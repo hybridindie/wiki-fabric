@@ -1,0 +1,31 @@
+# Expected claim extraction — golden corpus
+# For each fixture, the list of claims a correct ingest must produce.
+# Scored by scripts/eval.py against rubric.md thresholds.
+
+source-a:
+  golden_keys:
+    - "editor is single-threaded"
+    - "godot_composite_run_commands collapses"
+    - "gather_reads makes O(N) reads ~O(1)"
+    - "ReadCache memoizes per-session"
+  forbidden:
+    - "status != supported for any of the above"
+
+source-b:
+  golden_keys:
+    - "threaded blocks match sync baseline 1075"
+    - "800-concurrent stress fails 244 mismatches"
+    - "recursive_mutex lock failure crashes teardown"
+  forbidden:
+    - "merging the two into one 'threading works' claim"
+
+source-c:
+  golden_keys:
+    - "paged attention reduces KV-cache fragmentation"
+    - "C1 and C2 contradictory throughput figures"
+  expected_status: contested
+  expected_relations:
+    - type: contradicts
+  forbidden:
+    - "status: supported (cannot collapse a contested claim)"
+    - "status: proposed (both sources support the core claim)"

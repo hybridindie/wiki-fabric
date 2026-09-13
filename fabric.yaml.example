@@ -1,0 +1,22 @@
+# Wiki Fabric configuration (example)
+# Copy this file to fabric.yaml and edit for your setup.
+# fabric.yaml is gitignored — it contains personal repo paths and settings.
+
+owner: your-name
+
+llm:
+  base_url: http://localhost:11434/v1   # Ollama default
+  api_key: ollama                        # Ollama ignores this
+  model: qwen2.5-coder:7b               # any OpenAI-compatible model
+
+repos:
+  # my-project:
+  #   path: ../my-project               # relative to fabric root, or absolute
+  #   graph_dir: graphify-out            # optional, for graphify integration
+
+domains:
+  agent-systems:
+    signals: [agent, mcp, fastmcp, opencode, claude]
+  web-systems:
+    signals: [fastapi, flask, react, nextjs, supabase, postgresql]
+  # Add domains as your evidence grows (propose-domains.py will suggest them)

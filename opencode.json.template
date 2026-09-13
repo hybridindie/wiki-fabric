@@ -1,0 +1,35 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "bash": {
+      "*": "allow",
+      "git commit *": "ask",
+      "git push *": "ask",
+      "rm *": "ask"
+    }
+  },
+  "references": {
+    "wiki-fabric": {
+      "path": "~/wiki-fabric",
+      "description": "Global knowledge fabric (evidence-first wiki + cross-project promotion)"
+    }
+  },
+  "instructions": [
+    "~/wiki-fabric/AGENTS.md",
+    ".wiki-overlay.md"
+  ],
+  "watcher": {
+    "ignore": [
+      ".obsidian/**",
+      "evidence/raw/**",
+      "node_modules/**",
+      ".git/**"
+    ]
+  },
+  "skills": {
+    "paths": [
+      "~/.opencode/skills",
+      "~/wiki-fabric/.opencode/skills"
+    ]
+  }
+}

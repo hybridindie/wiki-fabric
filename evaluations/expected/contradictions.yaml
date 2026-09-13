@@ -1,0 +1,21 @@
+# Expected contradictions — golden corpus
+
+```yaml
+- fixture: source-b
+  kind: scoped-contradiction
+  note: happy-path parity vs 800-concurrent stress. Must be TWO claims with a
+         `contradicts` (or `applies_when`-scoped coexistence) relation — NOT merged.
+  expected:
+      claims: [parity, stress-failure]
+     relation: contradicts
+     resolution: scoped, not supersession
+
+- fixture: source-c
+  kind: contested-claim
+  note: C1 and C2 give conflicting throughput figures.
+  expected:
+      one_claim: true
+      status: contested
+     relation: contradicts
+     must_surface_in_synthesis: true
+```
