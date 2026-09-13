@@ -518,6 +518,15 @@ case "${1:-help}" in
         shift
         run_python "$(find_fabric)" "$(find_fabric)/scripts/log-experience.py" "$@"
         ;;
+    sync)
+        shift
+        fdir=$(find_fabric)
+        if [[ -z "${1:-}" ]]; then
+            err "Usage: wf sync {init <git-url> | status | push [-m msg] | pull}"
+            exit 1
+        fi
+        run_python "${fdir}" "${fdir}/scripts/sync.py" "$@"
+        ;;
     help|--help|-h)
         echo ""
         echo "════════════════════════════════════════════"
@@ -537,6 +546,7 @@ case "${1:-help}" in
         echo "  ingest <source-path>              Ingest a source (--extract-claims for LLM)"
         echo "  query \"<question>\"                 Ask the fabric a question"
         echo "  log --project <slug>              Log an experience event"
+        echo "  sync {init|status|push|pull}      Share the corpus with a team via a git remote"
         echo "  lint                              Run deterministic linter"
         echo ""
         echo "Environment:"

@@ -234,6 +234,15 @@ def main():
         if linked == 0:
             warnings.append("ORPHAN %s: no inbound links" % rel)
 
+    # 6b. sync conflicts (unresolved block commit/push)
+    conflicts_dir = vault / "registry" / "conflicts"
+    if conflicts_dir.exists():
+        for cp in conflicts_dir.glob("**/*.md"):
+            fm, _, err = parse_frontmatter(cp)
+            st = fm.get("status") if isinstance(fm, dict) else None
+            if st == "unresolved":
+                errors.append("SYNC-CONFLICT %s: unresolved (review, fix source page, delete, then sync push)" % cp.relative_to(vault))
+
     # 7. report
     print("# Lint — %s  (pages %d, yaml %s)" % (vault.name, len(pages), HAVE_YAML))
     for e in errors if not only_orphans else []:

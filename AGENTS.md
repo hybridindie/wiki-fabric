@@ -296,6 +296,7 @@ experience-event (project) → cluster (mining) → promotion-dossier
 - Promotion = one commit; message: `promote <pattern-id> (maturity N)`.
 - `registry/log.md` is append-only and tracked in the harness repo (seeded at bootstrap; created on ingest if missing). Raw is append-only-capture (new file, new hash).
 - Never `git commit` a change-set that failed `scripts/lint.py`.
+- **Team sync** (`wf sync`): corpus content shares to a dedicated `corpus` git remote (branch `corpus`); the harness remote is separate. Same-path edits from two machines become `registry/conflicts/<date>/` dossiers; unresolved conflicts fail lint and block `sync push`.
 
 **Public harness repo vs. private fabric install:** this repo ships the harness
 (scripts, schemas, templates, examples). In a personal fabric install, user
