@@ -23,7 +23,12 @@ try:
 except ImportError:
     HAS_EMBEDDINGS = False
 
-import numpy as np
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    np = None
+    HAS_NUMPY = False
 
 VAULT_ROOT = Path(__file__).parent.parent
 
@@ -102,6 +107,8 @@ def cluster_events_semantic(events, min_projects=2, model=None, threshold=0.7):
     """Cluster experience events using semantic similarity."""
     if len(events) < 2:
         return {}
+    if not HAS_NUMPY:
+        return cluster_events_keyword(events, min_projects)
     
     # Generate embeddings
     embeddings = []
