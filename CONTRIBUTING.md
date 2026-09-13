@@ -115,6 +115,18 @@ mkdir -p .opencode/skills/<skill-name>
 wf lint  # must be 0 errors
 ```
 
+## Tests
+
+Run before changing any script:
+
+```bash
+python3 -m pytest tests/ -q   # unit tests for script logic
+bash scripts/smoke-test.sh    # end-to-end CLI checks (isolated temp fabric)
+```
+
+CI enforces both plus `python3 -m py_compile` on every script. A PR that fails
+`smoke-test.sh` or drops unit tests below passing will not merge.
+
 ---
 
 ## Evaluation Discipline

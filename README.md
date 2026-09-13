@@ -48,6 +48,19 @@ wf log --project my-project --problem "..." --intervention "..." --outcomes "...
 
 All `wf` commands work without the install too — the underlying scripts live in `scripts/` and run with plain `python3`.
 
+### Tests
+
+The harness tests itself:
+
+```bash
+python3 -m pytest tests/ -q    # unit tests: capture filters, ingest parsing, lint helpers
+bash scripts/smoke-test.sh     # end-to-end: spins up a throwaway fabric, runs 13 CLI checks
+python3 scripts/lint.py .      # fabric self-lint (0-error gate)
+```
+
+CI runs all three on every push and PR (`.github/workflows/ci.yml`). The smoke
+test runs in an isolated temp copy by default, so it can't dirty your fabric.
+
 ---
 
 ## Architecture

@@ -282,6 +282,7 @@ python3 ~/wiki-fabric/scripts/lint.py .
 
 Add license here.
 EOF
+fi
 
 echo ""
 echo "=== Project bootstrap complete ==="

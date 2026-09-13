@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 30   # capture-git smoke test reads history
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test deps
+        run: pip install pytest pyyaml
+
+      - name: Unit tests (pytest)
+        run: python3 -m pytest tests/ -q
+
+      - name: Smoke test (isolated temp fabric)
+        run: bash scripts/smoke-test.sh
+
+      - name: Fabric lint (0 errors gate)
+        run: python3 scripts/lint.py .
