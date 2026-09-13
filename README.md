@@ -1,12 +1,34 @@
----
-type: registry
-title: Wiki Fabric — Evidence-First Knowledge Base
-updated: 2026-09-13
----
-
 # Wiki Fabric
 
 > **Evidence-first knowledge base that compounds across projects.** Every claim traces to a source locator. Patterns emerge from cross-project experience. The LLM maintains it; you review it.
+
+---
+
+## Why Not Just a Wiki, Notes App, or RAG?
+
+Most knowledge systems fail agents (and humans) in the same ways. Wiki Fabric is designed against those failure modes:
+
+| Common system | Failure mode | Wiki Fabric's answer |
+|---|---|---|
+| **Wiki / notes app** (Obsidian, Notion, Confluence) | Pages drift from reality; nothing enforces freshness or provenance; orphaned pages rot silently | Every claim carries a `last_verified` date, a source locator, and a verbatim quote. A deterministic linter (14 checks) fails loudly on broken links, orphans, hash drift, and unsupported claims |
+| **RAG / vector DB** | Retrieval is opaque; answers cite nothing auditable; stale chunks silently poison results; every question costs tokens | Retrieval is deterministic (lexical + graph expansion, 0 tokens). Answers are structured (`bottom line / evidence / caveats / confidence`) and every evidence item links to a line-level locator you can open and verify |
+| **Memory tools** (session memory, auto-summaries) | Unstructured prose; contradicts itself over time; no way to tell "measured" from "guessed" | Claims are atomic and typed: `supported`, `contested`, `superseded`. Contradictions are represented, not collapsed. Confidence and evidence strength are explicit fields, not vibes |
+| **ADR collections** | Decisions recorded but never revisited; no feedback loop from outcomes | Decisions connect to experience events (what actually happened), which cluster into patterns with measured maturity. A pattern read but never applied gets flagged |
+| **Prompt/skill libraries** | Copied between projects by hand; drift apart; no evidence of what works | Skills and patterns live in one global fabric. Promotion requires replication in ≥2 independent projects. Projects inherit them automatically at session start |
+| **Second-brain tools** | Capture is cheap, retrieval and trust are expensive; nothing compounds | Structure from day one: capture → claim → concept → pattern. Each layer is machine-checkable, so the fabric stays queryable as it grows to thousands of pages |
+
+The core bet: **an LLM is a good compiler but a unreliable memory.** So the fabric stores structured, source-anchored claims (not prose summaries), does all retrieval deterministically, and spends LLM tokens only where judgment is needed — extraction and synthesis. You review at defined gates; the machine handles the bookkeeping.
+
+---
+
+## What Is This?
+
+Wiki Fabric is a self-maintaining knowledge system that:
+
+1. **Compiles raw sources into verified claims** — LLM extracts atomic assertions with line-level locators and verbatim quotes from your project docs
+2. **Promotes cross-project patterns** — experience events are mined into reusable patterns and skills that compound across all connected projects
+3. **Validates itself** — deterministic linter + golden-corpus evaluation measures the compiler, not just the artifacts
+4. **Stays current** — graphify AST integration detects code changes at zero token cost; entity index tracks symbol locations
 
 ---
 
@@ -25,17 +47,6 @@ wf log --project my-project --problem "..." --intervention "..." --outcomes "...
 ```
 
 All `wf` commands work without the install too — the underlying scripts live in `scripts/` and run with plain `python3`.
-
----
-
-## What Is This?
-
-Wiki Fabric is a self-maintaining knowledge system that:
-
-1. **Compiles raw sources into verified claims** — LLM extracts atomic assertions with line-level locators and verbatim quotes from your project docs
-2. **Promotes cross-project patterns** — experience events are mined into reusable patterns and skills that compound across all connected projects
-3. **Validates itself** — deterministic linter + golden-corpus evaluation measures the compiler, not just the artifacts
-4. **Stays current** — graphify AST integration detects code changes at zero token cost; entity index tracks symbol locations
 
 ---
 
@@ -109,6 +120,20 @@ WIKI_LLM_MODEL="llama3.1:70b" wf ingest evidence/raw/foo.md --extract-claims
 
 Works with any OpenAI-compatible endpoint: Ollama, OpenAI, vLLM, LM Studio, Together, etc.
 
+**Scenario — onboarding onto an unfamiliar codebase.** Your project's docs are
+scattered across a README, `docs/`, and ADRs. Bootstrap the project, `wf capture`,
+then ingest each doc. Within an hour you have a claim graph: "writes serialize on
+the main thread (L42)", "batching collapses N round-trips to 1 (L55)". Ask
+`wf query "Why is the write path slow?"` and get an answer citing exact lines you
+can open — not a hallucinated summary. New docs re-captured later trigger
+re-ingest only where the sha256 changed.
+
+**Scenario — auditing an upstream dependency.** Before adopting a library,
+capture its docs and changelog into the fabric. After each release,
+`wf update` re-captures; hash drift flags exactly which claims are affected by the
+new version — so "we rely on their single-writer guarantee" gets re-verified
+against the new source text, not forgotten.
+
 ### 2. Query: Question → Evidence-Backed Answer
 
 ```mermaid
@@ -135,6 +160,18 @@ wf query "What patterns apply to batch-write systems?" --save
 # Force query type
 wf query "What did we decide about the bridge?" --type decision
 ```
+
+**Scenario — mid-session architectural question.** While refactoring, the agent
+wonders "do we serialize writes here, or is that only in the other project?"
+A lexical query costs 0 tokens and returns the relevant claims with locators —
+the agent reads the underlying sources itself instead of asking you to repeat
+project history you half-remember.
+
+**Scenario — contradicting sources.** Two docs disagree about a throughput
+figure. Ingesting both produces a `status: contested` claim with a `contradicts`
+relation, not a silently merged average. Querying the topic surfaces the conflict
+with both locators side by side, so a human settles it instead of a model
+averaging it.
 
 ### 3. Experience → Pattern → Skill (Compounding Loop)
 
@@ -170,6 +207,20 @@ python3 scripts/promote.py --list
 python3 scripts/promote.py --promote <dossier-file>.md
 ```
 
+**Scenario — the same bug bites twice.** Project A hits a deadlock from
+concurrent writes; you log the event with measured outcomes. Three weeks later,
+project B (a completely different codebase) shows the same signature. After the
+second `wf log`, mining clusters the two events into a promotion dossier: same
+problem shape, same intervention, independent evidence. After your review, the
+pattern is promoted — and project C, bootstrapped next month, inherits the skill
+"serialize writes + verify parity" automatically instead of rediscovering the
+bug a third time.
+
+**Scenario — killing a bad habit.** Experience events aren't only wins: log
+failed interventions too. Mined clusters can produce anti-patterns
+("parallel validation writes caused 3 separate incidents") that future sessions
+surface as warnings when they detect the setup.
+
 ### 4. Bootstrapping: Connect a New Project
 
 ```mermaid
@@ -198,6 +249,14 @@ wf ingest evidence/raw/my-project/docs/*.md --extract-claims
 ```
 
 The bootstrap **additively merges** into existing `opencode.json` (never overwrites your MCP config, rules, or references).
+
+**Scenario — spinning up project five.** You've got four projects connected and
+start a new one. Bootstrap takes a minute: it writes `.wiki-overlay.md`, creates
+`projects/<slug>/`, and merges into `opencode.json` without touching your MCP
+servers. At the next session start, the agent loads the global fabric plus this
+project's overlay — and immediately knows about the three patterns promoted from
+your other projects, the domain ontology, and which skills apply here. No copying
+of wiki folders, no "let me catch you up" prompt engineering.
 
 ### 5. Maintenance
 
@@ -240,6 +299,13 @@ python3 scripts/graphify-bridge.py --all          # full pipeline
 python3 scripts/graphify-bridge.py --status       # dashboard
 python3 scripts/graphify-bridge.py --diff         # staleness check
 ```
+
+**Scenario — docs went stale.** You refactor `gather_reads` into
+`collect_reads`; the claim "gather_reads makes O(N) reads ~O(1)" now points at a
+symbol that no longer exists. The graphify diff (AST-only, 0 tokens) detects the
+rename and flags the affected claims as stale. Refresh re-ingests only the
+changed source, and the claim either updates or is superseded — with the change
+recorded in the change-set manifest, never silently rewritten.
 
 ---
 

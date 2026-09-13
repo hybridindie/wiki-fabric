@@ -95,7 +95,8 @@ def md_files(vault):
 
 
 def is_tpl(rel):
-    return "templates" in rel.parts or "templates" in rel.parts or rel.as_posix().startswith("schemas/")
+    return ("templates" in rel.parts or rel.as_posix().startswith("schemas/")
+            or rel.name in ("README.md", "CONTRIBUTING.md", "LICENSE"))
 
 
 def main():
