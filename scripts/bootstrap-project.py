@@ -145,6 +145,60 @@ def register_in_fabric_yaml(project_slug, project_root):
     print(f"Registered {project_slug} in fabric.yaml (path: {rel_path})")
 
 
+def get_corpus_remote():
+    """Return the corpus remote URL if the fabric is wired for team sync."""
+    try:
+        result = subprocess.run(
+            ["git", "remote", "get-url", "corpus"],
+            cwd=str(FABRIC_ROOT), capture_output=True, text=True, timeout=10,
+        )
+        return result.stdout.strip() if result.returncode == 0 else None
+    except Exception:
+        return None
+
+
+def write_namespace_readme(namespace_dir, project_slug, project_name, owner, source_repos):
+    """Write a small README into the project namespace — it syncs to the corpus
+    so teammates can see what this project is without asking."""
+    readme = namespace_dir / "README.md"
+    if readme.exists():
+        return
+    try:
+        import yaml as _yaml
+        config = _yaml.safe_load((FABRIC_ROOT / "fabric.yaml").read_text()) or {}
+    except Exception:
+        config = {}
+    repos = (config.get("repos") or {}).get(project_slug, {})
+    upstream = repos.get("path", "")
+    repos_yaml = upstream or "_(none yet — add source_repos to .wiki-overlay.md)_"
+    readme.write_text(f"""---
+type: registry
+project: {project_slug}
+title: {project_name}
+created: {__import__('datetime').date.today().isoformat()}
+owner: {owner}
+---
+
+# Project: {project_name}
+
+Namespace `projects/{project_slug}/` — bootstrapped by `{owner}` on the machine that owns this corpus entry.
+
+## Purpose
+
+{project_name} connected to the shared fabric.
+
+## Upstream sources
+
+- {repos_yaml}
+
+## Layout
+
+- `experience-events/` — structured observations (problem → intervention → outcome)
+- `decisions/` — ADR-like technical choices
+""")
+    print(f"Wrote namespace README: {readme.relative_to(FABRIC_ROOT)}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Bootstrap a new project with Wiki Fabric",
@@ -392,6 +446,9 @@ This file configures how the global Wiki Fabric connects to this project.
     (namespace_dir / "decisions").mkdir(parents=True, exist_ok=True)
     print(f"Created project namespace: {namespace_dir.relative_to(find_fabric_root())}")
 
+    # 5a. Namespace README → syncs to the corpus so teammates see what this project is
+    write_namespace_readme(namespace_dir, project_slug, project_name, owner, args.source_repo or [])
+
     # 6. Register in fabric.yaml
     register_in_fabric_yaml(project_slug, str(project_root))
 
@@ -407,6 +464,16 @@ WIKI_LLM_API_KEY={config["llm"]["api_key"]}
 WIKI_LLM_MODEL={config["llm"]["model"]}
 """)
         print("Created .env.wiki-fabric (LLM configuration)")
+
+    # 8. Corpus awareness: is this fabric wired for team sync?
+    corpus_remote = get_corpus_remote()
+    if corpus_remote:
+        print(f"Corpus remote detected: {corpus_remote}")
+        print(f"This project is local-only until you run: wf sync push")
+        print(f"Teammates receive it on their next: wf sync pull")
+    else:
+        print("Note: no corpus remote configured — this project is local-only.")
+        print("To share it with a team: wf sync init <git-url> && wf sync push")
 
     print(f"""
 === Project bootstrap complete ===

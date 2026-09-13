@@ -71,6 +71,49 @@ def sh(*args, cwd=None):
         return None
 
 
+def local_projects():
+    """Project namespaces that exist locally."""
+    pd = VAULT_ROOT / "projects"
+    if not pd.exists():
+        return set()
+    return {p.name for p in pd.iterdir() if p.is_dir() and not p.name.startswith(".")}
+
+
+def remote_projects():
+    """Project namespaces that exist on the remote corpus."""
+    listing = sh("ls-tree", "--name-only", f"{CONTENT_REMOTE_NAME}/corpus", "--", "projects/")
+    if not listing:
+        return set()
+    return {l.strip().rstrip("/").split("/")[-1] for l in listing.splitlines() if l.strip()}
+
+
+def namespace_diff(direction):
+    """Project namespaces present only on one side. direction: 'remote-only' or 'local-only'."""
+    lp, rp = local_projects(), remote_projects()
+    if lp == rp:
+        return set()
+    return (rp - lp) if direction == "remote-only" else (lp - rp)
+
+
+def describe_namespaces(names):
+    """One-line description of each project namespace from its README frontmatter."""
+    out = []
+    for name in sorted(names):
+        readme = VAULT_ROOT / "projects" / name / "README.md"
+        title = name
+        owner = ""
+        if readme.exists():
+            try:
+                import yaml
+                fm = yaml.safe_load(readme.read_text().split("---")[1]) or {}
+                title = fm.get("title") or name
+                owner = fm.get("owner") or ""
+            except Exception:
+                pass
+        out.append(f"  projects/{name}/ — {title}" + (f" (owner: {owner})" if owner else ""))
+    return out
+
+
 def git_status():
     out = sh("status", "--porcelain")
     return [l for l in (out or "").splitlines() if l.strip()]
@@ -171,6 +214,17 @@ def cmd_status():
             print(f"  {c}")
         print("Resolve each, then: wf sync push")
 
+    # Project namespace visibility
+    try:
+        remote_only = namespace_diff("remote-only")
+        if remote_only:
+            print(f"\nNew projects on the corpus (pull to receive):")
+            print("\n".join(describe_namespaces(remote_only)))
+    except SystemExit:
+        raise
+    except Exception:
+        pass  # ls-tree failures shouldn't break status
+
 
 def cmd_push(message=None):
     validate_fabric()
@@ -238,6 +292,8 @@ def cmd_pull():
                        cwd=str(VAULT_ROOT), capture_output=True)
         print(f"Committed {len(changes)} local corpus changes before merging.")
 
+    pre_pull_local = local_projects()
+
     # Merge remote corpus branch (allow unrelated histories: two fabrics that
     # share a remote but no common ancestor are still the same corpus)
     today = date.today().isoformat()
@@ -248,6 +304,15 @@ def cmd_pull():
     )
     if result.returncode == 0:
         print("Pulled and merged corpus.")
+        # Report newly-arrived project namespaces (present remotely, absent locally before the pull)
+        try:
+            new_projects = local_projects() & (remote_projects() - pre_pull_local)
+            if new_projects:
+                print(f"\nNew project namespace(s) received:")
+                print("\n".join(describe_namespaces(new_projects)))
+                print("Next: wf status to see inventory, wf query to use them.")
+        except Exception:
+            pass
         return
 
     # Merge failed: collect conflicts

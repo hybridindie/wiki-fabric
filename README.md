@@ -577,6 +577,16 @@ git remote add corpus git@github.com:your-org/wiki-fabric-corpus.git
 wf sync pull
 ```
 
+**How bootstrap meets the corpus:** when you `wf bootstrap` a project into a
+fabric with a corpus remote, the bootstrap writes a small
+`projects/<slug>/README.md` (title, owner, date, upstream sources) into the
+namespace — that README syncs to the corpus, so teammates see *what* the new
+project is the moment it lands. Bootstrap prints whether the project is
+local-only or corpus-wired, and `wf sync status` lists new namespaces waiting
+on the remote ("New projects on the corpus (pull to receive)"); `wf sync pull`
+announces each namespace it delivers, with owner. Teammates discover
+new projects by pulling — nothing to configure on their side.
+
 **Conflict policy — review queue, never silent overwrite:** if two machines
 changed the same file, `wf sync pull` aborts the merge and writes a conflict
 dossier to `registry/conflicts/<date>/` containing *both* versions (ours vs

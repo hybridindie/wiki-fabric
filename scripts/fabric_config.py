@@ -77,7 +77,7 @@ def get_config():
             user_config = yaml.safe_load(config_file.read_text()) or {}
             # Merge top-level keys
             for key in ("owner", "llm", "repos", "domains"):
-                if key in user_config:
+                if key in user_config and user_config[key] is not None:
                     if isinstance(config.get(key), dict) and isinstance(user_config[key], dict):
                         config[key].update(user_config[key])
                     else:
