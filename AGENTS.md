@@ -19,13 +19,9 @@ This is the **global wiki fabric** — a single, shared knowledge base that live
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  evidence/raw/              # Immutable captures from upstream repos        │
-│    ├── aperiodic/                                                           │
-│    ├── godot-mcp/                                                           │
-│    ├── alpaca-agents/                                                         │
-│    ├── comfyui_mcp/                                                           │
-│    ├── godot-agents/                                                          │
-│    ├── nomokailist/                                                           │
-│    └── instructions-and-rules/                                                │
+│    ├── project-a/                                                           │
+│    ├── project-b/                                                           │
+│    └── ...                    # One directory per captured repo             │
 │                                                                             │
 │  evidence/                      # Compiled knowledge base                   │
 │    ├── sources/                 # type: source — one record per raw capture │
@@ -36,13 +32,13 @@ This is the **global wiki fabric** — a single, shared knowledge base that live
 │    └── _inbox/                  # unprocessed captures awaiting ingest     │
 │                                                                             │
 │  projects/                   # PROJECT NAMESPACES (one per project)        │
-│    ├── aperiodic/              # Project namespace                         │
+│    ├── project-a/              # Project namespace                         │
 │    │    ├── experience-events/ # type: experience-event                    │
 │    │    └── decisions/         # type: decision (ADR-like)                 │
-│    ├── godot-mcp/              # Another project namespace                 │
+│    ├── project-b/              # Another project namespace                 │
 │    │    ├── experience-events/                                                │
 │    │    └── decisions/                                                        │
-│    ├── alpaca-agents/          # Another project namespace                  │
+│    ├── project-c/              # Another project namespace                  │
 │    │    ├── experience-events/                                                │
 │    │    └── decisions/                                                        │
 │    ├── my-new-project/         # New project adds its namespace here       │

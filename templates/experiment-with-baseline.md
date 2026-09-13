@@ -104,6 +104,6 @@ updated: {{date:YYYY-MM-DD}}
 
 ## Related
 
-- [[pattern-single-writer-with-parity-check]]
-- [[skill-serialize-and-verify-writes]]
+- [[pattern-<pattern-slug>]]
+- [[skill-<skill-slug>]]
 - [[claim-<claim-slug>]]

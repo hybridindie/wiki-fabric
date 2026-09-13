@@ -5,10 +5,10 @@ A correct ingest must surface the right entities and cross-link them.
 ```yaml
 - fixture: source-a
   expected_entities:
-      - godot-mcp
-      - "Godot editor (single-writer)"
+      - example-editor
+      - "editor bridge (single-writer)"
   expected_concepts:
-      - single-writer-serialization     # concept-single-writer-serialization.md
+      - single-writer-serialization
   forbidden_missing:
       - []                              # all above must appear
 

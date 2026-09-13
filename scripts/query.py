@@ -2,7 +2,7 @@
 # query.py — Query the evidence fabric
 #
 # Usage:
-#   python3 scripts/query.py "Why does godot-mcp batch writes but pipeline reads?"
+#   python3 scripts/query.py "Why does the bridge batch writes but pipeline reads?"
 #   python3 scripts/query.py "What patterns apply to single-writer systems?" --verbose
 #   python3 scripts/query.py "What did we decide about the bridge?" --type decision
 #   python3 scripts/query.py "What should I investigate next?" --type gap

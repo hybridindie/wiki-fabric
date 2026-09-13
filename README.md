@@ -44,32 +44,30 @@ Wiki Fabric is a self-maintaining knowledge system that:
 ```mermaid
 graph TB
     subgraph "Source Repos"
-        GM["godot-mcp"]
-        AP["aperiodic"]
-        AA["alpaca-agents"]
-        NK["nomokailist"]
-        CM["comfyui_mcp"]
+        R1["project-a"]
+        R2["project-b"]
+        R3["project-c"]
     end
 
     subgraph "Fabric"
         RAW["evidence/raw/<br/>(immutable captures)"]
-        CLAIMS["evidence/claims/<br/>(47 verified claims)"]
-        CONCEPTS["concepts/<br/>(7 synthesized concepts)"]
-        PATTERNS["patterns/<br/>(2 patterns)"]
-        SKILLS["skills/<br/>(2 skills)"]
-        EVENTS["projects/*/experience-events/<br/>(4 events)"]
-        ENTITIES["global/entities/<br/>(2,138 AST-indexed symbols)"]
+        CLAIMS["evidence/claims/<br/>(verified claims)"]
+        CONCEPTS["concepts/<br/>(synthesized concepts)"]
+        PATTERNS["patterns/<br/>(cross-project patterns)"]
+        SKILLS["skills/<br/>(promoted skills)"]
+        EVENTS["projects/*/experience-events/"]
+        ENTITIES["global/entities/<br/>(AST-indexed symbols)"]
         GRAPHS["global/graphs/<br/>(graphify call graph)"]
-        REGISTRY["registry/<br/>(index, log, promotion queue)"]
+        REGISTRY["registry/<br/>(index, promotion queue)"]
     end
 
-    GM & AP & AA & NK & CM -->|capture| RAW
+    R1 & R2 & R3 -->|capture| RAW
     RAW -->|"ingest.py (LLM)"| CLAIMS
     CLAIMS -->|"synthesize.py (LLM)"| CONCEPTS
     CLAIMS -->|"mine-promotions.py"| PATTERNS
     PATTERNS -->|"promote.py"| SKILLS
-    GM & AP & AA & NK & CM -->|"build-entity-index.py (AST)"| ENTITIES
-    GM -->|"graphify-bridge.py (AST, 0 tokens)"| GRAPHS
+    R1 & R2 & R3 -->|"build-entity-index.py (AST)"| ENTITIES
+    R1 -->|"graphify-bridge.py (AST, 0 tokens)"| GRAPHS
     EVENTS -->|"mine-promotions.py"| PATTERNS
 ```
 
@@ -92,7 +90,7 @@ flowchart LR
 
 ```bash
 # Ingest a source with LLM claim extraction
-wf ingest evidence/raw/godot-mcp/docs/architecture.md --extract-claims
+wf ingest evidence/raw/my-project/docs/readme.md --extract-claims
 
 # Dry run (no files written)
 wf ingest --extract-claims --dry-run evidence/raw/foo.md
@@ -129,10 +127,10 @@ flowchart TD
 
 ```bash
 # Ask anything
-wf query "Why does godot-mcp batch writes but pipeline reads?"
+wf query "Why does my code batch writes but pipeline reads?"
 
 # Save reusable answers as synthesis pages
-wf query "What patterns apply to single-writer systems?" --save
+wf query "What patterns apply to batch-write systems?" --save
 
 # Force query type
 wf query "What did we decide about the bridge?" --type decision
@@ -155,10 +153,10 @@ flowchart LR
 
 ```bash
 # Capture an experience event
-wf log --project godot-mcp \
-  --problem "Editor froze on batch mutation" \
-  --intervention "Added batch queue with undo grouping" \
-  --outcomes "frame_drops=12→0" --tags "godot-mcp,performance"
+wf log --project my-project \
+  --problem "API froze under concurrent writes" \
+  --intervention "Added write queue with undo grouping" \
+  --outcomes "errors=12→0" --tags "my-project,performance"
 
 # List projects + event counts
 wf log --list
@@ -169,7 +167,7 @@ python3 scripts/mine-promotions.py
 
 # Review dossier, then promote
 python3 scripts/promote.py --list
-python3 scripts/promote.py --promote promotion-consolidate-validation.md
+python3 scripts/promote.py --promote <dossier-file>.md
 ```
 
 ### 4. Bootstrapping: Connect a New Project
@@ -247,19 +245,13 @@ python3 scripts/graphify-bridge.py --diff         # staleness check
 
 ## Fabric Inventory
 
-| Layer | Count | Purpose |
-|-------|-------|---------|
-| Claims | 47 | Atomic evidence with locators + quotes |
-| Concepts | 7 | Synthesized explanations from claim clusters |
-| Sources | 17 | Immutable captures from 6 repos |
-| Source summaries | 16 | Faithful, locator-rich summaries |
-| Patterns | 2 | Cross-project, maturity 2 |
-| Anti-patterns | 2 | Detected failure modes |
-| Skills | 2 | Reusable agent procedures |
-| Experience events | 4 | From 4 connected projects |
-| Entities (AST) | 2,138 | Code symbols across 4 repos |
-| Graph edges (graphify) | 4,419 | Call/import/inherits relationships |
-| Lint | **0 errors** | Deterministic, 12 checks |
+Counts live in your fabric, not the repo. Check yours anytime:
+
+```bash
+wf status
+```
+
+The repo ships only the harness — examples, templates, schemas, and scripts. Your claims, captures, and patterns accumulate locally as you connect projects.
 
 ---
 
@@ -410,24 +402,10 @@ Environment: `WIKI_FABRIC_REPO` overrides the source repo URL.
 | `schemas/frontmatter.md` | Per-type frontmatter contracts |
 | `schemas/ontology.md` | Living domain ontology (auto-discovered) |
 | `registry/index.md` | Exhaustive catalog (auto-generated) |
-| `registry/log.md` | Append-only operation timeline |
 | `registry/promotion-queue.md` | Promotion pipeline with review checklist |
 | `system/skills/*/SKILL.md` | Skill protocols |
 | `fabric.yaml.example` | Config template (repos, owner, LLM) |
 | `evaluations/rubric.md` | Evaluation metrics & run protocol |
-
----
-
-## Connected Projects
-
-| Project | Domain | Claims | Experience Events | Entity Pages |
-|---------|--------|--------|-------------------|-------------|
-| godot-mcp | agent-systems, godot-systems | 27 | 1 | 342 |
-| aperiodic | godot-systems | 13 | 1 | 91 |
-| alpaca-agents | agent-systems | 7 | 1 | 922 |
-| nomokailist | agent-systems | 0 | 1 | 784 |
-| instructions-and-rules | agent-systems | 7 | 0 | — |
-| comfyui_mcp | mcp-systems | 0 | 0 | — |
 
 ---
 

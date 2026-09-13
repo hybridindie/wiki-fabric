@@ -1,17 +1,17 @@
 # Fixture A — harness performance excerpt
 
-The Godot editor is **single-threaded**: the addon drains queued command packets
+The fixture editor is **single-threaded**: the addon drains queued command packets
 once per `_process` frame and executes them serially on the main thread
 (~50–100ms/command). The only levers are **fatter commands** and **fewer
 commands**.
 
-## 1. Batch arbitrary commands — `godot_composite_run_commands` (#167)
+## 1. Batch arbitrary commands — `composite_run_commands` (#167)
 
 When you have N commands to run, send them as **one**
-`godot_composite_run_commands` batch instead of N tool calls. The addon executes
+`composite_run_commands` batch instead of N tool calls. The addon executes
 the whole list in a single frame; N round-trips collapse to one.
 `stop_on_error: true` halts at the first failure; false runs them all.
-`godot_composite_run_commands` cannot be nested.
+`composite_run_commands` cannot be nested.
 
 ## 2. Pipeline independent reads — `gather_reads` (#169)
 

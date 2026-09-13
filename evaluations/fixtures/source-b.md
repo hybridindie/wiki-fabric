@@ -1,6 +1,6 @@
 # Fixture B — threading test log (excerpt)
 
-Godot Engine v4.7.2.stable
+Engine v4.7.2.stable
 
   PASS: threaded mode is on by default
   PASS: chunks streamed with threads on (25)

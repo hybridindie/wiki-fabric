@@ -5,7 +5,7 @@
 source-a:
   golden_keys:
     - "editor is single-threaded"
-    - "godot_composite_run_commands collapses"
+    - "composite_run_commands collapses"
     - "gather_reads makes O(N) reads ~O(1)"
     - "ReadCache memoizes per-session"
   forbidden:

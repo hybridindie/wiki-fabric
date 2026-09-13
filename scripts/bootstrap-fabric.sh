@@ -83,8 +83,8 @@ mkdir -p evidence/raw
 mkdir -p projects global/patterns global/anti-patterns global/skills
 mkdir -p global/playbooks global/decision-rules global/entities global/ontologies
 mkdir -p global/templates domains/agent-systems/concepts domains/agent-systems/questions
-mkdir -p domains/agent-systems/syntheses domains/godot-systems/concepts
-mkdir -p domains/godot-systems/questions domains/godot-systems/syntheses
+mkdir -p domains/agent-systems/syntheses
+
 mkdir -p registry/promotions
 
 # Create empty registry files if they don't exist
@@ -228,7 +228,6 @@ mkdir -p global/templates
 
 # Create empty domain directories
 mkdir -p domains/agent-systems/concepts domains/agent-systems/questions domains/agent-systems/syntheses
-mkdir -p domains/godot-systems/concepts domains/godot-systems/questions domains/godot-systems/syntheses
 
 # Create empty registry subdirs
 mkdir -p registry/promotions

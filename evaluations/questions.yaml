@@ -4,29 +4,28 @@ For each, the expected shape of a correct synthesis answer (rubric in rubric.md)
 
 ```yaml
 - id: q1
-  question: "Why does godot-mcp batch its writer commands but pipeline its reads?"
+  question: "Why does the fixture editor bridge batch its writer commands but pipeline its reads?"
     expected:
       bottom_line: "editor is single-writer; writes serialize, reads can pipeline"
      must_cite:
-          - [[claim-editor-single-threaded]]
-          - [[claim-batch-collapses-roundtrips]]
-          - [[claim-gather-reads-o1]]
+           - [[claim-editor-single-threaded]]
+           - [[claim-batch-collapses-roundtrips]]
+           - [[claim-gather-reads-o1]]
       format: bottom-line + evidence + caveat + confidence + next-action
 
 - id: q2
-  question: "Is threaded chunk streaming in aperiodic proven correct?"
+  question: "Is threaded chunk streaming in fixture B proven correct?"
     expected:
       bottom_line: "yes at rest, no under 800-concurrent stress"
      must_cite:
-          - [[claim-threaded-parity]]
-          - [[claim-thread-stress-failure]]
+           - [[claim-threaded-parity]]
+           - [[claim-thread-stress-failure]]
       format: must surface the scoped contradiction, not collapse it
 
 - id: q3
-  question: "What is the promotion status of the single-writer-with-parity-check pattern?"
+  question: "How does the promotion pipeline treat a pattern replicated in 2 independent projects?"
     expected:
-      answer: "candidate, maturity 2 (replicated in 2 projects), pending human promotion at 2026-09-25"
+      answer: "eligible for maturity 2, pending human promotion"
      must_cite:
-          - [[pattern-single-writer-with-parity-check]]
-          - [[promotion-single-writer-with-parity-check]]
+           - [[promotion-queue]]
 ```

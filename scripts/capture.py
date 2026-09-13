@@ -195,7 +195,7 @@ def process_sources(project_slug, source_repos, repo_filter, dry_run=False):
 
 def main():
     parser = argparse.ArgumentParser(description="Capture knowledge-bearing files from upstream repos")
-    parser.add_argument("project", help="Project slug (e.g. godot-mcp)")
+    parser.add_argument("project", help="Project slug (e.g. my-project)")
     parser.add_argument("--repo", help="Capture from a specific repo path (overrides overlay)")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be captured")
     args = parser.parse_args()

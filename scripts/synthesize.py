@@ -234,14 +234,13 @@ def write_concept_page(concept_slug, cluster, synthesis, domain):
     today = date.today().isoformat()
     claim_links = "\n".join(f'  - "[[{c["stem"]}]]"' for c in cluster)
 
-    # Find domain from cluster claims (use first claim's source slug as heuristic)
+    # Find domain from cluster claims (keyword heuristic against known domains)
     domains = set()
     for c in cluster:
-        if "godot" in c["stem"].lower():
+        stem = c["stem"].lower()
+        if any(k in stem for k in ("godot", "game", "engine", "chunk", "scene")):
             domains.add("godot-systems")
-        elif "aperiodic" in c["stem"].lower():
-            domains.add("godot-systems")
-        elif "alpaca" in c["stem"].lower():
+        else:
             domains.add("agent-systems")
     if not domains:
         domains.add("agent-systems")

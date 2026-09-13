@@ -9,7 +9,7 @@ Re-captures knowledge-bearing markdown from upstream source repos (defined in pr
 
 ## When to Use
 
-- After upstream work: "refresh aperiodic" or "refresh my-upstream-lib"
+- After upstream work: "refresh my-upstream-lib"
 - Scheduled (e.g., weekly)
 - When `.wiki-overlay.md` source_repos changes
 

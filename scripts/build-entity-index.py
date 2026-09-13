@@ -3,7 +3,7 @@
 #
 # Usage:
 #   python3 scripts/build-entity-index.py                    # index all connected repos
-#   python3 scripts/build-entity-index.py --repo godot-mcp   # index one repo
+#   python3 scripts/build-entity-index.py --repo my-project  # index one repo
 #   python3 scripts/build-entity-index.py --dry-run          # show what would be indexed
 #
 # Parses Python (AST) and GDScript (regex) from connected project repos,

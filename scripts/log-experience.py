@@ -2,15 +2,15 @@
 # log-experience.py — Capture an experience event into the fabric
 #
 # Usage:
-#   python3 scripts/log-experience.py --project godot-mcp --problem "Risk agent had redundant checks" \
+#   python3 scripts/log-experience.py --project my-project --problem "Risk agent had redundant checks" \
 #     --intervention "Consolidated 3 checks into 1 validator" --outcome "150ms→23ms latency" \
-#     --tags "godot-mcp,performance"
+#     --tags "my-project,performance"
 #
 #   Interactive mode (prompts for each field):
-#   python3 scripts/log-experience.py --project godot-mcp
+#   python3 scripts/log-experience.py --project my-project
 #
 #   From stdin (pipe a description):
-#   echo "Fixed threading crash by adding mutex lock" | python3 scripts/log-experience.py --project aperiodic
+#   echo "Fixed threading crash by adding mutex lock" | python3 scripts/log-experience.py --project my-project
 
 import sys
 import re
@@ -115,7 +115,7 @@ def interactive_mode(project):
     intervention = input("Intervention (what did you do about it?) [optional]: ").strip()
 
     print("\nConditions (key=value, comma-separated) [optional]:")
-    print("  e.g. task_class=refactor, runtime=Godot 4.7, tool=godot-mcp")
+    print("  e.g. task_class=refactor, runtime=python-3.12, tool=my-cli")
     cond_input = input("  > ").strip()
     conditions = {}
     if cond_input:
@@ -141,7 +141,7 @@ def interactive_mode(project):
 
 def main():
     parser = argparse.ArgumentParser(description="Log an experience event into the fabric")
-    parser.add_argument("--project", help="Project namespace (e.g. godot-mcp)")
+    parser.add_argument("--project", help="Project namespace (e.g. my-project)")
     parser.add_argument("--problem", help="Observed problem (one sentence)")
     parser.add_argument("--intervention", help="What was done about it [optional]")
     parser.add_argument("--conditions", help="key=value pairs, comma-separated [optional]")

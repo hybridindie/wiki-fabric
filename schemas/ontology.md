@@ -1,30 +1,26 @@
 ---
 type: ontology
 title: Domain Ontology
-updated: 2026-09-11
+updated: 2026-09-13
 ---
 
 # Domain Ontology
 
+The ontology is living — `python3 scripts/propose-domains.py` discovers new domains
+from evidence signals. Domains below are a starting point; add yours as you
+connect projects.
+
 ## Domains
 
 - **agent-systems** — agent harnesses, MCP tool surfaces, retrieval/evaluation, prompt/skill design.
-   - Examples of evidence here: godot-mcp tool-surface, batch/pipeline performance, sessionless migration.
-- **godot-systems** — Godot editor/runtime, procedural world generation, threading, chunk streaming.
-   - Examples: aperiodic monotile terrain, godot-mcp four-layer bridge, debugging protocol.
+- **godot-systems** — Godot editor/runtime systems, game engine tooling, concurrency.
 
-- **web-systems** — web systems (auto-proposed 2026-09-13, signal score: 79).
-   - Status: proposed — review and add examples before confirming.
-- **mcp-systems** — mcp systems (auto-proposed 2026-09-13, signal score: 19).
-   - Status: proposed — review and add examples before confirming.
-- **devops** — devops (auto-proposed 2026-09-13, signal score: 9).
-   - Status: proposed — review and add examples before confirming.
+- **web-systems** — web systems (example proposed domain; confirm with your own evidence).
 
 ## Shared tag set (lowercase)
 
-- Cross-cutting: `agent`, `mcp`, `threading`, `safety`, `benchmark`, `procedural-generation`, `git`, `evaluation`, `retrieval`
-- Tooling: `godot`, `godot-mcp`, `fastmcp`, `opencode`
-- Math/domain: `tiling`, `aperiodic`, `spectre`, `hat`, `voxel`, `terrain`
+- Cross-cutting: `agent`, `mcp`, `threading`, `safety`, `benchmark`, `git`, `evaluation`, `retrieval`
+- Tooling: `godot`, `fastmcp`, `opencode`
 - Knowledge-model: `provenance`, `pattern`, `experience-event`, `promotion`
 
 ## Scope → home mapping
