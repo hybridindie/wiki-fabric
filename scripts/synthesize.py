@@ -248,7 +248,7 @@ def write_concept_page(concept_slug, cluster, synthesis, domain):
 
     # Determine output path based on primary domain
     primary_domain = domain_list[0] if domain_list else "agent-systems"
-    concepts_dir = VAULT_ROOT / "Concepts"
+    concepts_dir = VAULT_ROOT / "concepts"
     concepts_dir.mkdir(parents=True, exist_ok=True)
     concept_path = concepts_dir / f"concept-{concept_slug}.md"
 

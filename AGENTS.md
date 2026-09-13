@@ -294,8 +294,15 @@ experience-event (project) → cluster (mining) → promotion-dossier
 
 - One ingest = one commit; message: `ingest <change-set-slug> (raw <sha8>)`.
 - Promotion = one commit; message: `promote <pattern-id> (maturity N)`.
-- `registry/log.md` is append-only. Raw is append-only-capture (new file, new hash).
+- `registry/log.md` is append-only and tracked in the harness repo (seeded at bootstrap; created on ingest if missing). Raw is append-only-capture (new file, new hash).
 - Never `git commit` a change-set that failed `scripts/lint.py`.
+
+**Public harness repo vs. private fabric install:** this repo ships the harness
+(scripts, schemas, templates, examples). In a personal fabric install, user
+content (claims, captures, patterns, experience events) is typically gitignored;
+in a shared/content-tracking install, it is committed. Either way, the git
+policies above apply — but a public clone should never receive your personal
+captures.
 
 ---
 
@@ -390,54 +397,3 @@ cp ~/wiki-fabric/.wiki-overlay.md.template .wiki-overlay.md
 ```
 
 ---
-
-## Promotion Pipeline (Cross-Project)
-
-```text
-experience-event (project) → cluster (mining) → promotion-dossier
-→ human review → pattern/anti-pattern/rule/skill with maturity 2+ → measured reuse
-```
-
-**Maturity** (evidence threshold → permission):
-
-| Level | Threshold | Agents may |
-|---|---|---|
-| 0 hypothesis | idea / external source only | mention as question |
-| 1 observed | one project/incident/experiment | suggest with local-context disclaimer |
-| 2 replicated | ≥2 **independent** projects or controlled eval | recommend when `applicability` matches |
-| 3 standard | repeated positive evidence + known tradeoffs + owner review | load by default |
-| deprecated | superseded / disproven | surface as caution only |
-
-**Independence**: two notes sharing one lineage (same source copied into two repos) count as one evidence. State the lineage. **Mining cadence**: on demand or weekly — not per edit. **No auto-promotion**: a `promotion-dossier` is proposed; only the user (or an explicitly governed agent) sets `status: recommended`/`standard`. **Feedback loop**: record reuse outcomes (`applied`, `overridden`, `outcome`) in the pattern page; a pattern read but never applied is too abstract — narrow or repackage.
-
----
-
-## Git Policy
-
-- One ingest = one commit; message: `ingest <change-set-slug> (raw <sha8>)`.
-- Promotion = one commit; message: `promote <pattern-id> (maturity N)`.
-- `registry/log.md` is append-only. Raw is append-only-capture (new file, new hash).
-- Never `git commit` a change-set that failed `scripts/lint.py`.
-
----
-
-## Project Overlay (`.wiki-overlay.md`)
-
-Each project creates a `.wiki-overlay.md` in its root (see `bootstrap-project.py`):
-
-```yaml
-project: my-project
-namespace: my-project
-domains:
-  - agent-systems
-skills:
-  - serialize-and-verify-writes
-source_repos:
-  - path: ../my-upstream-repo
-    raw_path: evidence/raw/my-upstream-repo
-    globs:
-      - "*.md"
-      - "docs/**/*.md"
-```
-
-The agent loads **global AGENTS.md + project .wiki-overlay.md** at session start.

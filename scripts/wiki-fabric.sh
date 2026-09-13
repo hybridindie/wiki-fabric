@@ -438,7 +438,6 @@ case "${1:-help}" in
         ;;
     ingest)
         shift
-        local fdir
         fdir=$(find_fabric)
         if [[ -z "${1:-}" ]]; then
             err "Usage: wf ingest <source-path> [--extract-claims]"

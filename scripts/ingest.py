@@ -26,6 +26,9 @@ def slugify(text):
     return re.sub(r'[^a-z0-9]+', '-', text.lower()).strip('-')
 
 
+args_dry_run = False
+
+
 def sha256(path):
     h = hashlib.sha256()
     h.update(Path(path).read_bytes())
@@ -309,32 +312,57 @@ relations: []
 """
 
 
-def main():
-    import argparse
-    parser = argparse.ArgumentParser(description="Ingest a raw source into the evidence fabric")
-    parser.add_argument("source", help="Path to source file under evidence/raw/")
-    parser.add_argument("--project", help="Project namespace (from .wiki-overlay.md)")
-    parser.add_argument("--dry-run", action="store_true", help="Show what would be done without writing")
-    parser.add_argument("--extract-claims", action="store_true", help="Extract claims using LLM")
-    parser.add_argument("--model", default=None, help="LLM model (default: $WIKI_LLM_MODEL or qwen2.5-coder:7b)")
-    args = parser.parse_args()
+def is_already_ingested(source_path, file_hash):
+    """Check if a source record with this sha256 already exists (anti-loop)."""
+    sources_dir = VAULT_ROOT / "evidence" / "sources"
+    if not sources_dir.exists():
+        return False
+    for rec in sources_dir.glob("src-*.md"):
+        if re.search(rf"sha256:\s*{re.escape(file_hash)}", rec.read_text(encoding="utf-8", errors="replace")):
+            return rec
+    return None
 
-    source_path = Path(args.source)
-    if not source_path.is_absolute():
-        if "evidence/raw" in str(source_path):
-            source_path = VAULT_ROOT / source_path
-        else:
-            source_path = VAULT_ROOT / "evidence" / "raw" / source_path
 
+def find_changed_sources(project_slug):
+    """Return raw files that are NEW or CHANGED vs. their source records.
+
+    Compares each file under evidence/raw/<slug>/ against every sha256 recorded
+    in evidence/sources/. A file with no matching hash is new or changed.
+    """
+    raw_dir = VAULT_ROOT / "evidence" / "raw" / project_slug
+    if not raw_dir.exists():
+        return []
+    known_hashes = set()
+    sources_dir = VAULT_ROOT / "evidence" / "sources"
+    if sources_dir.exists():
+        for rec in sources_dir.glob("src-*.md"):
+            m = re.search(r"sha256:\s*([a-f0-9]{64})", rec.read_text(encoding="utf-8", errors="replace"))
+            if m:
+                known_hashes.add(m.group(1))
+    changed = []
+    for f in sorted(raw_dir.rglob("*.md")):
+        if sha256(f) not in known_hashes:
+            changed.append(f)
+    return changed
+
+
+def ingest_source(source_path, extract_claims=False, model=None, dry_run=False, namespace=None):
+    """Ingest one source file (the body of the original main())."""
     if not source_path.exists():
         print(f"Error: Source file not found: {source_path}", file=sys.stderr)
-        sys.exit(1)
+        return False
 
     file_hash = sha256(source_path)
     print(f"Source: {source_path}")
     print(f"SHA256: {file_hash}")
 
-    namespace = args.project or find_project_namespace(Path.cwd())
+    # Anti-loop: skip sources already ingested with the same hash
+    existing = is_already_ingested(source_path, file_hash)
+    if existing:
+        print(f"Skipped — already ingested as {existing.name} (matching sha256)")
+        return False
+
+    namespace = namespace or find_project_namespace(Path.cwd())
     print(f"Project namespace: {namespace}")
 
     try:
@@ -352,10 +380,9 @@ def main():
     print(f"Source summary: {summary_path}")
     print(f"Change-set: {change_dir}/")
 
-    if args.dry_run:
-        if args.extract_claims:
-            print("  (would extract claims via LLM)")
-        return
+    if args_dry_run:
+        print("  (dry run — no files written)")
+        return True
 
     # 1. Source record
     title = source_path.stem.replace('-', ' ').replace('_', ' ').title()
@@ -381,10 +408,10 @@ Faithful summary: [[sum-{source_slug}]].
 
     # 2. Extract claims (optional)
     claims = []
-    if args.extract_claims:
+    if extract_claims:
         print("Extracting claims via LLM...")
         source_text = source_path.read_text(encoding="utf-8", errors="replace")
-        claims = extract_claims(source_text, str(source_path), args.model)
+        claims = extract_claims(source_text, str(source_path), model)
         if claims:
             print(f"Extracted {len(claims)} claims")
         else:
@@ -480,11 +507,60 @@ parent: "[[{change_set_id}]]"
 
     # 6. Log
     log_path = VAULT_ROOT / "registry" / "log.md"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    if not log_path.exists():
+        log_path.write_text("# Log\n\nAppend-only timeline.\n")
     with open(log_path, "a") as f:
         f.write(f"\n## [{date.today().isoformat()}] ingest | {source_slug}\n\n")
         f.write(f"- Ingested {source_path.name} (sha256 {file_hash[:12]}...)\n")
         f.write(f"- Extracted {len(claims)} claims\n")
         f.write(f"- Change-set: {change_dir}\n")
+
+    return True
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Ingest a raw source into the evidence fabric")
+    parser.add_argument("source", nargs="?", help="Path to source file under evidence/raw/")
+    parser.add_argument("--changed", metavar="PROJECT", help="Ingest all NEW/CHANGED raw files for a project slug (vs. recorded sha256s)")
+    parser.add_argument("--project", help="Project namespace (from .wiki-overlay.md)")
+    parser.add_argument("--dry-run", action="store_true", help="Show what would be done without writing")
+    parser.add_argument("--extract-claims", action="store_true", help="Extract claims using LLM")
+    parser.add_argument("--model", default=None, help="LLM model (default: $WIKI_LLM_MODEL or qwen2.5-coder:7b)")
+    args = parser.parse_args()
+
+    global args_dry_run
+    args_dry_run = args.dry_run
+
+    if args.changed:
+        project = args.changed
+        changed = find_changed_sources(project)
+        if not changed:
+            print(f"No new or changed sources under evidence/raw/{project}/ — nothing to ingest")
+            return
+        print(f"=== Ingesting {len(changed)} new/changed sources for {project} ===\n")
+        results = []
+        for f in changed:
+            print(f"--- {f.name} ---")
+            results.append(ingest_source(f, args.extract_claims, args.model, args.dry_run, args.project))
+        ingested = sum(1 for r in results if r)
+        print(f"\nIngest summary: {ingested} ingested, {len(results) - ingested} skipped")
+        return
+
+    if not args.source:
+        parser.error("provide a source path, or use --changed <project-slug>")
+
+    source_path = Path(args.source)
+    if not source_path.is_absolute():
+        if "evidence/raw" in str(source_path):
+            source_path = VAULT_ROOT / source_path
+        else:
+            source_path = VAULT_ROOT / "evidence" / "raw" / source_path
+
+    ok = ingest_source(source_path, args.extract_claims, args.model, args.dry_run, args.project)
+    if not ok:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -385,7 +385,7 @@ def generate_answer(query, scored, pages, query_type):
 
 def save_synthesis(query, answer, pages):
     """Save the answer as a synthesis page."""
-    synth_dir = VAULT_ROOT / "projects" / "_syntheses"
+    synth_dir = VAULT_ROOT / "syntheses"
     synth_dir.mkdir(parents=True, exist_ok=True)
 
     slug = re.sub(r'[^a-z0-9]+', '-', norm(query))[:60]

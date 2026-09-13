@@ -40,7 +40,7 @@ if [[ -z "${CHANGESET_SLUG}" ]]; then
     exit 1
 fi
 
-CHANGESET_DIR="${VAULT_ROOT}/01-Raw/evidence/traces/change-sets/${CHANGESET_SLUG}"
+CHANGESET_DIR="${VAULT_ROOT}/evidence/traces/change-sets/${CHANGESET_SLUG}"
 MANIFEST="${CHANGESET_DIR}/manifest.md"
 DIFF_FILE="${CHANGESET_DIR}/diff.md"
 
@@ -213,23 +213,23 @@ for p in Path(".").rglob("*.md"):
     pages.append((str(rel), p.stem))
 
 # Build index
-with open("01-Raw/registry/index.md", "w") as f:
+with open("registry/index.md", "w") as f:
     f.write("---\ntype: index\ntitle: Vault Index\nupdated: 2026-09-12\n---\n\n# Index\n\nExhaustive catalog. One line per page. Updated on every ingest and lint.\nFormat: \`- [[stem]] — one-line summary\`\n\n")
     
     # Sources
     f.write("## Sources\n")
     for rel, stem in pages:
-        if rel.startswith("01-Raw/evidence/sources/") and rel.endswith(".md"):
+        if rel.startswith("evidence/sources/") and rel.endswith(".md"):
             f.write(f"- [[{stem}]] — \n")
     
     f.write("\n## Source Summaries\n")
     for rel, stem in pages:
-        if rel.startswith("01-Raw/evidence/source-summaries/") and rel.endswith(".md"):
+        if rel.startswith("evidence/source-summaries/") and rel.endswith(".md"):
             f.write(f"- [[{stem}]] — \n")
     
     f.write("\n## Claims\n")
     for rel, stem in pages:
-        if rel.startswith("01-Raw/evidence/claims/") and rel.endswith(".md"):
+        if rel.startswith("evidence/claims/") and rel.endswith(".md"):
             f.write(f"- [[{stem}]] — \n")
     
     f.write("\n## Concepts\n")
@@ -256,12 +256,12 @@ with open("01-Raw/registry/index.md", "w") as f:
     
     f.write("\n## Source Records (catalog)\n")
     for rel, stem in pages:
-        if rel.startswith("01-Raw/evidence/sources/") and rel.endswith(".md"):
+        if rel.startswith("evidence/sources/") and rel.endswith(".md"):
             f.write(f"- [[{stem}]]\n")
     
     f.write("\n## Change-sets\n")
     for rel, stem in pages:
-        if rel.startswith("01-Raw/evidence/traces/change-sets/") and rel.endswith(".md"):
+        if rel.startswith("evidence/traces/change-sets/") and rel.endswith(".md"):
             f.write(f"- [[{stem}]] — \n")
 
 print("Index rebuilt")
@@ -273,10 +273,10 @@ fi
 if [[ "${DRY_RUN}" == false ]]; then
     DATE=$(date +%Y-%m-%d)
     LOG_ENTRY="## [${DATE}] apply | ${CHANGESET_SLUG}"
-    echo "" >> "${VAULT_ROOT}/01-Raw/registry/log.md"
-    echo "${LOG_ENTRY}" >> "${VAULT_ROOT}/01-Raw/registry/log.md"
-    echo "- Applied change-set: ${CHANGESET_SLUG}" >> "${VAULT_ROOT}/01-Raw/registry/log.md"
-    echo "- Files created: ${#CREATED_FILES[@]}, updated: ${#UPDATED_FILES[@]}, deleted: ${#DELETED_FILES[@]}" >> "${VAULT_ROOT}/01-Raw/registry/log.md"
+    echo "" >> "${VAULT_ROOT}/registry/log.md"
+    echo "${LOG_ENTRY}" >> "${VAULT_ROOT}/registry/log.md"
+    echo "- Applied change-set: ${CHANGESET_SLUG}" >> "${VAULT_ROOT}/registry/log.md"
+    echo "- Files created: ${#CREATED_FILES[@]}, updated: ${#UPDATED_FILES[@]}, deleted: ${#DELETED_FILES[@]}" >> "${VAULT_ROOT}/registry/log.md"
 fi
 
 # Run lint

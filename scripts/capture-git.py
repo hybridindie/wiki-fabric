@@ -128,6 +128,8 @@ def capture_github(project, repo, since, limit, include_comments, dry_run):
              "--json", "number,title,body,state,mergedAt,labels,url", expect_json=True)
     if prs is None:
         print("  Warning: could not list PRs (is gh authenticated for this repo?)", file=sys.stderr)
+        print("  Hint: run 'gh auth status' to check, or clone the repo and use a local path instead:", file=sys.stderr)
+        print("        wf capture %s --git /path/to/local/clone" % project, file=sys.stderr)
     else:
         for pr in prs:
             merged = pr.get("mergedAt") or ""

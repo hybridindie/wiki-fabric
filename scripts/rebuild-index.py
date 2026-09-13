@@ -99,8 +99,8 @@ def scan_vault():
             categories["experience_events"].append(entry)
         elif "decisions" in rel_str:
             categories["decisions"].append(entry)
-        elif rel_str.startswith("concepts/"):
-            categories["other"].append(entry)  # concepts go under other for now
+        elif rel_str.startswith("concepts/") or "domains/" in parts[:2] and "concepts" in parts:
+            categories["concepts"].append(entry)
         elif rel_str.startswith("patterns/"):
             categories["patterns"].append(entry)
         elif rel_str.startswith("anti-patterns/"):
@@ -156,14 +156,14 @@ def build_index(categories):
     section("Sources", categories["sources"])
     section("Source Summaries", categories["source_summaries"])
     section("Claims", categories["claims"])
-    section("Concepts", [e for e in categories["other"] if "concept" in str(e[1]).lower()])
+    section("Concepts", categories["concepts"])
     section("Experience Events", categories["experience_events"])
     section("Decisions", categories["decisions"])
     section("Patterns", categories["patterns"])
     section("Anti-Patterns", categories["anti_patterns"])
     section("Skills", categories["skills"])
     section("Promotion Dossiers", categories["promotions"])
-    section("Other", [e for e in categories["other"] if "concept" not in str(e[1]).lower()])
+    section("Other", categories["other"])
 
     # Registry hub links
     lines.append("## Registry")
