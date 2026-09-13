@@ -423,10 +423,18 @@ case "${1:-help}" in
     capture)
         shift
         if [[ -z "${1:-}" ]]; then
-            err "Usage: wf capture <project-slug> [--repo <path>]"
+            err "Usage: wf capture <project-slug> [--repo <path>] [--git <owner/name|path>] [--since 6m] [--limit 30]"
             exit 1
         fi
-        python3 "$(find_fabric)/scripts/capture.py" "$@"
+        if [[ "${2:-}" == "--git" || "${2:-}" == "-g" ]]; then
+            grepo="${3:-}"
+            [[ -z "$grepo" ]] && { err "Usage: wf capture <project-slug> --git <owner/name-or-path>"; exit 1; }
+            project="$1"
+            shift 3
+            python3 "$(find_fabric)/scripts/capture-git.py" "$project" --repo "$grepo" "$@"
+        else
+            python3 "$(find_fabric)/scripts/capture.py" "$@"
+        fi
         ;;
     ingest)
         shift
@@ -464,6 +472,7 @@ case "${1:-help}" in
         echo "  vault [PATH]                      Create Obsidian vault (symlinks)"
         echo "  bootstrap <project-path>          Connect a project to the fabric"
         echo "  capture <project-slug>            Capture upstream repo docs → evidence/raw/"
+        echo "                                    (--git owner/name or /path captures PR/issue history)"
         echo "  ingest <source-path>              Ingest a source (--extract-claims for LLM)"
         echo "  query \"<question>\"                 Ask the fabric a question"
         echo "  log --project <slug>              Log an experience event"

@@ -134,6 +134,16 @@ capture its docs and changelog into the fabric. After each release,
 new version — so "we rely on their single-writer guarantee" gets re-verified
 against the new source text, not forgotten.
 
+**Scenario — bootstrapping from PR history.** Docs tell you what a system does;
+PR and issue history tells you why. `wf capture my-project --git owner/repo`
+pulls PR descriptions with review threads and issue reports into
+`evidence/raw/<slug>/git/` — the "problem → intervention" debates that never
+make it into docs, pre-shaped for experience-event extraction. Commits are
+deterministically filtered (reverts, `fix:`/`feat:`/`perf:` conventional
+commits; `chore:`/`style:` skipped) so LLM extraction stays cheap. On a local
+repo, add `--churn` for a file-churn ranking that tells you which areas
+deserve deeper ingest first.
+
 ### 2. Query: Question → Evidence-Backed Answer
 
 ```mermaid
@@ -429,6 +439,7 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 | `wf vault [PATH]` | Create Obsidian vault (symlinks) |
 | `wf bootstrap <project-path>` | Connect a project to the fabric |
 | `wf capture <project-slug> [--repo PATH]` | Capture upstream repo docs → `evidence/raw/` |
+| `wf capture <project-slug> --git <owner/name-or-path>` | Capture PR/issue threads + high-signal commits → `evidence/raw/<slug>/git/` (add `--since 6m`, `--limit 30`, `--churn`) |
 | `wf ingest <source> [--extract-claims]` | Ingest a source (LLM claim extraction) |
 | `wf query "<question>"` | Ask the fabric a question |
 | `wf log --project <slug> ...` | Log an experience event |

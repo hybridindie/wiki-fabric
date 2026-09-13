@@ -146,6 +146,7 @@ See the ASCII tree above. Key principles:
 - **Global assets** under `global/` are shared by all projects
 - **Domains** are cross-project knowledge areas
 - **Raw captures** under `evidence/raw/<repo>/` from upstream repos
+- **Git history captures** under `evidence/raw/<repo>/git/` (PR/issue threads, high-signal commits via `capture-git.py`) — same immutable rules; PR/commit SHA are valid locators
 
 ---
 
