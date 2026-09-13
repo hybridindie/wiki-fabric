@@ -10,6 +10,24 @@ updated: 2026-09-13
 
 ---
 
+## Quick Start
+
+```bash
+# One-liner install (installs the `wf` CLI at ~/.local/bin/)
+curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/scripts/wiki-fabric.sh | bash
+
+wf status                              # check fabric health
+wf bootstrap /path/to/my-project       # connect a project
+wf capture my-project                  # pull docs from upstream repos → evidence/raw/
+wf ingest evidence/raw/my-project/docs/readme.md --extract-claims
+wf query "Why does my code batch writes?"
+wf log --project my-project --problem "..." --intervention "..." --outcomes "..."
+```
+
+All `wf` commands work without the install too — the underlying scripts live in `scripts/` and run with plain `python3`.
+
+---
+
 ## What Is This?
 
 Wiki Fabric is a self-maintaining knowledge system that:
@@ -36,9 +54,9 @@ graph TB
     subgraph "Fabric"
         RAW["evidence/raw/<br/>(immutable captures)"]
         CLAIMS["evidence/claims/<br/>(47 verified claims)"]
-        CONCEPTS["02-Human/Concepts/<br/>(7 synthesized concepts)"]
-        PATTERNS["02-Human/Patterns/<br/>(2 patterns)"]
-        SKILLS["02-Human/Skills/<br/>(2 skills)"]
+        CONCEPTS["concepts/<br/>(7 synthesized concepts)"]
+        PATTERNS["patterns/<br/>(2 patterns)"]
+        SKILLS["skills/<br/>(2 skills)"]
         EVENTS["projects/*/experience-events/<br/>(4 events)"]
         ENTITIES["global/entities/<br/>(2,138 AST-indexed symbols)"]
         GRAPHS["global/graphs/<br/>(graphify call graph)"]
@@ -74,13 +92,13 @@ flowchart LR
 
 ```bash
 # Ingest a source with LLM claim extraction
-python3 scripts/ingest.py --extract-claims evidence/raw/godot-mcp/docs/architecture.md
+wf ingest evidence/raw/godot-mcp/docs/architecture.md --extract-claims
 
 # Dry run (no files written)
-python3 scripts/injest.py --extract-claims --dry-run evidence/raw/foo.md
+wf ingest --extract-claims --dry-run evidence/raw/foo.md
 
 # Use a different model
-WIKI_LLM_MODEL="llama3.1:70b" python3 scripts/ingest.py --extract-claims evidence/raw/foo.md
+WIKI_LLM_MODEL="llama3.1:70b" wf ingest evidence/raw/foo.md --extract-claims
 ```
 
 **LLM configuration** (env vars, Ollama default):
@@ -111,13 +129,13 @@ flowchart TD
 
 ```bash
 # Ask anything
-python3 scripts/query.py "Why does godot-mcp batch writes but pipeline reads?"
+wf query "Why does godot-mcp batch writes but pipeline reads?"
 
 # Save reusable answers as synthesis pages
-python3 scripts/query.py "What patterns apply to single-writer systems?" --save
+wf query "What patterns apply to single-writer systems?" --save
 
 # Force query type
-python3 scripts/query.py "What did we decide about the bridge?" --type decision
+wf query "What did we decide about the bridge?" --type decision
 ```
 
 ### 3. Experience → Pattern → Skill (Compounding Loop)
@@ -137,13 +155,13 @@ flowchart LR
 
 ```bash
 # Capture an experience event
-python3 scripts/log-experience.py --project godot-mcp \
+wf log --project godot-mcp \
   --problem "Editor froze on batch mutation" \
   --intervention "Added batch queue with undo grouping" \
   --outcomes "frame_drops=12→0" --tags "godot-mcp,performance"
 
 # List projects + event counts
-python3 scripts/log-experience.py --list
+wf log --list
 
 # Mine for cross-project patterns
 python3 scripts/mine-promotions.py --dry-run
@@ -169,17 +187,16 @@ flowchart LR
 
 ```bash
 # One-time global install
-bash ~/wiki-fabric/scripts/bootstrap-fabric.sh
+wf install
 
 # Per-project setup
-python3 scripts/bootstrap-project.py /path/to/my-project \
-  --name "My Project" \
+wf bootstrap /path/to/my-project --name "My Project" \
   --domain agent-systems --domain web-systems \
-  --skill serialize-and-verify-writes \
-  --init-git
+  --skill serialize-and-verify-writes --init-git
 
 # Then capture + ingest sources
-python3 scripts/ingest.py --extract-claims evidence/raw/my-project/docs/*.md
+wf capture my-project
+wf ingest evidence/raw/my-project/docs/*.md --extract-claims
 ```
 
 The bootstrap **additively merges** into existing `opencode.json` (never overwrites your MCP config, rules, or references).
@@ -212,7 +229,7 @@ flowchart TD
 python3 scripts/rebuild-index.py
 
 # Verify health
-python3 scripts/lint.py .
+wf lint
 
 # Run formal evaluation (golden corpus)
 WIKI_LLM_MODEL="qwen3.8:27b-mlx" python3 scripts/eval.py
@@ -328,17 +345,38 @@ Graphify adds **structural intelligence the LLM can't provide deterministically*
 | `source` | `evidence/sources/` | Immutable bibliographic record + sha256 |
 | `source-summary` | `evidence/source-summaries/` | Faithful summary with locators, no inference |
 | `claim` | `evidence/claims/` | Atomic assertion with `source_refs` (locator + quote) + `code_symbols` + `graph_edges` |
-| `concept` | `02-Human/Concepts/` | Stable explanation built ONLY from linked claims |
+| `concept` | `concepts/` or `domains/<d>/concepts/` | Stable explanation built ONLY from linked claims |
 | `experience-event` | `projects/<p>/experience-events/` | Structured observation: problem → intervention → outcome |
-| `pattern` | `02-Human/Patterns/` | Reusable context→problem→forces→solution (maturity 0–3) |
-| `anti-pattern` | `02-Human/Anti-Patterns/` | Repeated failure mode; detect and warn |
-| `skill` | `02-Human/Skills/` | Reusable procedure with inputs/outputs |
+| `pattern` | `patterns/` | Reusable context→problem→forces→solution (maturity 0–3) |
+| `anti-pattern` | `anti-patterns/` | Repeated failure mode; detect and warn |
+| `skill` | `skills/` | Reusable procedure with inputs/outputs |
 | `decision` | `projects/<p>/decisions/` | ADR-like technical choice record |
 | `entity` | `global/entities/` | Code-symbol index from AST parsing |
 | `change-set` | `evidence/traces/change-sets/` | Agent-proposed edit batch for human review |
-| `synthesis` | `02-Human/Projects/_syntheses/` | Query answer filed for reuse |
+| `synthesis` | `syntheses/` | Query answer filed for reuse |
 
 **See `schemas/frontmatter.md` for full contracts.**
+
+---
+
+## CLI Reference (`wf`)
+
+The `wf` command is the single entry point for controlling the fabric. It installs to `~/.local/bin/wf` (alias `wiki-fabric`).
+
+| Command | Purpose |
+|---------|---------|
+| `wf install [--repo URL] [--dir DIR]` | Clone + set up the fabric |
+| `wf update` | Pull latest, rebuild entity index + catalog, lint |
+| `wf status` | Fabric health + inventory counts |
+| `wf vault [PATH]` | Create Obsidian vault (symlinks) |
+| `wf bootstrap <project-path>` | Connect a project to the fabric |
+| `wf capture <project-slug> [--repo PATH]` | Capture upstream repo docs → `evidence/raw/` |
+| `wf ingest <source> [--extract-claims]` | Ingest a source (LLM claim extraction) |
+| `wf query "<question>"` | Ask the fabric a question |
+| `wf log --project <slug> ...` | Log an experience event |
+| `wf lint` | Run deterministic linter |
+
+Environment: `WIKI_FABRIC_REPO` overrides the source repo URL.
 
 ---
 
@@ -364,6 +402,22 @@ Graphify adds **structural intelligence the LLM can't provide deterministically*
 
 ---
 
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `AGENTS.md` | Master schema: layers, note types, workflows, protocols |
+| `schemas/frontmatter.md` | Per-type frontmatter contracts |
+| `schemas/ontology.md` | Living domain ontology (auto-discovered) |
+| `registry/index.md` | Exhaustive catalog (auto-generated) |
+| `registry/log.md` | Append-only operation timeline |
+| `registry/promotion-queue.md` | Promotion pipeline with review checklist |
+| `system/skills/*/SKILL.md` | Skill protocols |
+| `fabric.yaml.example` | Config template (repos, owner, LLM) |
+| `evaluations/rubric.md` | Evaluation metrics & run protocol |
+
+---
+
 ## Connected Projects
 
 | Project | Domain | Claims | Experience Events | Entity Pages |
@@ -377,43 +431,6 @@ Graphify adds **structural intelligence the LLM can't provide deterministically*
 
 ---
 
-## Governance
-
-- **Raw sources immutable** — never edit `evidence/raw/` in place; re-capture on refresh
-- **Human gates** — all canonical edits require change-set + human approval
-- **No auto-promotion** — patterns require human review (7-point checklist)
-- **Provenance mandatory** — every claim traces to source + locator + quote
-- **Ontology is living** — `propose-domains.py` auto-discovers new domains from evidence
-- **Compounding** — skills/patterns/templates compound across projects
-- **LLM only for synthesis** — retrieval is always deterministic (lexical + graph)
-
----
-
-## Key Files
-
-| File | Purpose |
-|------|---------|
-| `00-System/AGENTS.md` | Master schema: layers, note types, workflows, protocols |
-| `00-System/schemas/frontmatter.md` | Per-type frontmatter contracts |
-| `00-System/schemas/ontology.md` | Living domain ontology (auto-discovered) |
-| `01-Raw/registry/index.md` | Exhaustive catalog (auto-generated) |
-| `01-Raw/registry/log.md` | Append-only operation timeline |
-| `01-Raw/registry/promotion-queue.md` | Promotion pipeline with review checklist |
-| `00-System/skills/*/SKILL.md` | Skill protocols |
-| `evaluations/rubric.md` | Evaluation metrics & run protocol |
-
----
-
-## Governance
-
-- **Single source of truth:** Raw sources immutable; wiki pages derived
-- **Human gates:** All canonical edits require change-set + human approval
-- **No auto-promotion:** Patterns require human review (7-point checklist)
-- **Provenance mandatory:** Every claim traces to source + locator + quote
-- **Self-updating ontology:** `propose-domains.py` discovers new domains from evidence signals
-
----
-
 ## License
 
-MIT — use freely, contribute back improvements to the fabric.
+MIT — see [LICENSE](LICENSE). Use freely, contribute back improvements to the fabric.

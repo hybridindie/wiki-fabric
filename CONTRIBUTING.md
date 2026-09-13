@@ -45,7 +45,7 @@ sha256sum evidence/raw/<repo>/<file>.md
 #   - diff.md (unified diff)
 
 # 7. Lint → Human gate → Merge → Log → Commit
-python3 scripts/lint.py .
+wf lint
 ```
 
 ### 2. Run Evaluation Fixtures
@@ -71,7 +71,7 @@ cp -r evaluations/fixtures/source-a.md evidence/_inbox/
 #    5. Tradeoff: cost/benefit stated
 #    6. Asset changes: which global/ entries
 #    7. Owner review
-# 5. On approval: write global/patterns/..., update indexes, lint, commit
+# 3. On approval: write patterns/<slug>.md, update indexes, lint, commit
 ```
 
 ### 3. Add a Skill
@@ -112,7 +112,7 @@ mkdir -p .opencode/skills/<skill-name>
 ## Lint Before Commit
 
 ```bash
-python3 scripts/lint.py .  # must be 0 errors
+wf lint  # must be 0 errors
 ```
 
 ---

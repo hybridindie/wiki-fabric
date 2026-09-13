@@ -2,7 +2,7 @@
 # wiki-fabric — Install, update, and manage the Wiki Fabric
 #
 # One-liner install:
-#   curl -fsSL https://raw.githubusercontent.com/YOU/wiki-fabric/main/scripts/wiki-fabric.sh (installs as `wf`) | bash
+#   curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/scripts/wiki-fabric.sh | bash
 #
 # Usage:
 #   wf install [--repo URL] [--dir DIR]   # Clone + set up fabric
@@ -16,7 +16,7 @@
 set -euo pipefail
 
 # === Constants ===
-FABRIC_REPO="${WIKI_FABRIC_REPO:-https://github.com/YOUR_GITHUB_USER/wiki-fabric.git}"
+FABRIC_REPO="${WIKI_FABRIC_REPO:-https://github.com/hybridindie/wiki-fabric.git}"
 DEFAULT_DIR="${HOME}/Development/wiki-fabric"
 DEFAULT_VAULT="${HOME}/Development/vault"
 SCRIPT_NAME="wf"
@@ -473,7 +473,7 @@ case "${1:-help}" in
         echo "  WIKI_FABRIC_REPO  Git URL (default: ${FABRIC_REPO})"
         echo ""
         echo "One-liner install:"
-        echo "  curl -fsSL https://raw.githubusercontent.com/YOU/wiki-fabric/main/scripts/wiki-fabric.sh | bash"
+        echo "  curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/scripts/wiki-fabric.sh | bash"
         echo "  (installs as 'wf' + 'wiki-fabric' at ~/.local/bin/)"
         echo ""
         ;;
