@@ -176,9 +176,10 @@ ensure_directories() {
 
 # === Command: install ===
 cmd_install() {
-    local repo_url="${WIKI_FABRIC_REPO}"
+    local repo_url="${FABRIC_REPO}"
     local install_dir="${DEFAULT_DIR}"
     local skip_vault=false
+    local corpus_url=""
 
     # Parse install args
     while [[ $# -gt 0 ]]; do
@@ -186,6 +187,7 @@ cmd_install() {
             --repo) repo_url="$2"; shift 2 ;;
             --dir) install_dir="$2"; shift 2 ;;
             --no-vault) skip_vault=true; shift ;;
+            --corpus) corpus_url="$2"; shift 2 ;;
             *) shift ;;
         esac
     done
@@ -236,7 +238,7 @@ cmd_install() {
     cd "${install_dir}"
 
     # Ensure directory structure
-    ensure_directories
+    ensure_directories "${install_dir}"
 
     # Ensure fabric.yaml
     ensure_fabric_yaml "${install_dir}"
@@ -272,6 +274,20 @@ cmd_install() {
         echo ""
     fi
 
+    # Wire up team corpus sync if a remote was provided
+    if [[ -n "${corpus_url}" ]]; then
+        info "Configuring corpus sync → ${corpus_url}"
+        run_python "${install_dir}" "${install_dir}/scripts/sync.py" init "${corpus_url}"
+        echo ""
+    else
+        echo "────────────────────────────────────────────"
+        echo "Team sharing (optional): point this fabric at a shared corpus"
+        echo "remote so every machine reads the same source of truth:"
+        echo ""
+        echo "  ${SCRIPT_NAME} sync init git@github.com:your-org/wiki-fabric-corpus.git"
+        echo ""
+    fi
+
     echo "────────────────────────────────────────────"
     echo "Next steps:"
     echo ""
@@ -290,6 +306,10 @@ cmd_install() {
     echo ""
     echo "  5. Log experience:"
     echo "     wf log --project <slug> --problem \"...\" --intervention \"...\" --outcomes \"...\""
+    echo ""
+    echo "  6. Share with a team:"
+    echo "     wf sync init git@github.com:your-org/wiki-fabric-corpus.git"
+    echo "     wf sync push   # publish your corpus; teammates: wf sync pull"
     echo "────────────────────────────────────────────"
 }
 
@@ -537,6 +557,7 @@ case "${1:-help}" in
         echo ""
         echo "Commands:"
         echo "  install [--repo URL] [--dir DIR]  Install fabric from repo URL"
+        echo "          [--corpus GIT-URL]        Wire team corpus sync at install time"
         echo "  update                            Pull latest + rebuild entity index"
         echo "  status                            Show fabric health + inventory"
         echo "  vault [PATH]                      Create Obsidian vault (symlinks)"

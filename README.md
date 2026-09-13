@@ -38,6 +38,9 @@ Wiki Fabric is a self-maintaining knowledge system that:
 # One-liner install (installs uv if missing, then the `wf` CLI at ~/.local/bin/)
 curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/scripts/wiki-fabric.sh | bash
 
+# With team corpus sync wired in from the start:
+curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/scripts/wiki-fabric.sh | bash -s -- --corpus git@github.com:your-org/wiki-fabric-corpus.git
+
 wf status                              # check fabric health
 wf bootstrap /path/to/my-project       # connect a project
 wf capture my-project                  # pull docs from upstream repos → evidence/raw/
@@ -561,6 +564,7 @@ lifecycles and remotes.
 
 ```bash
 # One-time: point your fabric at the shared corpus remote
+# (or pass --corpus <git-url> to the installer and this is done for you)
 wf sync init git@github.com:your-org/wiki-fabric-corpus.git
 
 # Day-to-day, on any machine:
