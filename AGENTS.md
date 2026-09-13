@@ -160,13 +160,14 @@ Full frontmatter contracts live in `schemas/frontmatter.md`. One line each:
 | `source-summary` | `evidence/source-summaries/` | Faithful summary of one source with line/section locators; no inference |
 | `claim` | `evidence/claims/` | Atomic assertion with status, confidence, evidence refs, temporal fields |
 | `entity` | `global/entities/` | Project / org / model / library / person / paper |
-| `concept` | `domains/<d>/concepts/` | Stable explanation built ONLY from linked claims |
+| `concept` | `concepts/` or `domains/<d>/concepts/` | Stable explanation built ONLY from linked claims |
 | `question` | `domains/<d>/questions/` | Unresolved research question with priority + rationale |
-| `synthesis` | `domains/<d>/syntheses/` | Timed answer/comparison citing claims (an audience projection) |
+| `synthesis` | `syntheses/` | Timed answer/comparison citing claims (an audience projection) |
 | `decision` | `projects/<p>/decisions/` | ADR-like record of a project's technical choice |
 | `experience-event` | `projects/<p>/experience-events/` | Structured observation: problem, intervention, conditions, outcomes |
-| `pattern` | `global/patterns/` | Reusable context→problem→forces→solution with maturity + evidence lineage |
-| `anti-pattern` | `global/anti-patterns/` | Repeated failure mode; detect and warn |
+| `pattern` | `patterns/` | Reusable context→problem→forces→solution with maturity + evidence lineage |
+| `anti-pattern` | `anti-patterns/` | Repeated failure mode; detect and warn |
+| `skill` | `skills/` | Reusable procedure with inputs/outputs |
 | `experiment` | `evidence/experiments/` | Executable test contract: hypothesis, environment, metrics, results |
 | `change-set` | `evidence/traces/change-sets/` | Agent-proposed edit batch, human-reviewed before canonical write |
 | `promotion-dossier` | `registry/promotions/` | Proposal to promote a project finding to a global pattern |
