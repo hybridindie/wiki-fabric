@@ -99,6 +99,67 @@ flowchart LR
     G --> H["Merge → Log → Commit"]
 ```
 
+### 1a. Git History Capture: PRs, Issues, Commits → Raw Evidence
+
+Code history is a second capture channel alongside docs. Two sources, one pipeline:
+
+```mermaid
+flowchart LR
+    subgraph "Docs capture"
+        D1["README, docs/, ADRs<br/>(what the system does)"] --> RAW
+    end
+    subgraph "Git capture — capture-git.py"
+        G1["PR descriptions<br/>+ review threads"] --> RAW
+        G2["Issues<br/>(bug reports, feature debates)"] --> RAW
+        G3["High-signal commits<br/>(reverts, fix/feat/perf)"] --> RAW
+    end
+    RAW["evidence/raw/<slug>/git/<br/>(same immutable capture rules)"]
+```
+
+```bash
+# GitHub: PR threads + issue reports (via gh CLI)
+wf capture my-project --git owner/repo
+wf capture my-project --git owner/repo --since 1y --limit 100
+
+# Local repo: high-signal commits only + churn ranking
+wf capture my-project --git /path/to/repo --churn
+
+# See what would be captured without writing
+wf capture my-project --git owner/repo --dry-run
+```
+
+**Why this is helpful — and why it's filtered:**
+
+| Signal | What it gives the fabric | Cost control |
+|---|---|---|
+| PR bodies + review threads | The *why* behind changes — problem, debate, tradeoffs rejected and chosen. This is `experience-event` material pre-written by people who were there | 1 LLM call per PR, so `--limit` and `--since` bound the blast radius |
+| Issues | Structured `observed_problem` reports, often with repro steps and environment details | Filtered by date window; closed/stale issues usually aren't worth extracting |
+| Revert commits | Failed interventions — the seeds of anti-patterns. A revert says "we tried this and it was wrong", which docs never record | Deterministic prefix filter, 0 tokens |
+| Conventional commits (`fix:`, `feat:`, `perf:`) | Hotspot trail: which subsystems keep breaking | `chore:`/`style:`/`test:`/`ci:` skipped — most commits are noise |
+| `--churn` ranking | Tells you *where* to spend ingest budget: high-churn files are where the knowledge is | Pure git analysis, 0 tokens, 0 LLM calls |
+
+The key discipline: **LLM extraction is the most expensive operation in the fabric**
+(1 call per source), so git capture pre-filters deterministically and only the
+high-signal subset goes through ingest. A repo with 2,000 commits might yield 40
+capturable threads — and those 40 carry more decision history than all the docs
+combined. Every captured thread keeps its PR number / commit SHA, which are valid
+claim locators — auditable the same way line ranges are.
+
+**Scenario — archaeology on a inherited codebase.** You inherit a repo with
+thin docs and 8,000 commits. Instead of skimming `git log` by hand, run
+`wf capture my-project --git owner/repo --since 1y` then ingest the captured
+threads. The fabric compiles claims like "auth middleware was rewritten to
+token-based auth because stateful sessions broke horizontally-scaled sessions
+(PR #342, review thread)" — context no doc contains, each anchored to a PR you
+can open. `--churn` shows the payment module changed 400 times in 6 months:
+that's where the tribal knowledge lives, so ingest its PR threads first.
+
+**Scenario — avoiding a repeat failure.** A revert commit says a caching layer
+was tried and rolled back. Captured and ingested, it becomes an experience event
+with a negative outcome — and months later, when a new session proposes "add a
+cache here", `wf query "have we tried caching X?"` returns the revert's history
+before anyone re-runs the same experiment.
+
 ```bash
 # Ingest a source with LLM claim extraction
 wf ingest evidence/raw/my-project/docs/readme.md --extract-claims
@@ -135,14 +196,10 @@ new version — so "we rely on their single-writer guarantee" gets re-verified
 against the new source text, not forgotten.
 
 **Scenario — bootstrapping from PR history.** Docs tell you what a system does;
-PR and issue history tells you why. `wf capture my-project --git owner/repo`
-pulls PR descriptions with review threads and issue reports into
-`evidence/raw/<slug>/git/` — the "problem → intervention" debates that never
-make it into docs, pre-shaped for experience-event extraction. Commits are
-deterministically filtered (reverts, `fix:`/`feat:`/`perf:` conventional
-commits; `chore:`/`style:` skipped) so LLM extraction stays cheap. On a local
-repo, add `--churn` for a file-churn ranking that tells you which areas
-deserve deeper ingest first.
+PR and issue history tells you why. See **Git History Capture** above: the
+"problem → intervention" debates that never make it into docs, deterministically
+pre-filtered so LLM extraction stays cheap, with `--churn` pointing ingest
+budget at the highest-traffic areas.
 
 ### 2. Query: Question → Evidence-Backed Answer
 
