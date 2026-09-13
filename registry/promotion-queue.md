@@ -11,10 +11,7 @@ Candidates awaiting human promotion. **No auto-promotion** — only the user set
 
 | Pattern | Maturity | Evidence lineage | Dossier |
 |---|---|---|---|
-| [[pattern-single-writer-with-parity-check]] | 2 (recommended) | 2 independent projects | [[promotion-single-writer-with-parity-check]] |
-| [[pattern-consolidate-validation]] | 2 (candidate) | 2 independent projects (alpaca-agents, nomokailist) | [[promotion-consolidate-validation]] |
-| [[anti-pattern-unverified-parallel-writes]] | 2 (recommended) | same 2 projects | (above) |
-| [[anti-pattern-scattered-validation]] | 2 (candidate) | same 2 projects | (above) |
+| (empty) | | | |
 
 ## Review checklist (per dossier)
 

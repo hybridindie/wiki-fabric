@@ -6,11 +6,10 @@ updated: 2026-09-13
 
 # Skill Index
 
-Reusable agent procedures.
+Reusable agent procedures live in `skills/` and are promoted via the [[promotion-queue]].
 
 | Skill | Maturity | Pattern | Status |
 |---|---|---|---|
-| [[serialize-and-verify-writes]] | 2 (recommended) | [[pattern-single-writer-with-parity-check]] | available |
-| [[consolidate-validation]] | 2 (candidate) | [[pattern-consolidate-validation]] | available |
+| (none yet) | | | |
 
 When a pattern reaches maturity 3, package it as a `skill` + `template` here.

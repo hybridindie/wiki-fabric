@@ -167,7 +167,6 @@ def build_index(categories):
 
     # Registry hub links
     lines.append("## Registry")
-    lines.append("- [[log]] — Append-only operation timeline")
     lines.append("- [[promotion-queue]] — Promotion pipeline")
     lines.append("- [[pattern-index]] — Promoted patterns")
     lines.append("- [[skill-index]] — Reusable skills")
