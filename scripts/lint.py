@@ -26,7 +26,7 @@ VALID_TYPES = {
      "change-set", "change-set-diff", "promotion-dossier", "ontology", "registry", "index", "log",
 }
 PATTERN_STATUSES = {"candidate", "recommended", "standard", "deprecated"}
-EXCLUDE_DIRS = {".git", ".obsidian", ".opencode", "__pycache__", "evidence/traces"}
+EXCLUDE_DIRS = {".git", ".obsidian", ".opencode", "__pycache__", ".venv", "venv", "node_modules", "evidence/traces"}
 TEMPLATE_DIRS = {"global/templates", "schemas", "templates"}
 HUB_KINDS = {"ontology", "registry", "index", "log"}
 LINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]")

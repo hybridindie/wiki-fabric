@@ -1,0 +1,13 @@
+# Wiki Fabric — Python dependencies
+# Installed via uv during `wf install` (and synced on `wf update`).
+#
+# Core (required by the fabric CLI):
+pyyaml>=6.0
+
+# LLM clients (optional, used by ingest --extract-claims / synthesize):
+openai>=1.40
+anthropic>=0.40
+
+# Optional semantic clustering (mine-promotions --use-embeddings):
+# numpy
+# sentence-transformers

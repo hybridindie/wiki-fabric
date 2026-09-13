@@ -35,7 +35,7 @@ Wiki Fabric is a self-maintaining knowledge system that:
 ## Quick Start
 
 ```bash
-# One-liner install (installs the `wf` CLI at ~/.local/bin/)
+# One-liner install (installs uv if missing, then the `wf` CLI at ~/.local/bin/)
 curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/scripts/wiki-fabric.sh | bash
 
 wf status                              # check fabric health
@@ -45,6 +45,14 @@ wf ingest evidence/raw/my-project/docs/readme.md --extract-claims
 wf query "Why does my code batch writes?"
 wf log --project my-project --problem "..." --intervention "..." --outcomes "..."
 ```
+
+The one-liner checks for **uv** (Astral's Python package manager) and installs it
+if missing, then creates a `.venv` inside the fabric and installs Python deps
+from `requirements.txt` (pyyaml, openai, anthropic) with `uv pip`. Everything
+Python runs inside that venv — no system pip pollution, no version drift. If uv
+can't be installed, `wf` falls back to plain `python3` (core CLI works; LLM
+features need `pip install -r requirements.txt` manually). `wf update` re-syncs
+deps if `requirements.txt` changed.
 
 All `wf` commands work without the install too — the underlying scripts live in `scripts/` and run with plain `python3`.
 
@@ -58,8 +66,9 @@ bash scripts/smoke-test.sh     # end-to-end: spins up a throwaway fabric, runs 1
 python3 scripts/lint.py .      # fabric self-lint (0-error gate)
 ```
 
-CI runs all three on every push and PR (`.github/workflows/ci.yml`). The smoke
-test runs in an isolated temp copy by default, so it can't dirty your fabric.
+CI runs all three on every push and PR (`.github/workflows/ci.yml`) using
+**uv** for environment setup. The smoke test runs in an isolated temp copy by
+default (creating its own uv venv), so it can't dirty your fabric.
 
 ---
 

@@ -33,6 +33,58 @@ ok() { echo -e "${GREEN}✓${NC}  $*"; }
 warn() { echo -e "${YELLOW}⚠${NC}  $*"; }
 err() { echo -e "${RED}✗${NC}  $*" >&2; }
 
+# === Helper: ensure uv is available (install if missing) ===
+ensure_uv() {
+    if command -v uv &>/dev/null; then
+        return 0
+    fi
+    info "uv not found — installing (official installer)..."
+    if curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; then
+        export PATH="${HOME}/.local/bin:${PATH}"
+        if command -v uv &>/dev/null; then
+            ok "uv installed: $(uv --version 2>/dev/null | head -1)"
+            return 0
+        fi
+    fi
+    warn "Could not install uv — falling back to system python3 (pip-based deps)"
+    return 1
+}
+
+# === Helper: python runner — prefers `uv run` inside the fabric, falls back to python3 ===
+# Usage: run_python "${fabric_dir}" script.py args...
+run_python() {
+    local fabric_dir="$1"
+    shift
+    if [[ -x "${fabric_dir}/.venv/bin/python" ]]; then
+        "${fabric_dir}/.venv/bin/python" "$@"
+    elif command -v uv &>/dev/null && [[ -f "${fabric_dir}/pyproject.toml" ]]; then
+        (cd "${fabric_dir}" && uv run --no-sync python "$@")
+    else
+        python3 "$@"
+    fi
+}
+
+# === Helper: sync python deps into the fabric venv (uv-first, pip fallback) ===
+sync_deps() {
+    local fabric_dir="$1"
+    (
+        cd "${fabric_dir}" || return 1
+        if [[ ! -d .venv ]] && command -v uv &>/dev/null; then
+            uv venv --quiet 2>/dev/null
+        fi
+        if [[ -d .venv ]] && command -v uv &>/dev/null; then
+            uv pip install -q -r requirements.txt --python .venv/bin/python && \
+                { ok "Python dependencies synced (uv)"; return 0; }
+        fi
+        # Fallback: plain pip into the venv or user site
+        if [[ -x .venv/bin/pip ]]; then
+            .venv/bin/pip install -q -r requirements.txt && { ok "Python dependencies synced (pip)"; return 0; }
+        fi
+        python3 -m pip install -q -r requirements.txt && ok "Python dependencies synced (pip)" || \
+            warn "Could not install python deps — LLM features may be unavailable (core CLI still works)"
+    ) || true
+}
+
 # === Helper: find fabric root ===
 find_fabric() {
     # Check default location
@@ -189,6 +241,11 @@ cmd_install() {
     # Ensure fabric.yaml
     ensure_fabric_yaml "${install_dir}"
 
+    # Ensure uv + python, then sync dependencies into .venv
+    if ensure_uv; then
+        sync_deps "${install_dir}"
+    fi
+
     # Install CLI to local bin
     local bin_dir="${HOME}/.local/bin"
     mkdir -p "${bin_dir}"
@@ -226,13 +283,13 @@ cmd_install() {
     echo ""
     echo "  3. Ingest a source:"
     echo "     cd ${install_dir}"
-    echo "     python3 scripts/ingest.py --extract-claims evidence/raw/<repo>/<doc>.md"
+    echo "     wf ingest evidence/raw/<repo>/<doc>.md --extract-claims"
     echo ""
     echo "  4. Ask questions:"
-    echo "     python3 scripts/query.py \"Why does X do Y?\""
+    echo "     wf query \"Why does X do Y?\""
     echo ""
     echo "  5. Log experience:"
-    echo "     python3 scripts/log-experience.py --project <slug>"
+    echo "     wf log --project <slug> --problem \"...\" --intervention \"...\" --outcomes \"...\""
     echo "────────────────────────────────────────────"
 }
 
@@ -269,25 +326,30 @@ cmd_update() {
         warn "No remote configured. Add one: git remote add origin <url>"
     fi
 
+    # Sync python deps (in case requirements changed)
+    if [[ -f "requirements.txt" ]]; then
+        sync_deps "${fabric_dir}"
+    fi
+
     # Update entity index if repos are configured
     if [[ -f "fabric.yaml" ]]; then
         echo ""
         info "Updating entity index..."
-        python3 scripts/build-entity-index.py --skip-enrich 2>/dev/null || true
+        run_python "${fabric_dir}" scripts/build-entity-index.py --skip-enrich 2>/dev/null || true
     fi
 
     # Rebuild index
     echo ""
     info "Rebuilding catalog..."
-    python3 scripts/rebuild-index.py 2>/dev/null || true
+    run_python "${fabric_dir}" scripts/rebuild-index.py 2>/dev/null || true
 
     # Run lint
     echo ""
     info "Verifying health..."
-    if python3 scripts/lint.py . 2>/dev/null; then
+    if run_python "${fabric_dir}" scripts/lint.py . 2>/dev/null; then
         ok "Lint clean"
     else
-        warn "Lint has errors — run python3 scripts/lint.py . for details"
+        warn "Lint has errors — run: wf lint"
     fi
 
     # Update vault symlinks if vault exists
@@ -353,7 +415,7 @@ cmd_status() {
 
     # Lint health
     echo ""
-    if python3 scripts/lint.py . 2>/dev/null; then
+    if run_python "${fabric_dir}" scripts/lint.py . 2>/dev/null; then
         ok "Lint: clean"
     else
         warn "Lint: has errors"
@@ -397,7 +459,7 @@ cmd_bootstrap() {
     fi
 
     echo ""
-    python3 "${fabric_dir}/scripts/bootstrap-project.py" "$@"
+    run_python "${fabric_dir}" "${fabric_dir}/scripts/bootstrap-project.py" "$@"
 }
 
 # === Main dispatcher ===
@@ -431,9 +493,9 @@ case "${1:-help}" in
             [[ -z "$grepo" ]] && { err "Usage: wf capture <project-slug> --git <owner/name-or-path>"; exit 1; }
             project="$1"
             shift 3
-            python3 "$(find_fabric)/scripts/capture-git.py" "$project" --repo "$grepo" "$@"
+            run_python "$(find_fabric)" "$(find_fabric)/scripts/capture-git.py" "$project" --repo "$grepo" "$@"
         else
-            python3 "$(find_fabric)/scripts/capture.py" "$@"
+            run_python "$(find_fabric)" "$(find_fabric)/scripts/capture.py" "$@"
         fi
         ;;
     ingest)
@@ -443,18 +505,18 @@ case "${1:-help}" in
             err "Usage: wf ingest <source-path> [--extract-claims]"
             exit 1
         fi
-        python3 "${fdir}/scripts/ingest.py" "$@"
+        run_python "${fdir}" "${fdir}/scripts/ingest.py" "$@"
         ;;
     query)
         shift
-        python3 "$(find_fabric)/scripts/query.py" "$@"
+        run_python "$(find_fabric)" "$(find_fabric)/scripts/query.py" "$@"
         ;;
     lint)
-        python3 "$(find_fabric)/scripts/lint.py" .
+        run_python "$(find_fabric)" "$(find_fabric)/scripts/lint.py" .
         ;;
     log)
         shift
-        python3 "$(find_fabric)/scripts/log-experience.py" "$@"
+        run_python "$(find_fabric)" "$(find_fabric)/scripts/log-experience.py" "$@"
         ;;
     help|--help|-h)
         echo ""

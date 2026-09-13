@@ -17,7 +17,7 @@ except ImportError:
 VAULT_ROOT = Path(__file__).parent.parent
 INDEX_PATH = VAULT_ROOT / "registry" / "index.md"
 
-SKIP_PARTS = {".git", ".obsidian", ".opencode", "__pycache__", "templates", "schemas", "evaluations"}
+SKIP_PARTS = {".git", ".obsidian", ".opencode", "__pycache__", ".venv", "venv", "node_modules", "templates", "schemas", "evaluations", "system", "examples"}
 SKIP_DIRS_IN_EVIDENCE = {"raw", "traces"}
 
 LINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]")
