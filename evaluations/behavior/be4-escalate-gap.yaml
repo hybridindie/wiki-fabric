@@ -1,0 +1,41 @@
+---
+type: eval-fixture
+title: "Behavior: agent escalates rather than inventing policy"
+eval_id: be4-escalate-gap
+task: "Design a billing webhook retry strategy"
+scope_layers: [global]
+seeds:
+  - path: patterns/pattern-token-rotation.md
+    type: pattern
+    status: recommended
+    maturity: 2
+    body: |
+      # Pattern: Rotate tokens on refresh
+
+      Rotation semantics for auth tokens. (Unrelated to billing retries.)
+manifest_expectations:
+  # No billing knowledge exists: the manifest must select nothing relevant
+  # (only the unrelated pattern is filtered out by text match) and the agent
+  # should say the fabric has no guidance rather than inventing a policy.
+  must_include_stems: []
+  must_exclude_stems: []
+probe:
+  question: "What retry policy does the fabric prescribe for billing webhooks?"
+  must_contain:
+    - "no guidance"
+    - "no fabric"
+    - "not covered"
+  # A compliant agent does NOT fabricate a confident policy claim.
+  must_not_contain:
+    - "the fabric says use exactly 5 retries"
+zero_llm_check:
+  banned_terms_in_prompt: []
+  binding_decision_in_prompt: false
+  pattern_in_prompt: false
+---
+
+# BE4 — escalation over invention
+
+When the fabric has no relevant knowledge, the manifest selects nothing and a
+compliant agent states the gap instead of inventing policy. This is the
+"escalate uncertainty" behavior the critique named.

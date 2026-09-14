@@ -1,0 +1,48 @@
+---
+type: eval-fixture
+title: "Behavior: agent honors project constraint over general preference"
+eval_id: be2-project-over-global
+task: "Persist auth sessions for the auth service"
+scope_layers: [global, project]
+seeds:
+  - path: projects/auth-service/decisions/decision-rotation.md
+    type: decision
+    status: accepted
+    body: |
+      The auth service chose rotating refresh tokens over server-side session
+      extension. Rationale: stateless horizontal scaling. Session-extension
+      proposals should be redirected.
+  - path: patterns/pattern-session-store.md
+    type: pattern
+    status: recommended
+    maturity: 2
+    body: |
+      # Pattern: Server-side session store
+
+      For stateful services, a server-side session store with sticky routing
+      is a reasonable default. Requires horizontal-scaling review.
+manifest_expectations:
+  # The project decision must win: it is P1 and explicitly redirects
+  # session-extension proposals. The generic pattern is still delivered
+  # (it is valid elsewhere) but the manifest's precedence section resolves
+  # the conflict.
+  must_include_stems: [decision-rotation]
+  must_exclude_stems: []
+probe:
+  question: "Should we add server-side session storage to persist auth sessions?"
+  must_not_contain:
+    - "let's add a session store"
+    - "recommend session extension"
+  must_contain:
+    - "rotating refresh tokens"
+zero_llm_check:
+  banned_terms_in_prompt: []
+  binding_decision_in_prompt: true
+  pattern_in_prompt: true
+---
+
+# BE2 — precedence: project constraint beats general preference
+
+The general pattern (session store) matches the task text, but the project
+decision explicitly rejects it for this service. A compliant agent defers to
+the binding decision and says so.

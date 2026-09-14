@@ -97,10 +97,12 @@ def tokens(text):
     out = set()
     for w in re.findall(r"[a-z0-9][a-z0-9_-]{2,}", text.lower()):
         out.add(w)
-        # cheap suffix strip: -tion/-ting/-ing/-ed/-s
-        for suf in ("tion", "ting", "ing", "ed", "s"):
+        # cheap suffix strip: -tion/-ting/-ing/-ed/-s + e-restoration (caching→cache)
+        for suf, add in (("tion", ""), ("ting", ""), ("ing", "e"), ("ed", "e"), ("s", "")):
             if w.endswith(suf) and len(w) - len(suf) >= 4:
                 out.add(w[: -len(suf)])
+                if add:
+                    out.add(w[: -len(suf)] + add)
                 break
     return out
 

@@ -129,8 +129,12 @@ pass "mine-promotions dry-run"
 "${PY}" "${FABRIC}/scripts/context.py" --task "smoke test task" --format json | "${PY}" -m json.tool >/dev/null 2>&1 || fail "context --format json"
 pass "context manifest compiles (md + json)"
 
+# 15. behavior evaluation passes (0 tokens, manifest compliance)
+"${PY}" "${FABRIC}/scripts/eval-behavior.py" >/dev/null 2>&1 || fail "behavior eval"
+pass "behavior eval (4 fixtures)"
+
 echo ""
-echo "All smoke tests passed (16 checks)"
+echo "All smoke tests passed (17 checks)"
 
 if [[ "${MODE}" == "isolated" ]]; then
     echo "(isolated temp fabric removed on exit)"

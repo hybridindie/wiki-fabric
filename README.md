@@ -684,6 +684,50 @@ assembly, enforced by the P1 contract (SCOPE, REVIEW-AFTER, status filters).
 
 ---
 
+## Behavior Evals: Does the Fabric Change Agent Behavior? (P4)
+
+The compiler evals (`eval.py`, golden corpus) measure extraction quality.
+**Behavior evals** measure the thing that actually matters: when an agent
+receives the context manifest, does it make a better decision?
+
+```bash
+python3 scripts/eval-behavior.py          # zero-LLM: manifest-level compliance (CI)
+python3 scripts/eval-behavior.py --llm    # probe a real model + score its answer
+python3 scripts/eval-behavior.py --record # append metrics to registry/log.md
+```
+
+Fixtures in `evaluations/behavior/` encode scenarios with two layers:
+
+1. **Zero-LLM layer (deterministic):** does the compiled manifest deliver the
+   required knowledge? — banned anti-pattern present in the prompt, binding
+   decision present, stale pattern excluded with a reason, gap acknowledged
+   (nothing selected where no knowledge exists).
+2. **LLM layer (`--llm`):** the same fixture's probe question is sent to a real
+   model *with* the manifest; the answer must contain the compliant behavior
+   (`must_contain`) and must not contain the banned approach
+   (`must_not_contain`).
+
+Current fixtures:
+
+| Fixture | Behavior tested |
+|---------|-----------------|
+| `be1-avoid-anti-pattern` | agent is told NOT to build the banned shared token cache; implements rotation + per-session |
+| `be2-project-over-global` | project constraint (rotating tokens) beats the general preference (session store) |
+| `be3-stale-demoted` | stale pattern excluded from the manifest, fresh pattern delivered |
+| `be4-escalate-gap` | no billing knowledge exists → agent escalates rather than inventing policy |
+
+```text
+Knowledge Utility: 100% (4/4)
+```
+
+**Knowledge Utility** = fixtures whose required knowledge was delivered ÷ total.
+Regression guard: CI fails if any fixture stops passing — the same discipline
+as the compiler evals, applied to behavior. This is the differentiator: repos
+that only promise "compounding memory" can't measure whether the memory
+changed anything.
+
+---
+
 ## Machine-Readable Contract
 
 Everything the fabric validates and catalogs is available in JSON, so CI and

@@ -14,3 +14,10 @@ Append-only timeline. One `## [YYYY-MM-DD] <op> | <subject>` entry per operation
 - Ingested sample.md (sha256 9e389fa6f9c1...)
 - Extracted 0 claims
 - Change-set: evidence/traces/change-sets/2026-09-13-test-g-sample-md
+
+## [2026-09-13] eval-behavior | utility 100% (4/4)
+
+- be1-avoid-anti-pattern: PASS
+- be2-project-over-global: PASS
+- be3-stale-demoted: PASS
+- be4-escalate-gap: PASS
