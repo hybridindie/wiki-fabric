@@ -818,6 +818,31 @@ Per replayed PR (fetched live via `gh` — title, body, review comments, touched
 stemmed) present in the selected artifacts — a recall proxy on real work. The
 coverage delta isolates the value of the ingest step itself.
 
+### Stability & sensitivity evaluation
+
+Closes the rubric's reproducibility rows with hard gates:
+
+```bash
+python3 scripts/eval-stability.py --skip-llm          # deterministic gates (CI)
+python3 scripts/eval-stability.py --models qwen2.5-coder:7b,qwen3.8:27b-mlx
+python3 scripts/eval-stability.py --record            # append metrics to registry/log.md
+```
+
+| Gate | What it proves | Threshold |
+|------|----------------|-----------|
+| G1 context determinism | 20 manifest runs byte-identical | exact (0-token code must not vary) |
+| G2 rebuild determinism | `rebuild-index` output identical across runs | exact |
+| G3 ingest stability | same model, same source, 2 runs | fuzzy word-coverage ≥ 0.7 (exact Jaccard reported; paraphrase ≠ instability) |
+| G6 locator presence | every claim carries an L-locator | 1.0 |
+| G4 model sensitivity | two models on the same source | fuzzy ≥ 0.5 (target 0.8); a fail means model swap requires re-running compiler evals |
+
+**Live findings** (recorded in `registry/log.md`): context/rebuild are exactly
+deterministic (~40ms); same-model extraction is semantically stable (fuzzy 0.76)
+but drifts in wording (exact 0.56); and the two local models extract genuinely
+different claim sets from the same fixture (fuzzy 0.28) — the model-sensitivity
+gate doing exactly what the rubric demanded: flagging that model swaps are a
+compiler change requiring re-evaluation.
+
 ---
 
 ## Governance: The Answers, Enforced

@@ -133,8 +133,12 @@ pass "context manifest compiles (md + json)"
 "${PY}" "${FABRIC}/scripts/eval-behavior.py" >/dev/null 2>&1 || fail "behavior eval"
 pass "behavior eval (4 fixtures)"
 
+# 16. stability eval (deterministic gates only)
+"${PY}" "${FABRIC}/scripts/eval-stability.py" --skip-llm >/dev/null 2>&1 || fail "stability eval"
+pass "stability gates (G1/G2 determinism)"
+
 echo ""
-echo "All smoke tests passed (17 checks)"
+echo "All smoke tests passed (18 checks)"
 
 if [[ "${MODE}" == "isolated" ]]; then
     echo "(isolated temp fabric removed on exit)"
