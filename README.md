@@ -1,12 +1,42 @@
 # Wiki Fabric
 
-> **Evidence-first knowledge base that compounds across projects.** Every claim traces to a source locator. Patterns emerge from cross-project experience. The LLM maintains it; you review it.
+> **A governed, testable context layer for AI coding agents** — project memory that is scoped by precedence, traceable to evidence, and provably delivered. The LLM maintains it; you review it.
+
+**The one-session proof** — a fabric containing one pattern, one anti-pattern, and one project decision changes what an agent is *told* before it writes code:
+
+```bash
+bash scripts/demo.sh
+```
+
+```text
+▸ Agent asks for task context: "Add token refresh to the auth service"
+
+## Selected
+### Project (highest precedence)
+- [[decision-rotation-over-sessions]] — project match: auth-service
+### Global
+- [[anti-pattern-shared-token-cache]] — global pattern match: token
+- [[pattern-token-rotation]] — global pattern match: refresh, token
+
+## Excluded
+- `patterns/pattern-superseded.md` — superseded
+- `patterns/pattern-stale.md` — stale: review_after overdue 255 days
+
+✓ anti-pattern warning delivered: agent is told NOT to build a shared token cache
+✓ project decision delivered: binding, highest precedence
+✓ correct alternative delivered: per-session cache
+
+PROOF: without the fabric, an LLM would plausibly implement the banned shared cache.
+With the manifest, the banned approach is named in the prompt BEFORE code is written.
+```
+
+The agent's prompt now contains `[DO NOT] shared token cache → per-session + rotation` — knowledge mined from two projects' real failures, delivered deterministically, 0 tokens, with the reason for every inclusion and exclusion. Run `bash scripts/demo.sh --json` for the machine-checkable manifest.
 
 ---
 
 ## Why Not Just a Wiki, Notes App, or RAG?
 
-Most knowledge systems fail agents (and humans) in the same ways. Wiki Fabric is designed against those failure modes:
+Most knowledge systems fail agents (and humans) in the same ways. Wiki Fabric is designed against those failure modes — and, critically, the governance claims are **executable**: lint enforces them (`SCOPE`, `REVIEW-AFTER`, `SYNC-CONFLICT`, `SOURCE-DRIFT`), CI proves them, and the demo proves delivery.
 
 | Common system | Failure mode | Wiki Fabric's answer |
 |---|---|---|
@@ -35,6 +65,9 @@ Wiki Fabric is a self-maintaining knowledge system that:
 ## Quick Start
 
 ```bash
+# See the value in 5 seconds (no install):
+bash scripts/demo.sh
+
 # One-liner install (installs uv if missing, then the `wf` CLI at ~/.local/bin/)
 curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/scripts/wiki-fabric.sh | bash
 
