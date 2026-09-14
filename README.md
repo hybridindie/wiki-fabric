@@ -43,8 +43,10 @@ The agent's prompt now contains `[DO NOT] shared token cache → per-session + r
 | `wf context` — task manifest compiler | **core** |
 | Contract enforcement (`lint.py` + JSON, CI gate) | **core** |
 | Behavior evaluations (`eval-behavior.py`) | **core** |
-| `wf` CLI, uv install, Obsidian vault | reference implementation |
-| Git history capture, graphify AST integration, corpus team sync | integrations |
+| `wf` CLI, uv install | reference implementation |
+| **Graphify** (call-graph staleness, claim enrichment, graph expansion) | **optional integration** — off by default, enable via `integrations.graphify.enabled: true` or `wf update --with-graphify` |
+| **Embeddings** (semantic re-ranking) | **optional integration** — off by default, planned |
+| Git history capture, corpus team sync | integrations |
 | MCP server, multi-harness skill packs | roadmap |
 
 ---
@@ -778,6 +780,39 @@ The hard questions for agent-maintained knowledge — with where the fabric answ
 | How do we find stale pages after a dependency upgrade? | `review_after` dates lint-checked, sha256 staleness from capture drift, graphify AST diff flags code changes | lint `REVIEW-AFTER`; `graphify-bridge --diff` |
 
 None of these are promises in a README — each is a lint check or workflow gate in CI right now.
+
+---
+
+## Optional Integrations
+
+Integrations are **off by default** and declared in `fabric.yaml`:
+
+```yaml
+integrations:
+  graphify:
+    enabled: true          # call-graph intelligence
+    graph_dir: graphify-out
+  embeddings:
+    enabled: false         # semantic re-ranking (planned)
+```
+
+```bash
+wf integrations                    # show what's active and what it changes
+wf install --with-graphify         # enable at install time
+wf update --with-graphify          # enable on an existing fabric
+```
+
+**When graphify is active**, skills change behavior — each affected skill documents the delta:
+
+| Skill | Inactive (default) | Active (`graphify.enabled: true`) |
+|-------|--------------------|-----------------------------------|
+| `refresh` | sha256 drift is the only staleness signal | `graphify-bridge --diff` runs first; graph hash diff prioritizes which claims to re-ingest |
+| `ingest` | claims carry `source_refs` only | `graphify-bridge --enrich` attaches `code_symbols` + `graph_edges` (doc→code provenance) |
+| `query` | expansion via claim `relations` (frontmatter) | expansion also follows call/import edges; code-reachable claims surface |
+| `lint` | contract checks only | run `graphify-bridge --diff` after lint for code-staleness signal |
+| `promote` | dossiers rest on experience outcomes | code-adjacent dossiers cite graph evidence |
+
+When graphify is inactive, every script runs exactly as before — the flag gates *additional* steps, never core ones. The design rule: **integrations add capabilities; they are never load-bearing.**
 
 ---
 

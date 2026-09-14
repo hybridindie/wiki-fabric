@@ -32,6 +32,13 @@ wf query "What did we decide about the bridge?" --type decision
 wf query "cache invalidation strategy" --verbose
 ```
 
+**If graphify is ACTIVE** (`fabric.yaml` → `integrations.graphify.enabled: true`),
+graph expansion additionally follows code call/import edges from
+`global/graphs/` — query results include code-reachable claims that lexical
+matching misses. When graphify is inactive, expansion uses only claim
+`relations` (frontmatter), and code-symbol questions should be answered from
+the entity index (`build-entity-index.py`) instead.
+
 ## Query Types (route by type)
 
 | Type | Boosts | Use when |

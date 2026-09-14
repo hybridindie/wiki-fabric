@@ -283,6 +283,20 @@ def main():
     parser.add_argument("--all", action="store_true", help="Run full pipeline: update → import → enrich → diff")
     args = parser.parse_args()
 
+    # Gated integration: refuses to run unless enabled in fabric.yaml
+    from fabric_config import get_config, is_integration_active
+    config = get_config()
+    if not is_integration_active(config, "graphify"):
+        print("Graphify integration is not enabled.")
+        print("Enable it in fabric.yaml:")
+        print("  integrations:")
+        print("    graphify:")
+        print("      enabled: true")
+        print("      graph_dir: graphify-out   # per-repo override supported in repos:")
+        print("")
+        print("Then run: wf install --with-graphify (or configure graph_dir per repo in repos:)")
+        return
+
     repos = [args.repo] if args.repo else None
 
     if args.all:

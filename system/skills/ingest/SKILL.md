@@ -54,6 +54,13 @@ For each new claim, classify its effect on existing knowledge:
 `add | support | weaken | contradict | supersede | no-action`
 Add `relations` entries (`supports`/`contradicts`/`supersedes`/`depends_on`) where they apply.
 
+### 4a. If graphify is ACTIVE: enrich claims with code provenance
+When `fabric.yaml` has `integrations.graphify.enabled: true`, run
+`python3 scripts/graphify-bridge.py --enrich` after writing claims — this
+attaches `code_symbols` and `graph_edges` (calls/imports/rationale_for) to
+claims, linking documentation to the implementing code. When graphify is
+inactive, skip this step: claims carry only source_refs (locator + quote).
+
 ### 5. Open Change-Set
 Create `evidence/traces/change-sets/<date>-<slug>/` with:
 - `manifest.md` — sources+hashes, pages created/updated, new claims, newly detected contradictions, any source-less assertions, reason for each edit

@@ -14,6 +14,16 @@ repos:
   #   path: ../my-project               # relative to fabric root, or absolute
   #   graph_dir: graphify-out            # optional, for graphify integration
 
+# Optional integrations — all off by default; enable explicitly.
+# When active, skills gain graph-aware steps (see system/skills/*/SKILL.md).
+integrations:
+  graphify:
+    enabled: false                       # true → call-graph staleness, claim enrichment, graph expansion
+    graph_dir: graphify-out
+  embeddings:
+    enabled: false                       # true → semantic re-ranking (optional ML, planned)
+    model: all-MiniLM-L6-v2
+
 domains:
   agent-systems:
     signals: [agent, mcp, fastmcp, opencode, claude]

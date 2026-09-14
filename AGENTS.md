@@ -319,7 +319,7 @@ captures.
 | Compile task context | `context.py` | **0** | Before a task: scoped manifest (project>domain>global) with selection + exclusion reasons |
 | Look up a code symbol | `build-entity-index.py` | **0** | "Where is `gather_reads` defined?" — AST lookup |
 | Check fabric health | `lint.py` | **0** | Run after any edit batch, before commit |
-| Detect code staleness | `graphify-bridge.py --diff` | **0** | After upstream code changes |
+| Detect code staleness | `graphify-bridge.py --diff` | **0** | Only when `integrations.graphify.enabled: true` in fabric.yaml (optional integration; skills carry the active/inactive delta) |
 | Discover new domains | `propose-domains.py` | **0** | After ingesting new repos |
 | Extract claims from source | `ingest.py --extract-claims` | 1 call | New source to compile |
 | Synthesize concept | `synthesize.py` | 1 call | New claim cluster needing a concept page |

@@ -42,12 +42,37 @@ _DEFAULTS = {
         "model": "qwen2.5-coder:7b",
     },
     "repos": {},
+    "integrations": {
+        # Optional integrations; each is off until explicitly enabled here.
+        # When active, skills/scripts gain graph-aware steps (see system/skills).
+        "graphify": {"enabled": False, "graph_dir": "graphify-out"},
+        "embeddings": {"enabled": False, "model": "all-MiniLM-L6-v2"},
+    },
     "domains": {
         "agent-systems": {"signals": ["agent", "mcp", "fastmcp", "opencode", "claude"]},
         "godot-systems": {"signals": ["godot", "gdscript", "voxel"]},
         "web-systems": {"signals": ["fastapi", "flask", "react", "nextjs", "supabase", "postgresql"]},
     },
 }
+
+
+def get_integrations(config):
+    """Merged integrations dict with defaults (enabled: False)."""
+    merged = {}
+    for name, cfg in _DEFAULTS.get("integrations", {}).items():
+        merged[name] = dict(cfg)
+        user_cfg = (config.get("integrations") or {}).get(name) or {}
+        merged[name].update(user_cfg if isinstance(user_cfg, dict) else {})
+    for name, cfg in (config.get("integrations") or {}).items():
+        if name not in merged:
+            merged[name] = cfg if isinstance(cfg, dict) else {"enabled": bool(cfg)}
+    return merged
+
+
+def is_integration_active(config, name):
+    """True when an optional integration is explicitly enabled in fabric.yaml."""
+    integ = get_integrations(config)
+    return bool((integ.get(name) or {}).get("enabled", False))
 
 
 def _find_config_file():

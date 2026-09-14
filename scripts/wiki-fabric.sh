@@ -107,6 +107,7 @@ find_fabric() {
 # === Helper: ensure fabric.yaml exists ===
 ensure_fabric_yaml() {
     local fabric_dir="$1"
+    local enable_graphify="${2:-false}"
     local config_file="${fabric_dir}/fabric.yaml"
 
     if [[ -f "${config_file}" ]]; then
@@ -134,6 +135,19 @@ llm:
 repos: {}
 EOF
         ok "Created minimal fabric.yaml (owner: ${owner})"
+    fi
+
+    # Enable optional integrations requested at install time
+    if [[ "${enable_graphify}" == true ]]; then
+        cat >> "${config_file}" << EOF
+
+integrations:
+  graphify:
+    enabled: true
+    graph_dir: graphify-out
+EOF
+        ok "Graphify integration enabled (set repos: with graph_dir per repo)"
+        warn "Run graphify update/import per repo once repos are configured"
     fi
 }
 
@@ -178,6 +192,7 @@ cmd_install() {
     local install_dir="${DEFAULT_DIR}"
     local skip_vault=false
     local corpus_url=""
+    local with_graphify=false
 
     # Parse install args
     while [[ $# -gt 0 ]]; do
@@ -186,6 +201,7 @@ cmd_install() {
             --dir) install_dir="$2"; shift 2 ;;
             --no-vault) skip_vault=true; shift ;;
             --corpus) corpus_url="$2"; shift 2 ;;
+            --with-graphify) with_graphify=true; shift ;;
             *) shift ;;
         esac
     done
@@ -239,7 +255,7 @@ cmd_install() {
     ensure_directories "${install_dir}"
 
     # Ensure fabric.yaml
-    ensure_fabric_yaml "${install_dir}"
+    ensure_fabric_yaml "${install_dir}" "${with_graphify}"
 
     # Ensure uv + python, then sync dependencies into .venv
     if ensure_uv; then
@@ -314,6 +330,16 @@ cmd_install() {
 # === Command: update ===
 cmd_update() {
     local fabric_dir
+    local with_graphify=false
+    # Accept flag passthrough so `wf update --with-graphify` enables integrations
+    local passthrough=()
+    for arg in "$@"; do
+        if [[ "${arg}" == "--with-graphify" ]]; then
+            with_graphify=true
+        else
+            passthrough+=("${arg}")
+        fi
+    done
     if ! fabric_dir=$(find_fabric); then
         err "Fabric not found. Run: ${SCRIPT_NAME} install"
         exit 1
@@ -322,6 +348,18 @@ cmd_update() {
     echo ""
     info "Updating fabric at ${fabric_dir}..."
     cd "${fabric_dir}"
+
+    # Enable integrations on existing fabric.yaml if requested
+    if [[ "${with_graphify}" == true ]] && ! grep -q 'graphify:' fabric.yaml 2>/dev/null; then
+        cat >> fabric.yaml <<'EOF'
+
+integrations:
+  graphify:
+    enabled: true
+    graph_dir: graphify-out
+EOF
+        ok "Graphify integration enabled"
+    fi
 
     # Pull latest from remote
     if git remote get-url origin &>/dev/null; then
@@ -554,6 +592,21 @@ case "${1:-help}" in
         fi
         run_python "${fdir}" "${fdir}/scripts/sync.py" "$@"
         ;;
+    integrations)
+        fdir=$(find_fabric)
+        echo ""
+        echo "Optional integrations (config: ${fdir}/fabric.yaml → integrations:)"
+        echo ""
+        if grep -q 'graphify:' "${fdir}/fabric.yaml" 2>/dev/null && grep -A2 'graphify:' "${fdir}/fabric.yaml" | grep -q 'enabled: true'; then
+            ok "graphify: ENABLED (call-graph staleness, claim enrichment, graph expansion)"
+            echo "     commands: graphify-bridge.py --all | --diff | --status"
+        else
+            info "graphify: inactive"
+            echo "     enable: wf update --with-graphify (or fabric.yaml integrations.graphify.enabled: true)"
+            echo "     effect when active: skills gain graph staleness/enrichment steps; query gains call-graph expansion"
+        fi
+        echo ""
+        ;;
     help|--help|-h)
         echo ""
         echo "════════════════════════════════════════════"
@@ -577,6 +630,7 @@ case "${1:-help}" in
         echo "  log --project <slug>              Log an experience event"
         echo "  sync {init|status|push|pull}      Share the corpus with a team via a git remote"
         echo "  lint                              Run deterministic linter"
+        echo "  integrations                      Show optional integrations (graphify) status"
         echo ""
         echo "Environment:"
         echo "  WIKI_FABRIC_REPO  Git URL (default: ${FABRIC_REPO})"

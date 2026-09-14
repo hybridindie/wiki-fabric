@@ -293,12 +293,26 @@ def render_markdown(task, paths, project, selected, excluded):
     return "\n".join(lines) + "\n"
 
 
+def integrations_state():
+    """Report optional-integration state for manifest transparency."""
+    try:
+        from fabric_config import get_config, is_integration_active
+        cfg = get_config()
+        return {
+            "graphify": is_integration_active(cfg, "graphify"),
+            "embeddings": is_integration_active(cfg, "embeddings"),
+        }
+    except Exception:
+        return {"graphify": False, "embeddings": False}
+
+
 def render_json(task, paths, project, selected, excluded):
     return json.dumps({
         "task": task,
         "paths": paths,
         "project": project,
         "compiled": date.today().isoformat(),
+        "integrations": integrations_state(),
         "selected": selected,
         "excluded": excluded,
         "precedence": ["project", "domain", "global"],

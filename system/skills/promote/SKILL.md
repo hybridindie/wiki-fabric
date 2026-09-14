@@ -47,6 +47,12 @@ links, conditions, confounding factors, proposed `applicability.includes/exclude
 counterexamples, and tradeoffs. A dossier generated from placeholders
 (`<experience-event-slug>`) needs real links before review.
 
+**If graphify is ACTIVE** (`fabric.yaml` → `integrations.graphify.enabled: true`),
+dossiers for code-adjacent patterns should cite graph evidence (call-graph
+support for the claimed coupling) via `graphify-bridge.py --enrich` before
+review. When graphify is inactive, dossiers rest on experience-event outcomes
+alone.
+
 ### 3. Update Promotion Queue
 Append the candidate to `registry/promotion-queue.md` (pattern, maturity, evidence lineage, dossier link).
 

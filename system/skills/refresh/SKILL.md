@@ -14,7 +14,7 @@ append-only-capture — never edit a captured file in place.
 - After upstream work: "refresh my-project"
 - Scheduled (e.g., weekly) or before a consequential query
 - When `.wiki-overlay.md` `source_repos` changes
-- After a staleness flag from `graphify-bridge.py --diff`
+- **If graphify integration is enabled** (`fabric.yaml` → `integrations.graphify.enabled: true`): also after upstream code changes — the graphify staleness diff tells you which claims need re-ingest. Skip this step when graphify is inactive.
 
 ## CLI Commands
 
@@ -50,6 +50,13 @@ Read the project's `.wiki-overlay.md` → `source_repos` (each entry: `path`,
 - sha256 differs from the `source` record → changed, mark for re-ingest
 - New file with no source record → new ingest
 - File deleted upstream → keep the local copy (raw is immutable); note in log
+
+### 3a. If graphify is ACTIVE: staleness diff first
+When `fabric.yaml` has `integrations.graphify.enabled: true`, run
+`python3 scripts/graphify-bridge.py --diff` before step 4 — the graph hash
+diff flags claims whose code symbols changed, prioritizing which sources to
+re-ingest. When graphify is inactive, skip this step (sha256 drift in step 3
+is the only staleness signal).
 
 ### 4. Re-ingest Changed Only (anti-loop)
 Never re-ingest unchanged sources — LLM extraction is the most expensive

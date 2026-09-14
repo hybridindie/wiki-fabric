@@ -35,7 +35,13 @@ Deterministic checks (0 tokens): malformed/missing frontmatter (README.md,
 CONTRIBUTING.md, LICENSE, templates/ and schemas/ are exempt), broken wikilinks
 (inside `[[...]]`, skipping fenced code), unknown `type:` values, duplicate ids,
 claims without `source_refs`, circular `supersedes`, orphan pages, source hash
-drift, missing index entries.
+drift, missing index entries, declared `scope:` vs path-implied scope, and
+`review_after` staleness.
+
+**If graphify is ACTIVE** (`fabric.yaml` → `integrations.graphify.enabled: true`),
+`python3 scripts/graphify-bridge.py --diff` adds a complementary staleness
+signal: code symbols referenced by claims that moved or vanished. This is
+outside lint.py (it needs the graph) — run it after lint when active.
 
 ## Integration
 
