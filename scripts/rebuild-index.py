@@ -175,18 +175,78 @@ def build_index(categories):
     return "\n".join(lines)
 
 
+def build_registry_json(categories):
+    """Machine-readable registry for agent harnesses and CI (registry/index.json)."""
+    import json
+
+    def entry(stem, rel, fm):
+        fm = fm or {}
+        d = {
+            "id": str(fm.get("id") or stem),
+            "stem": stem,
+            "path": str(rel),
+            "type": fm.get("type"),
+            "title": fm.get("title"),
+        }
+        for field in ("status", "maturity", "scope", "confidence", "review_after", "last_verified"):
+            v = fm.get(field)
+            if v is None:
+                continue
+            # YAML may parse dates into date objects — normalize to ISO strings
+            d[field] = v.isoformat() if hasattr(v, "isoformat") else v
+        return d
+
+    pages = []
+    for name, entries in categories.items():
+        for stem, rel, fm, _body in entries:
+            page = entry(stem, rel, fm)
+            page["scope"] = (fm or {}).get("scope") or (
+                "domain" if rel.as_posix().startswith("domains/")
+                else "project" if rel.as_posix().startswith("projects/")
+                else "global"
+            )
+            page["category"] = name
+            pages.append(page)
+
+    registry = {
+        "generated": date.today().isoformat(),
+        "counts": {name: len(entries) for name, entries in sorted(categories.items()) if entries},
+        "total": sum(len(v) for v in categories.values()),
+        "pages": sorted(pages, key=lambda p: (p["category"] or "", p["stem"])),
+    }
+    out = VAULT_ROOT / "registry" / "index.json"
+    out.write_text(json.dumps(registry, indent=2))
+    return out
+
+
 def main():
+    import argparse
+    import os
+    parser = argparse.ArgumentParser(description="Rebuild registry catalog (index.md + index.json)")
+    parser.add_argument("--json", action="store_true", help="Print the JSON registry to stdout instead of writing files")
+    parser.add_argument("--root", default=None, help="Fabric root (default: repo parent of this script, or $WIKI_FABRIC_ROOT)")
+    args = parser.parse_args()
+
+    global VAULT_ROOT, INDEX_PATH
+    VAULT_ROOT = Path(args.root or os.environ.get("WIKI_FABRIC_ROOT", VAULT_ROOT)).resolve()
+    INDEX_PATH = VAULT_ROOT / "registry" / "index.md"
+
     categories = scan_vault()
     index_content = build_index(categories)
 
+    INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
     INDEX_PATH.write_text(index_content)
+    json_path = build_registry_json(categories)
 
     total = sum(len(v) for v in categories.values())
-    print(f"Rebuilt {INDEX_PATH.relative_to(VAULT_ROOT)}")
+    print(f"Rebuilt {INDEX_PATH.relative_to(VAULT_ROOT)} + {json_path.relative_to(VAULT_ROOT)}")
     print(f"  Pages cataloged: {total}")
     for name, entries in sorted(categories.items()):
         if entries:
             print(f"  {name}: {len(entries)}")
+
+    if args.json:
+        print(json_path.read_text())
 
 
 if __name__ == "__main__":

@@ -101,6 +101,12 @@ pass "rebuild-index idempotent"
 "${PY}" "${FABRIC}/scripts/lint.py" . >/dev/null 2>&1 || fail "lint after ingest"
 pass "lint clean after ingest"
 
+# 9b. Lint JSON report is valid + registry/index.json is machine-readable
+"${PY}" "${FABRIC}/scripts/lint.py" . --format json | "${PY}" -m json.tool >/dev/null 2>&1 || fail "lint --format json invalid"
+pass "lint --format json valid"
+"${PY}" -c "import json; d=json.load(open('registry/index.json')); assert 'pages' in d and 'counts' in d" 2>/dev/null || fail "registry/index.json invalid"
+pass "registry/index.json valid"
+
 # 10. log.md was appended
 grep -q "ingest | smoke-project" registry/log.md || fail "registry/log.md not appended"
 pass "registry/log.md appended"
@@ -119,7 +125,7 @@ pass "query executes"
 pass "mine-promotions dry-run"
 
 echo ""
-echo "All smoke tests passed (${pass_count:-13} checks)"
+echo "All smoke tests passed (15 checks)"
 
 if [[ "${MODE}" == "isolated" ]]; then
     echo "(isolated temp fabric removed on exit)"

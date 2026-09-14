@@ -374,11 +374,15 @@ flowchart TD
 ```
 
 ```bash
-# Rebuild index from actual files
+# Rebuild index from actual files (writes registry/index.md + registry/index.json)
 python3 scripts/rebuild-index.py
+python3 scripts/rebuild-index.py --json   # print machine-readable registry to stdout
 
-# Verify health
+# Verify health (human-readable)
 wf lint
+
+# Verify health (machine-readable, for CI + agent harnesses)
+wf lint --format json
 
 # Run formal evaluation (golden corpus)
 WIKI_LLM_MODEL="qwen3.8:27b-mlx" python3 scripts/eval.py
@@ -599,6 +603,34 @@ version for the source page, delete the conflict file, then push.
 harness; your corpus is your private knowledge. Keeping them on different
 remotes means `wf update` (harness) never touches team content, and `wf sync`
 never publishes your corpus to a public URL.
+
+---
+
+## Machine-Readable Contract
+
+Everything the fabric validates and catalogs is available in JSON, so CI and
+agent harnesses can consume it without parsing prose:
+
+```bash
+wf lint --format json            # errors/warnings with code + page + message, ok flag
+python3 scripts/rebuild-index.py # writes registry/index.json (catalog with ids, types, scopes, statuses)
+```
+
+The lint report codes are stable: `FRONTMATTER`, `BROKEN-LINK`, `SCOPE`,
+`REVIEW-AFTER`, `CLAIM`, `CONCEPT`, `PATTERN`, `DUP-ID`, `SOURCE`,
+`SOURCE-DRIFT`, `SYNC-CONFLICT`, `ORPHAN`. `registry/index.json` carries every
+cataloged page with its `id`, `type`, `scope`, `status`, `maturity`,
+`review_after`, and `last_verified` — a deterministic, auditable answer to
+"what knowledge exists and how fresh is it."
+
+**Checks the contract enforces:**
+
+| Check | Meaning |
+|-------|---------|
+| `SCOPE` | frontmatter `scope:` must match the path-implied scope (`global/` `domains/` `projects/`) — precedence comes from scope, so scope lies are errors |
+| `REVIEW-AFTER` | pages with a past `review_after` date are flagged stale (warning; message shows days overdue) — staleness is detected, not forgotten |
+| `SYNC-CONFLICT` | unresolved team-sync conflicts block commit/push |
+| `SOURCE-DRIFT` | a captured source's sha256 changed without re-ingest |
 
 ---
 

@@ -1,0 +1,45 @@
+{
+  "generated": "2026-09-13",
+  "counts": {
+    "other": 4
+  },
+  "total": 4,
+  "pages": [
+    {
+      "id": "pattern-index",
+      "stem": "pattern-index",
+      "path": "registry/pattern-index.md",
+      "type": "registry",
+      "title": "Pattern Index",
+      "scope": "global",
+      "category": "other"
+    },
+    {
+      "id": "promotion-queue",
+      "stem": "promotion-queue",
+      "path": "registry/promotion-queue.md",
+      "type": "registry",
+      "title": "Promotion Queue",
+      "scope": "global",
+      "category": "other"
+    },
+    {
+      "id": "rule-index",
+      "stem": "rule-index",
+      "path": "registry/rule-index.md",
+      "type": "registry",
+      "title": "Rule Index",
+      "scope": "global",
+      "category": "other"
+    },
+    {
+      "id": "skill-index",
+      "stem": "skill-index",
+      "path": "registry/skill-index.md",
+      "type": "registry",
+      "title": "Skill Index",
+      "scope": "global",
+      "category": "other"
+    }
+  ]
+}

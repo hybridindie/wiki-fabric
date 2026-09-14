@@ -324,7 +324,8 @@ captures.
 | Synthesize concept | `synthesize.py` | 1 call | New claim cluster needing a concept page |
 | Log experience event | `log-experience.py` | **0** | After solving a problem worth remembering |
 | Mine cross-project patterns | `mine-promotions.py` | **0** | When ≥2 projects have experience events |
-| Rebuild catalog | `rebuild-index.py` | **0** | After any ingest or promotion |
+| Rebuild catalog | `rebuild-index.py` | **0** | After any ingest or promotion; writes `registry/index.md` + `registry/index.json` |
+| Machine-readable lint | `lint.py --format json` | **0** | CI + agent harnesses consume validation results |
 
 ### When NOT to use the LLM
 

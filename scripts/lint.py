@@ -26,7 +26,8 @@ VALID_TYPES = {
      "change-set", "change-set-diff", "promotion-dossier", "ontology", "registry", "index", "log",
 }
 PATTERN_STATUSES = {"candidate", "recommended", "standard", "deprecated"}
-EXCLUDE_DIRS = {".git", ".obsidian", ".opencode", "__pycache__", ".venv", "venv", "node_modules", "evidence/traces"}
+EXCLUDE_DIRS = {".git", ".obsidian", ".opencode", "__pycache__", ".venv", "venv", "node_modules"}
+EXCLUDE_DIR_PREFIXES = ("evidence/traces",)
 TEMPLATE_DIRS = {"global/templates", "schemas", "templates"}
 HUB_KINDS = {"ontology", "registry", "index", "log"}
 LINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]")
@@ -84,6 +85,9 @@ def md_files(vault):
         parts = rel.parts
         if any(x in EXCLUDE_DIRS for x in parts):
             continue
+        rel_posix = rel.as_posix()
+        if any(rel_posix.startswith(pref) for pref in EXCLUDE_DIR_PREFIXES):
+            continue
         if "raw" in parts:
              continue
         if "evaluations" in parts and "fixtures" in parts:
@@ -99,19 +103,80 @@ def is_tpl(rel):
             or rel.name in ("README.md", "CONTRIBUTING.md", "LICENSE"))
 
 
+def scope_for(rel):
+    """Derive the expected scope from a page's path (AGENTS.md scope mapping)."""
+    s = rel.as_posix()
+    if s.startswith(("global/", "registry/", "schemas/", "evaluations/", "syntheses/", "concepts/",
+                     "patterns/", "anti-patterns/", "skills/", "system/", "tests/", "examples/")):
+        return "global"
+    if s.startswith("domains/"):
+        return "domain"
+    if s.startswith("projects/"):
+        return "project"
+    return "global"
+
+
+def validate_scope(fm, rel):
+    """Frontmatter scope (when present) must match the path-implied scope."""
+    declared = fm.get("scope")
+    if not declared:
+        return None
+    expected = scope_for(rel)
+    if declared != expected:
+        return "SCOPE %s: declared %r but path implies %r" % (rel, declared, expected)
+    return None
+
+
+def check_staleness(fm, rel, today):
+    """Pages with review_after in the past are stale (warning; error when far past)."""
+    ra = fm.get("review_after")
+    if not ra:
+        return None, None
+    try:
+        m = re.match(r"^(\d{4})-(\d{2})-(\d{2})$", str(ra).strip())
+        if not m:
+            return "REVIEW-AFTER %s: invalid date %r (expected YYYY-MM-DD)" % (rel, ra), None
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        import datetime as _dt
+        review = _dt.date(y, mo, d)
+    except (ValueError, TypeError):
+        return "REVIEW-AFTER %s: invalid date %r" % (rel, ra), None
+    if review < today:
+        overdue = (today - review).days
+        if overdue > 90:
+            return None, "REVIEW-AFTER %s: overdue %d days (review_after: %s) — review or re-verify" % (rel, overdue, ra)
+        return None, "REVIEW-AFTER %s: overdue %d day(s) (review_after: %s)" % (rel, overdue, ra)
+    return None, None
+
+
 def main():
     argv = sys.argv[1:]
     only_orphans = False
+    out_format = "text"
     positional = []
-    for a in argv:
+    i = 0
+    while i < len(argv):
+        a = argv[i]
         if a == "--orphans":
             only_orphans = True
+        elif a == "--format" and i + 1 < len(argv):
+            out_format = argv[i + 1]
+            i += 1
+        elif a.startswith("--format="):
+            out_format = a.split("=", 1)[1]
         else:
             positional.append(a)
+        i += 1
     if positional and positional[0] == "--hash":
         print(sha256(positional[1]))
         return
+    if out_format not in ("text", "json"):
+        print("Unknown --format: %s (expected text|json)" % out_format, file=sys.stderr)
+        return 2
     vault = Path(positional[0]).resolve() if positional else Path(".").resolve()
+
+    import datetime as _dt
+    today = _dt.date.today()
 
     errors, warnings = [], []
     pages = {}
@@ -144,11 +209,21 @@ def main():
             if target not in pages:
                 errors.append("BROKEN-LINK %s: [[%s]] -> no page" % (rel, m.group(1)))
 
-    # 3. claim / concept / pattern invariants
+    # 3. claim / concept / pattern invariants + scope + staleness
     for p, rel in md_files(vault):
         fm, _, err = parse_frontmatter(p)
         if not isinstance(fm, dict):
             continue
+        # scope consistency (declared scope must match path-implied scope)
+        scope_err = validate_scope(fm, rel)
+        if scope_err:
+            errors.append(scope_err)
+        # staleness (review_after)
+        e, w = check_staleness(fm, rel, today)
+        if e:
+            errors.append(e)
+        if w:
+            warnings.append(w)
         t = fm.get("type")
         if t == "claim":
             if not fm.get("id"):
@@ -244,6 +319,25 @@ def main():
                 errors.append("SYNC-CONFLICT %s: unresolved (review, fix source page, delete, then sync push)" % cp.relative_to(vault))
 
     # 7. report
+    if out_format == "json":
+        import json
+        report = {
+            "vault": vault.name,
+            "pages": len(pages),
+            "yaml": bool(HAVE_YAML),
+            "today": today.isoformat(),
+            "errors": [{"code": e.split(" ", 1)[0], "page": (e.split(" ", 1)[1].split(":", 1)[0].strip()
+                                                             if " " in e else ""), "message": e}
+                       for e in errors if not only_orphans],
+            "warnings": [{"code": w.split(" ", 1)[0], "page": (w.split(" ", 1)[1].split(":", 1)[0].strip()
+                                                                if " " in w else ""), "message": w}
+                         for w in warnings],
+            "counts": {"errors": len(errors), "warnings": len(warnings)},
+            "ok": not errors,
+        }
+        print(json.dumps(report, indent=2))
+        return 1 if errors else 0
+
     print("# Lint — %s  (pages %d, yaml %s)" % (vault.name, len(pages), HAVE_YAML))
     for e in errors if not only_orphans else []:
         print("ERROR   " + e)
