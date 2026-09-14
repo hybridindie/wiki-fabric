@@ -300,6 +300,15 @@ def main():
     config = get_config()
     repos_to_index = [args.repo] if args.repo else get_all_repo_names(config)
 
+    # Map repo name → resolved path (write_entity_pages and relative-path math
+    # depend on this module-level mapping)
+    global REPO_PATHS
+    REPO_PATHS = {}
+    for name in repos_to_index:
+        rp = resolve_repo_path(config, name)
+        if rp:
+            REPO_PATHS[name] = rp
+
     print("=== Building entity index ===")
     print()
 

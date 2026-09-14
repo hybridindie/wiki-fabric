@@ -763,6 +763,34 @@ as the compiler evals, applied to behavior. This is the differentiator: repos
 that only promise "compounding memory" can't measure whether the memory
 changed anything.
 
+### Real-repo evaluation
+
+For a heavyweight end-to-end check, run the whole pipeline against a real,
+popular repo (default: FastAPI — large, active, well-documented Python):
+
+```bash
+python3 scripts/eval-real-repo.py                      # clone + full pipeline + LLM ingest
+python3 scripts/eval-real-repo.py --skip-llm           # corpus + context metrics, no LLM
+python3 scripts/eval-real-repo.py --repo /path/to/clone
+python3 scripts/eval-real-repo.py --json
+```
+
+It seeds a throwaway fabric with both integrations enabled, captures a scoped
+slice of the repo's docs, ingests with LLM claim extraction (or seeds
+doc-backed patterns in `--skip-llm` mode), compiles probe-task manifests, and
+measures each tier:
+
+| Tier | Metric |
+|------|--------|
+| Corpus | sources captured, claims extracted, locator rate, lint errors |
+| Context | manifest hit-rate per probe task (selected > 0 with reasons) |
+| Graphify | AST symbols indexed from the real repo (e.g. 4,992 for FastAPI), entity pages written |
+| Embeddings | re-rank delta when `sentence-transformers` is installed; reported as config-only when absent |
+
+The graphify/embeddings tiers are measured *as integrations*: their
+contribution is reported separately, so you can see exactly what enabling them
+buys.
+
 ---
 
 ## Governance: The Answers, Enforced
