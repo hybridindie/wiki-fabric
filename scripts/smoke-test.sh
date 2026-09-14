@@ -124,8 +124,13 @@ pass "query executes"
 "${PY}" "${FABRIC}/scripts/mine-promotions.py" --dry-run >/dev/null 2>&1 || fail "mine-promotions --dry-run"
 pass "mine-promotions dry-run"
 
+# 14. context manifest compiles (markdown) and valid JSON output
+"${PY}" "${FABRIC}/scripts/context.py" --task "smoke test task" | grep -q "## Precedence" || fail "context markdown manifest"
+"${PY}" "${FABRIC}/scripts/context.py" --task "smoke test task" --format json | "${PY}" -m json.tool >/dev/null 2>&1 || fail "context --format json"
+pass "context manifest compiles (md + json)"
+
 echo ""
-echo "All smoke tests passed (15 checks)"
+echo "All smoke tests passed (16 checks)"
 
 if [[ "${MODE}" == "isolated" ]]; then
     echo "(isolated temp fabric removed on exit)"

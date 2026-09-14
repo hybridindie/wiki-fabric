@@ -57,8 +57,6 @@ run_python() {
     shift
     if [[ -x "${fabric_dir}/.venv/bin/python" ]]; then
         "${fabric_dir}/.venv/bin/python" "$@"
-    elif command -v uv &>/dev/null && [[ -f "${fabric_dir}/pyproject.toml" ]]; then
-        (cd "${fabric_dir}" && uv run --no-sync python "$@")
     else
         python3 "$@"
     fi
@@ -531,6 +529,15 @@ case "${1:-help}" in
         shift
         run_python "$(find_fabric)" "$(find_fabric)/scripts/query.py" "$@"
         ;;
+    context)
+        shift
+        fdir=$(find_fabric)
+        if [[ -z "${1:-}" ]]; then
+            err "Usage: wf context --task \"<task>\" [--paths <code/path>] [--project <slug>] [--format json] [--max N]"
+            exit 1
+        fi
+        run_python "${fdir}" "${fdir}/scripts/context.py" "$@"
+        ;;
     lint)
         run_python "$(find_fabric)" "$(find_fabric)/scripts/lint.py" .
         ;;
@@ -566,6 +573,7 @@ case "${1:-help}" in
         echo "                                    (--git owner/name or /path captures PR/issue history)"
         echo "  ingest <source-path>              Ingest a source (--extract-claims for LLM)"
         echo "  query \"<question>\"                 Ask the fabric a question"
+        echo "  context --task \"<task>\"             Compile a task context manifest (0 tokens)"
         echo "  log --project <slug>              Log an experience event"
         echo "  sync {init|status|push|pull}      Share the corpus with a team via a git remote"
         echo "  lint                              Run deterministic linter"

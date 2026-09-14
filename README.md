@@ -541,6 +541,7 @@ Environment: `WIKI_FABRIC_REPO` overrides the source repo URL.
 |--------|---------|----------|
 | `ingest.py` | Source → source record → claims (LLM extraction) | 1 call per source |
 | `query.py` | Question → evidence-backed answer | 0 tokens (lexical + graph) |
+| `context.py` | Task → scoped context manifest with reasons | 0 tokens (deterministic) |
 | `lint.py` | 12 deterministic checks | 0 tokens |
 | `eval.py` | Golden-corpus evaluation | 1 call per fixture |
 | `synthesize.py` | Claims → concept pages | 1 call per concept |
@@ -603,6 +604,50 @@ version for the source page, delete the conflict file, then push.
 harness; your corpus is your private knowledge. Keeping them on different
 remotes means `wf update` (harness) never touches team content, and `wf sync`
 never publishes your corpus to a public URL.
+
+---
+
+## Task Context: `wf context` (Deterministic Context Assembly)
+
+Before an agent starts work, compile exactly the knowledge it needs — no
+recursive filesystem scanning, no dumping the whole corpus, no LLM retrieval:
+
+```bash
+wf context --task "Add token rotation to the OAuth service" --paths services/auth
+```
+
+Output is a **context manifest** with three properties:
+
+1. **Scoped by precedence** — project decisions (highest) → domain patterns →
+   global policies. Conflicts resolve top-down; the agent cites the artifact it followed.
+2. **Explainable by construction** — every selected item carries a reason
+   (`project match: auth-service`, `domain match: oauth, rotation`, `global pattern match: token`).
+   Every *excluded* item carries a reason too (`superseded`, `stale: review_after overdue 255 days`,
+   `beyond --max`).
+3. **Deterministic, 0 tokens** — pure string ops over the corpus. Same task,
+   same manifest. Honors `--project` pinning, `--paths` code-path hints,
+   `--max`, and `--format json` for harnesses.
+
+```markdown
+## Selected
+
+### Project (highest precedence)
+- [[decision-rotation]] — *project match: auth-service*
+
+### Domain
+- [[concept-rotation]] — *domain match: oauth, rotation*
+
+### Global
+- [[pattern-token-rotation]] — *global pattern match: oauth, token*
+
+## Excluded
+- `patterns/pattern-old-writer.md` — superseded
+- `patterns/pattern-stale.md` — stale: review_after overdue 255 days
+```
+
+This is the payoff of the scope model: `global/` + `domains/` + `projects/`
+are not filing categories — they are the priority layers of task-time context
+assembly, enforced by the P1 contract (SCOPE, REVIEW-AFTER, status filters).
 
 ---
 

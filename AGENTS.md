@@ -316,6 +316,7 @@ captures.
 | Task | Tool | LLM Cost | When |
 |------|------|----------|------|
 | Find claims about X | `query.py` | **0** | "What do we know about X?" — lexical + graph expansion, no LLM |
+| Compile task context | `context.py` | **0** | Before a task: scoped manifest (project>domain>global) with selection + exclusion reasons |
 | Look up a code symbol | `build-entity-index.py` | **0** | "Where is `gather_reads` defined?" — AST lookup |
 | Check fabric health | `lint.py` | **0** | Run after any edit batch, before commit |
 | Detect code staleness | `graphify-bridge.py --diff` | **0** | After upstream code changes |
