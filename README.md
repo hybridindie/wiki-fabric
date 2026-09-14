@@ -1,6 +1,9 @@
 # Wiki Fabric
 
-> **A governed, testable context layer for AI coding agents** — project memory that is scoped by precedence, traceable to evidence, and provably delivered. The LLM maintains it; you review it.
+> **Git-native, testable knowledge governance for AI coding agents.**
+> Project memory that is scoped by precedence, traceable to evidence, enforced by CI — and *provably delivered* before an agent writes code.
+
+**Positioning in one line:** Wiki Fabric treats repository knowledge as operational infrastructure for agents — a governed context layer, not a note vault. Where generic "LLM wiki" projects stop at self-maintaining Markdown, Wiki Fabric adds the three things that make knowledge *trustworthy at task time*: scope with precedence, provenance with staleness gates, and behavior evaluations that measure whether the knowledge changed the agent's decision.
 
 **The one-session proof** — a fabric containing one pattern, one anti-pattern, and one project decision changes what an agent is *told* before it writes code:
 
@@ -32,11 +35,23 @@ With the manifest, the banned approach is named in the prompt BEFORE code is wri
 
 The agent's prompt now contains `[DO NOT] shared token cache → per-session + rotation` — knowledge mined from two projects' real failures, delivered deterministically, 0 tokens, with the reason for every inclusion and exclusion. Run `bash scripts/demo.sh --json` for the machine-checkable manifest.
 
+**What is core vs. optional:**
+
+| Layer | Status |
+|-------|--------|
+| Knowledge format (claims with locators, patterns, decisions, scopes) | **core format** |
+| `wf context` — task manifest compiler | **core** |
+| Contract enforcement (`lint.py` + JSON, CI gate) | **core** |
+| Behavior evaluations (`eval-behavior.py`) | **core** |
+| `wf` CLI, uv install, Obsidian vault | reference implementation |
+| Git history capture, graphify AST integration, corpus team sync | integrations |
+| MCP server, multi-harness skill packs | roadmap |
+
 ---
 
 ## Why Not Just a Wiki, Notes App, or RAG?
 
-Most knowledge systems fail agents (and humans) in the same ways. Wiki Fabric is designed against those failure modes — and, critically, the governance claims are **executable**: lint enforces them (`SCOPE`, `REVIEW-AFTER`, `SYNC-CONFLICT`, `SOURCE-DRIFT`), CI proves them, and the demo proves delivery.
+Most knowledge systems fail agents (and humans) in the same ways. Wiki Fabric is designed against those failure modes — and, critically, the governance claims are **executable**: lint enforces them (`SCOPE`, `REVIEW-AFTER`, `SYNC-CONFLICT`, `SOURCE-DRIFT`), CI proves them, and behavior evals measure delivery.
 
 | Common system | Failure mode | Wiki Fabric's answer |
 |---|---|---|
@@ -53,12 +68,32 @@ The core bet: **an LLM is a good compiler but a unreliable memory.** So the fabr
 
 ## What Is This?
 
-Wiki Fabric is a self-maintaining knowledge system that:
+Wiki Fabric is a governance layer and reference implementation for coding-agent memory. Four properties, each machine-enforced:
 
-1. **Compiles raw sources into verified claims** — LLM extracts atomic assertions with line-level locators and verbatim quotes from your project docs
-2. **Promotes cross-project patterns** — experience events are mined into reusable patterns and skills that compound across all connected projects
-3. **Validates itself** — deterministic linter + golden-corpus evaluation measures the compiler, not just the artifacts
-4. **Stays current** — graphify AST integration detects code changes at zero token cost; entity index tracks symbol locations
+1. **Compiles raw sources into verified claims** — LLM extracts atomic assertions with line-level locators and verbatim quotes. Provenance is mandatory (lint: claims without sources can't become canonical).
+2. **Promotes cross-project patterns with measured maturity** — experience events are deterministically clustered into promotion dossiers; promotion requires ≥2 independent projects and human review.
+3. **Enforces scope precedence at task time** — `wf context` compiles project decisions > domain patterns > global policies into a manifest where every inclusion/exclusion carries a reason, and stale/superseded knowledge is filtered before it can mislead.
+4. **Measures behavior, not vibes** — behavior evals verify the knowledge actually changes agent decisions (avoids banned approaches, honors constraints, escalates gaps); the compiler has its own golden-corpus eval; CI fails on regression.
+
+Everything else — the `wf` CLI, uv installer, Obsidian vault, git-history capture, corpus sync — is reference implementation and integrations around that core.
+
+---
+
+## The Loop (one page, start to finish)
+
+The daily-use cycle — each step is a command, every step is checked:
+
+| # | Step | Command | Enforced by |
+|---|------|---------|-------------|
+| 1 | **Connect** a project | `wf bootstrap /path/to/project` | namespace created, README written to corpus |
+| 2 | **Capture** knowledge | `wf capture p --git owner/repo` + `--git` for PR history | immutable raw + sha256 |
+| 3 | **Compile** sources → claims | `wf ingest <src> --extract-claims` | change-set + lint gate |
+| 4 | **Validate** | `wf lint` (or `--format json`) | 0 errors before merge |
+| 5 | **Compile task context** | `wf context --task "..."` | manifest with reasons + precedence |
+| 6 | **Agent works, then learns** | `wf log --project p ...` | experience event captured |
+| 7 | **Mine + review** | `mine-promotions` → human gate → `promote` | maturity gates, no auto-promotion |
+
+Then loop: step 7's promoted pattern is step 5's context for the next project — that's the compounding. CI proves every arrow in this table.
 
 ---
 
@@ -725,6 +760,24 @@ Regression guard: CI fails if any fixture stops passing — the same discipline
 as the compiler evals, applied to behavior. This is the differentiator: repos
 that only promise "compounding memory" can't measure whether the memory
 changed anything.
+
+---
+
+## Governance: The Answers, Enforced
+
+The hard questions for agent-maintained knowledge — with where the fabric answers them:
+
+| Question | The fabric's answer | Where it lives |
+|----------|--------------------|----------------|
+| Does every claim have a source or evidence type? | Claims without `source_refs` can't be `supported`; locators + verbatim quotes mandatory | lint `CLAIM` checks; provenance rules in AGENTS.md |
+| What changes when source documents change? | sha256 per capture; hash drift flags exactly which claims are affected; re-ingest produces a change-set, never silent overwrite | lint `SOURCE-DRIFT`; refresh workflow |
+| Canonical policy vs. tentative research? | Status taxonomy: `proposed` → `supported` → `contested` → `superseded` → `retracted`; patterns carry maturity 0–3 | frontmatter contracts; lint gates |
+| What wins when global and project rules conflict? | Precedence: project > domain > global, enforced at manifest compile time and validated against path scope | `wf context`; lint `SCOPE` |
+| How does an agent propose a knowledge mutation? | Change-sets (manifest + diff), staging→canonical flow, human gate before canonical writes | ingest workflow; `apply-changeset.sh` |
+| Which artifacts require human review? | Pattern promotion (7-point checklist), canonical merges, corpus conflicts (`SYNC-CONFLICT` blocks push) | promotion-queue; sync protocol |
+| How do we find stale pages after a dependency upgrade? | `review_after` dates lint-checked, sha256 staleness from capture drift, graphify AST diff flags code changes | lint `REVIEW-AFTER`; `graphify-bridge --diff` |
+
+None of these are promises in a README — each is a lint check or workflow gate in CI right now.
 
 ---
 
