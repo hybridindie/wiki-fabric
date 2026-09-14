@@ -791,6 +791,33 @@ The graphify/embeddings tiers are measured *as integrations*: their
 contribution is reported separately, so you can see exactly what enabling them
 buys.
 
+### PR replay evaluation
+
+Replay **real PRs** from an active repo and measure whether the fabric would
+have helped when the PR was written — a knowledge-recall eval on real-world
+vocabulary:
+
+```bash
+python3 scripts/eval-pr-replay.py --repo tiangolo/fastapi --prs 16192 --llm
+python3 scripts/eval-pr-replay.py --repo tiangolo/fastapi --auto 3            # pick recent merged PRs (deps-bumps skipped)
+python3 scripts/eval-pr-replay.py ... --json
+```
+
+Per replayed PR (fetched live via `gh` — title, body, review comments, touched files):
+
+- **Graphify tier:** the repo's code is AST-indexed; the report shows entity
+  pages written and how many of the PR's touched files have code-symbol
+  coverage (e.g. 4,992 symbols / 913 pages from FastAPI; 1/2 touched files covered).
+- **Zero-LLM tier:** manifest hit-rate over docs-only corpus (honest baseline).
+- **`--llm` tier:** the PR's own discussion is ingested with LLM claim
+  extraction; the manifest re-compiles and the report shows
+  `after LLM ingest (12 claims): coverage 0.414 (Δ +0.414)` — how much the
+  PR's own knowledge improves later recall of its task.
+
+**Term coverage** = share of the PR's own vocabulary (title + body + comments,
+stemmed) present in the selected artifacts — a recall proxy on real work. The
+coverage delta isolates the value of the ingest step itself.
+
 ---
 
 ## Governance: The Answers, Enforced

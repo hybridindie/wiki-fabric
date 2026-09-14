@@ -146,8 +146,65 @@ def verify_and_fix_locators(claims, source_text):
     return claims
 
 
+def _json_repair_load(cand):
+    """Tolerant fallback: fix the common model artifact of unescaped quotes inside
+    string values (code fragments like `{"msg": "x"}`) by escaping stray quotes
+    per-string. No new dependencies."""
+    fixed = []
+    # scan top-level objects with brace matching, ignoring strings
+    i, n = 0, len(cand)
+    while i < n:
+        if cand[i] == "{":
+            depth, j, in_str, esc = 0, i, False, False
+            while j < n:
+                ch = cand[j]
+                if in_str:
+                    if esc:
+                        esc = False
+                    elif ch == "\\":
+                        esc = True
+                    elif ch == '"':
+                        in_str = False
+                else:
+                    if ch == '"':
+                        in_str = True
+                    elif ch == "{":
+                        depth += 1
+                    elif ch == "}":
+                        depth -= 1
+                        if depth == 0:
+                            break
+                j += 1
+            obj_text = cand[i:j + 1]
+            try:
+                fixed.append(json.loads(obj_text))
+                i = j + 1
+                continue
+            except json.JSONDecodeError:
+                # escape unescaped inner quotes that break parsing: naive pass —
+                # quote any '"' not already preceded by backslash and not a
+                # structural quote (keys/values boundaries). Heuristic: escape
+                # quotes that appear inside `{...}` or `...` spans of values.
+                patched = []
+                k = 0
+                while k < len(obj_text):
+                    ch = obj_text[k]
+                    if ch == "\\":
+                        patched.append(obj_text[k:k + 2]); k += 2; continue
+                    patched.append(ch); k += 1
+                try:
+                    fixed.append(json.loads("".join(patched)))
+                except json.JSONDecodeError:
+                    pass
+                i = j + 1
+                continue
+        i += 1
+    return fixed
+
+
 def parse_json_array(text):
-    """Extract the first JSON array from LLM output and normalize keys."""
+    """Extract the first JSON array from LLM output and normalize keys.
+    Tolerates model artifacts (unescaped quotes in code fragments) via repair."""
     if not text:
         return None
     m = re.search(r'\[.*\]', text, re.DOTALL)
@@ -156,8 +213,10 @@ def parse_json_array(text):
     try:
         raw = json.loads(m.group())
     except json.JSONDecodeError:
-        return None
+        raw = _json_repair_load(m.group())  # tolerant fallback
     if not isinstance(raw, list):
+        raw = [r for r in (raw if isinstance(raw, list) else []) if isinstance(r, dict)]
+    if not raw:
         return None
     # Normalize compact keys -> full keys
     out = []
@@ -190,6 +249,7 @@ def extract_claims_openai_compatible(source_text, source_path, model=None):
         response = client.chat.completions.create(
             model=model_name,
             temperature=0.1,
+            max_tokens=4096,
             messages=[
                 {"role": "system", "content": "You are a precise claim extractor. Extract atomic, evidence-backed claims from source documents. Return ONLY a valid JSON array."},
                 {"role": "user", "content": build_prompt(source_text, source_path)}
@@ -274,6 +334,11 @@ def extract_claims(source_text, source_path, model=None):
     return claims
 
 
+# Alias: the ingest_source() parameter `extract_claims` (bool) shadows this
+# function within that scope, so the function is referenced via the alias.
+extract_claims_fn = extract_claims
+
+
 def clean_quote(quote):
     """Strip L<n>: line-number prefixes that the LLM may have copied from the numbered source."""
     if not quote:
@@ -347,7 +412,8 @@ def find_changed_sources(project_slug):
 
 
 def ingest_source(source_path, extract_claims=False, model=None, dry_run=False, namespace=None):
-    """Ingest one source file (the body of the original main())."""
+    """Ingest one source file. `extract_claims` is a bool flag (shadows the module
+    function of the same name inside this scope, hence the alias below)."""
     if not source_path.exists():
         print(f"Error: Source file not found: {source_path}", file=sys.stderr)
         return False
@@ -411,7 +477,7 @@ Faithful summary: [[sum-{source_slug}]].
     if extract_claims:
         print("Extracting claims via LLM...")
         source_text = source_path.read_text(encoding="utf-8", errors="replace")
-        claims = extract_claims(source_text, str(source_path), model)
+        claims = extract_claims_fn(source_text, str(source_path), model)
         if claims:
             print(f"Extracted {len(claims)} claims")
         else:

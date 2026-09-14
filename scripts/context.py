@@ -147,8 +147,10 @@ def select_context(pages, task, paths, project, today, max_items=20):
         status = str(fm.get("status") or "").lower()
 
         if t == "claim":
-            # claims ride along with their sources when referenced; skip standalone
-            # inclusion (they're linked from concepts/patterns)
+            # claims normally ride along via concepts/patterns that reference them;
+            # but strongly task-matching claims are direct task evidence — keep as
+            # candidates (tier P1-project evidence).
+            candidates.append((pg, 0))
             continue
         if t not in ("pattern", "anti-pattern", "skill", "concept", "decision", "experience-event", "question"):
             excluded.append({"stem": pg["stem"], "path": pg["posix"],
@@ -189,12 +191,17 @@ def select_context(pages, task, paths, project, today, max_items=20):
                 reason = f"project match: {project}"
                 priority = "P1-project"
             else:
-                toks = body_tokens_cache.get(pg["stem"]) if (body_tokens_cache := {}) else None
                 # text overlap with task
                 overlap = task_toks & body_tokens(pg)
                 if len(overlap) >= 2:
                     reason = f"task text match: {', '.join(sorted(overlap)[:4])}"
                     priority = "P1-project"
+        elif scope == "global" and pg["type"] == "claim":
+            # direct task evidence: a claim whose statement matches the task
+            overlap = task_toks & body_tokens(pg)
+            if len(overlap) >= 2:
+                reason = f"task evidence (claim): {', '.join(sorted(overlap)[:4])}"
+                priority = "P1-project"
         elif scope == "domain":
             toks = task_toks & (body_tokens(pg) | tokens(pg["stem"]))
             if len(toks) >= 1 and any(len(t) >= 4 for t in toks):

@@ -130,12 +130,22 @@ class TestSelection:
         priorities = [s["priority"] for s in selected]
         assert priorities == sorted(priorities, key=lambda p: {"P1-project": 0, "P2-domain": 1, "P3-global": 2}[p])
 
-    def test_claims_never_directly_selected(self):
+    def test_claims_require_strong_task_match(self):
         import datetime
+        # claims are now direct task evidence when they match the task; an
+        # unrelated claim must not be selected
         pages = [_page("evidence/claims/claim-x.md",
-                       {"type": "claim", "id": "claim-x", "status": "supported"}, "token rotation claim")]
-        selected, _ = ctx.select_context(pages, "token rotation", [], None, datetime.date.today())
+                       {"type": "claim", "id": "claim-x", "status": "supported"}, "billing webhook retry backoff policy")]
+        selected, _ = ctx.select_context(pages, "token rotation oauth", [], None, datetime.date.today())
         assert not any(s["type"] == "claim" for s in selected)
+
+    def test_matching_claim_selected_as_task_evidence(self):
+        import datetime
+        pages = [_page("evidence/claims/claim-sse.md",
+                       {"type": "claim", "id": "claim-sse", "status": "supported"},
+                       "EventSourceResponse sends an empty body for non-generator endpoints")]
+        selected, _ = ctx.select_context(pages, "Fix empty body in EventSourceResponse", [], None, datetime.date.today())
+        assert any(s["type"] == "claim" and s["priority"] == "P1-project" for s in selected)
 
     def test_max_respected(self):
         import datetime
