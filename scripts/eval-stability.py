@@ -208,13 +208,24 @@ def gate_ingest_stability(tmp, model, runs=2):
               "passed": locator_rate == 1.0, "rate": locator_rate}], scores[0], times)
 
 
-def gate_model_sensitivity(model_a, set_a, model_b, set_b):
-    """G4: claim-set Jaccard between two models (0.6 floor, 0.8 target)."""
-    jac = jaccard(set_a, set_b)
-    fz = fuzzy_coverage(set_a, set_b)
-    return [{"gate": "G4", "name": "model sensitivity",
-             "detail": f"{model_a} vs {model_b}: exact {jac:.2f} / fuzzy {fz:.2f} ({len(set_a)}/{len(set_b)} claims)",
-             "passed": fz >= 0.5, "target": "fuzzy>=0.8", "jaccard": round(jac, 3), "fuzzy": round(fz, 3)}]
+def gate_model_sensitivity(model_sets):
+    """G4: full pairwise fuzzy-coverage matrix between model claim sets.
+    Reports every pair; the gate fails if ANY pair < 0.5 (target 0.8)."""
+    gates = []
+    names = list(model_sets.keys())
+    pairs = [(a, b) for i, a in enumerate(names) for b in names[i + 1:]]
+    for ma, mb in pairs:
+        sa, sb = model_sets[ma], model_sets[mb]
+        jac = jaccard(sa, sb)
+        fz = fuzzy_coverage(sa, sb)
+        empty = (not sa) or (not sb)
+        gates.append({"gate": "G4", "name": "model sensitivity",
+                      "detail": (f"{ma} vs {mb}: EMPTY claim set ({len(sa)}/{len(sb)}) — extraction failed for one model"
+                                  if empty else
+                                  f"{ma} vs {mb}: exact {jac:.2f} / fuzzy {fz:.2f} ({len(sa)}/{len(sb)} claims)"),
+                      "passed": (not empty) and fz >= 0.5, "target": "fuzzy>=0.8",
+                      "jaccard": round(jac, 3), "fuzzy": round(fz, 3), "empty": empty})
+    return gates
 
 
 def main():
@@ -257,14 +268,24 @@ def main():
             g3g6, sets_a, ingest_times = gate_ingest_stability(tmp, model_a)
             gates.extend(g3g6)
             timings["ingest_s_per_run"] = round(statistics.mean(ingest_times), 1)
-            # G4: second model on a fresh fabric
-            build_fabric(tmp, model=model_b)
-            _out, t_model = timed(sys.executable, tmp / "scripts" / "ingest.py",
-                                  tmp / "evidence" / "raw" / "stab" / "fixture.md",
-                                  "--extract-claims", cwd=tmp, timeout=600)
-            timings["ingest_s_second_model"] = round(t_model, 1)
-            sets_b = claim_statements(tmp / "evidence" / "claims")
-            gates.extend(gate_model_sensitivity(model_a, sets_a, model_b, sets_b))
+            # G4: remaining models on fresh fabrics (pairwise matrix)
+            all_sets = {model_a: sets_a}
+            timings[f"ingest_s_{model_a}"] = round(statistics.mean(ingest_times), 1)
+            for mb in [m for m in models_arg if m != model_a]:
+                build_fabric(tmp, model=mb)
+                try:
+                    _out, t_model = timed(sys.executable, tmp / "scripts" / "ingest.py",
+                                          tmp / "evidence" / "raw" / "stab" / "fixture.md",
+                                          "--extract-claims", cwd=tmp, timeout=600)
+                except subprocess.TimeoutExpired:
+                    gates.append({"gate": "G4", "name": "model sensitivity",
+                                  "detail": f"{mb} did not respond within 600s — SKIPPED",
+                                  "passed": True, "skipped": True})
+                    continue
+                timings[f"ingest_s_{mb}"] = round(t_model, 1)
+                all_sets[mb] = claim_statements(tmp / "evidence" / "claims")
+            ordered = {m: all_sets[m] for m in models_arg if m in all_sets}
+            gates.extend(gate_model_sensitivity(ordered))
     finally:
         report = {
             "mode": "skip-llm" if args.skip_llm else "full",

@@ -63,7 +63,11 @@ Rules:
 - "q" = verbatim substring of the source (do NOT include the L-number prefixes in "q")
 - ev=primary only for direct measurement, secondary for reported, tertiary for hearsay
 - conf reflects corroboration; st=supported when quoted evidence exists, proposed otherwise
-- one fact per claim; merge trivially related facts; target 5-15 claims
+- Granularity: exactly ONE distinct verifiable fact per claim — a measurable property,
+  mechanism, or constraint, expressed in one sentence. Do NOT split one fact into
+  sub-facts (e.g. "X costs A and takes B" is one claim). Do NOT merge unrelated facts.
+- Target 5-12 claims for a document this size; prefer fewer, well-formed claims over
+  many fragments.
 - Output ONLY the JSON array, no other text.
 
 Source: {source_path}
@@ -246,17 +250,27 @@ def extract_claims_openai_compatible(source_text, source_path, model=None):
     model_name = model or cfg["model"]
     client = openai.OpenAI(base_url=cfg["base_url"], api_key=cfg["api_key"])
     try:
-        response = client.chat.completions.create(
-            model=model_name,
-            temperature=0.1,
-            max_tokens=4096,
-            messages=[
+        def _call(max_tokens, extra=None):
+            messages = [
                 {"role": "system", "content": "You are a precise claim extractor. Extract atomic, evidence-backed claims from source documents. Return ONLY a valid JSON array."},
-                {"role": "user", "content": build_prompt(source_text, source_path)}
-            ]
-        )
-        output = response.choices[0].message.content
+                {"role": "user", "content": build_prompt(source_text, source_path)},
+            ] + (extra or [])
+            return client.chat.completions.create(
+                model=model_name, temperature=0.1, max_tokens=max_tokens, messages=messages)
+
+        response = _call(16384)
+        msg = response.choices[0].message
+        # Reasoning models (deepseek etc.) may put the answer in `content` only,
+        # or spend the budget on `reasoning` — if no parseable JSON came back and
+        # the model emitted reasoning, retry once demanding direct JSON output.
+        output = msg.content or getattr(msg, "reasoning", None) or ""
         claims = parse_json_array(output)
+        if not claims and response.choices[0].finish_reason == "length":
+            response = _call(8192, extra=[{"role": "assistant", "content": output[:2000] if output else ""},
+                                          {"role": "user", "content": "Your reasoning consumed the token budget. Return the JSON array NOW, no explanations."}])
+            msg = response.choices[0].message
+            output = msg.content or getattr(msg, "reasoning", None) or ""
+            claims = parse_json_array(output)
         if claims:
             return claims
         print("No JSON array in OpenAI-compatible response", file=sys.stderr)

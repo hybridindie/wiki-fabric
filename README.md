@@ -837,11 +837,17 @@ python3 scripts/eval-stability.py --record            # append metrics to regist
 | G4 model sensitivity | two models on the same source | fuzzy ≥ 0.5 (target 0.8); a fail means model swap requires re-running compiler evals |
 
 **Live findings** (recorded in `registry/log.md`): context/rebuild are exactly
-deterministic (~40ms); same-model extraction is semantically stable (fuzzy 0.76)
-but drifts in wording (exact 0.56); and the two local models extract genuinely
-different claim sets from the same fixture (fuzzy 0.28) — the model-sensitivity
-gate doing exactly what the rubric demanded: flagging that model swaps are a
-compiler change requiring re-evaluation.
+deterministic (~40ms); same-model extraction is semantically stable (fuzzy 0.76–0.86)
+but drifts in wording (exact 0.31–0.73). A **4-model matrix** — local
+(qwen2.5-coder:7b, qwen3.8:27b-mlx) vs Ollama cloud (deepseek-v4.1-flash:cloud,
+kimi-k2.7-code:cloud) — showed cross-model disagreement is **capability-correlated**:
+the two largest models agree most (fuzzy 0.57–0.59), the smallest over-splits claims.
+The CLAIM_PROMPT now carries an explicit granularity spec (one verifiable fact per
+claim, target 5–12), which measurably improved agreement (+0.1–0.2 per pair) and
+stability (0.76 → 0.86). G4's rule stands: **any model swap requires re-running the
+compiler evals.** Infra note: cloud reasoning models can silently return 0 claims
+when reasoning consumes the token budget — the extractor now budgets 16K tokens and
+retries on `finish_reason=length`.
 
 ---
 
