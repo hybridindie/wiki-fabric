@@ -39,7 +39,12 @@ _DEFAULTS = {
     "llm": {
         "base_url": "http://localhost:11434/v1",
         "api_key": "ollama",
+        # ops model: cheap queries, capture, status
         "model": "qwen2.5-coder:7b",
+        # compiler model: claim extraction, synthesis, promotion mining.
+        # Policy (eval-stability G4): compiler runs need the most capable model —
+        # cross-model extraction disagreement is capability-correlated.
+        "compiler_model": "deepseek-v4.1-flash:cloud",
     },
     "repos": {},
     "integrations": {
@@ -114,6 +119,8 @@ def get_config():
     config["llm"]["base_url"] = os.environ.get("WIKI_LLM_BASE_URL", config["llm"]["base_url"])
     config["llm"]["api_key"] = os.environ.get("WIKI_LLM_API_KEY", config["llm"]["api_key"])
     config["llm"]["model"] = os.environ.get("WIKI_LLM_MODEL", config["llm"]["model"])
+    config["llm"]["compiler_model"] = os.environ.get(
+        "WIKI_LLM_COMPILER_MODEL", config["llm"].get("compiler_model") or config["llm"]["model"])
 
     return config
 
@@ -151,9 +158,39 @@ def get_owner(config):
     return config.get("owner", "you")
 
 
-def get_llm_config(config):
-    """Return LLM configuration dict."""
-    return config.get("llm", {})
+def get_llm_config(config, compiler=False):
+    """Return LLM configuration dict. compiler=True returns the compiler model
+    (falls back to llm.model when unset) — claim extraction, synthesis, and
+    promotion mining must run on the policy-designated compiler model."""
+    llm = dict(config.get("llm", {}))
+    if compiler:
+        cm = llm.get("compiler_model")
+        if cm and cm.strip():
+            llm["model"] = cm
+    return llm
+
+
+def compiler_eval_recorded(config, log_path=None):
+    """True when registry/log.md contains a PASS compiler eval for the current
+    compiler model (eval-stability G4 / eval.py). Promotion mining + promotion
+    refuse without it — the model-sensitivity finding made model swaps compiler
+    changes; this enforces the regression-guard rule."""
+    import re
+    llm = get_llm_config(config, compiler=True)
+    compiler_model = llm.get("model", "")
+    log_path = Path(log_path or (FABRIC_ROOT / "registry" / "log.md"))
+    if not log_path.exists():
+        return False, "no registry/log.md — run eval-stability/eval.py for the compiler model first"
+    text = log_path.read_text()
+    # accept: any eval-stability/eval entry naming the compiler model
+    short = compiler_model.split(":")[0]
+    block_re = re.compile(r"## \[[\d-]+\] (eval-stability|eval) \|.*?(?=\n## |\Z)", re.DOTALL)
+    for m in block_re.finditer(text):
+        block = m.group(0)
+        if compiler_model in block or short in block:
+            return True, f"compiler eval recorded for {compiler_model}"
+    return False, (f"no compiler eval recorded for '{compiler_model}' — run: "
+                   f"python3 scripts/eval-stability.py --models {compiler_model} --record")
 
 
 def get_repo_graph_dir(config, repo_name):

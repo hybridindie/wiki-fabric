@@ -184,3 +184,56 @@ Append-only timeline. One `## [YYYY-MM-DD] <op> | <subject>` entry per operation
 - Infra fix: deepseek:cloud reasoning consumed the 4096-token budget → no JSON. Added
   16384-token default + finish-reason=length retry. Without it cloud reasoning models
   silently extract 0 claims.
+
+## [2026-09-14] eval | formal golden corpus
+
+- Total extracted: 29, golden: 9, covered: 8
+- Recall: 0.89, Locator rate: 1.00, Quote rate: 1.00
+- Overall: PASS
+
+## [2026-09-14] eval | compiler re-baseline after CLAIM_PROMPT granularity spec
+
+- Claim recall: 0.89 (threshold 0.8) — PASS
+- Locator rate: 1.00 — PASS
+- Quote rate: 1.00 — PASS
+- 29 claims extracted across 3 fixtures, 8/9 golden keys covered
+- Model: compiler_model (deepseek-v4.1-flash:cloud) — first verified run since the
+  granularity spec landed; the compiler change is now regression-baselined.
+
+## [2026-09-14] eval-stability | PASS
+
+- G1 context determinism: PASS — 1 unique output(s) in 20 runs
+- G2 rebuild determinism: PASS — index.md + index.json identical across rebuilds
+- G3 ingest claim stability: PASS — exact Jaccard 0.33 | fuzzy word-coverage 0.78 across 2 runs (12/12 claims)
+- G6 locator presence: PASS — 12/12 claims carry L-locators
+- G4 model sensitivity: PASS — qwen2.5-coder:7b vs qwen3.8:27b-mlx: exact 0.41 / fuzzy 0.78 (12/12 claims)
+- G4 model sensitivity: PASS — qwen2.5-coder:7b vs deepseek-v4.1-flash:cloud: exact 0.35 / fuzzy 0.77 (12/11 claims)
+- G4 model sensitivity: PASS — qwen2.5-coder:7b vs kimi-k2.7-code:cloud: exact 0.20 / fuzzy 0.78 (12/12 claims)
+- G4 model sensitivity: PASS — qwen2.5-coder:7b vs glm-5.3-flash:cloud: exact 0.14 / fuzzy 0.75 (12/12 claims)
+- G4 model sensitivity: PASS — qwen3.8:27b-mlx vs deepseek-v4.1-flash:cloud: exact 0.28 / fuzzy 0.75 (12/11 claims)
+- G4 model sensitivity: PASS — qwen3.8:27b-mlx vs kimi-k2.7-code:cloud: exact 0.26 / fuzzy 0.78 (12/12 claims)
+- G4 model sensitivity: PASS — qwen3.8:27b-mlx vs glm-5.3-flash:cloud: exact 0.20 / fuzzy 0.76 (12/12 claims)
+- G4 model sensitivity: PASS — deepseek-v4.1-flash:cloud vs kimi-k2.7-code:cloud: exact 0.21 / fuzzy 0.85 (11/12 claims)
+- G4 model sensitivity: PASS — deepseek-v4.1-flash:cloud vs glm-5.3-flash:cloud: exact 0.28 / fuzzy 0.84 (11/12 claims)
+- G4 model sensitivity: PASS — kimi-k2.7-code:cloud vs glm-5.3-flash:cloud: exact 0.14 / fuzzy 0.82 (12/12 claims)
+- manifest_compile_ms: 39.4
+- rebuild_index_ms: 36.0
+- ingest_s_per_run: 35.2
+- ingest_s_qwen2.5-coder:7b: 35.2
+- ingest_s_qwen3.8:27b-mlx: 19.4
+- ingest_s_deepseek-v4.1-flash:cloud: 18.7
+- ingest_s_kimi-k2.7-code:cloud: 27.5
+- ingest_s_glm-5.3-flash:cloud: 17.9
+
+## [2026-09-14] eval-stability | 5-model matrix — G4 full PASS
+
+- Models: qwen2.5-coder:7b, qwen3.8:27b-mlx, deepseek-v4.1-flash:cloud, kimi-k2.7-code:cloud, glm-5.3-flash:cloud
+- All 10 pairwise G4 checks PASS: fuzzy 0.75-0.85, exact 0.14-0.41
+- G3 same-model: fuzzy 0.78; G6 locator 1.0 (12/12 claims per run)
+- Interpretation: with the granularity spec, claim extraction is now model-stable
+  across 5 heterogeneous models (local + cloud, reasoning + non-reasoning). The
+  earlier capability-correlated gap was a contract-precision problem, closed by the
+  granularity spec.
+- Latency: glm-5.3-flash 18s, deepseek 19s, qwen3.8 19s, kimi 28s, qwen2.5 35s
+- Compiler model policy unchanged (deepseek-v4.1-flash:cloud); glm-5.3-flash verified
+  as a peer alternative.

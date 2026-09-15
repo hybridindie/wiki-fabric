@@ -56,6 +56,13 @@ def list_recommended():
 
 def promote_dossier(dossier_path, dry_run=False):
     """Promote a dossier from pending-review to recommended."""
+    from fabric_config import get_config, compiler_eval_recorded
+    ok, why = compiler_eval_recorded(get_config())
+    if not ok:
+        print(f"BLOCKED: {why}")
+        print("Policy: promotion runs on the compiler model require a recorded compiler eval")
+        print("(eval-stability G4). Model swaps are compiler changes — re-evaluate first.")
+        return False
     fm, body = parse_frontmatter(dossier_path)
     
     if fm.get("status") != "pending-review":

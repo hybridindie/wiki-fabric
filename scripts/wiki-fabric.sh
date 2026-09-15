@@ -448,7 +448,9 @@ cmd_status() {
     # LLM
     if [[ -f "${fabric_dir}/fabric.yaml" ]]; then
         local llm_model=$(grep "model:" "${fabric_dir}/fabric.yaml" 2>/dev/null | head -1 | awk '{print $2}')
+        local compiler_model=$(grep "compiler_model:" "${fabric_dir}/fabric.yaml" 2>/dev/null | head -1 | awk '{print $2}')
         ok "LLM:    ${llm_model:-not configured}"
+        ok "Compiler: ${compiler_model:-${llm_model:-not configured}} (claim extraction, synthesis, promotion)"
     fi
 
     # Inventory counts

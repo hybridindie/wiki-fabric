@@ -44,14 +44,11 @@ def find_project_namespace(vault_root):
     return m.group(1) if m else "default-project"
 
 
-def llm_config():
-    """Read LLM config from fabric.yaml + env overrides."""
-    config = get_config()
-    return {
-        "base_url": config["llm"]["base_url"],
-        "api_key": config["llm"]["api_key"],
-        "model": config["llm"]["model"],
-    }
+def llm_config(compiler=False):
+    """Read LLM config from fabric.yaml + env overrides. compiler=True routes to
+    the policy-designated compiler model (claim extraction = compiler work)."""
+    from fabric_config import get_llm_config
+    return get_llm_config(get_config(), compiler=compiler)
 
 
 CLAIM_PROMPT = """Extract atomic evidence-backed claims from the line-numbered source below.
@@ -243,7 +240,7 @@ def extract_claims_openai_compatible(source_text, source_path, model=None):
         print("openai package not installed; skipping", file=sys.stderr)
         return []
 
-    cfg = llm_config()
+    cfg = llm_config(compiler=True)
     # Map generic names to local models only when using the Ollama default
     if model is None and "11434" in cfg["base_url"]:
         model = cfg["model"]

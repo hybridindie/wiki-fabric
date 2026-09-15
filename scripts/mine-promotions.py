@@ -581,8 +581,17 @@ def main():
         print("\n[DRY RUN] No files written")
         return
     
+    # Compiler-eval gate (policy: model swaps are compiler changes). Dry-run exempt.
+    from fabric_config import get_config, compiler_eval_recorded
+    ok, why = compiler_eval_recorded(get_config())
+    if not ok:
+        print(f"BLOCKED: {why}")
+        print("Policy: dossier generation requires a recorded compiler eval for the compiler model.")
+        print("Run: python3 scripts/eval-stability.py --models <compiler-model> --record")
+        sys.exit(2)
+
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     for cluster_key, events in clusters.items():
         # Generate dossier
         dossier = generate_dossier(cluster_key, events)

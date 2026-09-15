@@ -7,7 +7,10 @@ owner: your-name
 llm:
   base_url: http://localhost:11434/v1   # Ollama default
   api_key: ollama                        # Ollama ignores this
-  model: qwen2.5-coder:7b               # any OpenAI-compatible model
+  model: qwen2.5-coder:7b               # ops model: cheap queries, capture, status
+  # compiler_model: deepseek-v4.1-flash:cloud  # claim extraction, synthesis, promotion.
+  # Policy (eval-stability G4): compiler work needs the most capable model; model
+  # swaps require a recorded compiler eval (promote/mine refuse without it).
 
 repos:
   # my-project:
