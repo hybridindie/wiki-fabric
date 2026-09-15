@@ -838,16 +838,39 @@ python3 scripts/eval-stability.py --record            # append metrics to regist
 
 **Live findings** (recorded in `registry/log.md`): context/rebuild are exactly
 deterministic (~40ms); same-model extraction is semantically stable (fuzzy 0.76–0.86)
-but drifts in wording (exact 0.31–0.73). A **4-model matrix** — local
+but drifts in wording (exact 0.31–0.73). A **5-model matrix** — local
 (qwen2.5-coder:7b, qwen3.8:27b-mlx) vs Ollama cloud (deepseek-v4.1-flash:cloud,
-kimi-k2.7-code:cloud) — showed cross-model disagreement is **capability-correlated**:
-the two largest models agree most (fuzzy 0.57–0.59), the smallest over-splits claims.
-The CLAIM_PROMPT now carries an explicit granularity spec (one verifiable fact per
-claim, target 5–12), which measurably improved agreement (+0.1–0.2 per pair) and
-stability (0.76 → 0.86). G4's rule stands: **any model swap requires re-running the
-compiler evals.** Infra note: cloud reasoning models can silently return 0 claims
-when reasoning consumes the token budget — the extractor now budgets 16K tokens and
-retries on `finish_reason=length`.
+kimi-k2.7-code:cloud, glm-5.3-flash:cloud) — first showed capability-correlated
+disagreement (fuzzy 0.28–0.59). Fixing it took a contract change, not a model change:
+the CLAIM_PROMPT now carries an explicit **granularity spec** (exactly one verifiable
+fact per claim, target 5–12). After that: **all 10 pairwise G4 checks PASS
+(fuzzy 0.75–0.85)** and claim counts converge to 11–12 across every model. The
+compiler change was re-baselined against the golden corpus first (recall 0.89, locator
+1.00 — PASS). Infra note: cloud reasoning models can silently return 0 claims when
+reasoning consumes the token budget — the extractor now budgets 16K tokens and retries
+on `finish_reason=length`.
+
+### Model policy: ops vs compiler models
+
+Claim extraction is *compiler work* — it compiles sources into the fabric's
+canonical evidence — so it runs on a policy-designated **compiler model**, not
+whatever model is configured for cheap queries:
+
+| Setting | Default | Used for |
+|---------|---------|----------|
+| `llm.model` | `qwen2.5-coder:7b` | ops: capture, status, cheap query synthesis |
+| `llm.compiler_model` | `deepseek-v4.1-flash:cloud` | claim extraction (`ingest --extract-claims`), synthesis, promotion mining |
+
+```bash
+# Override per-run (e.g. test a different compiler model):
+WIKI_LLM_COMPILER_MODEL=kimi-k2.7-code:cloud wf ingest evidence/raw/<doc>.md --extract-claims
+```
+
+**The gate:** `promote.py` and `mine-promotions.py` **refuse to run** unless
+`registry/log.md` contains a recorded compiler eval for the current compiler
+model. This enforces the G4 lesson — model swaps are compiler changes, and
+compiler changes require re-evaluation — as a hard gate instead of a docs
+sentence. `wf status` shows both models.
 
 ---
 

@@ -321,7 +321,7 @@ captures.
 | Check fabric health | `lint.py` | **0** | Run after any edit batch, before commit |
 | Detect code staleness | `graphify-bridge.py --diff` | **0** | Only when `integrations.graphify.enabled: true` in fabric.yaml (optional integration; skills carry the active/inactive delta) |
 | Discover new domains | `propose-domains.py` | **0** | After ingesting new repos |
-| Extract claims from source | `ingest.py --extract-claims` | 1 call | New source to compile |
+| Extract claims from source | `ingest.py --extract-claims` | 1 call | New source to compile — runs on the **compiler model** (`llm.compiler_model`, default `deepseek-v4.1-flash:cloud`), not the ops model |
 | Synthesize concept | `synthesize.py` | 1 call | New claim cluster needing a concept page |
 | Log experience event | `log-experience.py` | **0** | After solving a problem worth remembering |
 | Mine cross-project patterns | `mine-promotions.py` | **0** | When ≥2 projects have experience events |
@@ -342,6 +342,10 @@ captures.
 3. **Lint before commit** — always run `scripts/lint.py` before any git commit. If lint fails, fix errors first.
 4. **Ask before canonical edits** — stage in `evidence/` first, then present manifest + diff for human review.
 5. **One operation per commit** — don't batch ingest + promote + synthesize into one git commit.
+6. **Compiler model policy** — claim extraction, synthesis, and promotion mining run on
+   `llm.compiler_model` (default `deepseek-v4.1-flash:cloud`), not the ops model.
+   `promote.py` and `mine-promotions.py` refuse without a recorded compiler eval for
+   the current compiler model (model swaps are compiler changes — eval-stability G4).
 
 ### Global Fabric Context
 
