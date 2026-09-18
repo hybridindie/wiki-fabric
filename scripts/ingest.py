@@ -105,12 +105,121 @@ def build_prompt(source_text, source_path):
     )
 
 
+def _normalize_for_match(text):
+    """Strip markdown artifacts + collapse whitespace for fuzzy quote matching."""
+    t = re.sub(r'[*`>]+', '', text)
+    t = re.sub(r'\s+', ' ', t)
+    return t.strip()
+
+
+def repair_quote(quote, source_text):
+    """Fuzzy-match a model-returned quote back to the verbatim source text.
+
+    Models strip markdown artifacts and join lines. If the normalized quote
+    matches the normalized source, return the true verbatim substring.
+    Returns (repaired_quote, True) or (original, False)."""
+    if not quote or not quote.strip():
+        return quote, False
+    src_norm = _normalize_for_match(source_text)
+    q_norm = _normalize_for_match(quote)
+    if not q_norm:
+        return quote, False
+    # exact verbatim already
+    if quote in source_text:
+        return quote, False
+    # fuzzy match: find the quote's position in the normalized source
+    idx = src_norm.find(q_norm)
+    if idx == -1:
+        # try with the first 60% of the quote (model may have truncated)
+        idx = src_norm.find(q_norm[:int(len(q_norm) * 0.6)])
+    if idx == -1:
+        return quote, False
+    # extract the true verbatim passage from the raw source at this position
+    # walk back from idx in normalized text to find the raw span — approximate
+    # by finding the first 5 words of the quote in the raw source
+    words = _normalize_for_match(quote).split()[:5]
+    if not words:
+        return quote, False
+    anchor = ' '.join(words)
+    # find anchor in raw source (tolerating md artifacts between words)
+    anchor_re = re.compile(re.escape(anchor.split()[0]) + r'(?:(?!' +
+                           re.escape(anchor.split()[-1]) + r').)*' +
+                           re.escape(anchor.split()[-1]), re.DOTALL)
+    m = anchor_re.search(source_text)
+    if not m:
+        return quote, False
+    # expand to cover the full quote: find the last words too
+    tail_words = _normalize_for_match(quote).split()[-3:]
+    tail = ' '.join(tail_words for tail_words in [tail_words]) if False else None
+    tail_norm = _normalize_for_match(quote).split()[-3:]
+    tail_re = re.compile(re.escape(' '.join(tail_norm)).replace('\\ ', r'\s+'), re.DOTALL)
+    # find the span in the raw source that matches the full quote (normalized)
+    raw_norm_map = {}  # norm_char -> raw_char
+    clean, mapped = [], []
+    i = 0
+    for j, ch in enumerate(source_text):
+        if ch in '*`>':
+            continue
+        if ch in '\n\r\t':
+            ch = ' '
+        if ch == ' ' and mapped and mapped[-1] == ' ':
+            continue
+        mapped.append(j)
+        mapped_char = ch
+        mapped[-1] = j
+        mapped_pos = len(mapped)
+    # simpler: build a char-map of normalized positions
+    norm_chars = []
+    norm_to_raw = []
+    for j, ch in enumerate(source_text):
+        if ch in '*`>':
+            continue
+        if ch in '\n\r\t':
+            ch = ' '
+        norm_chars.append(ch)
+        norm_to_raw.append(j)
+    src_flat = ''.join(norm_chars)
+    # collapse double spaces in the flat source
+    flat_final, flat_map = [], []
+    prev_space = False
+    for k, (ch, raw_i) in enumerate(zip(src_flat, norm_to_raw)):
+        if ch == ' ' and prev_space:
+            continue
+        flat_final.append(ch)
+        flat_map.append(raw_i)
+        prev_space = (ch == ' ')
+    flat_str = ''.join(flat_final)
+    q_flat = _normalize_for_match(quote)
+    pos = flat_str.find(q_flat)
+    if pos == -1:
+        return quote, False
+    raw_start = flat_map[pos]
+    raw_end = flat_map[min(pos + len(q_flat) - 1, len(flat_map) - 1)]
+    # extend to include closing md artifact chars
+    while raw_end < len(source_text) - 1 and source_text[raw_end + 1] in '*`':
+        raw_end += 1
+    verbatim = source_text[raw_start:raw_end + 1].strip()
+    if len(verbatim) < 10:
+        return quote, False
+    return source_text[raw_start:raw_end + 1].strip(), True
+
+
 def verify_and_fix_locators(claims, source_text):
     """Post-extraction: verify each claim's locator against the source and fix if off.
-    Works on the flat claim structure (locator, quote at top level)."""
+    Also repairs quotes that were markdown-normalized by the model back to the
+    true verbatim text. Works on the flat claim structure."""
     source_lines = source_text.split('\n')
     fixed = 0
+    q_repaired = 0
     for claim in claims:
+        quote = claim.get("quote", "") or claim.get("q", "") or ""
+        if quote and quote not in source_text:
+            repaired, did = repair_quote(quote, source_text)
+            if did and repaired != quote:
+                claim["quote"] = repaired
+                if "q" in claim:
+                    claim["q"] = repaired
+                q_repaired += 1
         quote = claim.get("quote", "") or claim.get("q", "") or ""
         loc = claim.get("locator", "") or claim.get("loc", "") or ""
 

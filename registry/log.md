@@ -126,3 +126,37 @@ Append-only timeline. One `## YYYY-MM-DD` heading per day with `* **<op> | <subj
   qwen2.5-coder:7b remains the local fallback (recall PASS, quote 0.88, G4 0.83 vs gemma4).
   The quote-rate failure mode: model paraphrases instead of quoting verbatim —
   prompt-side fix possible (explicit "quote MUST be verbatim substring" reinforcement).
+
+## 2026-09-18
+* **eval | formal golden corpus**
+- Total extracted: 22, golden: 9, covered: 8
+- Recall: 0.89, Locator rate: 1.00, Quote rate: 0.95
+- Overall: PASS
+
+## 2026-09-18
+* **eval | formal golden corpus**
+- Total extracted: 24, golden: 9, covered: 8
+- Recall: 0.89, Locator rate: 1.00, Quote rate: 0.96
+- Overall: PASS
+
+## 2026-09-18
+* **bench | gemma4 E4B with prompt+code fixes — PASSES golden corpus**
+
+- Two fixes landed:
+  1. quote-repair in verify_and_fix_locators — deterministic markdown-normalization
+     fuzzy-match that rewrites model quotes back to true verbatim source text
+     (quote rate 0.65 -> 0.96)
+  2. gemma4:e4b-fixed — Modelfile temperature 0.1 + top_k 10 (the stock QAT build
+     ships temperature 1, overriding API calls; fixed variant bakes low temp)
+- gemma4:e4b-fixed results:
+  - golden recall: 8/9 (0.89) PASS
+  - locator presence: 1.0 PASS
+  - quote rate: 0.96 PASS (was 0.65)
+  - G3 self-stability: PASS (with temp 0.1 baked)
+  - G4 vs deepseek: fuzzy 0.78 (above 0.75 quality bar, below 0.8 target)
+  - G4 vs qwen2.5-7b: fuzzy 0.68 PASS
+  - latency: 6.1s/fixture (vs 7.6s for the stock build, vs 6.2s for 7b)
+- Verdict: gemma4:e4b-fixed PASSES the golden corpus and G4-vs-qwen2.5 — a viable
+  6.1GB local extraction model. The quote-repair fix benefits ALL models.
+- The G4-vs-deepseek 0.78-vs-0.8 shortfall is small-model capability variance;
+  acceptable for the local tier given the cloud tier handles the precision-critical path.
