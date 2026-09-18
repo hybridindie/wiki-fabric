@@ -208,19 +208,28 @@ interactive_setup() {
     read -p "  Your name/handle [${git_name:-you}]: " owner
     owner="${owner:-${git_name:-you}}"
 
-    # LLM tier
+    # LLM provider
     echo ""
-    echo "  LLM configuration — claim extraction needs a compiler model."
-    echo "  Options:"
-    echo "    1) Ollama cloud (deepseek-v4.1-flash:cloud) — fastest, default"
-    echo "    2) Ollama local (qwen2.5-coder:7b) — free, private, 6s/doc"
-    echo "    3) Custom"
-    read -p "  Choice [1]: " llm_choice
-    case "${llm_choice:-1}" in
-        2) compiler_model="qwen2.5-coder:7b"; base_url="http://localhost:11434/v1" ;;
-        3) read -p "  Compiler model: " compiler_model; read -p "  Base URL [http://localhost:11434/v1]: " base_url; base_url="${base_url:-http://localhost:11434/v1}" ;;
-        *) compiler_model="deepseek-v4.1-flash:cloud"; base_url="http://localhost:11434/v1" ;;
+    echo "  LLM endpoint — any OpenAI-compatible API works:"
+    echo "    1) Ollama (local or cloud)   localhost:11434 — default"
+    echo "    2) LM Studio                 localhost:1234/v1"
+    echo "    3) vLLM                      localhost:8000/v1"
+    echo "    4) OpenRouter                openrouter.ai/api/v1 (needs key)"
+    echo "    5) Together AI               api.together.xyz/v1 (needs key)"
+    echo "    6) Custom endpoint"
+    read -p "  Endpoint [1]: " ep_choice
+    local api_key="ollama"
+    case "${ep:-1}" in
+        2) base_url="http://localhost:1234/v1" ;;
+        3) base_url="http://localhost:8000/v1" ;;
+        4) base_url="https://openrouter.ai/api/v1"; read -p "  API key: " api_key ;;
+        5) base_url="https://api.together.xyz/v1"; read -p "  API key: " api_key ;;
+        6) read -p "  Base URL: " base_url; read -p "  API key [none]: " api_key ;;
+        *) base_url="http://localhost:11434/v1" ;;
     esac
+
+    read -p "  Compiler model [deepseek-v4.1-flash:cloud]: " compiler_model
+    compiler_model="${compiler_model:-deepseek-v4.1-flash:cloud}"
 
     # Extraction routing
     echo ""
@@ -242,7 +251,7 @@ owner: ${owner}
 
 llm:
   base_url: ${base_url}
-  api_key: ollama
+  api_key: ${api_key}
   model: qwen2.5-coder:7b
   compiler_model: ${compiler_model}
 

@@ -410,10 +410,12 @@ def extract_claims_openai_compatible(source_text, source_path, model=None):
         return []
 
     cfg = llm_config(compiler=True)
-    # Map generic names to local models only when using the Ollama default
-    if model is None and "11434" in cfg["base_url"]:
+    # Only auto-map model names for Ollama (its /v1 endpoint requires the
+    # model name in the path). Other providers (vLLM, LM Studio, OpenRouter)
+    # accept any model name the server recognizes.
+    if model is None:
         model = cfg["model"]
-    model_name = model or cfg["model"]
+    model_name = model
     client = openai.OpenAI(base_url=cfg["base_url"], api_key=cfg["api_key"],
                            timeout=float(os.environ.get("WIKI_LLM_TIMEOUT", "600")))
     try:

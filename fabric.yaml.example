@@ -5,9 +5,19 @@
 owner: your-name
 
 llm:
-  base_url: http://localhost:11434/v1   # Ollama default
-  api_key: ollama                        # Ollama ignores this
+  # Any OpenAI-compatible endpoint works: Ollama, LM Studio, vLLM,
+  # llama.cpp server, MLX-VM, OpenRouter, Together AI, etc.
+  base_url: http://localhost:11434/v1   # Ollama default (see presets below)
+  api_key: ollama                        # Ollama ignores this; cloud providers need a real key
   model: qwen2.5-coder:7b               # ops model: cheap queries, capture, status
+
+  # Other tested endpoints:
+  #   LM Studio:        http://localhost:1234/v1
+  #   vLLM:             http://localhost:8000/v1
+  #   mlx-serve:        http://localhost:8000/v1   (MLX hot-swap server for Apple Silicon)
+  #   mlx-openai-server: http://localhost:8080/v1  (MLX OpenAI-compatible server)
+  #   OpenRouter:       https://openrouter.ai/api/v1  (api_key: your key)
+  #   Together AI:      https://api.together.xyz/v1   (api_key: your key)
   # compiler_model: deepseek-v4.1-flash:cloud  # claim extraction, synthesis, promotion.
   # Policy (eval-stability G4): compiler work needs the most capable model; model
   # swaps require a recorded compiler eval (promote/mine refuse without it).

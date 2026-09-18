@@ -7,8 +7,8 @@ or LLM settings.
 fabric.yaml schema:
     owner: <your name>
     llm:
-      base_url: http://localhost:11434/v1
-      api_key: ollama
+      base_url: http://localhost:11434/v1   # any OpenAI-compatible endpoint
+      api_key: ollama                        # or a real key for cloud providers
       model: qwen2.5-coder:7b
     repos:
       my-project:

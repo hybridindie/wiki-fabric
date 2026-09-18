@@ -23,6 +23,7 @@
 #   python3 scripts/eval-stability.py --json --record
 
 import sys
+import os
 import hashlib
 import re
 import json
@@ -88,7 +89,7 @@ def build_fabric(tmp, model=None):
         shutil.rmtree(tmp / d, ignore_errors=True)
     (tmp / "evidence" / "raw" / "stab").mkdir(parents=True, exist_ok=True)
     (tmp / "evidence" / "raw" / "stab" / "fixture.md").write_text(STABILITY_SOURCE)
-    llm = (f"llm:\n  base_url: http://localhost:11434/v1\n  api_key: ollama\n"
+    llm = (f"llm:\n  base_url: {os.environ.get('WIKI_LLM_BASE_URL', 'http://localhost:11434/v1')}\n  api_key: {os.environ.get('WIKI_LLM_API_KEY', 'ollama')}\n"
            f"  model: {model}\n") if model else ""
     (tmp / "fabric.yaml").write_text(f"owner: eval\n{llm}repos: {{}}\n")
 

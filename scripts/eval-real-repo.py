@@ -73,7 +73,7 @@ def seed_fabric(tmp, repo_path_holder):
     repo_yaml = str(repo_path_holder["path"])
     (tmp / "fabric.yaml").write_text(
         "owner: eval\n"
-        "llm:\n  base_url: http://localhost:11434/v1\n  api_key: ollama\n  model: qwen2.5-coder:7b\n"
+        "llm:\n  base_url: {os.environ.get('WIKI_LLM_BASE_URL', 'http://localhost:11434/v1')}\n  api_key: {os.environ.get('WIKI_LLM_API_KEY', 'ollama')}\n  model: qwen2.5-coder:7b\n"
         f"repos:\n  fastapi:\n    path: {repo_yaml}\n    graph_dir: graphify-out\n"
         "integrations:\n  graphify:\n    enabled: true\n    graph_dir: graphify-out\n"
         "  embeddings:\n    enabled: true\n    model: all-MiniLM-L6-v2\n"
