@@ -160,3 +160,6 @@ Append-only timeline. One `## YYYY-MM-DD` heading per day with `* **<op> | <subj
   6.1GB local extraction model. The quote-repair fix benefits ALL models.
 - The G4-vs-deepseek 0.78-vs-0.8 shortfall is small-model capability variance;
   acceptable for the local tier given the cloud tier handles the precision-critical path.
+
+## 2026-09-18
+* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}

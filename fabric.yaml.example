@@ -16,6 +16,16 @@ repos:
   # my-project:
   #   path: ../my-project               # relative to fabric root, or absolute
   #   graph_dir: graphify-out            # optional, for graphify integration
+#   #
+#   # Per-stage LLM routing (privacy + quality tiering):
+#   #   extract:    summarize + claim extraction (sees raw docs - highest sensitivity)
+#   #   synthesize: concept synthesis from claims (sees sanitized statements)
+#   #   dossier:    promotion dossier generation (sees experience events)
+#   #
+#   # Values: "cloud" (default) | "local" (mlx backend) | explicit model name
+#   extract: local                        # raw docs never leave the machine
+#   synthesize: local                     # extracted claims stay local too
+#   dossier: cloud                        # experience events are safe for cloud
 
 # Optional ignores: exclude-side filter applied by capture, entity index,
 # context selection, lint, rebuild-index, and okf export.

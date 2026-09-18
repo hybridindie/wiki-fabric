@@ -19,7 +19,7 @@ from pathlib import Path
 from datetime import date
 
 sys.path.insert(0, str(Path(__file__).parent))
-from fabric_config import get_config, FABRIC_ROOT, get_llm_config, actor
+from fabric_config import get_config, FABRIC_ROOT, get_llm_config, actor, get_stage_route, is_local_route
 
 VAULT_ROOT = FABRIC_ROOT
 
@@ -876,6 +876,13 @@ def main():
 
     if args.pending:
         project = args.pending
+        # stage routing: extract sees raw docs — per-repo privacy override
+        if not args.model and not os.environ.get("WIKI_LLM_BACKEND"):
+            _cfg = get_config()
+            _model = get_stage_route(_cfg, project, "extract")
+            if is_local_route(_cfg, project, "extract"):
+                os.environ["WIKI_LLM_BACKEND"] = "mlx"
+            args.model = _model
         pending = find_pending_sources(project)
         if not pending:
             print(f"No pending sources for {project} — nothing to extract")
@@ -903,6 +910,13 @@ def main():
 
     if args.changed:
         project = args.changed
+        # stage routing: extract sees raw docs — per-repo privacy override
+        if not args.model and not os.environ.get("WIKI_LLM_BACKEND"):
+            _cfg = get_config()
+            _model = get_stage_route(_cfg, project, "extract")
+            if is_local_route(_cfg, project, "extract"):
+                os.environ["WIKI_LLM_BACKEND"] = "mlx"
+            args.model = _model
         changed = find_changed_sources(project)
         if not changed:
             print(f"No new or changed sources under evidence/raw/{project}/ — nothing to ingest")

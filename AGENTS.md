@@ -42,6 +42,7 @@ persistent memory layer.
 | Detect drift | `graphify-bridge.py --diff` | 0 | Only when graphify integration is enabled |
 | Verify a computation | `references/attesters/*.py` | **0** | Deterministic receipt checks (no LLM) |
 | Export portable bundle | `wf okf export` | **0** | Deterministic, okflint-conformant output |
+| Route extraction/synthesis | `repos.<slug>.extract` / `.synthesize` / `.dossier` | — | Per-repo, per-stage: `"cloud"` (default) or `"local"` (mlx gemma4, 34s/doc) — privacy + quality tiering |
 | Import external bundle | `wf okf import <bundle>` | 0 or 1/doc | Trust recorded, not inherited |
 | Log an experience | `wf log --project <slug>` | 0 | Feeds cross-project mining |
 | Health check | `wf lint` | **0** | 0-error gate before commit |

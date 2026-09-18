@@ -159,6 +159,43 @@ def get_owner(config):
     return config.get("owner", "you")
 
 
+
+
+def get_stage_route(config, repo_name=None, stage="extract"):
+    """Resolve the LLM model for a workflow stage in a repo.
+
+    Routing keys (per-repo override in repos.<slug>.<stage>):
+        extract:    summarize + claim extraction (sees raw docs - highest sensitivity)
+        synthesize: concept synthesis from claims (sees sanitized statements)
+        dossier:    promotion dossier generation (sees experience events)
+
+    Resolution order:
+        1. repos.<repo>.<stage>          (per-repo override: "local" | "cloud" | model name)
+        2. repos.<repo>.extract           (fallback for any unconfigured stage)
+        3. llm.compiler_model            (cloud default)
+    Returns a model string. "local" maps to WIKI_MLX_MODEL or
+    mlx-community/gemma-4-e4b-it-4bit. "cloud" maps to llm.compiler_model.
+    """
+    import os
+    DEFAULT_LOCAL = os.environ.get("WIKI_MLX_MODEL", "mlx-community/gemma-4-e4b-it-4bit")
+    cloud = (config.get("llm", {}).get("compiler_model")
+             or config.get("llm", {}).get("model") or "deepseek-v4.1-flash:cloud")
+    if not repo_name:
+        return cloud
+    repo_cfg = (config.get("repos") or {}).get(repo_name) or {}
+    route = repo_cfg.get(stage) or repo_cfg.get("extract") or "cloud"
+    if route == "local":
+        return DEFAULT_LOCAL
+    if route == "cloud":
+        return cloud
+    return route  # explicit model name
+
+
+def is_local_route(config, repo_name=None, stage="extract"):
+    """True when the stage's route resolves to a local (mlx) model."""
+    model = get_stage_route(config, repo_name, stage)
+    return "/" in model and not model.startswith("http")
+
 def actor(config, kind="agent", model=None):
     """OKF v0.2 §7 actor convention string.
 

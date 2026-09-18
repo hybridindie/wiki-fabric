@@ -308,8 +308,20 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Show clusters without writing")
     parser.add_argument("--min-claims", type=int, default=2, help="Minimum claims per concept")
     parser.add_argument("--threshold", type=float, default=0.25, help="Concept-overlap threshold")
+    parser.add_argument("--project", default=None, help="Project slug for stage routing")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
+
+    # Stage routing: synthesize sees sanitized claims — per-repo privacy override
+    from fabric_config import get_stage_route, is_local_route, get_config
+    _cfg = get_config()
+    if args.project:
+        _model = get_stage_route(_cfg, args.project, "synthesize")
+        if is_local_route(_cfg, args.project, "synthesize"):
+            os.environ["WIKI_LLM_BACKEND"] = "mlx"
+            os.environ["WIKI_MLX_MODEL"] = _model
+        else:
+            os.environ["WIKI_LLM_MODEL"] = _model
 
     global MIN_CLAIMS
     MIN_CLAIMS = args.min_claims

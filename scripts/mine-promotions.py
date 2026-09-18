@@ -287,7 +287,7 @@ def escape_yaml(value):
 
 
 def _mine_actor():
-    """Actor for dossier generation: agent/<owner>/<compiler-model>."""
+    """Actor for dossier generation: agent/<owner>/<dossier-model>."""
     from fabric_config import get_config, actor
     return actor(get_config(), "agent")
 
