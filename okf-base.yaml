@@ -12,6 +12,7 @@ base:
   roots:
     - path: .
       exclude_patterns:
+        - ".venv/**"
         - "evidence/raw/**"
         - "evaluations/fixtures/**"
         - "evaluations/okf/fixtures/violations/**"
