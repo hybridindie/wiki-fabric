@@ -9,6 +9,7 @@
 #   WIKI_LLM_MODEL      — model name (default: qwen2.5-coder:7b)
 
 import sys
+import os
 import time
 import re
 import hashlib
@@ -21,6 +22,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 from fabric_config import get_config, FABRIC_ROOT, get_llm_config, actor
 
 VAULT_ROOT = FABRIC_ROOT
+
+import threading as _threading
+_LOG_LOCK = _threading.Lock()
 
 
 def _dt_iso():
@@ -735,7 +739,7 @@ parent: "[[{change_set_id}]]"
         log_path.write_text(
             "---\ntype: log\ntitle: Log\ncreated: {d}\nupdated: {d}\n---\n\n# Log\n\nAppend-only timeline.\n".replace("{d}", date.today().isoformat())
         )
-    with open(log_path, "a") as f:
+    with _LOG_LOCK, open(log_path, "a") as f:
         f.write(f"\n## {date.today().isoformat()}\n* **ingest | {source_slug}**\n")
         f.write(f"- Ingested {source_path.name} (sha256 {file_hash[:12]}...)\n")
         f.write(f"- Extracted {len(claims)} claims\n")
@@ -754,6 +758,8 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Show what would be done without writing")
     parser.add_argument("--extract-claims", action="store_true", help="Extract claims using LLM")
     parser.add_argument("--model", default=None, help="LLM model (default: $WIKI_LLM_MODEL or qwen2.5-coder:7b)")
+    parser.add_argument("--workers", type=int, default=int(os.environ.get("WIKI_INGEST_WORKERS", "1")),
+                        help="Concurrent extraction threads (default 1; cloud tiers tolerate 6-12)")
     args = parser.parse_args()
 
     global args_dry_run
@@ -765,11 +771,23 @@ def main():
         if not pending:
             print(f"No pending sources for {project} — nothing to extract")
             return
-        print(f"=== Claim-extracting {len(pending)} pending sources for {project} ===\n")
-        results = []
-        for f in pending:
-            print(f"--- {f.name} ---")
-            results.append(ingest_source(f, args.extract_claims, args.model, args.dry_run, args.project or project))
+        print(f"=== Claim-extracting {len(pending)} pending sources for {project} "
+              f"(workers: {args.workers}) ===\n")
+        if args.workers <= 1 or args.dry_run:
+            results = []
+            for f in pending:
+                print(f"--- {f.name} ---")
+                results.append(ingest_source(f, args.extract_claims, args.model, args.dry_run, args.project or project))
+        else:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            results = []
+            with ThreadPoolExecutor(max_workers=args.workers) as ex:
+                futs = {ex.submit(ingest_source, f, args.extract_claims, args.model,
+                                  args.dry_run, args.project or project): f
+                        for f in pending}
+                for fut in as_completed(futs):
+                    print(f"--- done: {futs[fut].name} ---", flush=True)
+                    results.append(fut.result())
         ingested = sum(1 for r in results if r)
         print(f"\nIngest summary: {ingested} ingested, {len(results) - ingested} skipped")
         return
@@ -780,11 +798,23 @@ def main():
         if not changed:
             print(f"No new or changed sources under evidence/raw/{project}/ — nothing to ingest")
             return
-        print(f"=== Ingesting {len(changed)} new/changed sources for {project} ===\n")
-        results = []
-        for f in changed:
-            print(f"--- {f.name} ---")
-            results.append(ingest_source(f, args.extract_claims, args.model, args.dry_run, args.project or project))
+        print(f"=== Ingesting {len(changed)} new/changed sources for {project} "
+              f"(workers: {args.workers}) ===\n")
+        if args.workers <= 1 or args.dry_run:
+            results = []
+            for f in changed:
+                print(f"--- {f.name} ---")
+                results.append(ingest_source(f, args.extract_claims, args.model, args.dry_run, args.project or project))
+        else:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            results = []
+            with ThreadPoolExecutor(max_workers=args.workers) as ex:
+                futs = {ex.submit(ingest_source, f, args.extract_claims, args.model,
+                                  args.dry_run, args.project or project): f
+                        for f in changed}
+                for fut in as_completed(futs):
+                    print(f"--- done: {futs[fut].name} ---", flush=True)
+                    results.append(fut.result())
         ingested = sum(1 for r in results if r)
         print(f"\nIngest summary: {ingested} ingested, {len(results) - ingested} skipped")
         return
