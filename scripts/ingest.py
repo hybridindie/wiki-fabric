@@ -362,7 +362,10 @@ def extract_claims_mlx(source_text, source_path, model=None):
     try:
         from mlx_lm import load, generate
     except ImportError:
-        print("mlx-lm not installed; skipping (pip install mlx-lm)", file=sys.stderr)
+        if sys.platform != "darwin":
+            print("mlx-lm backend requires macOS (Apple Silicon); skipping", file=sys.stderr)
+        else:
+            print("mlx-lm not installed; skipping (pip install mlx-lm)", file=sys.stderr)
         return []
 
     mlx_model = model or os.environ.get("WIKI_MLX_MODEL", "mlx-community/Qwen3.8-27B-4bit")

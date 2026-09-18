@@ -22,6 +22,7 @@ fabric.yaml schema:
 """
 
 import os
+import sys
 import re
 from pathlib import Path
 
@@ -185,6 +186,13 @@ def get_stage_route(config, repo_name=None, stage="extract"):
     repo_cfg = (config.get("repos") or {}).get(repo_name) or {}
     route = repo_cfg.get(stage) or repo_cfg.get("extract") or "cloud"
     if route == "local":
+        if sys.platform != "darwin":
+            import warnings
+            warnings.warn(
+                f"repos.{repo_name}.{stage}='local' requires macOS (mlx-lm is Apple Silicon only); "
+                f"falling back to cloud ({cloud})",
+                stacklevel=2)
+            return cloud
         return DEFAULT_LOCAL
     if route == "cloud":
         return cloud

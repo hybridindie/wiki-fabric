@@ -14,8 +14,8 @@ llm:
   # Other tested endpoints:
   #   LM Studio:        http://localhost:1234/v1
   #   vLLM:             http://localhost:8000/v1
-  #   mlx-serve:        http://localhost:8000/v1   (MLX hot-swap server for Apple Silicon)
-  #   mlx-openai-server: http://localhost:8080/v1  (MLX OpenAI-compatible server)
+  #   mlx-serve:        http://localhost:8000/v1   (MLX hot-swap server, macOS only)
+  #   mlx-openai-server: http://localhost:8080/v1  (MLX server, macOS only)
   #   OpenRouter:       https://openrouter.ai/api/v1  (api_key: your key)
   #   Together AI:      https://api.together.xyz/v1   (api_key: your key)
   # compiler_model: deepseek-v4.1-flash:cloud  # claim extraction, synthesis, promotion.
@@ -32,7 +32,7 @@ repos:
 #   #   synthesize: concept synthesis from claims (sees sanitized statements)
 #   #   dossier:    promotion dossier generation (sees experience events)
 #   #
-#   # Values: "cloud" (default) | "local" (mlx backend) | explicit model name
+#   # Values: "cloud" (default) | "local" (mlx backend, macOS only) | explicit model name
 #   extract: local                        # raw docs never leave the machine
 #   synthesize: local                     # extracted claims stay local too
 #   dossier: cloud                        # experience events are safe for cloud

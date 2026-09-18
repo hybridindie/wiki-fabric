@@ -231,14 +231,16 @@ interactive_setup() {
     read -p "  Compiler model [deepseek-v4.1-flash:cloud]: " compiler_model
     compiler_model="${compiler_model:-deepseek-v4.1-flash:cloud}"
 
-    # Extraction routing
+    # Extraction routing (local MLX option only on Apple Silicon)
     echo ""
     echo "  Default extraction route:"
     echo "    1) cloud — 4-6s/doc at 8 workers, recall 0.89 [default]"
-    echo "    2) local — gemma4 E4B MLX, 34s/doc, zero egress"
+    if [[ "$(uname)" == "Darwin" ]]; then
+        echo "    2) local — gemma4 E4B MLX, 34s/doc, zero egress (Apple Silicon)"
+    fi
     read -p "  Choice [1]: " extract_route
     case "${extract_route:-1}" in
-        2) extract_route_note="# Per-repo: add 'extract: local' to repos that need privacy" ;;
+        2) extract_route_note="# Per-repo: add 'extract: local' to repos that need privacy (requires macOS)" ;;
         *) extract_route_note="" ;;
     esac
 
