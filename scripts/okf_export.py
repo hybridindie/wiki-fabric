@@ -88,8 +88,11 @@ def render_sources(claim_fm, link_map):
     return sources, footnotes
 
 
-def export(out_dir, scope="all", dry_run=False):
+def export(out_dir, scope="all", dry_run=False, root=None):
     out = Path(out_dir).resolve()
+    if root:
+        global VAULT_ROOT
+        VAULT_ROOT = Path(root).resolve()
     if dry_run:
         print(f"[DRY RUN] would export to {out}")
         return 0
@@ -171,9 +174,10 @@ def main():
     parser = argparse.ArgumentParser(description="Export fabric as a portable OKF v0.2 bundle")
     parser.add_argument("--out", required=True, help="Output bundle directory")
     parser.add_argument("--scope", default="all", help="all | global | <project-slug | domain-name>")
+    parser.add_argument("--root", default=None, help="Fabric root (default: repo parent of this script)")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
-    return export(args.out, args.scope, args.dry_run)
+    return export(args.out, args.scope, args.dry_run, args.root)
 
 
 if __name__ == "__main__":
