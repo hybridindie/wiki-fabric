@@ -1,0 +1,51 @@
+# Wiki Fabric configuration (example)
+# Copy this file to fabric.yaml and edit for your setup.
+# fabric.yaml is gitignored — it contains personal repo paths and settings.
+
+owner: your-name
+
+llm:
+  base_url: http://localhost:11434/v1   # Ollama default
+  api_key: ollama                        # Ollama ignores this
+  model: qwen2.5-coder:7b               # ops model: cheap queries, capture, status
+  # compiler_model: deepseek-v4.1-flash:cloud  # claim extraction, synthesis, promotion.
+  # Policy (eval-stability G4): compiler work needs the most capable model; model
+  # swaps require a recorded compiler eval (promote/mine refuse without it).
+
+repos:
+  # my-project:
+  #   path: ../my-project               # relative to fabric root, or absolute
+  #   graph_dir: graphify-out            # optional, for graphify integration
+
+# Optional ignores: exclude-side filter applied by capture, entity index,
+# context selection, lint, rebuild-index, and okf export.
+#   globs:   fnmatch-style with ** support (dir/** matches the dir + contents)
+#   regexes: python re.search against the posix path
+#   projects: per-repo patterns merged (union) with global
+# ignore:
+#   globs:
+#     - "vendor/**"
+#     - "docs/generated/**"
+#   regexes:
+#     - "_archive\\d+/"
+#   projects:
+#     my-godot-game:
+#       globs:
+#         - "addons/generated/**"
+
+# Optional integrations — all off by default; enable explicitly.
+# When active, skills gain graph-aware steps (see system/skills/*/SKILL.md).
+integrations:
+  graphify:
+    enabled: false                       # true → call-graph staleness, claim enrichment, graph expansion
+    graph_dir: graphify-out
+  embeddings:
+    enabled: false                       # true → semantic re-ranking (optional ML, planned)
+    model: all-MiniLM-L6-v2
+
+domains:
+  agent-systems:
+    signals: [agent, mcp, fastmcp, opencode, claude]
+  web-systems:
+    signals: [fastapi, flask, react, nextjs, supabase, postgresql]
+  # Add domains as your evidence grows (propose-domains.py will suggest them)

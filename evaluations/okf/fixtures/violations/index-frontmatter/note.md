@@ -1,0 +1,5 @@
+---
+type: Note
+---
+
+A concept.

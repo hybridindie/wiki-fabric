@@ -1,0 +1,24 @@
+# Expected concept / entity links — golden corpus
+
+A correct ingest must surface the right entities and cross-link them.
+
+```yaml
+- fixture: source-a
+  expected_entities:
+      - example-editor
+      - "editor bridge (single-writer)"
+  expected_concepts:
+      - single-writer-serialization
+  forbidden_missing:
+      - []                              # all above must appear
+
+- fixture: source-c
+  expected_entities:
+      - paged-attention
+      - "H100"
+      - "A100 80GB"
+  expected_concepts: []                  # a contested figure, not yet a concept
+  expected_relation:
+      - type: contradicts
+       between: [source-c.C1, source-c.C2]
+```

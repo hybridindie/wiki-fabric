@@ -1,0 +1,66 @@
+---
+project: <your-project-name>
+namespace: <your-project-slug>
+description: <brief project description>
+domains:
+  - agent-systems
+  # - godot-systems
+  # - <other-domain>
+skills:
+  # - serialize-and-verify-writes
+  # - batch-mutations
+  # - pipeline-reads
+  # - per-session-cache
+source_repos:
+  - path: ../<upstream-repo-name>
+    raw_path: evidence/raw/<repo-slug>
+    globs:
+      - "*.md"
+      - "docs/**/*.md"
+created: 2026-09-12
+updated: 2026-09-12
+---
+
+# Project Overlay: <your-project-name>
+
+This file configures how the global Wiki Fabric connects to this project.
+
+## Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `project` | Yes | Human-readable project name |
+| `namespace` | Yes | Projects folder name (e.g., `my-project` → `projects/my-project/`) |
+| `description` | No | Brief project description |
+| `domains` | Yes | Domains to load (see `02-Human/Concepts/` in global fabric) |
+| `skills` | No | Global skills to auto-load (from `global/skills/`) |
+| `source_repos` | No | Upstream repos to capture into `evidence/raw/<repo>/` |
+
+## Example
+
+```yaml
+project: my-awesome-app
+namespace: my-awesome-app
+description: A web app for managing tasks
+domains:
+  - agent-systems
+  - web-development
+skills:
+  - serialize-and-verify-writes
+  - batch-mutations
+source_repos:
+  - path: ../my-upstream-lib
+    raw_path: evidence/raw/my-upstream-lib
+    globs:
+      - "*.md"
+      - "docs/**/*.md"
+```
+
+## How It Works
+
+1. Agent loads **global AGENTS.md** + this overlay at session start
+2. Agent knows your project namespace: `projects/<namespace>/`
+3. Agent loads specified `domains` (from `02-Human/Concepts/`) and `skills` (from `global/skills/`)
+4. On `refresh <repo>`, agent copies files from `path` to `evidence/raw/<repo-slug>/` matching `globs`
+5. On `ingest`, agent writes to `projects/<namespace>/` namespace (experience-events, decisions)
+7. Cross-project patterns/skills in `global/` are available to all projects

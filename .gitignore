@@ -1,0 +1,45 @@
+# === User config (personal) ===
+fabric.yaml
+
+# === Content (user data — harness repo ships the tooling, not your fabric) ===
+evidence/
+global/entities/
+global/graphs/
+patterns/*.md
+anti-patterns/*.md
+skills/*.md
+concepts/*.md
+projects/*/experience-events/*.md
+projects/*/decisions/*.md
+projects/*/README.md
+registry/log.md
+registry/promotions/
+registry/epics/
+domains/
+syntheses/
+registry/conflicts/
+
+# === Obsidian workspace ===
+.obsidian/
+
+# === Python ===
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+env/
+venv/
+
+# === IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# === Temporary ===
+*.tmp
+*.temp
+*.log
+.DS_Store
+.okflint/

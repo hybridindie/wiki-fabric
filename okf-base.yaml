@@ -1,0 +1,107 @@
+# okflint manifest — wiki-fabric profile
+# The OKF conformance floor is enforced by scripts/lint.py --okf; this manifest
+# lets the external okflint cross-check the same bundle with our profile rules.
+#
+# Scope: fabric concepts only. evidence/raw/ holds immutable upstream captures
+# (AGENTS.md Raw layer: "capture by copy, immutable") and evaluations/fixtures/
+# are test scaffolds — neither are OKF concepts, so F001 does not apply there.
+# registry/index.md is our catalog hub named by convention; it carries type
+# frontmatter (non-root index exception documented in registry/epics/story-okf-01).
+okf_version: "0.2"
+base:
+  roots:
+    - path: .
+      exclude_patterns:
+        - "evidence/raw/**"
+        - "evaluations/fixtures/**"
+        - "evaluations/okf/fixtures/violations/**"
+        - "evaluations/okf/fixtures/conformant/**"
+        - ".okflint/**"
+        - ".pytest_cache/**"
+        - "node_modules/**"
+        - "scripts/**"
+        - "tests/**"
+  reserved_files:
+    index: index.md
+    log: log.md
+profile:
+  types:
+    source:
+      required: [type, source_path, sha256]
+      optional: [title, kind, tags, captured, summary, status]
+    claim:
+      required: [type, statement, source_refs]
+      optional: [id, status, confidence, evidence_strength, last_verified, relations, code_symbols]
+    source-summary:
+      required: [type, source]
+      optional: [title, status]
+    concept:
+      required: [type, claims]
+      optional: [domain, title]
+    question:
+      required: [type, priority]
+      optional: [rationale, related]
+    synthesis:
+      required: [type]
+      optional: [question, claims, confidence, next]
+    decision:
+      required: [type, status]
+      optional: [context, rationale, consequences, superseded_by]
+    experience-event:
+      required: [type, project, observed_problem]
+      optional: [intervention, conditions, outcomes, evidence, lineage, domain]
+    pattern:
+      required: [type, maturity, status]
+      optional: [applicability, problem, forces, solution, consequences, evidence]
+    anti-pattern:
+      required: [type, maturity, status]
+      optional: [applicability, problem, forces, solution, evidence]
+    experiment:
+      required: [type, question, hypothesis]
+      optional: [status, repo, commit, environment, metrics, results]
+    change-set:
+      required: [type, status, scope]
+      optional: [id]
+    change-set-diff:
+      required: [type, parent]
+      optional: [title, date]
+    promotion-dossier:
+      required: [type]
+      optional: [pattern_ref, anti_pattern_ref, status]
+    ontology:
+      required: [type]
+      optional: [title]
+    registry:
+      required: [type]
+      optional: [title, id, status, priority, github_issue, spec, spec_source, spec_version, stories]
+    index:
+      required: [type]
+      optional: [title, updated]
+    log:
+      required: [type]
+      optional: [title, created, updated]
+    skill:
+      required: [type, name, description]
+      optional: []
+    daily-note:
+      required: [type]
+      optional: [project, date, tags]
+    literature-note:
+      required: [type]
+      optional: [title]
+    quick-capture:
+      required: [type]
+      optional: [title]
+    index-root:
+      required: []
+      optional: [okf_version]
+    entity:
+      required: [type]
+      optional: [title, resource, tags]
+    attested-computation:
+      required: [type, runtime, executor, attester]
+      optional: [id, title, description, parameters, computation, generated, verified, stale_after, tags, created, updated]
+  F001: error
+  F002: error
+  R001: error
+  R002: error

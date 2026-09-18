@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 30   # capture-git smoke test reads history
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Create venv + install deps
+        run: |
+          uv venv
+          uv pip install -r requirements.txt
+          uv pip install pytest
+
+      - name: Unit tests (pytest)
+        run: uv run pytest tests/ -q
+
+      - name: Smoke test (isolated temp fabric, uv-aware)
+        run: bash scripts/smoke-test.sh
+
+      - name: Behavior evaluation (P4, zero-LLM)
+        run: uv run python scripts/eval-behavior.py
+
+      - name: Stability evaluation (deterministic gates)
+        run: uv run python scripts/eval-stability.py --skip-llm
+
+      - name: Fabric lint (0 errors gate)
+        run: uv run python scripts/lint.py .
+
+      - name: OKF v0.2 conformance (floor gate)
+        run: uv run python scripts/lint.py . --okf
+
+      - name: OKF cross-check (okflint, external validator)
+        run: |
+          uv tool install okflint
+          okflint validate --manifest okf-base.yaml

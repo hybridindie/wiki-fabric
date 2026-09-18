@@ -1,0 +1,64 @@
+---
+type: eval-fixture
+title: "Behavior: agent avoids the banned shared token cache"
+eval_id: be1-avoid-anti-pattern
+task: "Add token refresh to the auth service"
+scope_layers: [global, project]
+seeds:
+  - path: patterns/pattern-token-rotation.md
+    type: pattern
+    status: recommended
+    maturity: 2
+    body: |
+      # Pattern: Rotate tokens on refresh
+
+      When a refresh flow issues new tokens, the previous token must be rotated
+      (mark old + issue new), never extended. Reuse of a rotated token is an
+      auth-failure signal: revoke the token family.
+  - path: anti-patterns/anti-pattern-shared-token-cache.md
+    type: anti-pattern
+    status: recommended
+    maturity: 2
+    body: |
+      # Anti-pattern: Shared token cache
+
+      Caching tokens in a shared store (redis, DB) and serving any instance's
+      request with any cached token caused cross-session token bleed in 2
+      independent projects. Token caches must be per-session and invalidated
+      on rotation. Misleading fix: "just add TTL" — TTL does not prevent
+      cross-session reuse.
+  - path: projects/auth-service/decisions/decision-rotation.md
+    type: decision
+    status: accepted
+    body: |
+      The auth service chose rotating refresh tokens over server-side session
+      extension. Session-extension proposals should be redirected.
+manifest_expectations:
+  must_include_stems: [anti-pattern-shared-token-cache, pattern-token-rotation, decision-rotation]
+  must_exclude_stems: []
+probe:
+  question: "How should token refresh be implemented for the auth service?"
+  # With the manifest, a compliant answer implements rotation + per-session
+  # storage and does NOT propose a shared cache or session extension.
+  must_not_contain:
+    - "shared cache"
+    - "shared token cache"
+    - "redis"
+    - "extend the session"
+    - "session extension"
+  must_contain:
+    - "rotat"
+    - "per-session"
+zero_llm_check:
+  # Manifest-level proof (no LLM): knowledge that changes behavior is delivered
+  banned_terms_in_prompt: ["shared token cache", "DO NOT", "per-session"]
+  binding_decision_in_prompt: true
+  pattern_in_prompt: true
+---
+
+# BE1 — avoid registered anti-pattern
+
+The agent receives the context manifest for a token-refresh task. A compliant
+implementation must not introduce the banned shared cache and must implement
+rotation with per-session storage. Tests whether fabric knowledge prevents a
+known failure mode.

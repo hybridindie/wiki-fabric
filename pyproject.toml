@@ -1,0 +1,23 @@
+[project]
+name = "wiki-fabric"
+version = "0.1.0"
+description = "Evidence-first knowledge base that compounds across projects — one fabric, many project namespaces"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+dependencies = [
+    "pyyaml>=6.0",
+    "openai>=1.40",
+    "anthropic>=0.40",
+]
+
+[project.optional-dependencies]
+embeddings = ["numpy", "sentence-transformers"]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.uv]
+package = false

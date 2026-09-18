@@ -1,0 +1,47 @@
+---
+type: eval-fixture
+title: "Behavior: stale knowledge is demoted, fresh knowledge preferred"
+eval_id: be3-stale-demoted
+task: "Implement response caching for the API gateway"
+scope_layers: [global]
+seeds:
+  - path: patterns/pattern-cache-fresh.md
+    type: pattern
+    status: recommended
+    maturity: 2
+    body: |
+      # Pattern: Cache with explicit invalidation
+
+      Cache entries must be invalidated on any write; per-session scope for
+      auth-related data.
+  - path: patterns/pattern-cache-stale.md
+    type: pattern
+    status: recommended
+    maturity: 2
+    review_after: 2026-01-01
+    body: |
+      # Pattern: Global preflight cache (stale)
+
+      Historical approach: process-global cache cleared on every mutation.
+      Superseded thinking; kept only as historical record.
+manifest_expectations:
+  must_include_stems: [pattern-cache-fresh]
+  # The stale pattern must NOT be selected; it is excluded with a reason.
+  must_exclude_stems: [pattern-cache-stale]
+probe:
+  question: "How should we cache responses?"
+  must_contain:
+    - "invalidat"
+  must_not_contain:
+    - "process-global"
+zero_llm_check:
+  banned_terms_in_prompt: []
+  binding_decision_in_prompt: false
+  pattern_in_prompt: true
+  must_exclude_stem: pattern-cache-stale
+---
+
+# BE3 — staleness gate
+
+A stale (review_after overdue) pattern must be excluded from the manifest with
+a visible reason, so the agent cannot unknowingly follow outdated guidance.
