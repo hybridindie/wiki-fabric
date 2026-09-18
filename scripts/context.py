@@ -38,7 +38,7 @@ VAULT_ROOT = Path(__file__).parent.parent
 
 SKIP_PARTS = {".git", ".obsidian", ".opencode", "__pycache__", ".venv", "venv",
               "templates", "schemas", "evaluations", "raw", "traces", "system", "tests", "examples"}
-SKIP_FILES = {"index.md", "log.md", "catalog.md", "index.json", "README.md", "CONTRIBUTING.md", "AGENTS.md"}
+SKIP_FILES = {"index.md", "log.md", "catalog.json", "README.md", "CONTRIBUTING.md", "AGENTS.md"}
 
 
 def parse_frontmatter(path):

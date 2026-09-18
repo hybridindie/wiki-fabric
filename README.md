@@ -480,7 +480,7 @@ flowchart TD
 ```
 
 ```bash
-# Rebuild index from actual files (writes registry/catalog.md + registry/index.json)
+# Rebuild index from actual files (writes registry/catalog.md + registry/catalog.json)
 python3 scripts/rebuild-index.py
 python3 scripts/rebuild-index.py --json   # print machine-readable registry to stdout
 
@@ -1069,12 +1069,12 @@ agent harnesses can consume it without parsing prose:
 
 ```bash
 wf lint --format json            # errors/warnings with code + page + message, ok flag
-python3 scripts/rebuild-index.py # writes registry/index.json (catalog with ids, types, scopes, statuses)
+python3 scripts/rebuild-index.py # writes registry/catalog.json (catalog with ids, types, scopes, statuses)
 ```
 
 The lint report codes are stable: `FRONTMATTER`, `BROKEN-LINK`, `SCOPE`,
 `REVIEW-AFTER`, `CLAIM`, `CONCEPT`, `PATTERN`, `DUP-ID`, `SOURCE`,
-`SOURCE-DRIFT`, `SYNC-CONFLICT`, `ORPHAN`. `registry/index.json` carries every
+`SOURCE-DRIFT`, `SYNC-CONFLICT`, `ORPHAN`. `registry/catalog.json` carries every
 cataloged page with its `id`, `type`, `scope`, `status`, `maturity`,
 `review_after`, and `last_verified` — a deterministic, auditable answer to
 "what knowledge exists and how fresh is it."
@@ -1097,7 +1097,7 @@ cataloged page with its `id`, `type`, `scope`, `status`, `maturity`,
 | `AGENTS.md` | Master schema: layers, note types, workflows, protocols |
 | `schemas/frontmatter.md` | Per-type frontmatter contracts |
 | `schemas/ontology.md` | Living domain ontology (auto-discovered) |
-| `registry/catalog.md` | Exhaustive catalog (auto-generated) |
+| `registry/catalog.json` | Machine registry (auto-generated, JSON for agents/CI) |
 | `registry/promotion-queue.md` | Promotion pipeline with review checklist |
 | `system/skills/*/SKILL.md` | Skill protocols |
 | `fabric.yaml.example` | Config template (repos, owner, LLM) |

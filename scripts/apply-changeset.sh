@@ -5,7 +5,7 @@
 #        bash scripts/apply-changeset.sh --dry-run <change-set-slug>
 #
 # Reads the change-set manifest and diff, applies changes to canonical pages,
-# updates registry/catalog.md and registry/log.md, runs lint, and optionally commits.
+# updates registry/catalog.json and registry/log.md, runs lint, and optionally commits.
 
 set -euo pipefail
 
@@ -193,9 +193,9 @@ if [[ ${#DELETED_FILES[@]} -gt 0 ]]; then
     done
 fi
 
-# Update registry/catalog.md (rebuild from scratch)
+# Update registry/catalog.json (rebuild from scratch)
 if [[ "${DRY_RUN}" == false ]]; then
-    echo "Rebuilding registry/catalog.md..."
+    echo "Rebuilding registry/catalog.json..."
     python3 - <<'PYEOF'
 import os, re
 from pathlib import Path
@@ -213,7 +213,7 @@ for p in Path(".").rglob("*.md"):
     pages.append((str(rel), p.stem))
 
 # Build index
-with open("registry/catalog.md", "w") as f:
+with open("registry/catalog.json", "w") as f:
     f.write("---\ntype: index\ntitle: Vault Index\nupdated: 2026-09-12\n---\n\n# Index\n\nExhaustive catalog. One line per page. Updated on every ingest and lint.\nFormat: \`- [[stem]] — one-line summary\`\n\n")
     
     # Sources

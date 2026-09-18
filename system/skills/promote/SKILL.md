@@ -76,7 +76,7 @@ python3 scripts/promote.py --promote <dossier-file>.md
 wf lint
 ```
 This writes `patterns/pattern-<slug>.md` (or `anti-patterns/`, `skills/`) with
-`status: recommended`, updates `registry/pattern-index.md`, `registry/skill-index.md`,
+`status: recommended`, updates `registry/catalog.json` (regenerated),
 `registry/promotion-queue.md`, then one commit:
 `git add -A && git commit -m "promote <pattern-id> (maturity N)"`.
 

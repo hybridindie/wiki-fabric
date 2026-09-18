@@ -161,15 +161,15 @@ def gate_rebuild_determinism(tmp, runs=3):
     """G2: rebuild-index twice → identical index.md (minus updated: line) + identical index.json."""
     subprocess.run([sys.executable, str(tmp / "scripts" / "rebuild-index.py")],
                    capture_output=True, cwd=str(tmp))
-    idx1 = (tmp / "registry" / "catalog.md").read_text()
-    js1 = (tmp / "registry" / "index.json").read_text() if (tmp / "registry" / "index.json").exists() else ""
+    idx1 = (tmp / "registry" / "catalog.json").read_text()
+    js1 = (tmp / "registry" / "catalog.json").read_text() if (tmp / "registry" / "catalog.json").exists() else ""
     subprocess.run([sys.executable, str(tmp / "scripts" / "rebuild-index.py")],
                    capture_output=True, cwd=str(tmp))
-    idx2 = (tmp / "registry" / "catalog.md").read_text()
-    js2 = (tmp / "registry" / "index.json").read_text() if (tmp / "registry" / "index.json").exists() else ""
+    idx2 = (tmp / "registry" / "catalog.json").read_text()
+    js2 = (tmp / "registry" / "catalog.json").read_text() if (tmp / "registry" / "catalog.json").exists() else ""
     strip = lambda s: "\n".join(l for l in s.split("\n") if not l.startswith(("updated:", '"generated"')))
     return {"gate": "G2", "name": "rebuild determinism",
-            "detail": "catalog.md + index.json identical across rebuilds",
+            "detail": "catalog.json identical across rebuilds",
             "passed": strip(idx1) == strip(idx2) and js1 == js2}
 
 

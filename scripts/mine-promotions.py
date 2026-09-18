@@ -35,7 +35,6 @@ VAULT_ROOT = Path(__file__).parent.parent
 EXPERIENCE_DIR = VAULT_ROOT / "projects"
 PROMOTIONS_DIR = VAULT_ROOT / "registry" / "promotions"
 PROMOTION_QUEUE = VAULT_ROOT / "registry" / "promotion-queue.md"
-PATTERN_INDEX = VAULT_ROOT / "registry" / "pattern-index.md"
 
 MIN_PROJECTS = 2
 OUTPUT_DIR = PROMOTIONS_DIR

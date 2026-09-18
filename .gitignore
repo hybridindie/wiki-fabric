@@ -13,6 +13,7 @@ projects/*/experience-events/*.md
 projects/*/decisions/*.md
 projects/*/README.md
 registry/log.md
+registry/catalog.json
 registry/promotions/
 registry/epics/
 domains/

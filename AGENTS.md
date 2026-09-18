@@ -68,12 +68,11 @@ This is the **global wiki fabric** — a single, shared knowledge base that live
 │    └── templates/              # type: template — reusable shapes       │
 │                                                                             │
 │  registry/                   # Fabric metadata                            │
-│    ├── catalog.md              # Exhaustive catalog (auto-generated)     │
-│    ├── index.json              # Machine-readable catalog for CI/agents  │
+│    ├── catalog.json            # Machine registry (auto-generated)       │
 │    ├── log.md                  # Append-only operation timeline (§9)     │
-│    ├── pattern-index.md        # Promoted patterns index                │
-│    ├── rule-index.md           # Promoted rules index                   │
-│    ├── skill-index.md          # Promoted skills index                  │
+│    ├── catalog.json        # Promoted patterns index                │
+│    ├── catalog.json           # Promoted rules index                   │
+│    ├── catalog.json          # Promoted skills index                  │
 │    ├── promotion-queue.md      # Promotion pipeline queue               │
 │    ├── promotions/             # Promotion dossiers                     │
 │    └── epics/                  # Epic/story planning pages               │
@@ -230,7 +229,7 @@ relations:
 1. Compute sha256; create/update the `source` record in `evidence/sources/`.
 2. Write the `source-summary` — faithful, with locators, no inference.
 3. Extract candidate `claim` pages (atomic, one proposition each) under `evidence/claims/`.
-4. Retrieve affected claims, concepts, entities, decisions via `registry/catalog.md` then links (see retrieval policy).
+4. Retrieve affected claims, concepts, entities, decisions via `registry/catalog.json` then links (see retrieval policy).
 5. Classify each new claim's effect: `add | support | weaken | contradict | supersede | no-action`.
 6. Open a `change-set` in `evidence/traces/change-sets/<date-slug>/` with `manifest.md` (sources+hashes, pages created/updated/merged, new claims, newly detected contradictions, any source-less assertions, reason for each edit) and `diff.md`.
 7. Run `python3 scripts/lint.py` (deterministic layer). Fix all errors.
@@ -255,7 +254,7 @@ For consequential questions, answer in this shape (file it as a `synthesis` if w
 
 | Query type | Retrieval |
 |---|---|
-| Exact repo/API/API-surface question | Lexical: `registry/catalog.md` → source record → raw |
+| Exact repo/API/API-surface question | Lexical: `registry/catalog.json` → source record → raw |
 | "What did we decide?" | `projects/*/decisions/` + recency-weighted synthesis |
 | Cross-source conceptual synthesis | Claims → graph expansion via `relations` → linked sources |
 | Claim verification | Claim registry + explicit locators only |
@@ -380,7 +379,7 @@ Import: `wf okf import <bundle> [--scope name]` — external bundles as immutabl
 | Synthesize concept | `synthesize.py` | 1 call | New claim cluster needing a concept page |
 | Log experience event | `log-experience.py` | **0** | After solving a problem worth remembering |
 | Mine cross-project patterns | `mine-promotions.py` | **0** | When ≥2 projects have experience events |
-| Rebuild catalog | `rebuild-index.py` | **0** | After any ingest or promotion; writes `registry/catalog.md` + `registry/index.json` |
+| Rebuild catalog | `rebuild-index.py` | **0** | After any ingest or promotion; writes `registry/catalog.json` (single machine registry) |
 | Auto-refresh on commit | `wf hook install` | 0 (no LLM) or 1/doc (with `--extract-claims`) | One-time per project; then every doc-drift commit captures+ingests itself |
 | Export portable bundle | `wf okf export` | **0** | Hand knowledge to any OKF consumer; deterministic, okflint-conformant |
 | Ingest external bundle | `wf okf import` | 0 or 1/doc (`--extract-claims`) | Consume external OKF bundles as immutable evidence (trust recorded, not inherited) |
@@ -396,7 +395,7 @@ Import: `wf okf import <bundle> [--scope name]` — external bundles as immutabl
 
 ### Anti-Loop Rules
 
-1. **Ingest once** — if a source record exists with matching sha256, do not re-ingest. Check `registry/catalog.md`.
+1. **Ingest once** — if a source record exists with matching sha256, do not re-ingest. Check `registry/catalog.json`.
 2. **Query before ingest** — before extracting claims from a new source, check if the same source is already captured (`evidence/sources/`).
 3. **Lint before commit** — always run `scripts/lint.py` before any git commit. If lint fails, fix errors first.
 4. **Ask before canonical edits** — stage in `evidence/` first, then present manifest + diff for human review.

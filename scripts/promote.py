@@ -11,8 +11,6 @@ from datetime import date, datetime
 VAULT_ROOT = Path(__file__).parent.parent
 PROMOTION_QUEUE = VAULT_ROOT / "registry" / "promotion-queue.md"
 PROMOTIONS_DIR = VAULT_ROOT / "registry" / "promotions"
-PATTERN_INDEX = VAULT_ROOT / "registry" / "pattern-index.md"
-SKILL_INDEX = VAULT_ROOT / "registry" / "skill-index.md"
 
 def parse_frontmatter(path):
     text = path.read_text(encoding="utf-8", errors="replace")
@@ -136,10 +134,10 @@ def promote_dossier(dossier_path, dry_run=False):
         update_promotion_queue(pattern_path.stem.replace("pattern-", ""), "recommended")
         
         # Update pattern index
-        update_pattern_index()
+        update_indexes()
         
         # Update skill index
-        update_skill_index()
+        
         
         # Update promotion queue
         update_promotion_queue_file()
@@ -167,31 +165,13 @@ def update_promotion_queue(pattern_slug, new_status):
     Path(PROMOTION_QUEUE).write_text(text)
 
 
-def update_pattern_index():
-    """Update pattern-index.md"""
-    index_path = VAULT_ROOT / "registry" / "pattern-index.md"
-    text = PATTERN_INDEX.read_text()
-    
-    # Find the pattern row and update maturity
-    # This is a simple approach - in reality you'd parse the table properly
-    # For now, just ensure the pattern is listed as recommended
-    if "pattern-single-writer-with-parity-check" in str(PATTERN_INDEX.read_text()):
-        # Already there, just ensure it says recommended
-        text = PATTERN_INDEX.read_text()
-        text = text.replace("2 (candidate)", "2 (recommended)")
-        PATTERN_INDEX.write_text(text)
-
-
-def update_skill_index():
-    skill_index = VAULT_ROOT / "registry" / "skill-index.md"
-    text = skill_index.read_text()
-    if "serialize-and-verify-writes" not in text:
-        new_row = "| [[serialize-and-verify-writes]] | 2 (recommended) | [[pattern-single-writer-with-parity-check]] | available |"
-        text = text.replace(
-            "| Skill | Maturity | Pattern | Status |",
-            f"| Skill | Maturity | Pattern | Status |\n|---|---|---|---|\n| [[serialize-and-verify-writes]] | 2 (recommended) | [[pattern-single-writer-with-parity-check]] | available |"
-        )
-    VAULT_ROOT.joinpath("registry/skill-index.md").write_text(text)
+def update_indexes():
+    """Registry views are derived: rebuild catalog.json from actual files."""
+    import subprocess as _sp
+    r = _sp.run([sys.executable, str(Path(__file__).parent / "rebuild-index.py")],
+                capture_output=True, text=True)
+    if r.returncode != 0:
+        print(f"Warning: rebuild-index failed: {r.stderr[:200]}", file=sys.stderr)
 
 
 def list_dossiers():

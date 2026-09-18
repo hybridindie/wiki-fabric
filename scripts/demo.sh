@@ -49,7 +49,7 @@ cp -R "${REPO_ROOT}/." "${FABRIC}/"
 rm -rf "${FABRIC}/.git" "${FABRIC}/.venv" "${FABRIC}/fabric.yaml" \
        "${FABRIC}/evidence" "${FABRIC}/global/entities" "${FABRIC}/.okflint" \
        "${FABRIC}/.obsidian" "${FABRIC}/.pytest_cache" "${FABRIC}/index.md" \
-       "${FABRIC}/registry/catalog.md" "${FABRIC}/registry/index.json" "${FABRIC}/registry/log.md"
+       "${FABRIC}/registry/catalog.md" "${FABRIC}/registry/catalog.json" "${FABRIC}/registry/log.md"
 pass "fabric at ${FABRIC}"
 
 mkdir -p "${FABRIC}/patterns" "${FABRIC}/anti-patterns" "${FABRIC}/projects/auth-service/decisions" "${FABRIC}/projects/auth-service/experience-events" "${FABRIC}/domains/oauth/concepts"

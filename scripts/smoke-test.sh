@@ -30,8 +30,8 @@ if [[ "${MODE}" == "isolated" ]]; then
         "${TMPROOT}/fabric/evidence/source-summaries" \
         "${TMPROOT}/fabric/evidence/traces" \
         "${TMPROOT}/fabric/registry/log.md" \
-        "${TMPROOT}/fabric/registry/catalog.md" \
-        "${TMPROOT}/fabric/registry/index.json" \
+        "${TMPROOT}/fabric/registry/catalog.json" \
+        "${TMPROOT}/fabric/registry/catalog.json" \
         "${TMPROOT}/fabric/index.md" \
         "${TMPROOT}/fabric/global/entities"
     FABRIC="${TMPROOT}/fabric"
@@ -102,20 +102,20 @@ pass "ingest --changed idempotent (anti-loop)"
 
 # 8. rebuild-index runs and index is stable (idempotent)
 "${PY}" "${FABRIC}/scripts/rebuild-index.py" >/dev/null 2>&1 || fail "rebuild-index"
-cp "${FABRIC}/registry/catalog.md" /tmp/wf-idx-1.md
+cp "${FABRIC}/registry/catalog.json" /tmp/wf-idx-1.json
 "${PY}" "${FABRIC}/scripts/rebuild-index.py" >/dev/null 2>&1
-diff <(grep -v 'updated:' /tmp/wf-idx-1.md) <(grep -v 'updated:' "${FABRIC}/registry/catalog.md") >/dev/null || fail "rebuild-index not idempotent"
+diff <(grep -v 'generated' /tmp/wf-idx-1.json) <(grep -v 'generated' "${FABRIC}/registry/catalog.json") >/dev/null || fail "rebuild-index not idempotent"
 pass "rebuild-index idempotent"
 
 # 9. Lint still clean after ingest artifacts
 "${PY}" "${FABRIC}/scripts/lint.py" . >/dev/null 2>&1 || fail "lint after ingest"
 pass "lint clean after ingest"
 
-# 9b. Lint JSON report is valid + registry/index.json is machine-readable
+# 9b. Lint JSON report is valid + registry/catalog.json is machine-readable
 "${PY}" "${FABRIC}/scripts/lint.py" . --format json | "${PY}" -m json.tool >/dev/null 2>&1 || fail "lint --format json invalid"
 pass "lint --format json valid"
-"${PY}" -c "import json; d=json.load(open('registry/index.json')); assert 'pages' in d and 'counts' in d" 2>/dev/null || fail "registry/index.json invalid"
-pass "registry/index.json valid"
+"${PY}" -c "import json; d=json.load(open('registry/catalog.json')); assert 'pages' in d and 'counts' in d" 2>/dev/null || fail "registry/catalog.json invalid"
+pass "registry/catalog.json valid"
 
 # 10. log.md was appended
 grep -q "ingest | smoke-project" registry/log.md || fail "registry/log.md not appended"

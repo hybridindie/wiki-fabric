@@ -26,7 +26,7 @@ class TestContentPathFilter:
         assert sync.is_content_path("evidence/claims/claim-x.md")
         assert sync.is_content_path("patterns/pattern-x.md")
         assert sync.is_content_path("projects/my-project/experience-events/ee.md")
-        assert sync.is_content_path("registry/catalog.md")
+        assert sync.is_content_path("registry/catalog.json")
         assert sync.is_content_path("concepts/concept-x.md")
 
     def test_non_content_paths_excluded(self):

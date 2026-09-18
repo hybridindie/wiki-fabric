@@ -52,7 +52,7 @@ class TestScopeValidation:
         assert lint.validate_scope({"type": "pattern"}, rel) is None
 
     def test_scope_for_registry_is_global(self):
-        assert lint.scope_for(Path("registry/catalog.md")) == "global"
+        assert lint.scope_for(Path("registry/catalog.json")) == "global"
         assert lint.scope_for(Path("projects/p/decisions/d.md")) == "project"
 
 
@@ -132,8 +132,8 @@ class TestRegistryJson:
             [sys.executable, str(REPO / "scripts" / "rebuild-index.py"), "--root", str(tmp_path)],
             capture_output=True, text=True,
         )
-        reg = tmp_path / "registry" / "index.json"
-        assert reg.exists(), f"index.json not generated: {out.stdout} {out.stderr}"
+        reg = tmp_path / "registry" / "catalog.json"
+        assert reg.exists(), f"catalog.json not generated: {out.stdout} {out.stderr}"
         data = json.loads(reg.read_text())
         assert set(data) >= {"generated", "counts", "total", "pages"}
         stems = {p["stem"] for p in data["pages"]}
@@ -152,7 +152,7 @@ class TestRegistryJson:
             [sys.executable, str(REPO / "scripts" / "rebuild-index.py"), "--root", str(tmp_path)],
             capture_output=True, text=True,
         )
-        reg = tmp_path / "registry" / "index.json"
+        reg = tmp_path / "registry" / "catalog.json"
         assert reg.exists()
         data = json.loads(reg.read_text())
         page = next((p for p in data["pages"] if p["stem"] == "ee-demo"), None)

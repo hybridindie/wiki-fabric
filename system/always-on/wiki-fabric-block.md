@@ -1,3 +1,9 @@
+---
+type: skill
+name: wiki-fabric-always-on
+description: "Always-on instructions block installed into CLAUDE.md/AGENTS.md by wf claude install"
+---
+
 # wiki-fabric always-on block — written into CLAUDE.md / AGENTS.md by `wf claude install`
 
 ## wiki-fabric
