@@ -8,6 +8,34 @@ REPO = Path(__file__).parent.parent
 
 
 class TestExport:
+    def _seed_fabric(self, tmp_path):
+        """Seed a minimal fabric: harness already in checkout, add one source +
+        one claim so the export has content. Writes into the repo checkout itself
+        (CI-safe: the checkout IS the fabric)."""
+        import subprocess
+        # The CI checkout IS the fabric root (REPO == fabric). Seed content.
+        (REPO / "evidence" / "raw" / "seeded").mkdir(parents=True, exist_ok=True)
+        (REPO / "evidence" / "raw" / "seeded" / "doc.md").write_text(
+            "---\ntype: Note\ntitle: Seeded\n---\n\nSeeded raw doc.\n")
+        (REPO / "evidence" / "sources").mkdir(parents=True, exist_ok=True)
+        (REPO / "evidence" / "sources" / "src-seeded-doc-md.md").write_text(
+            "---\ntype: source\ntitle: Seeded Doc\nkind: doc\ntags: []\n"
+            "resource: 'evidence/raw/seeded/doc.md'\n"
+            "source_path: evidence/raw/seeded/doc.md\n"
+            "sha256: 0000000000000000000000000000000000000000000000000000000000000000\n"
+            "captured: 2026-09-18\nstatus: pending\n---\n\n# Seeded Doc\n")
+        (REPO / "evidence" / "claims").mkdir(parents=True, exist_ok=True)
+        (REPO / "evidence" / "claims" / "claim-seeded-doc-md-000.md").write_text(
+            "---\ntype: claim\nid: claim-seeded-doc-md-000\n"
+            'statement: "Seeded claim for export testing."\n'
+            "status: supported\n"
+            "source_refs:\n"
+            "  - source: \"[[src-seeded-doc-md]]\"\n"
+            "    locator: \"L1\"\n"
+            '    quote: "Seeded claim for export testing."\n'
+            "    supports: true\n---\n\n# claim\nBody.\n")
+        return REPO
+
     def _export(self, tmp_path, scope="all"):
         out = tmp_path / "bundle"
         r = subprocess.run(
@@ -23,6 +51,7 @@ class TestExport:
         assert 'okf_version: "0.2"' in text
 
     def test_claim_source_refs_rendered_as_sources(self, tmp_path):
+        self._seed_fabric(tmp_path)
         out = self._export(tmp_path, scope="global")
         claims = list((out / "evidence" / "claims").glob("*.md"))
         assert claims, "expected exported claims"
@@ -30,6 +59,7 @@ class TestExport:
         assert with_frontmatter_sources, "claims should carry OKF sources[]"
 
     def test_footnotes_keyed(self, tmp_path):
+        self._seed_fabric(tmp_path)
         out = self._export(tmp_path, scope="global")
         claims = list((out / "evidence" / "claims").glob("*.md"))
         with_footnotes = [c for c in claims if "\n[^wf-" in c.read_text()]
@@ -55,6 +85,7 @@ class TestExport:
         assert d1 == d2
 
     def test_raw_in_references(self, tmp_path):
+        self._seed_fabric(tmp_path)
         out = self._export(tmp_path, scope="global")
         refs = out / "references"
         assert refs.exists() and any(refs.rglob("*.md"))
