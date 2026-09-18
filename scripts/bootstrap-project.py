@@ -202,7 +202,7 @@ Namespace `projects/{project_slug}/` — bootstrapped by `{owner}` on the machin
 def main():
     parser = argparse.ArgumentParser(
         description="Bootstrap a new project with Wiki Fabric",
-        epilog="Run without flags for interactive mode with sensible defaults."
+        epilog="Interactive walkthrough: overlay, routing, hooks, capture, ingest, query. Without flags: prompts at each step. Use --non-interactive to skip."
     )
     parser.add_argument("project_root", nargs="?", help="Path to project root directory")
     parser.add_argument("--name", help="Human-readable project name")
@@ -485,6 +485,28 @@ WIKI_LLM_MODEL={config["llm"]["model"]}
         print("Note: no corpus remote configured — this project is local-only.")
         print("To share it with a team: wf sync init <git-url> && wf sync push")
 
+    # 8b. Extraction routing (interactive): privacy tiering per stage
+    if not args.non_interactive and _sys.stdin.isatty():
+        print()
+        print("  Extraction routing for this project:")
+        print("    cloud = deepseek (4-6s/doc, default)")
+        print("    local = gemma4 MLX (34s/doc, zero egress — for sensitive repos)")
+        if input("  Route extraction/synthesis LOCAL (privacy)? [y/N]: ").strip().lower() in ("y", "yes"):
+            _routing_cfg = find_fabric_root() / "fabric.yaml"
+            try:
+                import yaml as _yaml
+                _rc = _yaml.safe_load(_routing_cfg.read_text()) or {}
+                _repos = _rc.get("repos") or {}
+                _rcfg = _repos.get(project_slug) or {}
+                _rcfg["extract"] = "local"
+                _rcfg["synthesize"] = "local"
+                _repos[project_slug] = _rcfg
+                _rc["repos"] = _repos
+                _yaml.safe_dump(_rc, open(_routing_cfg, "w"), sort_keys=False, allow_unicode=True)
+                print(f"  ✓ extract + synthesize routed local for {project_slug}")
+            except Exception as e:
+                print(f"  (routing write failed: {e})")
+
     # 9. Git hook (opt-in): auto-capture+ingest on doc drift after each commit
     if args.hook or args.hook_extract_claims:
         import subprocess as _sp
@@ -499,6 +521,32 @@ WIKI_LLM_MODEL={config["llm"]["model"]}
         else:
             print(f"Hook install failed: {r.stderr.strip()}", file=_sp.sys.stderr)
 
+    # Interactive walkthrough: offer capture + ingest + verify now
+    import sys as _sys
+    if not args.non_interactive and _sys.stdin.isatty():
+        print()
+        print("─── Onboarding walkthrough ───")
+        print()
+        if input(f"  Capture upstream docs now? [Y/n]: ").strip().lower() not in ("n", "no"):
+            r = subprocess.run(
+                [_sys.executable, str(find_fabric_root() / "scripts" / "capture.py"),
+                 project_slug, "--project-root", str(project_root)],
+                capture_output=True, text=True)
+            print(r.stdout.strip() or r.stderr.strip())
+            captured_n = sum(1 for line in r.stdout.splitlines() if "matching" in line.lower())
+            if input("\n  Ingest captured sources with LLM claim extraction? [Y/n]: ").strip().lower() not in ("n", "no"):
+                ingest_cmd = [_sys.executable, str(find_fabric_root() / "scripts" / "ingest.py"),
+                              "--changed", project_slug, "--extract-claims"]
+                if input("  Workers for concurrent extraction [8]: ").strip():
+                    ingest_cmd += ["--workers", "8"]
+                print("  (this may take a few minutes per document)")
+                r2 = subprocess.run(ingest_cmd, capture_output=False, text=True)
+                if input("\n  Run a test query to verify the fabric? [Y/n]: ").strip().lower() not in ("n", "no"):
+                    q = input("  Question [what is this project about?]: ").strip() or "what is this project about?"
+                    r3 = subprocess.run(
+                        [_sys.executable, str(find_fabric_root() / "scripts" / "query.py"), q],
+                        capture_output=False, text=True)
+
     print(f"""
 === Project bootstrap complete ===
 
@@ -511,12 +559,11 @@ Created files:
   .env.wiki-fabric          - LLM config (source before running fabric scripts)
   .gitignore                - Updated with wiki-fabric ignores
 
-Next steps:
-  1. Capture sources: cp upstream docs → evidence/raw/{project_slug}/
-  2. Ingest: python3 ~/wiki-fabric/scripts/ingest.py --extract-claims evidence/raw/{project_slug}/<doc>.md
-  3. Log experience: python3 ~/wiki-fabric/scripts/log-experience.py --project {project_slug}
-  4. Verify: python3 ~/wiki-fabric/scripts/lint.py .
-  5. Ask questions: python3 ~/wiki-fabric/scripts/query.py "..."
+Ongoing:
+  wf capture {project_slug}        # re-capture upstream docs (or auto via hook)
+  wf query "..."                   # ask the fabric questions
+  wf log --project {project_slug}  # log experience events (feeds promotion)
+  wf lint                          # health check (0 errors before commit)
 """)
 
 
