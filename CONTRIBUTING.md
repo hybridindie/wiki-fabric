@@ -149,11 +149,13 @@ Before changing the compiler (agent prompts, ingest logic, skills):
 
 ---
 
-## Versioning
+## Versioning (alpha reality)
 
-- **Fabric structure**: CalVer `YYYY.MM.DD`
-- **Skills/patterns**: semantic `x.y.z` in frontmatter `version:`
-- **Schemas**: bump minor on additive, major on breaking
+- **The project is pre-1.0.** No stable release exists; do not treat any version as a stability promise.
+- **Package version** (`pyproject.toml`): `0.x.y` — bumped on notable changes, resets allowed while alpha.
+- **Fabric structure**: changes freely; no version contract until 1.0.
+- **Skills/patterns**: `x.y.z` in frontmatter `version:` if you want per-page tracking (optional).
+- **Releases**: none yet. When a first tagged release lands, it will be `0.1.0`, not 1.0 — 1.0 is reserved for a stable, documented, tested public contract.
 
 ---
 
