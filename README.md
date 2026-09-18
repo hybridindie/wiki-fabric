@@ -200,7 +200,7 @@ graph TB
         EVENTS["projects/*/experience-events/"]
         ENTITIES["global/entities/<br/>(AST-indexed symbols)"]
         GRAPHS["global/graphs/<br/>(graphify call graph)"]
-        REGISTRY["registry/<br/>(index, promotion queue)"]
+        REGISTRY["registry/<br/>(catalog.json, promotion queue, log)"]
     end
 
     R1 & R2 & R3 -->|capture| RAW
@@ -480,7 +480,7 @@ flowchart TD
 ```
 
 ```bash
-# Rebuild index from actual files (writes registry/catalog.md + registry/catalog.json)
+# Rebuild index from actual files (writes registry/catalog.json)
 python3 scripts/rebuild-index.py
 python3 scripts/rebuild-index.py --json   # print machine-readable registry to stdout
 

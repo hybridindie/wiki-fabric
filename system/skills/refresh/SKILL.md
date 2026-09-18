@@ -91,4 +91,4 @@ source_repos:
 
 - Updated `evidence/raw/` snapshot (new + changed files only)
 - One or more change-sets for re-ingest
-- Updated `registry/index.md` after merge
+- Updated `registry/catalog.json` after merge

@@ -103,4 +103,4 @@ Apply manifest to canonical pages; run `rebuild-index.py`; then one commit:
 
 - New pages under `evidence/sources/`, `evidence/source-summaries/`, `evidence/claims/`
 - Change-set directory ready for review
-- Updated `registry/index.md` (via rebuild-index.py)
+- Updated `registry/catalog.json` (via rebuild-index.py)
