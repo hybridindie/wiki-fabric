@@ -63,8 +63,8 @@ class TestExport:
         assert with_frontmatter_sources, "claims should carry OKF sources[]"
 
     def test_footnotes_keyed(self, tmp_path):
-        self._seeded_fabric(tmp_path)
-        out = self._export(tmp_path, scope="global")
+        fabric = self._seeded_fabric(tmp_path)
+        out = self._export(tmp_path, scope="global", fabric_root=fabric)
         claims = list((out / "evidence" / "claims").glob("*.md"))
         with_footnotes = [c for c in claims if "\n[^wf-" in c.read_text()]
         assert with_footnotes
@@ -81,8 +81,9 @@ class TestExport:
         assert not bad, f"unresolved wikilinks in export: {bad}"
 
     def test_deterministic(self, tmp_path):
-        out1 = self._export(tmp_path / "a", scope="global")
-        out2 = self._export(tmp_path / "b", scope="global")
+        fabric = self._seeded_fabric(tmp_path)
+        out1 = self._export(tmp_path / "a", scope="global", fabric_root=fabric)
+        out2 = self._export(tmp_path / "b", scope="global", fabric_root=fabric)
         d1 = sorted(p.relative_to(out1).as_posix() + "|" + p.read_text()
                     for p in out1.rglob("*.md"))
         d2 = sorted(p.relative_to(out2).as_posix() + "|" + p.read_text()
@@ -90,7 +91,7 @@ class TestExport:
         assert d1 == d2
 
     def test_raw_in_references(self, tmp_path):
-        self._seeded_fabric(tmp_path)
-        out = self._export(tmp_path, scope="global")
+        fabric = self._seeded_fabric(tmp_path)
+        out = self._export(tmp_path, scope="global", fabric_root=fabric)
         refs = out / "references"
         assert refs.exists() and any(refs.rglob("*.md"))
