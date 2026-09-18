@@ -164,12 +164,36 @@ class TestAttestedComputation:
         v, _ = okf_conformance(Path(__file__).parent.parent)
         assert v == [], f"AC pages must conform: {v}"
 
-    def test_golden_eval_attester(self):
+    def test_golden_eval_attester(self, tmp_path, monkeypatch):
+        """Attester reads registry/log.md from the fabric root; seed a receipt
+        in a temp fabric and run the attester from there."""
         import subprocess
-        att = Path(__file__).parent.parent / "references" / "attesters" / "check-golden-eval.py"
-        r = subprocess.run([sys.executable, str(att), "--model", "deepseek-v4.1-flash:cloud"],
-                           capture_output=True, text=True)
         import json
+        import datetime as dt
+        repo = Path(__file__).parent.parent
+        (tmp_path / "registry").mkdir()
+        (tmp_path / "registry" / "log.md").write_text(
+            f"""---
+type: log
+title: Log
+---
+
+## {dt.date.today().isoformat()}
+* **eval | formal golden corpus**
+
+- Claim recall: 0.91 (threshold 0.8) — PASS
+- Model: deepseek-v4.1-flash:cloud
+""")
+        att = repo / "references" / "attesters" / "check-golden-eval.py"
+        # attester resolves FABRIC from __file__; monkeypatch by copying it into tmp
+        (tmp_path / "attesters").mkdir()
+        src = att.read_text().replace(
+            'Path(__file__).resolve().parent.parent.parent',
+            f'Path("{tmp_path}")')
+        att2 = tmp_path / "check-golden-eval.py"
+        att2.write_text(src)
+        r = subprocess.run([sys.executable, str(att2), "--model", "deepseek-v4.1-flash:cloud"],
+                           capture_output=True, text=True)
         d = json.loads(r.stdout)
         assert d["verdict"] == "ATTESTED"
         assert d["recall"] >= 0.8
