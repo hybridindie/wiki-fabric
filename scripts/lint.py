@@ -106,7 +106,14 @@ def _ignores():
 
 def md_files(vault):
     ig = _ignores()
+    # Fixture bundles (tests/fixtures/okf/*) are external to the fabric vault:
+    # they only participate in --okf mode when passed explicitly as --root.
+    # fixture bundles (tests/fixtures/okf/*) are external to the fabric vault:
+    # skip them when walking the fabric repo, but they still lint via --root pass
     for p in vault.rglob("*.md"):
+        rel = p.relative_to(vault).as_posix()
+        if "fixtures/okf" in rel:
+            continue  # fixture bundles: only lint when explicitly passed as --root
         if ig.get("globs") or ig.get("compiled"):
             try:
                 rp = p.relative_to(vault).as_posix()
@@ -201,7 +208,22 @@ def okf_conformance(vault):
     date_re = re.compile(r"^#{1,3}\s*(\d{4}-\d{2}-\d{2})\s*$")
     list_re = re.compile(r"^[-*]\s+\[.+\]\(.+\)")
 
+    # OKF concepts live in content dirs only. Scripts/tests/system are the
+    # compiler, not the bundle — they don't participate in OKF conformance.
+    # Exception: fixture bundles passed via --root (tests) — any .md under
+    # the vault root is a concept there.
+    CONCEPT_DIR_PREFIXES = (
+        "evidence", "patterns", "anti-patterns", "skills", "concepts",
+        "global", "registry", "domains", "projects", "syntheses",
+    )
     for p, rel in md_files(vault):
+        posix = rel.as_posix()
+        in_concept_dir = posix.startswith(CONCEPT_DIR_PREFIXES)
+        # A fixture bundle (tests/fixtures/okf/*) is itself the vault: all md files
+        # under it are concepts regardless of prefix.
+        is_fixture = "fixtures/okf" in str(vault)
+        if not (in_concept_dir or is_fixture):
+            continue
         name = rel.name
         if name in reserved:
             if name == "index.md":

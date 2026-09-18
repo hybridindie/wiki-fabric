@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-FIXTURES = Path(__file__).parent.parent / "evaluations" / "okf" / "fixtures"
+FIXTURES = Path(__file__).parent / "fixtures" / "okf"
 import lint
 
 
@@ -198,11 +198,34 @@ title: Log
         assert d["verdict"] == "ATTESTED"
         assert d["recall"] >= 0.8
 
-    def test_lint_attester(self):
+    def test_lint_attester(self, tmp_path, monkeypatch):
+        """Self-contained: copy the repo harness into tmp (no evidence content),
+        seed a claim, then run the attester against it."""
         import subprocess
-        att = Path(__file__).parent.parent / "references" / "attesters" / "check-zero-errors.py"
-        r = subprocess.run([sys.executable, str(att)], capture_output=True, text=True)
         import json
+        import shutil
+        repo = Path(__file__).parent.parent
+        # copy harness, strip evidence + registry runtime state
+        shutil.copytree(repo, tmp_path, dirs_exist_ok=True, ignore=shutil.ignore_patterns(
+            ".git", ".venv", "__pycache__", ".okflint", ".pytest_cache",
+            ".obsidian", ".opencode", "node_modules", "evidence",
+            "registry/catalog.json"))
+        (tmp_path / "registry").mkdir(exist_ok=True)
+        (tmp_path / "registry" / "log.md").write_text(
+            "---\ntype: log\ntitle: Log\n---\n\n# Log\n")
+        (tmp_path / "evidence" / "claims").mkdir(parents=True)
+        (tmp_path / "evidence" / "claims" / "claim-x.md").write_text(
+            "---\ntype: claim\nid: claim-x\nstatus: supported\n"
+            'statement: "Test."\nsource_refs:\n'
+            '  - source: "[[src-x]]"\n    locator: "L1"\n    quote: "Test."\n'
+            "resource: \"[[src-x]]\"\n---\n\n# x\n")
+        att = repo / "references" / "attesters" / "check-zero-errors.py"
+        src = att.read_text().replace(
+            'FABRIC = Path(__file__).resolve().parent.parent.parent',
+            f'FABRIC = Path("{tmp_path}")')
+        att2 = tmp_path / "check-zero-errors.py"
+        att2.write_text(src)
+        r = subprocess.run([sys.executable, str(att2)], capture_output=True, text=True)
         d = json.loads(r.stdout)
         assert d["verdict"] == "ATTESTED" and d["errors"] == 0
 

@@ -7,9 +7,8 @@ from pathlib import Path
 
 FABRIC = Path(__file__).resolve().parent.parent.parent
 vault = sys.argv[1] if len(sys.argv) > 1 else str(FABRIC)
-r = json.loads(Path(FABRIC / "scripts" / "lint.py").read_text() and "{}") if False else None
 import subprocess as sp
-out = sp.run(["python3", str(FABRIC / "scripts" / "lint.py"), "--format", "json", vault],
+out = sp.run([sys.executable, str(FABRIC / "scripts" / "lint.py"), "--format", "json", vault],
              capture_output=True, text=True)
 d = json.loads(out.stdout)
 receipt = {"errors": d["counts"]["errors"], "warnings": d["counts"]["warnings"],
