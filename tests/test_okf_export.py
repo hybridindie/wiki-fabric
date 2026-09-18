@@ -16,7 +16,7 @@ class TestExport:
         # The CI checkout IS the fabric root (REPO == fabric). Seed content.
         (REPO / "evidence" / "raw" / "seeded").mkdir(parents=True, exist_ok=True)
         (REPO / "evidence" / "raw" / "seeded" / "doc.md").write_text(
-            "---\ntype: Note\ntitle: Seeded\n---\n\nSeeded raw doc.\n")
+            "Seeded raw doc with no frontmatter.\n")
         (REPO / "evidence" / "sources").mkdir(parents=True, exist_ok=True)
         (REPO / "evidence" / "sources" / "src-seeded-doc-md.md").write_text(
             "---\ntype: source\ntitle: Seeded Doc\nkind: doc\ntags: []\n"
