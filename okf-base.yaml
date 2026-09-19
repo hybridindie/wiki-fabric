@@ -22,6 +22,14 @@ base:
         - "node_modules/**"
         - "scripts/**"
         - "tests/**"
+        # visitor-facing repo pages (lint is_tpl exemption) — no frontmatter
+        - "README.md"
+        - "CONTRIBUTING.md"
+        - "LICENSE"
+        # VitePress docs site (web artifact, like node_modules)
+        - "docs/site/**"
+        # graphify self-graph artifacts (generated, not fabric concepts)
+        - "graphify-out/**"
   reserved_files:
     index: index.md
     log: log.md
