@@ -30,6 +30,43 @@ Every `wf` command, every page type, and the module layout of the harness. For c
 
 **See `schemas/frontmatter.md` for full contracts.**
 
+### Lifecycle: how pages move through statuses
+
+Types carry a status vocabulary, and transitions are gated — some by lint,
+some by humans. The two lifecycles you interact with daily:
+
+**Claims** (evidence lifecycle):
+
+```text
+proposed ──(locator verified)──> supported ──(newer claim wins)──> superseded
+    │                                │
+    └──(evidence contradicts)──> contested          retracted (bad quote/source)
+```
+
+- `proposed`: extracted but unverified (no `source_refs` required yet)
+- `supported`: locator-verified, quote verbatim — lint *demands* source_refs
+- `contested`: contradicted by another claim — both stay visible with
+  `contradicts` relations; a human settles it, a model never averages it
+- `superseded`: requires `superseded_by: [[claim-...]]` — chains can't loop
+
+**Patterns (maturity ladder):**
+
+```text
+candidate (m0-m1) ──(2 independent lineages)──> recommended (m2) ──(human review)──> standard (m3)
+      │                                                                                      │
+      └────────────────────── deprecated ←──────────── any time ─────────────────────────────┘
+```
+
+- `recommended` is **lint-enforced** to have maturity ≥ 2 and evidence from
+  ≥2 independent projects (the [independence rule](./why))
+- `standard` requires a `human:` verifier — the machine can never bless a
+  pattern into load-bearing status
+- `deprecated` keeps the page for history; context compilation stops selecting it
+
+Who does what: **agents** propose (claims, change-sets, dossiers — always
+staged, never merged silently); **humans** promote (merge change-sets, approve
+dossiers, set `standard`). The gates are where governance lives.
+
 ---
 
 ## CLI Reference (`wf`)
@@ -109,3 +146,43 @@ wf status
 The repo ships only the harness — examples, templates, schemas, and scripts. Your claims, captures, and patterns accumulate locally as you connect projects.
 
 ---
+
+## Vault & status commands (the human views)
+
+### `wf vault [PATH]` — browse the fabric in Obsidian
+
+Creates a directory of **symlinks** to the fabric's human-readable content
+(`AGENTS.md`, `concepts/`, `patterns/`, `skills/`, `evidence/`, ...). Obsidian
+follows symlinks, so you browse and graph the real files with zero duplication
+— edit in the vault, and you're editing the fabric. Default location is
+`~/Development/vault` (beside the fabric); pass a path to override; existing
+`.obsidian/` workspace config is preserved.
+
+```bash
+wf vault                     # ~/Development/vault
+wf vault ~/vaults/my-fabric  # custom location
+```
+
+### `wf status` — the health dashboard
+
+One screen answering "is my fabric healthy": fabric + vault locations, the
+three models (ops / compiler / local, with the local model's cache state),
+inventory counts (claims, sources, concepts, patterns, projects, entities),
+lint verdict, graphify import state.
+
+### `wf integrations` — what's active
+
+Lists optional integrations with their state and effect:
+
+```text
+✓ graphify: ENABLED (call-graph staleness, claim enrichment, graph expansion)
+     commands: graphify-bridge.py --all | --diff | --status
+```
+
+Inactive integrations print their enable command and what they'd change —
+so the dashboard doubles as documentation of the delta (full table in
+[Integrations](./integrations)).
+
+---
+
+Next: [Something not working? Troubleshooting](./troubleshooting)

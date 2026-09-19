@@ -51,3 +51,7 @@ are not filing categories — they are the priority layers of task-time context
 assembly, enforced by the P1 contract (SCOPE, REVIEW-AFTER, status filters).
 
 ---
+
+---
+
+Next: [Full command reference](./cli)

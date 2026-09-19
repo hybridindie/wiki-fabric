@@ -46,3 +46,7 @@ coupling — and is what the bridge diff/expand steps consult for claims about
 wiki-fabric itself. Refresh after refactors with `graphify --update`.
 
 ---
+
+---
+
+Next: [Integration issues? Troubleshooting](./troubleshooting)

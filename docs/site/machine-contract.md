@@ -36,3 +36,56 @@ cataloged page with its `id`, `type`, `scope`, `status`, `maturity`,
 | `SOURCE-DRIFT` | a captured source's sha256 changed without re-ingest |
 
 ---
+
+## The registry
+
+Two files, two jobs — both machine-written, human-readable:
+
+### `registry/catalog.json` — what knowledge exists
+
+Rebuilt by `rebuild-index.py` from actual files (never hand-edited):
+
+```json
+{
+  "okf_version": "0.2",
+  "generated": "2026-09-19",
+  "total": 4506,
+  "counts": { "claim": 3800, "pattern": 14, "...": 0 },
+  "pages": [
+    {
+      "id": "claim-alpaca-agents-retry-backoff-001",
+      "stem": "claim-alpaca-agents-retry-backoff-001",
+      "path": "evidence/claims/claim-alpaca-agents-retry-backoff-001.md",
+      "type": "claim",
+      "title": "...",
+      "scope": "project",
+      "description": "one-line summary",
+      "status": "supported",
+      "confidence": "high",
+      "last_verified": "2026-09-12"
+    }
+  ]
+}
+```
+
+Every entry answers "what knowledge exists and how fresh is it" — the field
+CI and dashboards consume. `--json` prints it to stdout for piping.
+
+### `registry/log.md` — the append-only timeline
+
+OKF §9 shape: one `## YYYY-MM-DD` heading per day, `* **<op> | <subject>**`
+bullets beneath. Eval scripts, imports, hooks, and promotions **append**; no
+tooling rewrites past entries (CONTRIBUTING.md: "never rewrite history — the
+log is the history"). It's also the compiler-eval gate's data source:
+`promote`/`mine-promotions` scan it for a PASS eval naming the current
+compiler model.
+
+```markdown
+## 2026-09-19
+* **eval-stability | gemma4:e4b-fixed** — Claim recall: 0.89 (threshold 0.8) — PASS
+* **okf-import | team-a** — bundle ext-bundle: 12 concepts (quarantine 1), tiers {...}
+```
+
+---
+
+Next: [When the contract fails: troubleshooting](./troubleshooting)

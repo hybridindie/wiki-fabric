@@ -25,3 +25,7 @@ The hard questions for agent-maintained knowledge — with where the fabric answ
 None of these are promises in a README — each is a lint check or workflow gate in CI right now.
 
 ---
+
+---
+
+Next: [The machine-readable surface for these answers](./machine-contract)

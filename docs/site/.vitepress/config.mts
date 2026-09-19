@@ -67,7 +67,8 @@ export default withMermaid(defineConfig({
           { text: 'Model Policy & Evals', link: '/evals' },
           { text: 'OKF v0.2 Conformance', link: '/okf' },
           { text: 'Machine-Readable Contract', link: '/machine-contract' },
-          { text: 'Governance', link: '/governance' }
+          { text: 'Governance', link: '/governance' },
+          { text: 'Troubleshooting', link: '/troubleshooting' }
         ]
       }
     ],

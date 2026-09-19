@@ -29,6 +29,28 @@ verified:
 ```
 
 - **Actors** (§7): `agent/<owner>/<model>` · `human:<id>` · `process:<id>`
+
+#### Writing provenance: the actor convention
+
+Every page's `generated.by` (and every `verified.by`) records *who* produced
+it, in one of three forms — lint rejects anything else:
+
+| Form | When your tooling writes it | Example |
+|------|----------------------------|---------|
+| `agent/<owner>/<model>` | an LLM produced the content — name the model that did | `agent/hybridindie/deepseek-v4.1-flash:cloud` |
+| `human:<id>` | a person wrote or verified it | `human:jane` |
+| `process:<id>` | deterministic tooling (hooks, CI, attesters) — model-independent by design | `process:locator-verification` |
+
+The `<owner>` in agent actors is the fabric `owner` (fabric.yaml). Practical
+rules for agent authors:
+
+- Claim pages minted by extraction carry the compiler model — that's the
+  audit trail for "which model asserted this".
+- Pages a human edited by hand get `verified: [{by: human:<id>, at: ...}]`
+  added — that's what pushes trust tier to `human-reviewed` and what the
+  maturity gate requires at maturity ≥ 2.
+- Never fake a `process:` actor for LLM output; the tier system only means
+  something if actors are honest.
 - **Trust tiers** (§5.3): every `wf context` manifest item carries
   `trust: human-reviewed > machine-confirmed > unverified` — advisory weighting at task time
 - **Promotion gate** (§5.2 + §10): `maturity >= 2` requires a `human:` verifier — lint-enforced
@@ -50,13 +72,59 @@ references/attesters/    # deterministic receipt checks (no LLM)
 ### Exchange
 
 ```bash
-wf okf export --out ./bundle --scope global   # deterministic portable bundle
-wf okf import  ./their-bundle --scope team-a  # external knowledge as immutable evidence
+wf okf export --out ./bundle [--scope all|global|<project|domain-slug>]
+wf okf import  ./their-bundle --scope team-a [--extract-claims]
 ```
 
-Export is byte-deterministic and okflint-conformant. Import records trust tiers
-but never inherits them: external concepts land as captures with source records
-(kind: okf-bundle), screened for prompt injection, quarantined on suspicion —
-and promotion still requires the human-gated pipeline.
+#### Export: your fabric as a portable bundle
+
+`export` renders the fabric (or one scope's slice of it) as a directory of
+markdown + frontmatter that any OKF consumer can read. It is **byte-deterministic**
+— same fabric state, same bytes — and validated by the external `okflint`
+validator in CI, so a bundle from anyone is checkable without wiki-fabric.
+
+| Scope | Exports |
+|-------|---------|
+| `all` (default) | everything the fabric owns |
+| `global` | patterns, anti-patterns, skills, entities, principles |
+| `<project-slug>` | that project's claims, experience events, decisions |
+| `<domain-slug>` | that domain's concepts, questions, syntheses |
+
+Wikilinks are rewritten to travel inside the bundle (dangling links don't ship).
+Raw captures ride along under `references/` (OKF §6.3: external material
+mirrors verbatim, never becomes a concept).
+
+#### Import: external knowledge as *quarantined evidence*
+
+`import` never writes concepts directly into your fabric. Each imported page
+becomes a **raw capture** (`evidence/raw/<scope>-okf/`) with a source record
+(`kind: okf-bundle`), so it enters through the same compile pipeline as any
+other external document:
+
+1. **Injection screen** — deterministic scan for zero-width characters,
+   control characters, and directive patterns ("ignore previous instructions",
+   "system prompt", ...). Hits are **quarantined** to
+   `evidence/_inbox/<scope>-okf/` for human review, never silently ingested.
+2. **Trust recorded, not inherited** — each page carries
+   `imported_trust_tier` (`human-reviewed` / `machine-confirmed` /
+   `unverified`) computed from *its* `verified` fields. The tier is
+   metadata for your weighting — it grants nothing.
+3. **Promotion still gated** — imported concepts become canonical only via
+   the human-gated pipeline (capture → ingest → change-set → lint → merge).
+   With `--extract-claims`, the compiler runs on the imported material
+   immediately (honoring per-scope routing).
+
+```bash
+# Consume a team bundle and compile it
+wf okf import ~/bundles/team-a --scope team-a --extract-claims
+```
+
+Use cases: consuming another team's curated fabric, archiving a fabric snapshot,
+feeding a curated external corpus (e.g. vendor docs someone exported) through
+your governance instead of around it.
 
 ---
+
+---
+
+Next: [The contract surface CI consumes](./machine-contract)

@@ -155,6 +155,7 @@ Full docs at **[hybridindie.github.io/wiki-fabric](https://hybridindie.github.io
 | [Machine-Readable Contract](docs/site/machine-contract.md) | Lint codes, `registry/catalog.json`, CI consumption |
 | [Optional Integrations](docs/site/integrations.md) | Graphify (0-token call-graph intelligence), embeddings |
 | [Team Sync](docs/site/sync.md) | Share the corpus as source of truth via git |
+| [Troubleshooting](docs/site/troubleshooting.md) | Common failure modes and fixes |
 
 ---
 

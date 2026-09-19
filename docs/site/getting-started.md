@@ -132,3 +132,7 @@ wf claude install                  # always-on instructions in AGENTS.md/CLAUDE.
 - [Core Workflows](./core-workflows) — the full loop with scenarios
 - [Task Context](./context) — what the agent receives at task time
 - [Team Sync](./sync) — share the corpus with a team
+
+---
+
+Next: [Once installed, walk the core workflows](./core-workflows)

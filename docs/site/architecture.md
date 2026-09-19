@@ -77,3 +77,7 @@ scripts/
 **Design rule:** every script runs standalone (`python3 scripts/x.py --help`);
 shared logic lives in the five modules above — import, don't copy
 (anti-loop rule 7 in [AGENTS.md](https://github.com/hybridindie/wiki-fabric/blob/main/AGENTS.md)).
+
+---
+
+Next: [Walk the core workflows](./core-workflows)

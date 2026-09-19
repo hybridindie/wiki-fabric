@@ -45,6 +45,9 @@ Wiki Fabric is a governance layer and reference implementation for coding-agent 
 3. **Enforces scope precedence at task time** — `wf context` compiles project decisions > domain patterns > global policies into a manifest where every inclusion/exclusion carries a reason, and stale/superseded knowledge is filtered before it can mislead.
 4. **Measures behavior, not vibes** — behavior evals verify the knowledge actually changes agent decisions (avoids banned approaches, honors constraints, escalates gaps); the compiler has its own golden-corpus eval; CI fails on regression.
 
-Everything else — the `wf` CLI, uv installer, Obsidian vault, git-history capture, corpus sync — is reference implementation and integrations around that core.
 
 ---
+
+---
+
+Next: [See the architecture that implements this bet](./architecture)

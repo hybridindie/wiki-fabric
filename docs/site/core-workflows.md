@@ -281,10 +281,18 @@ WIKI_LLM_MODEL="qwen3.8:27b-mlx" python3 scripts/eval.py
 python3 scripts/propose-domains.py
 
 # Graphify integration (optional, 0 token cost)
-python3 scripts/graphify-bridge.py --all          # full pipeline
-python3 scripts/graphify-bridge.py --status       # dashboard
-python3 scripts/graphify-bridge.py --diff         # staleness check
+graphify update                              # refresh each connected repo's graph (AST-only)
+python3 scripts/graphify-bridge.py --all     # update → import → enrich → diff
+python3 scripts/graphify-bridge.py --status  # dashboard
+python3 scripts/graphify-bridge.py --diff    # staleness check
 ```
+
+Run the graphify refresh **after code refactors** (it's AST-only — a few
+seconds, no LLM): `graphify update` in each connected repo, then
+`graphify-bridge --import` to sync hashes and `--diff` to see which claims
+reference symbols that moved. The fabric's own repo appears in the bridge once
+it has a `repos:` entry pointing at `.` — its self-graph lives in
+`graphify-out/` (see [Integrations](./integrations)).
 
 **Scenario — docs went stale.** You refactor `gather_reads` into
 `collect_reads`; the claim "gather_reads makes O(N) reads ~O(1)" now points at a
@@ -337,3 +345,7 @@ nudge (modeled on graphify's plugin) reminding the agent to prefer
 `wf context` / `wf query` over grep.
 
 ---
+
+---
+
+Next: [Go deep on the payoff: task context](./context)

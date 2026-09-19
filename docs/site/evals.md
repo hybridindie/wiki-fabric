@@ -173,3 +173,7 @@ compiler changes require re-evaluation — as a hard gate instead of a docs
 sentence. `wf status` shows all three models (ops, compiler, local).
 
 ---
+
+---
+
+Next: [How CI consumes these verdicts](./machine-contract)

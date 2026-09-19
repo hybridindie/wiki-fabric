@@ -56,3 +56,7 @@ remotes means `wf update` (harness) never touches team content, and `wf sync`
 never publishes your corpus to a public URL.
 
 ---
+
+---
+
+Next: [Moving knowledge between fabrics: OKF exchange](./okf)

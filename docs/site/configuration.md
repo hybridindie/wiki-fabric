@@ -165,3 +165,59 @@ domains:
   web-systems:
     signals: [fastapi, flask, react, nextjs, supabase, postgresql]
 ```
+## Security & privacy
+
+**Where secrets live.** API keys go in `fabric.yaml` only — the file is
+gitignored, and the repo's `.gitignore` ships with that exclusion. Never put
+keys in `fabric.yaml.example` (committed), page frontmatter, or claims. The
+fabric's own pages never store credentials; lint has no secret scanner yet
+(roadmap), so the discipline is: keys only in the config file or env vars.
+
+**What data flows where.** The fabric sends *content* to exactly two places:
+
+| Operation | What leaves the machine | To where |
+|-----------|------------------------|----------|
+| `ingest --extract-claims` on a **cloud-routed** repo | raw document text | your `base_url` endpoint |
+| `ingest --extract-claims` on a **`extract: local`** repo | nothing (on-device) | — |
+| `synthesize.py` cloud route | sanitized claim statements | your endpoint |
+| `synthesize.py` local route | nothing | — |
+| `mine-promotions.py` dossier | experience events (cloud route) | your endpoint |
+| `wf query` | **nothing** — deterministic retrieval, 0 tokens | — |
+| `wf context` | **nothing** — deterministic compilation | — |
+| `wf models ensure` | model download request | huggingface.co (metadata + weights only) |
+
+The threat model for sensitive repos: **raw documents are the highest
+sensitivity tier** (they may contain internal URLs, credentials-in-comments,
+customer names). That's why `extract` is the stage you route `local` — a
+private repo's raw docs never reach a cloud endpoint. Synthesized claims are
+deliberately sanitized statements, so `synthesize: local` is a second lock;
+`dossier` input (experience events) is usually safe for cloud.
+
+**Practical setup for mixed fleets:**
+
+```yaml
+# cloud compiler for everything...
+llm:
+  compiler_model: deepseek-v4.1-flash:cloud
+
+repos:
+  public-oss-project: {}            # all stages cloud — fast
+  internal-project:
+    extract: local                  # raw docs never leave
+    synthesize: local               # claims stay local too
+    dossier: cloud                  # experience events are fine
+```
+
+**Inbound content is screened too.** `wf okf import` runs a deterministic
+injection screen on every imported page (zero-width chars, control chars,
+"ignore previous instructions" patterns); hits are quarantined to
+`evidence/_inbox/<scope>-okf/` for human review instead of entering the
+fabric. Trust tiers are recorded, never inherited — see
+[OKF v0.2](./okf).
+
+**Team sync** pushes knowledge content to a git remote you own. Use a private
+repo for anything sensitive; the harness (scripts/schemas) never syncs.
+
+---
+
+Next: [See the workflows this config drives](./core-workflows)
