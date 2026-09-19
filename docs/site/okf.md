@@ -6,7 +6,9 @@ created: 2026-09-19
 updated: 2026-09-19
 ---
 
-# OKF v0.2: The Fabric Speaks the Standard: The Fabric Speaks the Standard
+# OKF v0.2: The Fabric Speaks the Standard
+
+OKF (Open Knowledge Format) v0.2 is the interoperability layer: your fabric reads and writes the standard bundle format. Governance stays local; portability is free.
 
 Wiki Fabric is a **conformant OKF v0.2 bundle** — verified by our conformance
 linter (`lint --okf`) and the external `okflint` validator. That means any OKF

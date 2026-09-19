@@ -6,7 +6,9 @@ created: 2026-09-19
 updated: 2026-09-19
 ---
 
-# Team Sync: Share the Corpus as Source of Truth: Share the Corpus as Source of Truth
+# Team Sync
+
+Team sync is the deployment story: one fabric per machine, one corpus shared via git. Configure the corpus remote in [Configuration](./configuration) or at install time.
 
 One fabric per machine, **one corpus shared via git**. `wf sync` pushes/pulls
 your knowledge content (claims, sources, patterns, skills, concepts, experience

@@ -33,6 +33,7 @@ export default withMermaid(defineConfig({
     nav: [
       { text: 'Guide', link: '/why' },
       { text: 'Workflows', link: '/core-workflows' },
+      { text: 'Config', link: '/configuration' },
       { text: 'Reference', link: '/cli' },
       {
         text: 'GitHub',
@@ -51,6 +52,7 @@ export default withMermaid(defineConfig({
       {
         text: 'Using the Fabric',
         items: [
+          { text: 'Configuration', link: '/configuration' },
           { text: 'Task Context (wf context)', link: '/context' },
           { text: 'Team Sync', link: '/sync' },
           { text: 'Optional Integrations', link: '/integrations' }

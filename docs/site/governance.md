@@ -6,7 +6,9 @@ created: 2026-09-19
 updated: 2026-09-19
 ---
 
-# Governance: The Answers, Enforced: The Answers, Enforced
+# Governance: The Answers, Enforced
+
+Agent-maintained knowledge raises hard questions: who verified this? does it still hold? how do you know the agent followed it? Each answer below points at the mechanism that enforces it — not a policy sentence.
 
 The hard questions for agent-maintained knowledge — with where the fabric answers them:
 

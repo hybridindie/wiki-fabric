@@ -8,6 +8,8 @@ updated: 2026-09-19
 
 # Machine-Readable Contract
 
+This page is the contract surface other systems consume: CI, agent harnesses, dashboards. For the human-readable workflows, start at [Core Workflows](./core-workflows).
+
 Everything the fabric validates and catalogs is available in JSON, so CI and
 agent harnesses can consume it without parsing prose:
 

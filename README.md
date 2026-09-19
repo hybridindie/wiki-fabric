@@ -135,20 +135,22 @@ model isn't cached or the platform lacks the backend.
 
 ## Documentation
 
+Full docs at **[hybridindie.github.io/wiki-fabric](https://hybridindie.github.io/wiki-fabric/)** — with search.
+
 | Doc | Contents |
 |-----|----------|
-| [Why not just a wiki or RAG?](docs/why.md) | Failure modes of the alternatives, and the core bet |
-| [Architecture](docs/architecture.md) | The pipeline diagram, module map |
-| [Core Workflows](docs/core-workflows.md) | Ingest, git-history capture, query, experience → pattern, bootstrap, maintenance, hooks — with scenarios |
-| [Task Context](docs/context.md) | `wf context` — the deterministic manifest compiler |
-| [CLI & Scripts Reference](docs/cli.md) | Every `wf` command, note types, scripts + shared modules |
-| [Model policy & local models](docs/evals.md) | Ops vs compiler models, `llm.local_model`, on-device routing |
-| [Behavior Evals](docs/evals.md) | Golden corpus, behavior fixtures, stability, PR replay, real-repo |
-| [OKF v0.2 conformance](docs/okf.md) | The portable-bundle standard, trust tiers, attested computations |
-| [Governance](docs/governance.md) | The hard questions, and where the fabric answers them |
-| [Machine-Readable Contract](docs/machine-contract.md) | Lint codes, `registry/catalog.json`, CI consumption |
-| [Optional Integrations](docs/integrations.md) | Graphify (0-token call-graph intelligence), embeddings |
-| [Team Sync](docs/sync.md) | Share the corpus as source of truth via git |
+| [Why not just a wiki or RAG?](docs/site/why.md) | Failure modes of the alternatives, and the core bet |
+| [Architecture](docs/site/architecture.md) | The pipeline, module map, reading order |
+| [Core Workflows](docs/site/core-workflows.md) | Ingest, git-history capture, query, experience → pattern, bootstrap, maintenance, hooks — with scenarios |
+| [Configuration](docs/site/configuration.md) | **OpenAI-compatible providers, env vars, model tiers, per-stage routing, ignores** |
+| [Task Context](docs/site/context.md) | `wf context` — the deterministic manifest compiler |
+| [CLI & Scripts Reference](docs/site/cli.md) | Every `wf` command, note types, scripts + shared modules |
+| [Model policy & evals](docs/site/evals.md) | Compiler-eval gate, behavior evals, stability, PR replay, real-repo |
+| [OKF v0.2 conformance](docs/site/okf.md) | The portable-bundle standard, trust tiers, attested computations |
+| [Governance](docs/site/governance.md) | The hard questions, and where the fabric answers them |
+| [Machine-Readable Contract](docs/site/machine-contract.md) | Lint codes, `registry/catalog.json`, CI consumption |
+| [Optional Integrations](docs/site/integrations.md) | Graphify (0-token call-graph intelligence), embeddings |
+| [Team Sync](docs/site/sync.md) | Share the corpus as source of truth via git |
 
 ---
 

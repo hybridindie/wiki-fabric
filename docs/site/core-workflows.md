@@ -8,7 +8,7 @@ updated: 2026-09-19
 
 # Core Workflows
 
-### 1. Ingest: Source → Claims
+## 1. Ingest: Source → Claims
 
 ```mermaid
 flowchart LR
@@ -21,7 +21,7 @@ flowchart LR
     G --> H["Merge → Log → Commit"]
 ```
 
-### 1a. Git History Capture: PRs, Issues, Commits → Raw Evidence
+## 1a. Git History Capture: PRs, Issues, Commits → Raw Evidence
 
 Code history is a second capture channel alongside docs. Two sources, one pipeline:
 
@@ -93,15 +93,8 @@ wf ingest --extract-claims --dry-run evidence/raw/foo.md
 WIKI_LLM_MODEL="llama3.1:70b" wf ingest evidence/raw/foo.md --extract-claims
 ```
 
-**LLM configuration** (env vars, Ollama default):
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `WIKI_LLM_BASE_URL` | `http://localhost:11434/v1` | OpenAI-compatible endpoint |
-| `WIKI_LLM_API_KEY` | `ollama` | API key (Ollama ignores) |
-| `WIKI_LLM_MODEL` | `qwen2.5-coder:7b` | Model name |
-
-Works with any OpenAI-compatible endpoint: Ollama, OpenAI, vLLM, LM Studio, Together, etc.
+**LLM configuration:** any OpenAI-compatible endpoint works — full provider
+table, model tiers, and env-var overrides in [Configuration](./configuration).
 
 **Scenario — onboarding onto an unfamiliar codebase.** Your project's docs are
 scattered across a README, `docs/`, and ADRs. Bootstrap the project, `wf capture`,
@@ -123,7 +116,7 @@ PR and issue history tells you why. See **Git History Capture** above: the
 pre-filtered so LLM extraction stays cheap, with `--churn` pointing ingest
 budget at the highest-traffic areas.
 
-### 2. Query: Question → Evidence-Backed Answer
+## 2. Query: Question → Evidence-Backed Answer
 
 ```mermaid
 flowchart TD
@@ -162,7 +155,7 @@ relation, not a silently merged average. Querying the topic surfaces the conflic
 with both locators side by side, so a human settles it instead of a model
 averaging it.
 
-### 3. Experience → Pattern → Skill (Compounding Loop)
+## 3. Experience → Pattern → Skill (Compounding Loop)
 
 ```mermaid
 flowchart LR
@@ -210,7 +203,7 @@ failed interventions too. Mined clusters can produce anti-patterns
 ("parallel validation writes caused 3 separate incidents") that future sessions
 surface as warnings when they detect the setup.
 
-### 4. Bootstrapping: Connect a New Project
+## 4. Bootstrapping: Connect a New Project
 
 ```mermaid
 flowchart LR
@@ -247,7 +240,7 @@ project's overlay — and immediately knows about the three patterns promoted fr
 your other projects, the domain ontology, and which skills apply here. No copying
 of wiki folders, no "let me catch you up" prompt engineering.
 
-### 5. Maintenance
+## 5. Maintenance
 
 ```mermaid
 flowchart TD
@@ -300,7 +293,7 @@ rename and flags the affected claims as stale. Refresh re-ingests only the
 changed source, and the claim either updates or is superseded — with the change
 recorded in the change-set manifest, never silently rewritten.
 
-### 6. Hooks: The Loop Runs Itself (opt-in)
+## 6. Hooks: The Loop Runs Itself (opt-in)
 
 Modeled on graphify's git-hook system — marker-delimited, append-safe, detached.
 

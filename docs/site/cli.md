@@ -8,6 +8,9 @@ updated: 2026-09-19
 
 # CLI & Scripts Reference
 
+
+Every `wf` command, every page type, and the module layout of the harness. For configuration (providers, routing), see [Configuration](./configuration).
+
 ## Note Types
 
 | Type | Location | Purpose |

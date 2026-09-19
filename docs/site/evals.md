@@ -6,7 +6,7 @@ created: 2026-09-19
 updated: 2026-09-19
 ---
 
-# Behavior Evals: Does the Fabric Change Agent Behavior?
+# Behavior Evals & Model Policy
 
 The compiler evals (`eval.py`, golden corpus) measure extraction quality.
 **Behavior evals** measure the thing that actually matters: when an agent
@@ -48,7 +48,7 @@ as the compiler evals, applied to behavior. This is the differentiator: repos
 that only promise "compounding memory" can't measure whether the memory
 changed anything.
 
-### Real-repo evaluation
+## Real-repo evaluation
 
 For a heavyweight end-to-end check, run the whole pipeline against a real,
 popular repo (default: FastAPI — large, active, well-documented Python):
@@ -76,7 +76,7 @@ The graphify/embeddings tiers are measured *as integrations*: their
 contribution is reported separately, so you can see exactly what enabling them
 buys.
 
-### PR replay evaluation
+## PR replay evaluation
 
 Replay **real PRs** from an active repo and measure whether the fabric would
 have helped when the PR was written — a knowledge-recall eval on real-world
@@ -103,7 +103,7 @@ Per replayed PR (fetched live via `gh` — title, body, review comments, touched
 stemmed) present in the selected artifacts — a recall proxy on real work. The
 coverage delta isolates the value of the ingest step itself.
 
-### Stability & sensitivity evaluation
+## Stability & sensitivity evaluation
 
 Closes the rubric's reproducibility rows with hard gates:
 
@@ -135,7 +135,9 @@ compiler change was re-baselined against the golden corpus first (recall 0.89, l
 reasoning consumes the token budget — the extractor now budgets 16K tokens and retries
 on `finish_reason=length`.
 
-### Model policy: ops vs compiler models
+## Model policy: ops vs compiler models
+
+The tier table and provider setup live in [Configuration](./configuration#model-tiers-ops-vs-compiler-vs-local); this page covers the *policy* — why the compiler model is gated and how evals enforce it.
 
 Claim extraction is *compiler work* — it compiles sources into the fabric's
 canonical evidence — so it runs on a policy-designated **compiler model**, not

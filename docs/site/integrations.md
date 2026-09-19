@@ -8,6 +8,8 @@ updated: 2026-09-19
 
 # Optional Integrations
 
+Integrations add capabilities on top of the core loop. They are declared in `fabric.yaml` (see [Configuration](./configuration)) and are **never load-bearing** — with the integration off, every script behaves exactly as the core docs describe.
+
 Integrations are **off by default** and declared in `fabric.yaml`:
 
 ```yaml
