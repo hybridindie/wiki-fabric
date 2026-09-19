@@ -1,8 +1,9 @@
 import { defineConfig } from 'vitepress'
+import { withMermaid } from 'vitepress-plugin-mermaid'
 
 const BASE = '/wiki-fabric/'
 
-export default defineConfig({
+export default withMermaid(defineConfig({
   lang: 'en-US',
   title: 'Wiki Fabric',
   description:
@@ -10,9 +11,23 @@ export default defineConfig({
   base: BASE,
   outDir: 'dist',
   ignoreDeadLinks: false,
+  vite: {
+    optimizeDeps: {
+      include: ['debug'],
+    },
+  },
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: BASE + 'logo.svg' }],
   ],
+  mermaid: {
+    // plugin auto-switches to theme 'dark' when VitePress dark mode is active
+    // (Mermaid.vue reads documentElement's `dark` class and re-renders)
+    securityLevel: 'loose',
+    startOnLoad: false,
+  },
+  mermaidPlugin: {
+    class: 'mermaid-blocks',
+  },
   themeConfig: {
     siteTitle: 'Wiki Fabric',
     nav: [
@@ -73,11 +88,4 @@ export default defineConfig({
       copyright: 'MIT Licensed. Copyright © 2026 hybridindie'
     }
   },
-  markdown: {
-    // mermaid support is provided by vitepress-plugin-group-icons-less setups;
-    // we render mermaid blocks as code fences (GitHub renders them natively).
-    config: (md) => {
-      // keep default; mermaid fences display as highlighted code in VitePress
-    }
-  }
-})
+}))
