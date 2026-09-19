@@ -13,63 +13,6 @@ Append-only timeline. One `## YYYY-MM-DD` heading per day with `* **<op> | <subj
 * **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
 
 ## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
 * **ingest | perf-test-perf-test-a-md**
 - Ingested perf-test-a.md (sha256 3087d1a00277...)
 - Extracted 4 claims
@@ -86,9 +29,6 @@ Append-only timeline. One `## YYYY-MM-DD` heading per day with `* **<op> | <subj
 - Ingested perf-test-b.md (sha256 b06dc819dbae...)
 - Extracted 5 claims
 - Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-18-perf-test-perf-test-b-md
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
 
 ## 2026-09-18
 * **eval | formal golden corpus**
@@ -161,23 +101,5 @@ Append-only timeline. One `## YYYY-MM-DD` heading per day with `* **<op> | <subj
 - The G4-vs-deepseek 0.78-vs-0.8 shortfall is small-model capability variance;
   acceptable for the local tier given the cloud tier handles the precision-critical path.
 
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
-* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
-
-## 2026-09-18
+## 2026-09-19
 * **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
