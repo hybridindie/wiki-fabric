@@ -48,3 +48,4 @@ venv/
 # graphify self-graph artifacts (regenerated: graphify --update; graph.json tracked)
 graphify-out/graph.html
 graphify-out/manifest.json
+graphify-out/.graphify_*
