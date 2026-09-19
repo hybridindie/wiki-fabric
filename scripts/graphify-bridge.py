@@ -29,6 +29,7 @@ from collections import defaultdict, Counter
 
 sys.path.insert(0, str(Path(__file__).parent))
 from fabric_config import get_config, FABRIC_ROOT, resolve_repo_path, get_all_repo_names, get_repo_graph_dir
+from wf_common import parse_frontmatter
 
 VAULT_ROOT = FABRIC_ROOT
 GRAPHS_DIR = VAULT_ROOT / "global" / "graphs"
@@ -38,17 +39,6 @@ CLAIMS_DIR = VAULT_ROOT / "evidence" / "claims"
 EXPAND_EDGE_TYPES = {"calls", "imports", "imports_from", "uses", "references", "inherits"}
 # Provenance edges (doc → code)
 PROVENANCE_EDGE_TYPES = {"rationale_for"}
-
-
-def parse_frontmatter(path):
-    text = path.read_text(encoding="utf-8", errors="replace")
-    m = re.match(r"^---\n(.*?)\n---\n(.*)$", text, re.DOTALL)
-    if not m:
-        return {}, text
-    try:
-        return (yaml.safe_load(m.group(1)) or {}), m.group(2)
-    except Exception:
-        return {}, m.group(2)
 
 
 def get_graph_path(repo_name):
@@ -77,6 +67,17 @@ def graph_hash(graph):
     links = sorted(f"{l['source']}->{l['target']}:{l.get('relation', '')}" for l in graph.get("links", []))
     content = json.dumps({"nodes": nodes, "links": links}, sort_keys=True)
     return hashlib.sha256(content.encode()).hexdigest()[:16]
+
+
+def _repo_targets(repos=None):
+    """Resolve target repo names from fabric.yaml (repos: keys), optionally
+    narrowed to the given subset. All commands previously read a REPO_CONFIG
+    global that no longer exists; config is the single source of truth."""
+    config = get_config()
+    names = get_all_repo_names(config)
+    if repos:
+        return [r for r in names if r in repos]
+    return names
 
 
 def cmd_update(repos=None):
@@ -118,7 +119,7 @@ def cmd_update(repos=None):
 def cmd_import(repos=None):
     """Import graph structure into fabric for query expansion."""
     GRAPHS_DIR.mkdir(parents=True, exist_ok=True)
-    targets = repos or list(REPO_CONFIG.keys())
+    targets = _repo_targets(repos)
 
     for repo_name in targets:
         graph_path = get_graph_path(repo_name)
@@ -146,7 +147,7 @@ def cmd_import(repos=None):
 
 def cmd_enrich(repos=None):
     """Enrich claims with graphify edges (call graph, communities)."""
-    targets = repos or list(REPO_CONFIG.keys())
+    targets = _repo_targets(repos)
 
     for repo_name in targets:
         graph_path = get_graph_path(repo_name)
@@ -211,7 +212,7 @@ def cmd_enrich(repos=None):
 
 def cmd_diff(repos=None):
     """Detect stale claims by comparing stored graph hash with current."""
-    targets = repos or list(REPO_CONFIG.keys())
+    targets = _repo_targets(repos)
     stale_count = 0
 
     for repo_name in targets:
@@ -246,7 +247,7 @@ def cmd_status():
     print("=== Graphify Integration Status ===")
     print()
 
-    for repo_name, cfg in REPO_CONFIG.items():
+    for repo_name in _repo_targets():
         graph_path = get_graph_path(repo_name)
         hash_path = GRAPHS_DIR / f"{repo_name}-graph.hash"
 

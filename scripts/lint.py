@@ -37,7 +37,7 @@ VALID_TYPES = {
      "attested-computation",
 }
 PATTERN_STATUSES = {"candidate", "recommended", "standard", "deprecated"}
-EXCLUDE_DIRS = {".git", ".obsidian", ".opencode", "__pycache__", ".pytest_cache", ".venv", "venv", "node_modules"}
+EXCLUDE_DIRS = {".git", ".obsidian", ".opencode", "__pycache__", ".pytest_cache", ".venv", "venv", "node_modules", "graphify-out", "docs/site"}
 EXCLUDE_DIR_PREFIXES = ("evidence/traces", "system/always-on")
 TEMPLATE_DIRS = {"global/templates", "schemas", "templates"}
 HUB_KINDS = {"ontology", "registry", "index", "log"}
@@ -124,6 +124,16 @@ def md_files(vault):
         rel = p.relative_to(vault)
         parts = rel.parts
         if any(x in EXCLUDE_DIRS for x in parts):
+            continue
+        # two-level excludes ('docs/site'): match when the file's leading
+        # path segments equal the excluded dir's segments
+        skip = False
+        for d in EXCLUDE_DIRS:
+            segs = tuple(d.split("/"))
+            if len(segs) > 1 and parts[:len(segs)] == segs:
+                skip = True
+                break
+        if skip:
             continue
         rel_posix = rel.as_posix()
         if any(rel_posix.startswith(pref) for pref in EXCLUDE_DIR_PREFIXES):
@@ -379,6 +389,31 @@ def check_actors(fm, rel):
     return problems
 
 
+def check_llm_config(config):
+    """Deterministic fabric.yaml llm.* checks. Returns list of problems.
+    Shape rules:
+      - llm.local_model must be an on-device model id (HF '<org>/<repo>' with
+        an on-device org/repo shape, .gguf file/repo, or an existing local path)
+        — ollama-style tags ('name:tag') and provider namespaced ids
+        ('openai/gpt-4o') are rejected: they can never run on-device.
+    """
+    probs = []
+    llm = (config.get("llm") or {}) if isinstance(config, dict) else {}
+    lm = llm.get("local_model")
+    if lm in (None, "", "local"):
+        return probs
+    lm = str(lm).strip()
+    from pathlib import Path as _P
+    if _P(lm).expanduser().exists():
+        return probs  # existing path: fine
+    from fabric_config import looks_like_local_model
+    if not looks_like_local_model(lm):
+        probs.append(f"LLM-CONFIG llm.local_model: '{lm}' does not look like an "
+                     f"on-device model id (expected '<org>/<repo>' HF id, *.gguf, "
+                     f"or an existing local path)")
+    return probs
+
+
 def main():
     argv = sys.argv[1:]
     only_orphans = False
@@ -440,6 +475,12 @@ def main():
     pages = {}
     INDEX = set()
 
+    # 0. fabric.yaml llm config checks (local_model shape)
+    try:
+        errors.extend(check_llm_config(get_config()))
+    except Exception:
+        pass  # config unreadable: get_config defaults cover it
+
     # 1. collect pages
     for p, rel in md_files(vault):
         fm, body, err = parse_frontmatter(p)
@@ -449,7 +490,7 @@ def main():
         if not isinstance(fm, dict):
             fm = {}
         t = fm.get("type")
-        if t is not None and t not in VALID_TYPES:
+        if t is not None and t not in VALID_TYPES and not is_tpl(rel):
             errors.append("TYPE %s: unknown type %r" % (rel, t))
         if t in ("registry", "index"):
             for m in LINK_RE.finditer(strip_code(body)):
