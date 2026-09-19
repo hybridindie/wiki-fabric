@@ -44,3 +44,7 @@ venv/
 *.log
 .DS_Store
 .okflint/
+
+# graphify self-graph artifacts (regenerated: graphify --update; graph.json tracked)
+graphify-out/graph.html
+graphify-out/manifest.json
