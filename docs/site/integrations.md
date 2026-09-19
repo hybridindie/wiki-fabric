@@ -8,18 +8,16 @@ updated: 2026-09-19
 
 # Optional Integrations
 
-Integrations add capabilities on top of the core loop. They are declared in `fabric.yaml` (see [Configuration](./configuration)) and are **never load-bearing** — with the integration off, every script behaves exactly as the core docs describe.
+Integrations add capabilities on top of the core loop. They are declared in `fabric.yaml` (see [Configuration](./configuration)) and are **never load-bearing** — with the integration off, every script behaves exactly as the core docs describe. The design rule: *integrations add capabilities; they are never load-bearing.*
 
-Integrations are **off by default** and declared in `fabric.yaml`:
+## What each integration does
 
-```yaml
-integrations:
-  graphify:
-    enabled: true          # call-graph intelligence
-    graph_dir: graphify-out
-  embeddings:
-    enabled: false         # semantic re-ranking (planned)
-```
+| Integration | When active | Cost |
+|-------------|-------------|------|
+| **graphify** | claims carry `code_symbols` + `graph_edges` (doc→code provenance); `graphify-bridge --diff` adds AST staleness detection after refactors; query expansion follows call/import edges; code-reachable claims surface first | 0 tokens (AST + community detection) |
+| **embeddings** | semantic re-ranking of retrieval results (planned — off by default) | local inference |
+
+## Enabling
 
 ```bash
 wf integrations                    # show what's active and what it changes
@@ -27,7 +25,9 @@ wf install --with-graphify         # enable at install time
 wf update --with-graphify          # enable on an existing fabric
 ```
 
-**When graphify is active**, skills change behavior — each affected skill documents the delta:
+## Skill deltas when graphify is active
+
+Each affected skill documents its delta:
 
 | Skill | Inactive (default) | Active (`graphify.enabled: true`) |
 |-------|--------------------|-----------------------------------|
@@ -39,7 +39,9 @@ wf update --with-graphify          # enable on an existing fabric
 
 When graphify is inactive, every script runs exactly as before — the flag gates *additional* steps, never core ones. The design rule: **integrations add capabilities; they are never load-bearing.**
 
-The fabric carries its own self-graph: `graphify-out/` is a code+docs graph of
+## The fabric's self-graph
+
+The fabric carries its own graph: `graphify-out/` is a code+docs graph of
 `scripts/`, `README.md`, and `schemas/` (AST-extracted, 0 tokens). It maps the
 real module structure — god nodes (`get_config()`), communities, cross-module
 coupling — and is what the bridge diff/expand steps consult for claims about

@@ -15,7 +15,7 @@ linter (`lint --okf`) and the external `okflint` validator. That means any OKF
 consumer (Google's Knowledge Catalog, viz.html, Kiso static sites, OpenWiki, Roteiro)
 can read your fabric without wiki-fabric tooling — and you can consume theirs.
 
-### Trust & provenance (portable)
+## Trust & provenance (portable)
 
 ```yaml
 ---
@@ -30,7 +30,7 @@ verified:
 
 - **Actors** (§7): `agent/<owner>/<model>` · `human:<id>` · `process:<id>`
 
-#### Writing provenance: the actor convention
+### Writing provenance: the actor convention
 
 Every page's `generated.by` (and every `verified.by`) records *who* produced
 it, in one of three forms — lint rejects anything else:
@@ -55,7 +55,7 @@ rules for agent authors:
   `trust: human-reviewed > machine-confirmed > unverified` — advisory weighting at task time
 - **Promotion gate** (§5.2 + §10): `maturity >= 2` requires a `human:` verifier — lint-enforced
 
-### Attested computations (§10)
+## Attested computations (§10)
 
 Deterministic fabric operations are declared as sanctioned computations with
 executors and attesters, so a consumer can confirm a verdict ("recall 0.89 PASS")
@@ -69,14 +69,14 @@ references/attesters/    # deterministic receipt checks (no LLM)
 
 `promote` refuses to promote without a fresh attestation from the eval computation.
 
-### Exchange
+## Exchange
 
 ```bash
 wf okf export --out ./bundle [--scope all|global|<project|domain-slug>]
 wf okf import  ./their-bundle --scope team-a [--extract-claims]
 ```
 
-#### Export: your fabric as a portable bundle
+### Export: your fabric as a portable bundle
 
 `export` renders the fabric (or one scope's slice of it) as a directory of
 markdown + frontmatter that any OKF consumer can read. It is **byte-deterministic**
@@ -94,7 +94,7 @@ Wikilinks are rewritten to travel inside the bundle (dangling links don't ship).
 Raw captures ride along under `references/` (OKF §6.3: external material
 mirrors verbatim, never becomes a concept).
 
-#### Import: external knowledge as *quarantined evidence*
+### Import: external knowledge as *quarantined evidence*
 
 `import` never writes concepts directly into your fabric. Each imported page
 becomes a **raw capture** (`evidence/raw/<scope>-okf/`) with a source record

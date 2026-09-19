@@ -32,7 +32,9 @@ git remote add corpus git@github.com:your-org/wiki-fabric-corpus.git
 wf sync pull
 ```
 
-**How bootstrap meets the corpus:** when you `wf bootstrap` a project into a
+## How bootstrap meets the corpus
+
+**Bootstrap meets the corpus:** when you `wf bootstrap` a project into a
 fabric with a corpus remote, the bootstrap writes a small
 `projects/<slug>/README.md` (title, owner, date, upstream sources) into the
 namespace — that README syncs to the corpus, so teammates see *what* the new
@@ -42,7 +44,9 @@ on the remote ("New projects on the corpus (pull to receive)"); `wf sync pull`
 announces each namespace it delivers, with owner. Teammates discover
 new projects by pulling — nothing to configure on their side.
 
-**Conflict policy — review queue, never silent overwrite:** if two machines
+## Conflict policy: review queue, never silent overwrite
+
+ if two machines
 changed the same file, `wf sync pull` aborts the merge and writes a conflict
 dossier to `registry/conflicts/<date>/` containing *both* versions (ours vs
 theirs) side by side. The fabric stays clean; you decide. Unresolved conflicts
@@ -50,7 +54,9 @@ make `wf lint` fail (SYNC-CONFLICT errors) and block `wf sync push`, so a
 disagreement can't sneak into the shared truth. Resolve by picking the correct
 version for the source page, delete the conflict file, then push.
 
-**Why a separate remote from this public repo:** this repo is the public
+## Why a separate remote from this public repo
+
+ this repo is the public
 harness; your corpus is your private knowledge. Keeping them on different
 remotes means `wf update` (harness) never touches team content, and `wf sync`
 never publishes your corpus to a public URL.

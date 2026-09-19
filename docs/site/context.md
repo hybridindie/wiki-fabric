@@ -17,6 +17,8 @@ recursive filesystem scanning, no dumping the whole corpus, no LLM retrieval:
 wf context --task "Add token rotation to the OAuth service" --paths services/auth
 ```
 
+## What the manifest guarantees
+
 Output is a **context manifest** with three properties:
 
 1. **Scoped by precedence** — project decisions (highest) → domain patterns →

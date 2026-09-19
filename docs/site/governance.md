@@ -10,7 +10,6 @@ updated: 2026-09-19
 
 Agent-maintained knowledge raises hard questions: who verified this? does it still hold? how do you know the agent followed it? Each answer below points at the mechanism that enforces it — not a policy sentence.
 
-The hard questions for agent-maintained knowledge — with where the fabric answers them:
 
 | Question | The fabric's answer | Where it lives |
 |----------|--------------------|----------------|
@@ -23,8 +22,6 @@ The hard questions for agent-maintained knowledge — with where the fabric answ
 | How do we find stale pages after a dependency upgrade? | `review_after` dates lint-checked, sha256 staleness from capture drift, graphify AST diff flags code changes | lint `REVIEW-AFTER`; `graphify-bridge --diff` |
 
 None of these are promises in a README — each is a lint check or workflow gate in CI right now.
-
----
 
 ---
 
