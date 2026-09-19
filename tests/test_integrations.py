@@ -45,16 +45,43 @@ class TestIntegrationConfig:
 
 class TestGraphifyGate:
     def test_bridge_gate_respects_fabric_yaml(self):
-        """graphify-bridge gate: runs when fabric.yaml enables graphify (this
-        repo's fabric.yaml has it enabled); the gate itself is unit-tested via
-        is_integration_active in TestIntegrationConfig."""
+        """graphify-bridge gate: runs against a temp fabric whose fabric.yaml
+        enables graphify (independent of this repo's gitignored config, so it
+        holds in CI)."""
+        fab = self._make_fabric()
         out = subprocess.run(
-            [sys.executable, str(REPO / "scripts" / "graphify-bridge.py"), "--status"],
+            [sys.executable, str(fab / "scripts" / "graphify-bridge.py"), "--status"],
             capture_output=True, text=True,
-            env={"PATH": "/usr/bin:/bin"},
         )
         assert out.returncode == 0
         assert "Graphify Integration Status" in out.stdout
+
+    def test_bridge_gate_refuses_when_disabled(self):
+        """The gate: a fabric with graphify disabled gets the enable message,
+        not a crash."""
+        fab = self._make_fabric(enabled=False)
+        out = subprocess.run(
+            [sys.executable, str(fab / "scripts" / "graphify-bridge.py"), "--status"],
+            capture_output=True, text=True,
+        )
+        assert out.returncode == 0
+        assert "not enabled" in out.stdout
+
+    def _make_fabric(self, enabled=True):
+        scripts = Path(__file__).parent / "_bridge_fixture_scripts"
+        fab = Path(__file__).parent / "_bridge_fixture_fabric"
+        import shutil
+        if fab.exists():
+            shutil.rmtree(fab)
+        fab.mkdir(parents=True)
+        (fab / "scripts").mkdir()
+        for mod in ("graphify-bridge.py", "fabric_config.py", "wf_common.py"):
+            shutil.copy(REPO / "scripts" / mod, fab / "scripts" / mod)
+        (fab / "fabric.yaml").write_text(
+            f"owner: t\n"
+            f"integrations:\n  graphify:\n    enabled: {str(enabled).lower()}\n"
+            "repos:\n  fake-repo:\n    path: repos/fake-repo\n")
+        return fab
 
     def test_manifest_reports_integration_state(self, tmp_path):
         src = (REPO / "scripts" / "context.py").read_text()

@@ -125,6 +125,20 @@ def _config_fingerprint():
     return hashlib.sha1(f"{file_sig}|{env_sig}".encode()).hexdigest()
 
 
+def _merge_user_config(base, user_config):
+    """Merge a user config into a (already deep-copied) defaults dict.
+    Top-level keys: owner/llm/repos/domains/ignore/integrations/corpus.
+    Dicts merge shallowly at the top level; scalars/lists replace.
+    Does NOT mutate `base`."""
+    for key in ("owner", "llm", "repos", "domains", "ignore", "integrations", "corpus"):
+        if key in user_config and user_config[key] is not None:
+            if isinstance(base.get(key), dict) and isinstance(user_config[key], dict):
+                base[key].update(user_config[key])
+            else:
+                base[key] = user_config[key]
+    return base
+
+
 def get_config():
     """Load fabric.yaml, merged with defaults. Returns dict.
 
@@ -148,13 +162,7 @@ def get_config():
     if config_file and HAVE_YAML:
         try:
             user_config = yaml.safe_load(config_file.read_text()) or {}
-            # Merge top-level keys (ignore + integrations pass through verbatim)
-            for key in ("owner", "llm", "repos", "domains", "ignore", "integrations", "corpus"):
-                if key in user_config and user_config[key] is not None:
-                    if isinstance(config.get(key), dict) and isinstance(user_config[key], dict):
-                        config[key].update(user_config[key])
-                    else:
-                        config[key] = user_config[key]
+            config = _merge_user_config(config, user_config)
         except Exception:
             pass
 
