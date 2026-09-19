@@ -111,6 +111,11 @@ wf models ensure [--yes]      # check + offer download; --check exits 0/1 for sc
 
 Install the backends: `pip install -e ".[local]"`.
 
+**Quality expectations:** the default local models pass the golden-corpus eval
+(recall 0.89, quote-verbatim 0.96) and agree with the cloud compiler at G4
+0.68–0.78 — the full local-vs-cloud test story with numbers lives in
+[Model Policy & Evals](./evals#local-vs-cloud-what-the-small-model-tests-actually-showed).
+
 ## Connecting repos
 
 ```yaml

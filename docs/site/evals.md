@@ -139,6 +139,78 @@ on `finish_reason=length`.
 
 The tier table and provider setup live in [Configuration](./configuration#model-tiers-ops-vs-compiler-vs-local); this page covers the *policy* — why the compiler model is gated and how evals enforce it.
 
+## Local vs cloud: what the small-model tests actually showed
+
+The fabric's privacy tiering promises "sensitive repos extract on-device" —
+which is only honest if on-device models can actually extract claims at
+governance-grade quality. That's a testable claim, so it was tested. The
+findings below are recorded in `registry/log.md` with reproducible commands
+(`eval.py`, `eval-stability.py`).
+
+### The benchmark
+
+Both candidate small models ran the **golden corpus** (9 golden keys,
+recall/locator/quote-rate gates) plus the stability gates (G3 self-stability,
+G4 cross-model agreement against the cloud compiler):
+
+| Model | Size | Golden recall | Locator | Quote rate | Verdict |
+|-------|------|--------------|---------|------------|---------|
+| `qwen2.5-coder:7b` (GGUF/llama.cpp) | 4.7 GB | PASS | 1.0 PASS | 0.88 PASS | solid local fallback |
+| `gemma4:e4b` stock QAT | 6.1 GB | 0.89 PASS | 1.0 PASS | **0.65 FAIL** | close, two gates failed |
+| `gemma4:e4b-fixed` (temp 0.1 baked) | 6.1 GB | 0.89 PASS | 1.0 PASS | **0.96 PASS** | **viable local compiler** |
+| `deepseek-v4.1-flash:cloud` | — | 0.89 | 1.0 | 0.96 | precision-critical tier |
+
+### The interesting part: two fixes, not a bigger model
+
+The stock gemma4 E4B failed the quote-verbatim gate — 35% of returned quotes
+were markdown-normalized paraphrases, not verbatim source. Two fixes closed it:
+
+1. **Deterministic quote repair** (in `verify_and_fix_locators`): models strip
+   markdown artifacts and join lines; a fuzzy-match pass rewrites model quotes
+   back to the true verbatim source text. Quote rate 0.65 → **0.96** — and
+   this fix benefits *every* model, cloud included.
+2. **Temperature baked into the model build**: the stock QAT gemma ships
+   temperature 1.0, silently overriding API calls. A fixed variant (temp 0.1 +
+   top_k 10) made G3 self-stability pass.
+
+Lesson: **small-model failures were often contract failures.** The same
+pattern as the G4 model-sensitivity finding — when 5 models disagreed wildly
+(fuzzy 0.28–0.59), the fix wasn't a bigger model, it was an explicit
+granularity spec in the extraction prompt (one verifiable fact per claim,
+target 5–12), after which all 10 pairwise G4 checks passed (0.75–0.85).
+
+### What small models cost you
+
+Honest accounting from the runs:
+
+| Dimension | Cloud compiler (deepseek-v4.1) | Local gemma4 E4B |
+|-----------|-------------------------------|------------------|
+| Golden recall | 0.89 | 0.89 (ties) |
+| Cross-agreement (G4 vs deepseek) | — | 0.78 (bar 0.75, target 0.8) |
+| Latency | ~5–6s/fixture | ~6.1s/fixture (MLX/GGUF on Apple Silicon) |
+| Memory | — | ~6 GB (4-bit), one model at a time |
+| Privacy | raw docs leave the machine | zero egress |
+| Cost | tokens per document | zero |
+
+The 0.78-vs-0.8 G4 shortfall is small-model capability variance — acceptable
+**for the local tier**, because the architecture assigns the
+precision-critical path to the cloud compiler. The local tier exists for
+privacy and availability, not to beat the cloud on recall.
+
+### Policy consequences
+
+- The compiler-eval gate (promote/mine refuse without a recorded PASS eval)
+  applies to whichever model does compiler work — local routes included. A
+  local compiler needs its own golden-corpus pass before it can drive
+  promotion.
+- `llm.local_model` defaults are models that **passed** the corpus; swapping
+  them for untested small models is exactly the G4 lesson — re-run
+  `eval.py` + `eval-stability.py --record` first.
+- Extraction quality varies more by *prompt contract* than by model within a
+  capability class — that's why the prompt is versioned, and prompt changes
+  require re-baselining (the granularity-spec change was re-baselined against
+  the golden corpus first: recall 0.89, locator 1.0, before rolling out).
+
 Claim extraction is *compiler work* — it compiles sources into the fabric's
 canonical evidence — so it runs on a policy-designated **compiler model**, not
 whatever model is configured for cheap queries:
