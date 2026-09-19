@@ -18,13 +18,10 @@ import yaml
 import argparse
 from pathlib import Path
 from datetime import date
+from wf_common import slugify
 
 VAULT_ROOT = Path(__file__).parent.parent
 PROJECTS_DIR = VAULT_ROOT / "projects"
-
-
-def slugify(text):
-    return re.sub(r'[^a-z0-9]+', '-', text.lower()).strip('-')
 
 
 def get_projects():

@@ -16,6 +16,7 @@ from pathlib import Path
 from collections import defaultdict
 from datetime import datetime
 from datetime import timedelta
+from wf_common import parse_frontmatter
 
 try:
     from sentence_transformers import SentenceTransformer
@@ -45,51 +46,6 @@ def escape_yaml(value):
     if '[' in value or ']' in value or ':' in value or '#' in value or '"' in value:
         return '"' + value.replace('"', '\\"') + '"'
     return value
-
-
-def parse_frontmatter(path):
-    text = path.read_text(encoding="utf-8", errors="replace")
-    m = re.match(r"^---\n(.*?)\n---\n(.*)$", text, re.DOTALL)
-    if not m:
-        return {}, text
-    raw, body = m.group(1), m.group(2)
-    try:
-        fm = yaml.safe_load(raw) or {}
-    except Exception:
-        fm = {}
-    return fm, body
-
-
-def extract_experience_events():
-    """Extract all experience events from projects/*/experience-events/"""
-    events = []
-    for exp_file in (VAULT_ROOT / "projects").rglob("experience-events/*.md"):
-        fm, body = parse_frontmatter(exp_file)
-        if fm.get("type") == "experience-event":
-            fm["_file"] = exp_file
-            fm["_body"] = body
-            events.append(fm)
-    return events
-
-
-def parse_frontmatter(path):
-    text = path.read_text(encoding="utf-8", errors="replace")
-    m = re.match(r"^---\n(.*?)\n---\n(.*)$", text, re.DOTALL)
-    if not m:
-        return {}, text
-    raw, body = m.group(1), m.group(2)
-    if HAVE_YAML:
-        try:
-            fm = yaml.safe_load(raw) or {}
-        except Exception:
-            fm = {}
-    else:
-        fm = {}
-        for line in raw.splitlines():
-            mm = re.match(r"([\w-]+):\s*(.*)$", line)
-            if mm:
-                fm[mm.group(1)] = mm.group(2).strip().strip("'\"") or None
-    return fm, body
 
 
 def get_event_embedding(event, model=None):
@@ -286,14 +242,15 @@ def escape_yaml(value):
     return value
 
 
-def _mine_actor():
+def _mine_actor(model=None):
     """Actor for dossier generation: agent/<owner>/<dossier-model>."""
     from fabric_config import get_config, actor
-    return actor(get_config(), "agent")
+    return actor(get_config(), "agent", model=model)
 
 
-def generate_dossier(cluster_key, events):
-    """Generate a promotion dossier markdown."""
+def generate_dossier(cluster_key, events, local_model=None):
+    """Generate a promotion dossier markdown. local_model set => the cluster
+    routed local; the actor records the on-device model actually in use."""
     projects = set(ev.get("project", "") for ev in events)
     domains = set()
     for ev in events:
@@ -328,7 +285,7 @@ type: promotion-dossier
 id: promotion-{cluster_key}
 title: "Promotion proposal: {cluster_key.replace('_', '-')}"
 description: "Cross-project promotion dossier mined from independent projects"
-generated: {{ by: "{_mine_actor()}", at: "{_at}" }}
+generated: {{ by: "{_mine_actor(model=local_model)}", at: "{_at}" }}
 status: pending-review
 created: {datetime.now().strftime('%Y-%m-%d')}
 pattern_ref: "[[pattern-{cluster_key}]]"
@@ -590,22 +547,49 @@ def main():
         return
     
     # Compiler-eval gate (policy: model swaps are compiler changes). Dry-run exempt.
-    from fabric_config import get_config, compiler_eval_recorded
-    ok, why = compiler_eval_recorded(get_config())
+    from fabric_config import (get_config, compiler_eval_recorded,
+                               get_stage_route, is_local_route, ensure_local_model)
+    _cfg = get_config()
+    ok, why = compiler_eval_recorded(_cfg)
     if not ok:
         print(f"BLOCKED: {why}")
         print("Policy: dossier generation requires a recorded compiler eval for the compiler model.")
         print("Run: python3 scripts/eval-stability.py --models <compiler-model> --record")
         sys.exit(2)
 
+    # Dossier stage routing: when every project in a cluster routes its dossier
+    # stage local, generate on-device (experience events may be sensitive).
+    # Mixed clusters (any cloud) stay on the compiler model — a dossier's
+    # evidence pool is only as private as its least-private input.
+    def _route_for_cluster(cluster_events):
+        projects = sorted({ev.get("project", "") for ev in cluster_events})
+        for p in projects:
+            if not is_local_route(_cfg, p, "dossier"):
+                return None, None
+        return "local", get_stage_route(_cfg, projects[0], "dossier") if projects else None
+
+    _local_model = None
+    if clusters:
+        all_events = [ev for evs in clusters.values() for ev in evs]
+        _local, _m = _route_for_cluster(all_events)
+        # Pre-flight: front-load the download prompt before generation starts.
+        if _local == "local":
+            ensure_local_model(_m, config=_cfg)
+            _local_model = _m
+
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     for cluster_key, events in clusters.items():
-        # Generate dossier
-        dossier = generate_dossier(cluster_key, events)
+        # Generate dossier (local when every contributing project routes local)
+        route, model_for_cluster = _route_for_cluster(events)
+        if route == "local":
+            _actor_model = model_for_cluster
+        else:
+            _actor_model = _cfg.get("llm", {}).get("compiler_model") or _cfg.get("llm", {}).get("model") or "unknown"
+        dossier = generate_dossier(cluster_key, events, model_for_cluster if route == "local" else None)
         dossier_path = Path(args.output_dir) / f"promotion-{cluster_key}.md"
         dossier_path.write_text(dossier)
-        print(f"Created dossier: {dossier_path}")
+        print(f"Created dossier: {dossier_path} (route: {route or 'cloud'})")
         
         # Generate pattern file
         pattern_content = generate_pattern_file(cluster_key, events)

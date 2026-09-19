@@ -7,24 +7,11 @@ import sys
 import re
 from pathlib import Path
 from datetime import date, datetime
+from wf_common import parse_frontmatter
 
 VAULT_ROOT = Path(__file__).parent.parent
 PROMOTION_QUEUE = VAULT_ROOT / "registry" / "promotion-queue.md"
 PROMOTIONS_DIR = VAULT_ROOT / "registry" / "promotions"
-
-def parse_frontmatter(path):
-    text = path.read_text(encoding="utf-8", errors="replace")
-    m = re.match(r"^---\n(.*?)\n---\n(.*)$", text, re.DOTALL)
-    if not m:
-        return {}, text
-    raw, body = m.group(1), m.group(2)
-    try:
-        import yaml
-        fm = yaml.safe_load(raw) or {}
-    except Exception:
-        fm = {}
-    return fm, body
-
 
 def write_frontmatter(path, fm, body):
     import yaml

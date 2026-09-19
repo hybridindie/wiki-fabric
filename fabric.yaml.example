@@ -22,6 +22,14 @@ llm:
   # Policy (eval-stability G4): compiler work needs the most capable model; model
   # swaps require a recorded compiler eval (promote/mine refuse without it).
 
+  # local_model: resolves repos.<slug>.<stage>="local" routes (extraction,
+  # synthesis on-device). Default when unset — platform-split:
+  #   Apple Silicon: mlx-community/gemma-4-e4b-it-4bit   (MLX, 34s/doc)
+  #   other:         unsloth/gemma-4-e4b-it-GGUF         (llama.cpp/GGUF)
+  # Missing models are offered for download at first use (human-gated), or
+  # pre-fetch with: wf models ensure [--yes]
+  # local_model: mlx-community/gemma-4-e4b-it-4bit
+
 repos:
   # my-project:
   #   path: ../my-project               # relative to fabric root, or absolute
@@ -32,7 +40,8 @@ repos:
 #   #   synthesize: concept synthesis from claims (sees sanitized statements)
 #   #   dossier:    promotion dossier generation (sees experience events)
 #   #
-#   # Values: "cloud" (default) | "local" (mlx backend, macOS only) | explicit model name
+#   # Values: "cloud" (default) | "local" (on-device; MLX on macOS, GGUF
+#   # elsewhere — see llm.local_model) | explicit model name
 #   extract: local                        # raw docs never leave the machine
 #   synthesize: local                     # extracted claims stay local too
 #   dossier: cloud                        # experience events are safe for cloud

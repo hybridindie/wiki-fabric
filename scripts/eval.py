@@ -15,15 +15,12 @@ from datetime import date
 
 sys.path.insert(0, str(Path(__file__).parent))
 from ingest import extract_claims, VAULT_ROOT
+from wf_common import norm
+from eval_core import concept_match
 
 EVAL_DIR = VAULT_ROOT / "evaluations"
 FIXTURES_DIR = EVAL_DIR / "fixtures"
 EXPECTED_DIR = EVAL_DIR / "expected"
-
-
-def norm(s):
-    """Normalize text for fuzzy matching."""
-    return re.sub(r'[^a-z0-9]+', ' ', s.lower()).strip()
 
 
 def extract_expected():
@@ -56,34 +53,6 @@ def extract_contradictions():
     except Exception:
         return []
     return data if isinstance(data, list) else []
-
-
-def concept_match(golden_key, statement):
-    """Loose semantic match: check for key concept overlap."""
-    gk_n = norm(golden_key)
-    stmt_n = norm(statement)
-
-    # 1. Exact substring
-    if gk_n in stmt_n:
-        return True
-
-    # 2. All-words substring
-    gk_words = set(gk_n.split())
-    if gk_words and gk_words.issubset(set(stmt_n.split())):
-        return True
-
-    # 3. Concept overlap: extract distinctive words (skip stopwords) and check overlap
-    stopwords = {"the", "a", "an", "is", "of", "to", "in", "and", "or", "for", "on",
-                 "with", "at", "by", "from", "that", "this", "it", "as", "be", "are",
-                 "makes", "produces", "yields", "gives", "fails", "crashes"}
-    gk_content = gk_words - stopwords
-    stmt_words = set(stmt_n.split())
-    if gk_content:
-        overlap = len(gk_content & stmt_words) / len(gk_content)
-        if overlap >= 0.6:
-            return True
-
-    return False
 
 
 def score_fixture(fixture_name, extracted_claims, golden_spec):

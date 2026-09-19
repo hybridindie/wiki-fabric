@@ -10,10 +10,12 @@ fabric.yaml schema:
       base_url: http://localhost:11434/v1   # any OpenAI-compatible endpoint
       api_key: ollama                        # or a real key for cloud providers
       model: qwen2.5-coder:7b
+      local_model: mlx-community/gemma-4-e4b-it-4bit   # resolves "local" routes
     repos:
       my-project:
         path: ../my-project          # relative to fabric root, or absolute
         graph_dir: graphify-out       # optional, for graphify integration
+        extract: local               # route: "cloud" | "local" | explicit model
     domains:
       agent-systems:
         signals: [agent, mcp, fastmcp, opencode, claude]
@@ -35,6 +37,14 @@ except ImportError:
 FABRIC_ROOT = Path(__file__).parent.parent
 CONFIG_FILENAME = "fabric.yaml"
 
+# Local-model defaults (platform-split): MLX on Apple Silicon, GGUF elsewhere.
+# mlx-community/... and unsloth/... repos are HuggingFace ids resolvable by
+# mlx_lm.load / llama-cpp-python. See get_local_model() + ensure_local_model().
+DEFAULT_LOCAL_MODELS = {
+    "darwin": "mlx-community/gemma-4-e4b-it-4bit",
+    "default": "unsloth/gemma-4-e4b-it-GGUF",
+}
+
 # Defaults when no fabric.yaml exists
 _DEFAULTS = {
     "owner": "you",
@@ -47,6 +57,9 @@ _DEFAULTS = {
         # Policy (eval-stability G4): compiler runs need the most capable model —
         # cross-model extraction disagreement is capability-correlated.
         "compiler_model": "deepseek-v4.1-flash:cloud",
+        # local model: resolves repos.<slug>.<stage>="local" routes.
+        # Platform default (see DEFAULT_LOCAL_MODELS) or explicit HF id.
+        "local_model": None,
     },
     "repos": {},
     "integrations": {
@@ -95,14 +108,42 @@ def _find_config_file():
     return None
 
 
+_CONFIG_CACHE = None  # (fingerprint, config)
+
+
+def _config_fingerprint():
+    """Cheap identity of the config inputs: file mtime+size and the env vars
+    that get_config() folds in. Invalidates the per-process cache when either
+    changes (tests flip env vars; nothing else mutates mid-run)."""
+    import hashlib
+    config_file = _find_config_file()
+    stat = config_file.stat() if (config_file and config_file.exists()) else None
+    file_sig = f"{stat.st_mtime_ns}:{stat.st_size}" if stat else "none"
+    env_sig = "|".join(f"{k}={os.environ.get(k, '')}" for k in (
+        "WIKI_LLM_BASE_URL", "WIKI_LLM_API_KEY", "WIKI_LLM_MODEL",
+        "WIKI_LLM_COMPILER_MODEL", "WIKI_LLM_LOCAL_MODEL"))
+    return hashlib.sha1(f"{file_sig}|{env_sig}".encode()).hexdigest()
+
+
 def get_config():
-    """Load fabric.yaml, merged with defaults. Returns dict."""
+    """Load fabric.yaml, merged with defaults. Returns dict.
+
+    Memoized per process, keyed on the config file's mtime/size + the LLM env
+    overrides — batch runs (ingest workers, mine-promotions) parse the YAML
+    once instead of on every call. Call get_config.invalidate() (or flip an
+    env var) when you need a guaranteed re-read."""
+    global _CONFIG_CACHE
+    fp = _config_fingerprint()
+    if _CONFIG_CACHE is not None and _CONFIG_CACHE[0] == fp:
+        return _CONFIG_CACHE[1]
+
     config_file = _find_config_file()
 
-    config = dict(_DEFAULTS)
-    config["llm"] = dict(_DEFAULTS["llm"])
-    config["repos"] = dict(_DEFAULTS.get("repos", {}))
-    config["domains"] = dict(_DEFAULTS.get("domains", {}))
+    # Deep copy: _DEFAULTS contains nested dicts (llm/integrations/domains) and
+    # the merge below .update()s them — a shallow copy leaked user config into
+    # _DEFAULTS for the life of the process (visible once results are cached).
+    import copy
+    config = copy.deepcopy(_DEFAULTS)
 
     if config_file and HAVE_YAML:
         try:
@@ -123,8 +164,18 @@ def get_config():
     config["llm"]["model"] = os.environ.get("WIKI_LLM_MODEL", config["llm"]["model"])
     config["llm"]["compiler_model"] = os.environ.get(
         "WIKI_LLM_COMPILER_MODEL", config["llm"].get("compiler_model") or config["llm"]["model"])
+    config["llm"]["local_model"] = os.environ.get(
+        "WIKI_LLM_LOCAL_MODEL", config["llm"].get("local_model") or None)
 
+    _CONFIG_CACHE = (fp, config)
     return config
+
+
+def get_config_clear_cache():
+    """Force the next get_config() to re-read from disk (tests, long-running
+    processes that must observe fabric.yaml edits)."""
+    global _CONFIG_CACHE
+    _CONFIG_CACHE = None
 
 
 def resolve_repo_path(config, repo_name):
@@ -162,6 +213,21 @@ def get_owner(config):
 
 
 
+def get_local_model(config=None):
+    """Resolve the local-model default: llm.local_model from fabric.yaml, then
+    WIKI_LLM_LOCAL_MODEL (env), then the platform default — MLX on Apple
+    Silicon, GGUF elsewhere. Returns a HuggingFace model id."""
+    if config is None:
+        config = get_config()
+    explicit = (config.get("llm", {}) or {}).get("local_model")
+    if explicit and str(explicit).strip():
+        return str(explicit).strip()
+    env = os.environ.get("WIKI_LLM_LOCAL_MODEL")
+    if env and env.strip():
+        return env.strip()
+    return DEFAULT_LOCAL_MODELS.get(sys.platform, DEFAULT_LOCAL_MODELS["default"])
+
+
 def get_stage_route(config, repo_name=None, stage="extract"):
     """Resolve the LLM model for a workflow stage in a repo.
 
@@ -174,11 +240,10 @@ def get_stage_route(config, repo_name=None, stage="extract"):
         1. repos.<repo>.<stage>          (per-repo override: "local" | "cloud" | model name)
         2. repos.<repo>.extract           (fallback for any unconfigured stage)
         3. llm.compiler_model            (cloud default)
-    Returns a model string. "local" maps to WIKI_MLX_MODEL or
-    mlx-community/gemma-4-e4b-it-4bit. "cloud" maps to llm.compiler_model.
+    Returns a model string. "local" maps to llm.local_model (see
+    get_local_model); "cloud" maps to llm.compiler_model. A local_model set in
+    fabric.yaml overrides the WIKI_MLX_MODEL env default for mlx routes.
     """
-    import os
-    DEFAULT_LOCAL = os.environ.get("WIKI_MLX_MODEL", "mlx-community/gemma-4-e4b-it-4bit")
     cloud = (config.get("llm", {}).get("compiler_model")
              or config.get("llm", {}).get("model") or "deepseek-v4.1-flash:cloud")
     if not repo_name:
@@ -186,23 +251,166 @@ def get_stage_route(config, repo_name=None, stage="extract"):
     repo_cfg = (config.get("repos") or {}).get(repo_name) or {}
     route = repo_cfg.get(stage) or repo_cfg.get("extract") or "cloud"
     if route == "local":
-        if sys.platform != "darwin":
-            import warnings
-            warnings.warn(
-                f"repos.{repo_name}.{stage}='local' requires macOS (mlx-lm is Apple Silicon only); "
-                f"falling back to cloud ({cloud})",
-                stacklevel=2)
-            return cloud
-        return DEFAULT_LOCAL
+        # Cross-platform: MLX on Apple Silicon, GGUF elsewhere (local_llm.py
+        # picks the backend from the model-id shape).
+        return os.environ.get("WIKI_MLX_MODEL") or get_local_model(config)
     if route == "cloud":
         return cloud
     return route  # explicit model name
 
 
+def find_local_model_path(model_id):
+    """Return a local filesystem path when model_id points at a local dir, or a
+    cached HuggingFace snapshot path for an hf id. None when not present locally."""
+    p = Path(model_id).expanduser()
+    if p.is_dir():
+        return p
+    if "/" not in model_id or model_id.startswith("http"):
+        return None
+    hf_home = os.environ.get("HF_HOME") or str(Path.home() / ".cache" / "huggingface")
+    hub_dir = Path(os.environ.get("HF_HUB_CACHE") or (Path(hf_home) / "hub"))
+    repo_dir = hub_dir / ("models--" + model_id.replace("/", "--"))
+    if not repo_dir.is_dir():
+        return None
+    snapshots = repo_dir / "snapshots"
+    if snapshots.is_dir():
+        for snap in sorted(snapshots.iterdir()):
+            if ((snap / "config.json").exists() or (snap / "tokenizer_config.json").exists()
+                    or any(snap.glob("*.gguf"))):
+                return snap
+    return None
+
+
+# Quantization preference when a GGUF repo ships multiple splits. Regexes
+# matched (case-insensitive) against root-level filenames, in order.
+GGUF_QUANT_PREFERENCE = [r"q4_k_m", r"q4_k_s", r"q4[^_]*_", r"q4"]
+
+
+def gguf_preferred_file(model_id):
+    """Preferred root-level .gguf filename in a HF repo (None when unlistable)."""
+    import re
+    try:
+        from huggingface_hub import HfApi
+        files = HfApi().list_repo_files(model_id)
+        root_ggufs = sorted(f for f in files if f.lower().endswith(".gguf") and "/" not in f)
+        for rx in GGUF_QUANT_PREFERENCE:
+            hits = [f for f in root_ggufs if re.search(rx, f.lower())]
+            if hits:
+                return hits[0]
+        return root_ggufs[0] if root_ggufs else None
+    except Exception:
+        return None
+
+
+_ENSURE_LOCK = None
+
+
+def _ensure_lock():
+    """Process-wide lock so concurrent ingest workers don't prompt/download twice."""
+    global _ENSURE_LOCK
+    if _ENSURE_LOCK is None:
+        import threading
+        _ENSURE_LOCK = threading.Lock()
+    return _ENSURE_LOCK
+
+
+def ensure_local_model(model_id=None, assume_yes=False, config=None):
+    """Check the local model is present (local dir or HF cache); offer to
+    download it when missing. Returns (path_or_None, downloaded_bool).
+
+    Human-gated: prompts before any network write unless assume_yes (CI /
+    non-tty). Never raises — callers degrade to cloud on (None, False).
+    Thread-safe: concurrent workers serialize here.
+    """
+    model_id = model_id or get_local_model(config)
+    if find_local_model_path(model_id) or Path(model_id).exists():
+        return model_id, False
+    with _ensure_lock():
+        # Re-check inside the lock: another worker may have finished while we waited.
+        if find_local_model_path(model_id) or Path(model_id).exists():
+            return model_id, False
+
+        is_tty = False
+        try:
+            is_tty = sys.stdin.isatty() and sys.stdout.isatty()
+        except Exception:
+            pass
+        if not (assume_yes or is_tty):
+            print(f"local model '{model_id}' not found locally; "
+                  f"download with: wf models ensure (or --yes)", file=sys.stderr)
+            return None, False
+
+        size_hint = "~2-4 GB" if "4bit" in model_id or "GGUF" in model_id else "multi-GB"
+        if not assume_yes:
+            try:
+                answer = input(f"Local model '{model_id}' not found — download from "
+                               f"HuggingFace ({size_hint})? [y/N] ")
+            except (EOFError, KeyboardInterrupt):
+                answer = ""
+            if answer.strip().lower() not in ("y", "yes"):
+                print("Skipping download — local routes will fall back or fail.", file=sys.stderr)
+                return None, False
+
+        print(f"Downloading {model_id} from HuggingFace ({size_hint})...", file=sys.stderr)
+        try:
+            from huggingface_hub import snapshot_download, hf_hub_download
+            if "gguf" in model_id.lower():
+                # GGUF repos ship many quantization splits; fetch only the
+                # preferred one (root-level, Q4_K_M first) — a blanket
+                # snapshot_download("*.gguf") would pull every split.
+                filename = gguf_preferred_file(model_id)
+                if filename:
+                    hf_hub_download(model_id, filename)
+                    print(f"Downloaded: {model_id} ({filename})", file=sys.stderr)
+                    return model_id, True
+            snapshot_download(model_id)
+            print(f"Downloaded: {model_id}", file=sys.stderr)
+            return model_id, True
+        except Exception as e:
+            print(f"download failed: {e}\n"
+                  f"Install huggingface_hub (pip install huggingface_hub) or download manually.",
+                  file=sys.stderr)
+            return None, False
+
+
 def is_local_route(config, repo_name=None, stage="extract"):
-    """True when the stage's route resolves to a local (mlx) model."""
+    """True when the stage's route resolves to an on-device model (MLX/GGUF)."""
     model = get_stage_route(config, repo_name, stage)
-    return "/" in model and not model.startswith("http")
+    return looks_like_local_model(model)
+
+
+# Known OpenAI-compatible provider prefixes whose "/"-namespaced ids are NOT
+# on-device HF repos (e.g. openai/gpt-4o on OpenRouter).
+_PROVIDER_PREFIXES = {
+    "openai", "anthropic", "google", "mistralai", "meta-llama", "microsoft",
+    "deepseek", "qwen", "openrouter", "together", "cohere", "x-ai", "amazon",
+    "azure", "perplexity", "groq", "fireworks", "deepseek-ai", "moonshot",
+    "baichuan", "zai", "liquid", "nousresearch", "sao10k", "undi95",
+}
+
+
+def looks_like_local_model(model_id):
+    """Heuristic: True when a model string should run on-device.
+    Matches the local backend's own shapes: local paths, .gguf ids, mlx ids,
+    and '<org>/<repo>' HF ids that are not a known cloud-provider namespace."""
+    m = str(model_id or "")
+    if not m or m.startswith("http"):
+        return False
+    if Path(m).expanduser().is_dir() or m.lower().endswith(".gguf"):
+        return True
+    if "mlx" in m.lower() or "gguf" in m.lower():
+        return True
+    if "/" not in m:
+        return False
+    first = m.split("/", 1)[0].lower()
+    if first in _PROVIDER_PREFIXES:
+        return False
+    # HF org ids: second segment must look like a repo name (no ':' port),
+    # and the whole id must not be a host:port/base-url string.
+    if ":" in m.split("/", 1)[1]:
+        return False
+    return True
+
 
 def actor(config, kind="agent", model=None):
     """OKF v0.2 §7 actor convention string.

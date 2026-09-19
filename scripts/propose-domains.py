@@ -23,6 +23,7 @@ from collections import Counter, defaultdict
 
 sys.path.insert(0, str(Path(__file__).parent))
 from fabric_config import get_config, FABRIC_ROOT, resolve_repo_path, get_all_repo_names, get_domain_signals
+from wf_common import parse_frontmatter
 
 VAULT_ROOT = FABRIC_ROOT
 ONTOLOGY_PATH = VAULT_ROOT / "schemas" / "ontology.md"
@@ -58,17 +59,6 @@ def match_signal(dep_or_tag, signal_lookup):
 STOPWORDS = {"the", "a", "an", "is", "of", "to", "in", "and", "or", "for", "on",
              "with", "at", "by", "from", "that", "this", "it", "as", "be", "are",
              "was", "were", "repo", "snapshot", "capture", "test", "doc", "log"}
-
-
-def parse_frontmatter(path):
-    text = path.read_text(encoding="utf-8", errors="replace")
-    m = re.match(r"^---\n(.*?)\n---\n(.*)$", text, re.DOTALL)
-    if not m:
-        return {}, ""
-    try:
-        return (yaml.safe_load(m.group(1)) or {}), m.group(2)
-    except Exception:
-        return {}, ""
 
 
 def scan_repo_tech_stack(repo_path, signal_lookup):

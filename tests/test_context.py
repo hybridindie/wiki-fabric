@@ -167,9 +167,10 @@ class TestOutputs:
         src = (REPO / "scripts" / "context.py").read_text()
         (tmp_path / "scripts").mkdir()
         (tmp_path / "scripts" / "context.py").write_text(src)
-        # context.py imports fabric_config from its own dir
-        (tmp_path / "scripts" / "fabric_config.py").write_text(
-            (REPO / "scripts" / "fabric_config.py").read_text())
+        # context.py imports fabric_config + wf_common from its own dir
+        for dep in ("fabric_config.py", "wf_common.py"):
+            (tmp_path / "scripts" / dep).write_text(
+                (REPO / "scripts" / dep).read_text())
         out = subprocess.run(
             [sys.executable, str(tmp_path / "scripts" / "context.py"),
              "--task", "token rotation", "--format", "json"],

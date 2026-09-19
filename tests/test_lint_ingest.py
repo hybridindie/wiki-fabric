@@ -72,6 +72,36 @@ class TestLintHelpers:
         assert lint_mod.is_tpl(Path("schemas/frontmatter.md"))
         assert not lint_mod.is_tpl(Path("evidence/claims/claim-x.md"))
 
+    def test_repo_meta_needs_no_frontmatter(self, tmp_path):
+        """Regression: README/CONTRIBUTING are visitor-facing repo pages —
+        no frontmatter required (and an unknown type there isn't a fabric
+        type error). The VitePress site dir is also excluded."""
+        (tmp_path / "README.md").write_text("# Just a readme, no frontmatter\n")
+        (tmp_path / "docs" / "site").mkdir(parents=True)
+        (tmp_path / "docs" / "site" / "index.md").write_text("no fm either")
+        # fabric-y page still requires frontmatter
+        (tmp_path / "evidence").mkdir()
+        (tmp_path / "evidence" / "claims").mkdir()
+        (tmp_path / "evidence" / "claims" / "claim-x.md").write_text("# no fm\n")
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = lint_mod.main.__wrapped__(tmp_path) if hasattr(lint_mod.main, "__wrapped__") else None
+        # run lint by invoking its checks directly (main() parses argv)
+        import sys as _sys
+        old_argv = _sys.argv
+        _sys.argv = ["lint.py", str(tmp_path)]
+        try:
+            with contextlib.redirect_stdout(buf):
+                rc = lint_mod.main()
+        finally:
+            _sys.argv = old_argv
+        out = buf.getvalue()
+        assert "FRONTMATTER README.md" not in out
+        assert "FRONTMATTER docs/site/" not in out
+        assert "FRONTMATTER evidence/claims/claim-x.md" in out
+        assert "TYPE README.md" not in out
+
 
 class TestIngestLineNumbers:
     def test_number_lines_prefixes(self):

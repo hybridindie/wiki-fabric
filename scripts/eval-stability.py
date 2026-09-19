@@ -37,6 +37,9 @@ import statistics
 from pathlib import Path
 from datetime import date
 
+sys.path.insert(0, str(Path(__file__).parent))
+from eval_core import jaccard, fuzzy_coverage
+
 REPO_ROOT = Path(__file__).parent.parent
 
 # The stability probe source: deliberately knowledge-dense, distinct statements,
@@ -114,32 +117,6 @@ def claim_statements(claims_dir):
             s = re.sub(r"\s+", " ", s).strip()
             out.add(s)
     return out
-
-
-def jaccard(a, b):
-    if not a and not b:
-        return 1.0
-    return len(a & b) / len(a | b)
-
-
-def fuzzy_coverage(source_set, target_set, threshold=0.7):
-    """Mean best token-Jaccard of each source statement against target_set —
-    robust to minor wording drift that exact-set Jaccard over-penalizes."""
-    src = {s: set(s.split()) for s in source_set}
-    tgt = {s: set(s.split()) for s in target_set}
-    if not src:
-        return 1.0
-    vals = []
-    for toks in src.values():
-        best = 0.0
-        for tt in tgt.values():
-            u = len(toks | tt)
-            if u:
-                best = max(best, len(toks & tt) / u)
-        vals.append(best)
-    return statistics.mean(vals)
-
-
 
 
 def gate_context_determinism(tmp, runs=20):

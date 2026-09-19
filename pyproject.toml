@@ -14,10 +14,21 @@ dependencies = [
 
 [project.optional-dependencies]
 embeddings = ["numpy", "sentence-transformers"]
+# On-device compiler routes (llm.local_model): HF download + backends.
+# llama-cpp-python (GGUF) is universal — the recommended testing backend;
+# mlx-lm is Apple-Silicon-only (faster on M-series when installed).
+local = [
+    "huggingface_hub>=0.24",
+    "llama-cpp-python>=0.3; sys_platform == 'darwin' or sys_platform == 'linux'",
+    "mlx-lm>=0.19; sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
 dev = ["pytest>=8.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "live: runs real on-device models (GGUF/MLX) — slow; deselect with -m 'not live'",
+]
 
 [tool.uv]
 package = false

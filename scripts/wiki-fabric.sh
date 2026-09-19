@@ -192,6 +192,7 @@ ensure_directories() {
 interactive_setup() {
     local install_dir="$1"
     local cfg="${install_dir}/fabric.yaml"
+    local cfg_dir="${install_dir}"
 
     echo ""
     echo "════════════════════════════════════════════"
@@ -231,6 +232,15 @@ interactive_setup() {
     read -p "  Compiler model [deepseek-v4.1-flash:cloud]: " compiler_model
     compiler_model="${compiler_model:-deepseek-v4.1-flash:cloud}"
 
+    # Local model default (platform-split: MLX on Apple Silicon, GGUF elsewhere)
+    local local_model
+    local_model=$(run_python "${cfg_dir}" -c "
+import sys; sys.path.insert(0, '${cfg_dir}/scripts')
+from fabric_config import get_local_model; print(get_local_model())" 2>/dev/null)
+    [[ -z "${local_model}" ]] && local_model="mlx-community/gemma-4-e4b-it-4bit"
+    read -p "  Local model [${local_model}]: " local_model_in
+    local_model="${local_model_in:-${local_model}}"
+
     # Extraction routing (local MLX option only on Apple Silicon)
     echo ""
     echo "  Default extraction route:"
@@ -256,6 +266,7 @@ llm:
   api_key: ${api_key}
   model: qwen2.5-coder:7b
   compiler_model: ${compiler_model}
+  local_model: ${local_model}
 
 repos: {}
 ${extract_route_note}
@@ -550,10 +561,25 @@ cmd_status() {
 
     # LLM
     if [[ -f "${fabric_dir}/fabric.yaml" ]]; then
-        local llm_model=$(grep "model:" "${fabric_dir}/fabric.yaml" 2>/dev/null | head -1 | awk '{print $2}')
-        local compiler_model=$(grep "compiler_model:" "${fabric_dir}/fabric.yaml" 2>/dev/null | head -1 | awk '{print $2}')
+        local llm_model=$(grep "^  model:" "${fabric_dir}/fabric.yaml" 2>/dev/null | head -1 | awk '{print $2}')
+        local compiler_model=$(grep "^  compiler_model:" "${fabric_dir}/fabric.yaml" 2>/dev/null | head -1 | awk '{print $2}')
         ok "LLM:    ${llm_model:-not configured}"
         ok "Compiler: ${compiler_model:-${llm_model:-not configured}} (claim extraction, synthesis, promotion)"
+        local local_model
+        local_model=$(run_python "${fabric_dir}" -c "
+import sys; sys.path.insert(0, '${fabric_dir}/scripts')
+from fabric_config import get_local_model; print(get_local_model())" 2>/dev/null)
+        if [[ -n "${local_model}" ]]; then
+            if run_python "${fabric_dir}" -c "
+import sys, os; sys.path.insert(0, '${fabric_dir}/scripts')
+from fabric_config import find_local_model_path
+mid = sys.argv[1]
+sys.exit(0 if find_local_model_path(mid) or os.path.isdir(os.path.expanduser(mid)) else 1)" "${local_model}" 2>/dev/null; then
+                ok "Local:  ${local_model} (cached)"
+            else
+                warn "Local:  ${local_model} (not downloaded — run: ${SCRIPT_NAME} models ensure)"
+            fi
+        fi
     fi
 
     # Inventory counts
@@ -719,6 +745,21 @@ case "${1:-help}" in
         shift
         run_python "$(find_fabric)" "$(find_fabric)/scripts/log-experience.py" "$@"
         ;;
+    models)
+        shift
+        fdir=$(find_fabric)
+        subcmd="${1:-ensure}"
+        shift 2>/dev/null || true
+        case "${subcmd}" in
+            ensure)
+                run_python "${fdir}" "${fdir}/scripts/ensure-local-model.py" "$@"
+                ;;
+            *)
+                err "Usage: ${SCRIPT_NAME} models {ensure} [--model <hf-id>] [--yes]"
+                exit 1
+                ;;
+        esac
+        ;;
     sync)
         shift
         fdir=$(find_fabric)
@@ -764,6 +805,7 @@ case "${1:-help}" in
         echo "  query \"<question>\"                 Ask the fabric a question"
         echo "  context --task \"<task>\"             Compile a task context manifest (0 tokens)"
         echo "  log --project <slug>              Log an experience event"
+        echo "  models ensure [--model <hf-id>] [--yes]  Check the local model; offer download if missing"
         echo "  sync {init|status|push|pull}      Share the corpus with a team via a git remote"
         echo "  hook {install|uninstall|status}   Git post-commit auto-capture+ingest in a project"
         echo "                                    (--extract-claims: LLM runs on drift)"

@@ -27,6 +27,7 @@ import argparse
 from pathlib import Path
 from datetime import date
 from collections import Counter
+from wf_common import parse_frontmatter, norm
 
 try:
     import yaml
@@ -35,22 +36,6 @@ except ImportError:
     HAVE_YAML = False
 
 VAULT_ROOT = Path(__file__).parent.parent
-
-
-def norm(s):
-    return re.sub(r'[^a-z0-9]+', ' ', s.lower()).strip()
-
-
-def parse_frontmatter(path):
-    text = path.read_text(encoding="utf-8", errors="replace")
-    m = re.match(r"^---\n(.*?)\n---\n(.*)$", text, re.DOTALL)
-    if not m:
-        return {}, text
-    try:
-        fm = yaml.safe_load(m.group(1)) or {}
-    except Exception:
-        fm = {}
-    return fm, m.group(2)
 
 
 def concept_match(query_norm, text_norm):

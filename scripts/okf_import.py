@@ -11,6 +11,7 @@
 import sys
 import re
 import json
+import os
 import hashlib
 import shutil
 import yaml
@@ -162,11 +163,29 @@ Imported from OKF bundle `{bundle}`. Trust tier **recorded, not inherited**
         created_sources += 1
 
     # 4. Optional claim extraction via the compiler pipeline
+    #     Stage routing applies: a fabric.yaml repo named "<scope>-okf" (or
+    #     "<scope>") with extract: local runs extraction on-device.
     if extract_claims and created_sources:
         import subprocess
         ing = VAULT_ROOT / "scripts" / "ingest.py"
-        r = subprocess.run([sys.executable, str(ing), "--pending", f"{scope}-okf",
-                            "--extract-claims"], capture_output=True, text=True)
+        cmd = [sys.executable, str(ing), "--pending", f"{scope}-okf", "--extract-claims"]
+        try:
+            from fabric_config import get_config, get_stage_route, is_local_route
+            _cfg = get_config()
+            for _proj in (f"{scope}-okf", scope):
+                if _cfg.get("repos", {}).get(_proj):
+                    _m = get_stage_route(_cfg, _proj, "extract")
+                    if is_local_route(_cfg, _proj, "extract"):
+                        cmd = [sys.executable, str(ing), "--pending", f"{scope}-okf",
+                               "--extract-claims", "--model", _m]
+                        os.environ["WIKI_LLM_BACKEND"] = "mlx"
+                    else:
+                        cmd = [sys.executable, str(ing), "--pending", f"{scope}-okf",
+                               "--extract-claims", "--model", _m]
+                    break
+        except Exception:
+            pass
+        r = subprocess.run(cmd, capture_output=True, text=True)
         print(r.stdout[-500:] if r.stdout else "")
 
     # 5. Registry log entry (OKF §9 shape)

@@ -9,6 +9,7 @@
 # Clusters claims by concept-overlap, then asks the LLM to synthesize each
 # cluster into a type:concept page that draws ONLY from linked claims.
 
+import os
 import sys
 import re
 import yaml
@@ -19,29 +20,15 @@ from datetime import date
 from collections import defaultdict
 
 sys.path.insert(0, str(Path(__file__).parent))
-from ingest import extract_claims_openai_compatible, llm_config
+from extract_backends import llm_config
+from fabric_config import get_local_model
+from wf_common import parse_frontmatter, norm
 
 VAULT_ROOT = Path(__file__).parent.parent
 CLAIMS_DIR = VAULT_ROOT / "evidence" / "claims"
 CONCEPTS_BASE = VAULT_ROOT
 
 MIN_CLAIMS = 2
-
-
-def parse_frontmatter(path):
-    text = path.read_text(encoding="utf-8", errors="replace")
-    m = re.match(r"^---\n(.*?)\n---\n(.*)$", text, re.DOTALL)
-    if not m:
-        return {}, text
-    try:
-        fm = yaml.safe_load(m.group(1)) or {}
-    except Exception:
-        fm = {}
-    return fm, m.group(2)
-
-
-def norm(s):
-    return re.sub(r'[^a-z0-9]+', ' ', s.lower()).strip()
 
 
 def load_claims():
@@ -189,17 +176,36 @@ Return ONLY the JSON object."""
 
 
 def synthesize_concept(cluster, concept_slug):
-    """Use LLM to synthesize a concept from a cluster of claims."""
+    """Use LLM to synthesize a concept from a cluster of claims.
+
+    Backend: WIKI_LLM_BACKEND=mlx (set by main() for local routes) runs the
+    synthesis on-device via local_llm.generate; otherwise the OpenAI-compatible
+    endpoint. Falls back to mechanical synthesis when the local backend is
+    unavailable."""
     claims_text = "\n".join(
         f"- [{c['stem']}] {c['statement']} (status={c['status']}, conf={c['confidence']})"
         for c in cluster
     )
     prompt = SYNTH_PROMPT.replace("{claims_block}", claims_text)
 
+    if os.environ.get("WIKI_LLM_BACKEND", "").lower() == "mlx":
+        local_model = os.environ.get("WIKI_MLX_MODEL") or get_local_model()
+        try:
+            from local_llm import generate as local_generate
+            output = local_generate(prompt, local_model, max_tokens=int(
+                os.environ.get("WIKI_LOCAL_MAX_TOKENS", "4096")))
+            m = re.search(r'\{.*\}', output, re.DOTALL)
+            if m:
+                return json.loads(m.group())
+            print(f"local synthesis: no JSON object in output ({local_model})",
+                  file=sys.stderr)
+        except Exception as e:
+            print(f"local synthesis failed ({local_model}): {e} — falling back",
+                  file=sys.stderr)
+
     cfg = llm_config()
     try:
         import openai
-        import os
         base_url = os.environ.get("WIKI_LLM_BASE_URL", cfg["base_url"])
         api_key = os.environ.get("WIKI_LLM_API_KEY", cfg["api_key"])
         model = os.environ.get("WIKI_LLM_MODEL", cfg["model"])
@@ -313,15 +319,20 @@ def main():
     args = parser.parse_args()
 
     # Stage routing: synthesize sees sanitized claims — per-repo privacy override
-    from fabric_config import get_stage_route, is_local_route, get_config
+    from fabric_config import get_stage_route, is_local_route, get_config, ensure_local_model
     _cfg = get_config()
     if args.project:
         _model = get_stage_route(_cfg, args.project, "synthesize")
         if is_local_route(_cfg, args.project, "synthesize"):
             os.environ["WIKI_LLM_BACKEND"] = "mlx"
             os.environ["WIKI_MLX_MODEL"] = _model
+            ensure_local_model(_model, config=_cfg)  # offer download if missing
         else:
+            os.environ["WIKI_LLM_BACKEND"] = ""
             os.environ["WIKI_LLM_MODEL"] = _model
+    else:
+        # No --project: cloud compiler path (synthesis is compiler work).
+        os.environ["WIKI_LLM_BACKEND"] = ""
 
     global MIN_CLAIMS
     MIN_CLAIMS = args.min_claims

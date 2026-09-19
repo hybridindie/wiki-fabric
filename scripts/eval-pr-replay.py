@@ -33,6 +33,8 @@ import argparse
 import subprocess
 from pathlib import Path
 from datetime import date
+from eval_core import tokens
+sys.path.insert(0, str(Path(__file__).parent))
 
 REPO_ROOT = Path(__file__).parent.parent
 
@@ -62,20 +64,6 @@ def fetch_pr(repo, number):
         "files": [f.get("filename", "") for f in files],
         "patches": {f.get("filename"): (f.get("patch") or "") for f in files},
     }
-
-
-def tokens(text):
-    import re
-    out = set()
-    for w in re.findall(r"[a-z0-9][a-z0-9_-]{3,}", text.lower()):
-        out.add(w)
-        for suf, add in (("tion", ""), ("ting", ""), ("ing", "e"), ("ed", "e"), ("s", "")):
-            if w.endswith(suf) and len(w) - len(suf) >= 4:
-                out.add(w[: -len(suf)])
-                if add:
-                    out.add(w[: -len(suf)] + add)
-                break
-    return out
 
 
 def seed_fabric(tmp, repo, pr, repo_clone, graphify=False):

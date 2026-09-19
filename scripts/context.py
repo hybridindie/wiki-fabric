@@ -33,30 +33,13 @@ except ImportError:
 
 sys.path.insert(0, str(Path(__file__).parent))
 from fabric_config import get_config, get_ignores, is_ignored
+from wf_common import parse_frontmatter
 
 VAULT_ROOT = Path(__file__).parent.parent
 
 SKIP_PARTS = {".git", ".obsidian", ".opencode", "__pycache__", ".venv", "venv",
               "templates", "schemas", "evaluations", "raw", "traces", "system", "tests", "examples"}
 SKIP_FILES = {"index.md", "log.md", "catalog.json", "README.md", "CONTRIBUTING.md", "AGENTS.md"}
-
-
-def parse_frontmatter(path):
-    text = path.read_text(encoding="utf-8", errors="replace")
-    m = None
-    try:
-        import re as _re
-        m = _re.match(r"^---\n(.*?)\n---\n(.*)$", text, _re.DOTALL)
-    except Exception:
-        pass
-    if not m:
-        return {}, text
-    if HAVE_YAML:
-        try:
-            return (yaml.safe_load(m.group(1)) or {}), m.group(2)
-        except Exception:
-            return {}, m.group(2)
-    return {}, m.group(2)
 
 
 def load_corpus():
