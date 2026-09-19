@@ -12,6 +12,111 @@ Install first: [Getting Started](./getting-started). Everything in wiki-fabric i
 `fabric.yaml` (template: [`fabric.yaml.example`](https://github.com/hybridindie/wiki-fabric/blob/main/fabric.yaml.example)),
 plus environment variables that override it per-run.
 
+## The complete fabric.yaml (annotated)
+
+A full-featured example showing every key in context. Copy the sections you
+need — every field is optional except `owner`; defaults come from
+`fabric_config.py` ([the source of truth for defaults](https://github.com/hybridindie/wiki-fabric/blob/main/scripts/fabric_config.py)).
+
+```yaml
+# ─── Identity ────────────────────────────────────────────────────────────────
+owner: your-name                    # your handle; used in actor conventions
+                                    # (agent/<owner>/<model>) across all pages
+
+# ─── LLM: three model roles ─────────────────────────────────────────────────
+llm:
+  # Endpoint: any OpenAI-compatible /v1 API (Ollama, OpenAI, OpenRouter,
+  # Together, LM Studio, vLLM, llama.cpp server). See provider table above.
+  base_url: http://localhost:11434/v1
+  api_key: ollama                   # Ollama ignores it; cloud providers need a real key
+  model: qwen2.5-coder:7b           # OPS model — cheap queries, capture, status
+
+  # COMPILER model — claim extraction, synthesis, promotion mining.
+  # The most consequential knob: the fabric's canonical evidence is compiled
+  # by this model, and swapping it requires a recorded compiler eval.
+  compiler_model: deepseek-v4.1-flash:cloud
+
+  # LOCAL model — resolves repos.<slug>.<stage>: "local" routes (on-device,
+  # zero egress). Defaults per platform if unset:
+  #   Apple Silicon: mlx-community/gemma-4-e4b-it-4bit   (MLX, ~2.5 GB)
+  #   elsewhere:     unsloth/gemma-4-e4b-it-GGUF         (GGUF, ~4 GB Q4_K_M)
+  # Missing models are offered for download at first use (human-gated y/N),
+  # or pre-fetch with: wf models ensure [--yes]
+  local_model: mlx-community/gemma-4-e4b-it-4bit
+
+# ─── Connected repos (namespaces) ───────────────────────────────────────────
+repos:
+  # Every connected project gets an entry. path is relative to the fabric
+  # root (or absolute). The fabric itself can be its own namespace ("path: .")
+  wiki-fabric:
+    path: .
+    graph_dir: graphify-out         # optional: per-repo graphify graph dir
+
+  my-oss-project:
+    path: ../my-oss-project         # all stages cloud (default) — fastest
+
+  my-private-repo:                  # privacy tiering per stage
+    path: ../my-private-repo
+    graph_dir: graphify-out
+    extract: local                  # raw docs never leave the machine (highest sensitivity)
+    synthesize: local               # extracted claims stay local too
+    dossier: cloud                  # experience events are safe for cloud
+    # Values per stage: "cloud" (default) | "local" (uses llm.local_model)
+    #   | an explicit model id (e.g. "qwen2.5-coder:7b" or an HF id)
+    # Stages: extract (sees raw docs) · synthesize (sanitized claims)
+    #         · dossier (experience events)
+
+  # OpenAI directly instead of Ollama? Override per-fabric or per-repo:
+  # llm:
+  #   base_url: https://api.openai.com/v1
+  #   api_key: sk-your-key-here
+  #   compiler_model: gpt-4o
+
+# ─── Ignores (exclude-side filter) ──────────────────────────────────────────
+# Applied by capture, entity index, context, lint, rebuild-index, okf export.
+ignore:
+  globs:                           # fnmatch-style; ** crosses directories
+    - "vendor/**"
+    - "docs/generated/**"
+    - "**/*.min.js"
+  regexes:                         # python re.search against the posix path
+    - "_archive\\d+/"
+  projects:                        # per-repo patterns, unioned with global
+    my-godot-game:
+      globs:
+        - "addons/generated/**"
+
+# ─── Optional integrations (all off by default) ─────────────────────────────
+integrations:
+  graphify:
+    enabled: false                 # true → call-graph staleness, claim
+    graph_dir: graphify-out        #        enrichment, query graph expansion
+  embeddings:
+    enabled: false                 # planned: semantic re-ranking of retrieval
+    model: all-MiniLM-L6-v2
+
+# ─── Domain taxonomy ────────────────────────────────────────────────────────
+# Drives classification + context scoping. Grow with propose-domains.py.
+domains:
+  agent-systems:
+    signals: [agent, mcp, fastmcp, opencode, claude]
+  web-systems:
+    signals: [fastapi, flask, react, nextjs, supabase, postgresql]
+```
+
+**Cheat sheet — who reads what:**
+
+| Key | Read by |
+|-----|---------|
+| `llm.model` | query synthesis, capture, status |
+| `llm.compiler_model` | ingest extraction, synthesize, mine-promotions, compiler-eval gate |
+| `llm.local_model` | any `local` route (extract/synthesize/dossier) |
+| `repos.<slug>.path` | capture, entity index, graphify bridge, hooks |
+| `repos.<slug>.<stage>` | ingest, synthesize, mine-promotions routing |
+| `ignore.*` | capture, context, lint, rebuild-index, okf export |
+| `integrations.*` | graphify bridge, skills |
+| `domains.*` | classification, context scoping, propose-domains |
+
 ## LLM providers (any OpenAI-compatible endpoint)
 
 The fabric talks to **any OpenAI-compatible `/v1` endpoint**. Set it once in `fabric.yaml`:
