@@ -49,3 +49,6 @@ venv/
 graphify-out/graph.html
 graphify-out/manifest.json
 graphify-out/.graphify_*
+docs/site/node_modules/
+docs/site/dist/
+docs/site/node_modules
