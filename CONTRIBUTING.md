@@ -1,8 +1,3 @@
----
-type: registry
-title: Contributing to Wiki Fabric
-updated: 2026-09-11
----
 # Contributing to Wiki Fabric
 
 > **The fabric is a compiler, not a wiki.** We maintain the *compiler* (the agent that maintains the wiki), not just the artifacts.
@@ -101,6 +96,11 @@ mkdir -p .opencode/skills/<skill-name>
 - **Locators required** — every claim needs `locator` + `quote`
 - **4-space indent** — Python/scripts use 4 spaces
 - **No tabs** — spaces only
+- **Import shared modules, don't copy them** — `fabric_config.py`,
+  `extract_backends.py`, `wf_common.py`, `eval_core.py`, `local_llm.py` are
+  the canonical homes for config, extraction, frontmatter parsing, eval
+  scoring, and on-device generation. A local copy of one of these helpers is
+  a bug waiting to drift (tests guard the import shape).
 
 ---
 
@@ -130,11 +130,14 @@ anchors). The `--okf` mode is the OKF v0.2 §11 conformance floor; external
 Run before changing any script:
 
 ```bash
-python3 -m pytest tests/ -q   # unit tests for script logic
-bash scripts/smoke-test.sh    # end-to-end CLI checks (isolated temp fabric)
+python3 -m pytest tests/ -q                # full suite
+python3 -m pytest tests/ -m "not live" -q  # fast: skips on-device model tests
+bash scripts/smoke-test.sh                 # end-to-end CLI checks (isolated temp fabric)
 ```
 
-CI enforces both plus `python3 -m py_compile` on every script. A PR that fails
+Tests marked `live` run real on-device models (GGUF/MLX); they self-skip when
+the model isn't cached or the platform lacks the backend. CI enforces the fast
+suite plus `python3 -m py_compile` on every script. A PR that fails
 `smoke-test.sh` or drops unit tests below passing will not merge.
 
 ---

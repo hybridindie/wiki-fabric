@@ -42,7 +42,8 @@ persistent memory layer.
 | Detect drift | `graphify-bridge.py --diff` | 0 | Only when graphify integration is enabled |
 | Verify a computation | `references/attesters/*.py` | **0** | Deterministic receipt checks (no LLM) |
 | Export portable bundle | `wf okf export` | **0** | Deterministic, okflint-conformant output |
-| Route extraction/synthesis | `repos.<slug>.extract` / `.synthesize` / `.dossier` | — | Per-repo, per-stage: `"cloud"` (default) or `"local"` (mlx gemma4, 34s/doc, macOS only) — privacy + quality tiering |
+| Route extraction/synthesis | `repos.<slug>.extract` / `.synthesize` / `.dossier` | — | Per-repo, per-stage: `"cloud"` (default) or `"local"` (on-device — MLX on Apple Silicon, GGUF elsewhere; model = `llm.local_model`) — privacy + quality tiering |
+| Ensure local model | `wf models ensure [--yes]` | 0 | Check `llm.local_model` is cached; offer human-gated download (`--check` for scripts) |
 | Import external bundle | `wf okf import <bundle>` | 0 or 1/doc | Trust recorded, not inherited |
 | Log an experience | `wf log --project <slug>` | 0 | Feeds cross-project mining |
 | Health check | `wf lint` | **0** | 0-error gate before commit |
@@ -69,6 +70,11 @@ persistent memory layer.
 6. **Compiler model policy** — claim extraction, synthesis, and promotion
    mining run on `llm.compiler_model`. Model swaps require a recorded
    compiler eval (G4). `promote`/`mine` refuse without it.
+7. **Import shared modules, don't re-implement** — `fabric_config.py`
+   (config/routing/actors), `extract_backends.py` (claim extraction),
+   `wf_common.py` (frontmatter/norm/slugify), `eval_core.py` (scoring
+   primitives), `local_llm.py` (on-device generation). A local copy of one of
+   these helpers is a bug waiting to drift; lint/tests guard the import shape.
 
 ## Where Things Live
 
@@ -84,6 +90,16 @@ persistent memory layer.
 - **Agent-facing assets**: `system/skills/` (6), `system/always-on/`,
   `system/opencode/plugins/`
 - **Project overlay**: `.wiki-overlay.md` in each connected project root
+- **Shared modules**: `scripts/fabric_config.py`, `scripts/extract_backends.py`,
+  `scripts/local_llm.py`, `scripts/wf_common.py`, `scripts/eval_core.py`
+  (see README Scripts Reference for the map)
+
+## Tests
+
+- `python3 -m pytest tests/ -q` — full suite.
+- Tests marked `live` run real on-device models (GGUF/MLX); skip on slow
+  machines with `pytest -m "not live"`. They self-skip when the model isn't
+  cached or the platform lacks the backend.
 
 See `README.md` for the full architecture, OKF conformance details, and
 the promotion pipeline narrative.
