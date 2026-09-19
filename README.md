@@ -90,6 +90,8 @@ Then loop: step 7's promoted pattern is step 5's context for the next project �
 > Real-fabric setup (`wf bootstrap` + ingest + extraction) is the alpha part —
 > expect rough edges, and file issues for anything that bites.
 
+Full walkthrough: **[Getting Started](https://hybridindie.github.io/wiki-fabric/getting-started.html)** (install flags, manual install, first loop).
+
 ```bash
 # See the value in 5 seconds (no install):
 bash scripts/demo.sh
@@ -117,7 +119,8 @@ and installs Python deps from `requirements.txt` (pyyaml, openai, anthropic)
 with `uv pip`. Everything Python runs inside that venv. If uv can't be
 installed, `wf` falls back to plain `python3`. `wf update` re-syncs deps when
 `requirements.txt` changes. All `wf` commands also work without the install —
-the scripts in `scripts/` run with plain `python3`.
+the scripts in `scripts/` run with plain `python3`. Install flags, manual
+install, and requirements: [Getting Started](docs/site/getting-started.md).
 
 ### Verify the install
 
@@ -139,6 +142,7 @@ Full docs at **[hybridindie.github.io/wiki-fabric](https://hybridindie.github.io
 
 | Doc | Contents |
 |-----|----------|
+| [Getting Started](docs/site/getting-started.md) | Install, quickstart, first loop, requirements |
 | [Why not just a wiki or RAG?](docs/site/why.md) | Failure modes of the alternatives, and the core bet |
 | [Architecture](docs/site/architecture.md) | The pipeline, module map, reading order |
 | [Core Workflows](docs/site/core-workflows.md) | Ingest, git-history capture, query, experience → pattern, bootstrap, maintenance, hooks — with scenarios |

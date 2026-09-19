@@ -8,7 +8,7 @@ updated: 2026-09-19
 
 # Configuration
 
-Everything in wiki-fabric is configured through one gitignored file,
+Install first: [Getting Started](./getting-started). Everything in wiki-fabric is configured through one gitignored file,
 `fabric.yaml` (template: [`fabric.yaml.example`](https://github.com/hybridindie/wiki-fabric/blob/main/fabric.yaml.example)),
 plus environment variables that override it per-run.
 

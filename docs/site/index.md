@@ -10,8 +10,8 @@ hero:
       text: Why Wiki Fabric
       link: ./why
     - theme: alt
-      text: Quick Start
-      link: https://github.com/hybridindie/wiki-fabric#quick-start
+      text: Getting Started
+      link: ./getting-started
     - theme: alt
       text: GitHub
       link: https://github.com/hybridindie/wiki-fabric

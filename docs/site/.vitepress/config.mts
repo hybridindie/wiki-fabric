@@ -32,6 +32,7 @@ export default withMermaid(defineConfig({
     siteTitle: 'Wiki Fabric',
     nav: [
       { text: 'Guide', link: '/why' },
+      { text: 'Getting Started', link: '/getting-started' },
       { text: 'Workflows', link: '/core-workflows' },
       { text: 'Config', link: '/configuration' },
       { text: 'Reference', link: '/cli' },
@@ -44,6 +45,7 @@ export default withMermaid(defineConfig({
       {
         text: 'Start Here',
         items: [
+          { text: 'Getting Started', link: '/getting-started' },
           { text: 'Why not just a wiki or RAG?', link: '/why' },
           { text: 'Architecture', link: '/architecture' },
           { text: 'Core Workflows', link: '/core-workflows' }
