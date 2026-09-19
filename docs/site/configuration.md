@@ -74,16 +74,18 @@ repos:
 
 # ─── Ignores (exclude-side filter) ──────────────────────────────────────────
 # Applied by capture, entity index, context, lint, rebuild-index, okf export.
+# One list, auto-classified: globs by default, regex when metacharacters
+# appear, `regex:` prefix as escape hatch.
 ignore:
-  globs:                           # fnmatch-style; ** crosses directories
-    - "vendor/**"
+  patterns:
+    - "vendor/**"                  # glob: fnmatch-style, ** crosses dirs
     - "docs/generated/**"
     - "**/*.min.js"
-  regexes:                         # python re.search against the posix path
-    - "_archive\\d+/"
+    - "_archive\\d+/"              # regex: \d triggers auto-classification
+    - "regex:^node_modules/"       # regex: prefix forces regex matching
   projects:                        # per-repo patterns, unioned with global
     my-godot-game:
-      globs:
+      patterns:
         - "addons/generated/**"
 
 # ─── Optional integrations (all off by default) ─────────────────────────────
@@ -113,7 +115,7 @@ domains:
 | `llm.local_model` | any `local` route (extract/synthesize/dossier) |
 | `repos.<slug>.path` | capture, entity index, graphify bridge, hooks |
 | `repos.<slug>.<stage>` | ingest, synthesize, mine-promotions routing |
-| `ignore.*` | capture, context, lint, rebuild-index, okf export |
+| `ignore.patterns` / `.globs` / `.regexes` | capture, context, lint, rebuild-index, okf export |
 | `integrations.*` | graphify bridge, skills |
 | `domains.*` | classification, context scoping, propose-domains |
 
@@ -233,20 +235,45 @@ repos:
 ## Ignoring files
 
 Exclusion filter applied by capture, entity index, context, lint, rebuild-index,
-and okf export:
+and okf export.
+
+**One list, auto-classified** (preferred — `ignore.patterns`):
 
 ```yaml
 ignore:
-  globs:                      # fnmatch-style, ** crosses directories
-    - "vendor/**"
+  patterns:
+    - "vendor/**"              # glob (default): fnmatch-style, ** crosses directories
     - "docs/generated/**"
-  regexes:                    # python re.search on the posix path
-    - "_archive\\d+/"
-  projects:                   # per-repo patterns merged (union) with global
-    my-godot-game:
-      globs:
-        - "addons/generated/**"
+    - "**/*.min.js"
+    - "_archive\\d+/"          # regex — auto-detected by metacharacters (\d)
+    - "regex:^temp-\\d+\\.tmp$"  # `regex:` prefix forces regex (escape hatch)
 ```
+
+**Classification rules** for `patterns` entries:
+
+1. `regex:` / `re:` prefix → regex (prefix stripped) — use this for ambiguous strings
+2. contains a regex-only metacharacter (`\` `(` `)` `{` `}` `+` `|` `^`) → regex (`re.search` on the posix path)
+3. anything else → glob (`fnmatch` on the full path or basename; `**` crosses directories)
+
+**The explicit keys still work** and win for ambiguous strings:
+
+```yaml
+ignore:
+  globs:                      # always fnmatch-style
+    - "vendor/**"
+  regexes:                    # always re.search
+    - "_archive\\d+/"
+  projects:                   # per-repo patterns, merged (union) with global
+    my-godot-game:
+      patterns:               # unified key works here too
+        - "addons/generated/**"
+      globs:
+        - "addons/third-party/**"
+```
+
+Invalid regexes don't crash anything (they're skipped at match time) but
+**lint flags them** as `IGNORE-CONFIG` errors — so typos surface at the
+0-error gate instead of silently never matching.
 
 ## Integrations
 

@@ -450,17 +450,50 @@ def get_llm_config(config, compiler=False):
     return llm
 
 
+# Characters that signal a regex rather than a glob. Globs legitimately
+# contain * ? [ ] — anything beyond that (backslash classes, anchors, groups)
+# reads as regex intent.
+_REGEX_HINT_CHARS = set("\\(){}+|^$<>")
+_REGEX_HINT_EXPLICIT = ("regex:", "re:")
+
+
+def _classify_ignore_pattern(pattern):
+    """Auto-classify an ignore pattern as "glob" or "regex".
+
+    Explicit prefix wins: a pattern starting with `regex:` or `re:` is always
+    a regex (strips the prefix) — the escape hatch for ambiguous strings like
+    a literal filename containing `*`. Everything else is a regex when it
+    contains a regex-only metacharacter (\\ ( ) { } + | ^), else a glob.
+    """
+    p = str(pattern)
+    low = p.lower()
+    for prefix in _REGEX_HINT_EXPLICIT:
+        if low.startswith(prefix):
+            return "regex", p[len(prefix):].strip()
+    if any(c in p for c in _REGEX_HINT_CHARS):
+        return "regex", p
+    return "glob", p
+
+
 def get_ignores(config, repo_name=None):
     """Return merged ignore patterns from fabric.yaml.
 
     Schema:
         ignore:
-          globs:   ["vendor/**", "docs/generated/**"]   # fnmatch w/ ** support
-          regexes: ["_archive\\d+/"]                    # re.search on posix path
-          projects:                                       # per-repo overrides (merged)
+          patterns: ["vendor/**", "regex:_archive\\d+/"]   # auto-classified
+          globs:   ["vendor/**", "docs/generated/**"]       # explicit fnmatch w/ ** support
+          regexes: ["_archive\\d+/"]                        # explicit re.search on posix path
+          projects:                                          # per-repo overrides (merged)
             <slug>:
+              patterns: [...]
               globs: [...]
               regexes: [...]
+
+    `patterns` is the unified list — every entry is auto-classified: globs
+    (fnmatch-style, ** crosses dirs) are the default; a pattern containing a
+    regex-only metacharacter (\\ ( ) { } + | ^) is compiled as a regex; prefix
+    any entry with `regex:` to force regex matching. The separate globs/regexes
+    keys keep working (and take precedence for ambiguous strings).
 
     Returns {"globs": [...], "regexes": [...], "compiled": [...re.Pattern...]}.
     Global patterns apply to all repos; per-repo patterns union with global.
@@ -468,10 +501,16 @@ def get_ignores(config, repo_name=None):
     raw = config.get("ignore") or {}
     globs = list(raw.get("globs") or [])
     regexes = list(raw.get("regexes") or [])
+    for pat in raw.get("patterns") or []:
+        kind, value = _classify_ignore_pattern(pat)
+        (globs if kind == "glob" else regexes).append(value)
     if repo_name:
         per = (raw.get("projects") or {}).get(repo_name) or {}
         globs.extend(per.get("globs") or [])
         regexes.extend(per.get("regexes") or [])
+        for pat in per.get("patterns") or []:
+            kind, value = _classify_ignore_pattern(pat)
+            (globs if kind == "glob" else regexes).append(value)
     compiled = []
     for r in regexes:
         try:

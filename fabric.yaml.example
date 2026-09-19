@@ -48,19 +48,27 @@ repos:
 
 # Optional ignores: exclude-side filter applied by capture, entity index,
 # context selection, lint, rebuild-index, and okf export.
-#   globs:   fnmatch-style with ** support (dir/** matches the dir + contents)
-#   regexes: python re.search against the posix path
-#   projects: per-repo patterns merged (union) with global
+#
+# One list, auto-classified (preferred): glob by default; a pattern with a
+# regex-only metacharacter (\ ( ) { } + | ^) is compiled as a regex; prefix
+# `regex:` to force regex matching on ambiguous strings.
+# ignore:
+#   patterns:
+#     - "vendor/**"                  # glob (fnmatch-style, ** crosses dirs)
+#     - "docs/generated/**"
+#     - "_archive\\d+/"              # regex (auto-detected)
+#     - "regex:^temp-\\d+\\.tmp$"   # forced regex
+#   projects:                        # per-repo, unioned with global
+#     my-godot-game:
+#       patterns:
+#         - "addons/generated/**"
+#
+# Explicit keys still work (and win for ambiguous strings):
 # ignore:
 #   globs:
 #     - "vendor/**"
-#     - "docs/generated/**"
 #   regexes:
 #     - "_archive\\d+/"
-#   projects:
-#     my-godot-game:
-#       globs:
-#         - "addons/generated/**"
 
 # Optional integrations — all off by default; enable explicitly.
 # When active, skills gain graph-aware steps (see system/skills/*/SKILL.md).

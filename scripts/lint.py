@@ -389,6 +389,40 @@ def check_actors(fm, rel):
     return problems
 
 
+def check_ignore_config(config):
+    """Deterministic ignore.* checks. Invalid regex patterns are skipped
+    silently by get_ignores (so capture/lint can't crash) — but they should be
+    loud in lint. Also flags entries that classify as neither glob nor regex
+    shape (empty strings, regex: prefixes with no payload)."""
+    probs = []
+    raw = (config.get("ignore") or {}) if isinstance(config, dict) else {}
+
+    def _scan(patterns, where):
+        from fabric_config import _classify_ignore_pattern
+        for pat in patterns or []:
+            kind, value = _classify_ignore_pattern(pat)
+            if not value:
+                probs.append(f"IGNORE-CONFIG {where}: empty pattern in {kind} list")
+                continue
+            if kind == "regex":
+                try:
+                    import re as _re
+                    _re.compile(value)
+                except _re.error as e:
+                    probs.append(f"IGNORE-CONFIG {where}: invalid regex {value!r} ({e})")
+
+    for key in ("globs", "regexes", "patterns"):
+        vals = raw.get(key) or []
+        _scan(vals if isinstance(vals, list) else [vals], f"ignore.{key}")
+    for slug, per in (raw.get("projects") or {}).items():
+        if not isinstance(per, dict):
+            continue
+        for key in ("globs", "regexes", "patterns"):
+            vals = per.get(key) or []
+            _scan(vals if isinstance(vals, list) else [vals], f"ignore.projects.{slug}.{key}")
+    return probs
+
+
 def check_llm_config(config):
     """Deterministic fabric.yaml llm.* checks. Returns list of problems.
     Shape rules:
@@ -480,6 +514,10 @@ def main():
         errors.extend(check_llm_config(get_config()))
     except Exception:
         pass  # config unreadable: get_config defaults cover it
+    try:
+        errors.extend(check_ignore_config(get_config()))
+    except Exception:
+        pass
 
     # 1. collect pages
     for p, rel in md_files(vault):

@@ -95,3 +95,92 @@ class TestScriptsUseSharedHelpers(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestUnifiedIgnorePatterns(unittest.TestCase):
+    """ignore.patterns: one list, auto-classified (glob default, regex on
+    metacharacters, `regex:` prefix as escape hatch)."""
+
+    def _cfg(self, patterns, projects=None):
+        cfg = {"ignore": {"patterns": patterns}}
+        if projects:
+            cfg["ignore"]["projects"] = projects
+        return cfg
+
+    def test_glob_default(self):
+        from fabric_config import get_ignores, is_ignored
+        ig = get_ignores(self._cfg(["vendor/**", "*.log"]))
+        assert is_ignored("vendor/a/b/x.md", ig)
+        assert is_ignored("deep/nested/x.log", ig)
+        assert not is_ignored("src/x.md", ig)
+
+    def test_regex_detected_by_metacharacter(self):
+        from fabric_config import get_ignores, is_ignored
+        ig = get_ignores(self._cfg([r"_archive\d+/"]))
+        assert is_ignored("a/_archive2/old.md", ig)
+        assert not is_ignored("a/archives/x.md", ig)
+
+    def test_regex_explicit_prefix(self):
+        from fabric_config import get_ignores, is_ignored
+        # a literal glob-looking string forced to regex
+        ig = get_ignores(self._cfg(["regex:temp.*\\d+\\.tmp$"]))
+        assert is_ignored("cache/temp123.tmp", ig)
+        assert not is_ignored("cache/temp.tmp", ig)
+
+    def test_prefix_stripped_for_literal_glob_lookalike(self):
+        from fabric_config import get_ignores, is_ignored
+        # re: prefix on something with no metachars — still treated as regex
+        ig = get_ignores(self._cfg(["re:^exact-prefix-"]))
+        assert is_ignored("exact-prefix-file.md", ig)
+        assert not is_ignored("prefix-file.md", ig)
+
+    def test_per_repo_patterns(self):
+        from fabric_config import get_ignores, is_ignored
+        ig = get_ignores(self._cfg(["vendor/**"],
+                                   {"my-repo": {"patterns": [r"_arch\d+/"]}}))
+        ig_my = get_ignores(self._cfg(["vendor/**"],
+                                      {"my-repo": {"patterns": [r"_arch\d+/"]}}), "my-repo")
+        assert is_ignored("x/_arch3/y.md", ig_my)
+        assert not is_ignored("vendor/a/x.md", ig) or is_ignored("vendor/a/x.md", ig_my)
+
+    def test_mixed_explicit_and_unified(self):
+        from fabric_config import get_ignores, is_ignored
+        cfg = {"ignore": {"globs": ["g-only/**"], "regexes": [r"_e\d+re/"],
+                          "patterns": ["p-glob/**", r"p-regex\d+/"]}}
+        ig = get_ignores(cfg)
+        assert is_ignored("g-only/x.md", ig)      # explicit glob
+        assert is_ignored("a/_e1re/x.md", ig)      # explicit regex
+        assert is_ignored("p-glob/x.md", ig)      # unified glob
+        assert is_ignored("z/p-regex7/x.md", ig)  # unified regex
+
+    def test_classify_direct(self):
+        from fabric_config import _classify_ignore_pattern
+        assert _classify_ignore_pattern("vendor/**") == ("glob", "vendor/**")
+        assert _classify_ignore_pattern(r"\d+") == ("regex", r"\d+")
+        assert _classify_ignore_pattern("regex:x*") == ("regex", "x*")
+        assert _classify_ignore_pattern("re: foo+") == ("regex", "foo+")
+        assert _classify_ignore_pattern("[abc].md") == ("glob", "[abc].md")
+
+
+class TestLintIgnoreConfig(unittest.TestCase):
+    def _check(self, cfg):
+        from lint import check_ignore_config
+        return check_ignore_config(cfg)
+
+    def test_valid_patterns_clean(self):
+        assert self._check({"ignore": {"patterns": ["vendor/**", r"\d+/", "regex:x"]}}) == []
+
+    def test_invalid_regex_flagged(self):
+        probs = self._check({"ignore": {"patterns": [r"broken(\d+/"]}})
+        assert probs and "IGNORE-CONFIG" in probs[0] and "invalid regex" in probs[0]
+
+    def test_explicit_regexes_also_checked(self):
+        probs = self._check({"ignore": {"regexes": [r"bad(+stuff"]}})
+        assert probs and "ignore.regexes" in probs[0]
+
+    def test_per_project_checked(self):
+        probs = self._check({"ignore": {"projects": {"p": {"patterns": [r"(\d"]}}}})
+        assert probs and "ignore.projects.p" in probs[0]
+
+    def test_empty_pattern_flagged(self):
+        probs = self._check({"ignore": {"patterns": ["regex:", ""]}})
+        assert len(probs) == 2
