@@ -146,6 +146,11 @@ def gate_rebuild_determinism(tmp, runs=3):
     idx2 = (tmp / "registry" / "catalog.json").read_text()
     js2 = (tmp / "registry" / "catalog.json").read_text() if (tmp / "registry" / "catalog.json").exists() else ""
     strip = lambda s: "\n".join(l for l in s.split("\n") if not l.lstrip().startswith(("updated:", '"generated"')))
+    if strip(idx1) != strip(idx2) or js1 != js2:
+        # debug aid: first differing line
+        import difflib
+        for line in list(difflib.unified_diff(strip(idx1).split("\n"), strip(idx2).split("\n"), lineterm=""))[:12]:
+            print(f"    {line if (line := line) else ''}", file=sys.stderr)
     return {"gate": "G2", "name": "rebuild determinism",
             "detail": "catalog.json identical across rebuilds",
             "passed": strip(idx1) == strip(idx2) and js1 == js2}
