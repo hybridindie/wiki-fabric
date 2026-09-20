@@ -122,8 +122,9 @@ compiling PR history.
 ### Automate the loop (opt-in)
 
 ```bash
+wf harness install                 # configure every detected agent harness
+                                   # (--all for the full matrix; --only claude,copilot)
 wf hook install --extract-claims   # doc-drift commits auto-capture + auto-ingest
-wf claude install                  # always-on instructions in AGENTS.md/CLAUDE.md
 ```
 
 ## Requirements
@@ -135,6 +136,26 @@ wf claude install                  # always-on instructions in AGENTS.md/CLAUDE.
 | LLM endpoint | anything OpenAI-compatible — Ollama (`curl -fsSL https://ollama.com/install.sh \| sh`) is the zero-config default; see [Configuration](./configuration) for OpenAI/OpenRouter/etc. |
 | On-device models (optional) | `pip install -e ".[local]"` — GGUF anywhere, MLX on Apple Silicon |
 | Platform | macOS / Linux (Windows untested; git hooks are POSIX-verified only) |
+
+## Agent harness support
+
+`wf harness install` configures every agent tool it detects (or `--all`):
+
+| Harness | Always-on instructions | Skills |
+|---------|----------------------|--------|
+| Claude Code | `CLAUDE.md` + `AGENTS.md` | `.claude/skills/` |
+| opencode | `AGENTS.md` + `opencode.json` merge | `.opencode/skill/` + plugin |
+| OpenAI Codex CLI | `AGENTS.md` (native) | — |
+| GitHub Copilot | `.github/copilot-instructions.md` | — |
+| Gemini CLI | `GEMINI.md` | — |
+| Cursor | `.cursor/rules/wiki-fabric.mdc` | — |
+| Pi | `AGENTS.md` / `PI.md` | — |
+| Aider / Zed / Cline / Windsurf | `CONVENTIONS.md` / `.rules` / `.clinerules/` / `.windsurf/rules/` | — |
+
+The instruction content is identical everywhere — the same always-on block and
+the same six SKILL.md files, in whichever format each tool reads. `wf harness
+status` shows what's detected and installed. `bootstrap` runs this
+automatically.
 
 ## Next steps
 

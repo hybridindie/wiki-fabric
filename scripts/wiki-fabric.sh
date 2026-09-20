@@ -812,10 +812,23 @@ case "${1:-help}" in
         export WIKI_FABRIC_DIR="${fdir}"
         run_python "${fdir}" "${fdir}/scripts/hooks.py" "${subcmd}" "$@"
         ;;
-    claude)
+    claude|harness)
         shift
         fdir=$(find_fabric)
-        run_python "${fdir}" "${fdir}/scripts/always_on.py" "$@"
+        subcmd="${1:-status}"
+        shift 2>/dev/null || true
+        case "${subcmd}" in
+            install|status)
+                run_python "${fdir}" "${fdir}/scripts/harnesses.py" "${subcmd}" "$@"
+                ;;
+            legacy)
+                run_python "${fdir}" "${fdir}/scripts/always_on.py" "$@"
+                ;;
+            *)
+                err "Usage: ${SCRIPT_NAME} harness {install|status} [--all|--only k1,k2] [--force]"
+                exit 1
+                ;;
+        esac
         ;;
     okf)
         shift
@@ -918,7 +931,9 @@ case "${1:-help}" in
         echo "  sync {init|status|push|pull}      Share the corpus with a team via a git remote"
         echo "  hook {install|uninstall|status}   Git post-commit auto-capture+ingest in a project"
         echo "                                    (--extract-claims: LLM runs on drift)"
-        echo "  claude {install|uninstall|status} Always-on instructions in CLAUDE.md/AGENTS.md"
+        echo "  harness {install|status}          Install always-on + skills into detected agent"
+        echo "                                    harnesses (--all|--only claude,copilot| --force)"
+        echo "                                    (alias: claude — legacy always_on.py via 'claude legacy')"
         echo "  okf export --out DIR            Export fabric as a portable OKF v0.2 bundle"
         echo "  okf import <bundle>             Ingest an external OKF bundle as evidence"
         echo "                                    (--user for ~/.claude/CLAUDE.md)"

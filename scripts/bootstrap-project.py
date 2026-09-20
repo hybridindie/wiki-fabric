@@ -472,6 +472,30 @@ config; the fabric discovers it (see fabric.yaml repos.auto_discover).
         plugin_dst.write_text(plugin_src.read_text())
         print("Installed .opencode/plugins/wiki-fabric.js (session nudge)")
 
+    # 2c. Multi-harness support: install always-on + skills into every detected
+    # agent harness (Claude Code, Codex, Copilot, Cursor, Gemini CLI, ...).
+    try:
+        harnesses_py = find_fabric_root() / "scripts" / "harnesses.py"
+        if harnesses_py.exists():
+            import importlib.util as _hlu
+            hspec = _hlu.spec_from_file_location("harnesses", str(harnesses_py))
+            hmod = _hlu.module_from_spec(hspec)
+            hspec.loader.exec_module(hmod)
+            targets = hmod.detect_installed(Path.cwd())
+            if targets:
+                block = hmod.body_from(fabric_root / "system" / "always-on" / "wiki-fabric-block.md")
+                n = 0
+                for spec in targets:
+                    written = hmod.install_instructions(spec, Path.cwd(), block)
+                    written += hmod.install_skills(spec, Path.cwd(), fabric_root)
+                    for w in written:
+                        print(f"  harness [{spec['name']}]: {w.relative_to(Path.cwd())}")
+                    n += len(written)
+                if n:
+                    print(f"Configured {len(targets)} agent harness(es) ({n} files)")
+    except Exception as e:
+        print(f"  (harness setup skipped: {e})", file=sys.stderr)
+
     # 3. Create .gitignore additions
     gitignore = Path(".gitignore")
     if not gitignore.exists():

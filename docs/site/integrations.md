@@ -22,6 +22,13 @@ Integrations add capabilities on top of the core loop. They are declared in `fab
 | **graphify** | claims carry `code_symbols` + `graph_edges` (doc→code provenance); `graphify-bridge --diff` adds AST staleness detection after refactors; query expansion follows call/import edges; code-reachable claims surface first | 0 tokens (AST + community detection) |
 | **embeddings** | semantic re-ranking of retrieval results (planned — off by default) | local inference |
 
+## Agent harnesses
+
+Wiki Fabric installs into any agent harness — see the matrix in
+[Getting Started](./getting-started#agent-harness-support). `wf harness
+install` detects what you use and writes the always-on block + skills in each
+tool's native format; `wf harness status` shows the current state.
+
 ## Enabling
 
 ```bash
