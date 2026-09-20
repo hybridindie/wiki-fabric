@@ -12,6 +12,11 @@ Install first: [Getting Started](./getting-started). Everything in wiki-fabric i
 `fabric.yaml` (template: [`fabric.yaml.example`](https://github.com/hybridindie/wiki-fabric/blob/main/fabric.yaml.example)),
 plus environment variables that override it per-run.
 
+**Where it lives:** `~/.local/share/wiki-fabric/fabric.yaml` after a standard
+install (the fabric dir — content and config live there, never in the harness
+clone). `WIKI_FABRIC_DIR` relocates the whole fabric. Dev mode: a harness
+clone holding its own `fabric.yaml` doubles as the fabric.
+
 ## The complete fabric.yaml (annotated)
 
 A full-featured example showing every key in context. Copy the sections you
@@ -167,6 +172,7 @@ llm:
 | `WIKI_LOCAL_N_CTX` | `16384` | GGUF context window |
 | `WIKI_INGEST_WORKERS` | `1` | Concurrent extraction threads (cloud tolerates 6–12) |
 | `HF_HOME` / `HF_HUB_CACHE` | `~/.cache/huggingface` | Where local models are cached |
+| `WIKI_FABRIC_DIR` | `~/.local/share/wiki-fabric` | Fabric location (content + config) |
 
 ## Model tiers: ops vs compiler vs local
 

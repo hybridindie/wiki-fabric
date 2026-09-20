@@ -55,8 +55,14 @@ ensure_uv() {
 run_python() {
     local fabric_dir="$1"
     shift
+    # Prefer a venv next to the fabric, else the harness venv (deps live with
+    # the code), else system python3.
+    local harness_dir
+    harness_dir="$(find_harness || echo "${fabric_dir}")"
     if [[ -x "${fabric_dir}/.venv/bin/python" ]]; then
         "${fabric_dir}/.venv/bin/python" "$@"
+    elif [[ -x "${harness_dir}/.venv/bin/python" ]]; then
+        "${harness_dir}/.venv/bin/python" "$@"
     else
         python3 "$@"
     fi
@@ -83,22 +89,57 @@ sync_deps() {
     ) || true
 }
 
-# === Helper: find fabric root ===
-find_fabric() {
-    # Check default location
+# === Helpers: harness vs fabric roots ===
+# Harness = this repo (code). Fabric = content + config, defaults to
+# ~/.local/share/wiki-fabric (XDG). In dev mode the harness clone doubles as
+# the fabric when it has fabric.yaml.
+fabric_home() {
+    echo "${XDG_DATA_HOME:-${HOME}/.local/share}/wiki-fabric"
+}
+
+find_harness() {
+    # The harness (code) — wherever this script lives, or the default clone
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
+    if [[ -d "${script_dir}/scripts" ]]; then
+        echo "${script_dir}"
+        return 0
+    fi
     if [[ -d "${DEFAULT_DIR}/scripts" ]]; then
         echo "${DEFAULT_DIR}"
         return 0
     fi
-    # Check sibling of current directory
+    return 1
+}
+
+# === Helper: find fabric root ===
+find_fabric() {
+    # 1. Env override
+    if [[ -n "${WIKI_FABRIC_DIR:-}" ]] && [[ -d "${WIKI_FABRIC_DIR}" ]]; then
+        echo "${WIKI_FABRIC_DIR}"
+        return 0
+    fi
+    # 2. XDG default fabric (has fabric.yaml or content dirs)
+    local fh; fh="$(fabric_home)"
+    if [[ -f "${fh}/fabric.yaml" ]] || [[ -d "${fh}/evidence" ]] || [[ -d "${fh}/projects" ]]; then
+        echo "${fh}"
+        return 0
+    fi
+    # 3. Dev fallback: harness clone doubles as fabric when configured
+    if [[ -f "${DEFAULT_DIR}/fabric.yaml" ]]; then
+        echo "${DEFAULT_DIR}"
+        return 0
+    fi
+    # 4. Bare harness clone: scripts still runnable (lint/tests/help), commands
+    #    needing content will fail with a helpful message
+    if [[ -d "${DEFAULT_DIR}/scripts" ]]; then
+        echo "${DEFAULT_DIR}"
+        return 0
+    fi
+    # 5. Sibling of current directory (dev checkouts)
     local parent="$(dirname "$(pwd)")"
     if [[ -d "${parent}/wiki-fabric/scripts" ]]; then
         echo "${parent}/wiki-fabric"
-        return 0
-    fi
-    # Check home
-    if [[ -d "${HOME}/wiki-fabric/scripts" ]]; then
-        echo "${HOME}/wiki-fabric"
         return 0
     fi
     return 1
@@ -165,24 +206,21 @@ ensure_directories() {
         evidence/traces/change-sets
         evidence/_inbox
         registry/promotions
+        registry/conflicts
         patterns
         anti-patterns
         skills
         concepts
+        domains
         projects
         syntheses
         global/entities
         global/graphs
-        templates
-        examples
     )
+    # templates/examples ship with the harness — don't recreate in the fabric
 
     for dir in "${dirs[@]}"; do
         mkdir -p "${dir}"
-        # .gitkeep for empty dirs
-        if [[ -z "$(ls -A "${dir}" 2>/dev/null)" ]]; then
-            touch "${dir}/.gitkeep"
-        fi
     done
 }
 
@@ -347,18 +385,27 @@ cmd_install() {
 
     cd "${install_dir}"
 
-    # Ensure directory structure
-    ensure_directories "${install_dir}"
+    # Harness needs no content dirs — they live in the fabric (created below)
 
-    # Ensure fabric.yaml
-    ensure_fabric_yaml "${install_dir}" "${with_graphify}"
-
-    # Interactive first-run configuration
-    if [[ -t 0 ]] && [[ ! -f "${install_dir}/fabric.yaml" || "${interactive}" == "true" ]]; then
-        interactive_setup "${install_dir}"
+    # === Fabric dir: content + config live SEPARATELY from the harness clone ===
+    local fabric_dir; fabric_dir="$(fabric_home)"
+    if [[ ! -f "${fabric_dir}/fabric.yaml" ]]; then
+        mkdir -p "${fabric_dir}"
+        info "Creating fabric at ${fabric_dir} (content + config; harness code stays in ${install_dir})"
     fi
 
-    # Ensure uv + python, then sync dependencies into .venv
+    # Ensure fabric.yaml in the FABRIC dir (the harness clone keeps none)
+    ensure_fabric_yaml "${fabric_dir}" "${with_graphify}"
+
+    # Interactive first-run configuration
+    if [[ -t 0 ]] && [[ ! -f "${fabric_dir}/fabric.yaml" || "${interactive}" == "true" ]]; then
+        interactive_setup "${fabric_dir}"
+    fi
+
+    # Ensure content dirs in the fabric (evidence/, projects/, patterns/, ...)
+    ensure_directories "${fabric_dir}"
+
+    # Ensure uv + python, then sync dependencies into the HARNESS venv
     if ensure_uv; then
         sync_deps "${install_dir}"
     fi
@@ -378,15 +425,15 @@ cmd_install() {
     fi
 
     echo ""
-    ok "Wiki Fabric installed at ${install_dir}"
+    ok "Wiki Fabric installed (harness: ${install_dir}; fabric: ${fabric_dir})"
     echo ""
 
     # Set up vault
     if [[ "${skip_vault}" == false ]]; then
-        local vault_path="$(dirname "${install_dir}")/vault"
+        local vault_path="$(dirname "${fabric_dir}")/vault"
         info "Setting up Obsidian vault at ${vault_path}..."
         bash "${install_dir}/scripts/setup-vault.sh" "${vault_path}" 2>/dev/null || true
-        run_python "${install_dir}" "${install_dir}/scripts/vault-refresh.py" "${vault_path}" 2>/dev/null || true
+        run_python "${fabric_dir}" "${install_dir}/scripts/vault-refresh.py" "${vault_path}" 2>/dev/null || true
         echo ""
     fi
 

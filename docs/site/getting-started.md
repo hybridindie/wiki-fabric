@@ -42,22 +42,30 @@ Install flags:
 |------|--------|
 | `--corpus <git-url>` | Wire team corpus sync at install time (see [Team Sync](./sync)) |
 | `--with-graphify` | Enable the graphify integration (see [Integrations](./integrations)) |
-| `--dir <path>` | Install location (default `~/Development/wiki-fabric`) |
+| `--dir <path>` | Harness clone location (default `~/Development/wiki-fabric`) |
 | `--repo <url>` | Install from a fork |
 | `--interactive` | Walk through provider/model/routing config (prompts for everything — see [Configuration](./configuration)) |
 | `--no-vault` | Skip the Obsidian vault symlink |
 
 **What the one-liner actually does:** checks for **uv** (Astral's Python
-package manager) and installs it if missing, clones the repo, creates a
-`.venv` inside the fabric, installs Python deps from `requirements.txt`
-(pyyaml, openai, anthropic) with `uv pip`, and symlinks `wf` into
-`~/.local/bin/`. Everything Python runs inside that venv — no system pip
-pollution, no version drift. If uv can't be installed, `wf` falls back to plain
-`python3` (core CLI works; LLM features need `pip install -r
-requirements.txt`). `wf update` re-syncs deps when `requirements.txt` changes.
+package manager) and installs it if missing, clones the **harness** (the code —
+this repo) to `~/Development/wiki-fabric`, creates the **fabric** (your content
++ config) at `~/.local/share/wiki-fabric/` (XDG data dir), sets up the venv in
+the harness, and symlinks `wf` into `~/.local/bin/`. Everything Python runs
+inside that venv — no system pip pollution, no version drift. If uv can't be
+installed, `wf` falls back to plain `python3` (core CLI works; LLM features
+need `pip install -r requirements.txt`). `wf update` re-syncs deps when
+`requirements.txt` changes.
+
+**Harness vs fabric:** the harness clone never holds your knowledge — it's a
+git clone of this public repo, refreshed by `wf update` (git pull). Your
+content (`evidence/`, `projects/`, `patterns/`, `fabric.yaml`, ...) lives in
+the fabric dir and syncs via [Team Sync](./sync) to a remote you own. Set
+`WIKI_FABRIC_DIR` to relocate the fabric.
 
 All `wf` commands also work without any install — the scripts in `scripts/`
-run with plain `python3` from a clone.
+run with plain `python3` from a clone (dev mode: a clone holding a
+`fabric.yaml` doubles as its own fabric).
 
 ### Manual install (equivalent)
 

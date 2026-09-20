@@ -229,3 +229,36 @@ class TestReposMigrate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestFabricRootResolution(unittest.TestCase):
+    """FABRIC_ROOT chain: WIKI_FABRIC_DIR > XDG default > harness (dev)."""
+
+    def test_env_override_wins(self):
+        import fabric_config as fc
+        with mock.patch.dict(os.environ, {"WIKI_FABRIC_DIR": str(self.fabric)}):
+            # re-import resolution? FABRIC_ROOT is computed at import; test the fn
+            self.assertEqual(fc._resolve_fabric_root(), self.fabric.resolve())
+
+    def test_xdg_default_when_content_present(self):
+        import fabric_config as fc
+        xdg = self.tmp / "xdg"
+        fabric = xdg / "wiki-fabric"
+        fabric.mkdir(parents=True)
+        (fabric / "fabric.yaml").write_text("owner: t\n")
+        with mock.patch.dict(os.environ, {"XDG_DATA_HOME": str(xdg)}, clear=False):
+            os.environ.pop("WIKI_FABRIC_DIR", None)
+            self.assertEqual(fc._resolve_fabric_root(), fabric)
+
+    def test_dev_fallback_to_harness(self):
+        import fabric_config as fc
+        env = {k: v for k, v in os.environ.items()
+               if k not in ("WIKI_FABRIC_DIR", "XDG_DATA_HOME")}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(fc._resolve_fabric_root(), fc.HARNESS_ROOT)
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.fabric, _ = _make_world(self.tmp)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)

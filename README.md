@@ -153,14 +153,35 @@ Two kinds of tree live here: the **harness** (tooling, shipped in this repo) and
 | `references/` | harness | attesters (deterministic receipt checks) + executor skills |
 | `evaluations/` | harness | golden corpus, behavior fixtures, eval scripts' data |
 | `global/computations/` | harness | attested-computation contracts (OKF §10) |
-| `evidence/` | **fabric** | captured sources, summaries, claims (gitignored) |
-| `projects/` | **fabric** | per-project namespaces (gitignored) |
-| `patterns/` `concepts/` `skills/` `anti-patterns/` `domains/` `syntheses/` | **fabric** | canonical knowledge (gitignored) |
-| `registry/` | fabric+harness | `promotion-queue.md` tracked; `log.md`, `catalog.json` generated |
-| `fabric.yaml` | yours | config (gitignored — see [Configuration](docs/site/configuration.md)) |
-| `graphify-out/` | generated | the self knowledge graph |
+**The harness clone never holds your knowledge.** In dev mode (a clone with a
+`fabric.yaml`) the content dirs below exist gitignored; in installed mode they
+live in the **fabric dir** — `~/.local/share/wiki-fabric/` by default
+(`WIKI_FABRIC_DIR` overrides), created by `wf install`:
 
-Fresh clones ship the harness plus the layout skeleton (`.gitkeep`ed content dirs); your knowledge accumulates locally and syncs via [Team Sync](docs/site/sync.md).
+| Path (in the fabric dir) | Kind | What it is |
+|------|------|-----------|
+| `fabric.yaml` | yours | config (see [Configuration](docs/site/configuration.md)) |
+| `evidence/` | **fabric** | captured sources, summaries, claims |
+| `projects/` | **fabric** | per-project namespaces |
+| `patterns/` `concepts/` `skills/` `anti-patterns/` `domains/` `syntheses/` | **fabric** | canonical knowledge |
+| `registry/` | fabric | `log.md`, `catalog.json`, promotion queue |
+
+| Path (in this repo) | Kind | What it is |
+|------|------|-----------|
+| `README.md` `AGENTS.md` `CONTRIBUTING.md` `LICENSE` `index.md` | harness | entry points (index.md is the OKF root index) |
+| `pyproject.toml` `requirements.txt` `okf-base.yaml` | harness | Python packaging, deps, okflint profile |
+| `scripts/` | harness | the pipeline: ingest, query, context, lint, promote, sync, hooks |
+| `tests/` | harness | 220+ unit tests (`-m "not live"` for fast suite) |
+| `docs/site/` | harness | this documentation (VitePress, deployed to Pages) |
+| `system/` | harness | agent-facing assets: `skills/` (6 SKILL.md), `always-on/`, `opencode/plugins/` |
+| `schemas/` | harness | frontmatter contracts (`frontmatter.md`) + domain ontology |
+| `templates/` | harness | page scaffolds (`pattern.md`, `decision.md`, ...) + `examples/` |
+| `references/` | harness | attesters (deterministic receipt checks) + executor skills |
+| `evaluations/` | harness | golden corpus, behavior fixtures, eval scripts' data |
+| `global/computations/` | harness | attested-computation contracts (OKF §10) |
+| `graphify-out/` | generated | the self knowledge graph (harness-side) |
+
+Your knowledge accumulates in the fabric dir and syncs via [Team Sync](docs/site/sync.md).
 
 ---
 
