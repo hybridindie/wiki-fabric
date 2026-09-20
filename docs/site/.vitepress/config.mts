@@ -31,7 +31,7 @@ export default withMermaid(defineConfig({
   themeConfig: {
     siteTitle: 'Wiki Fabric',
     nav: [
-      { text: 'Guide', link: '/why' },
+      { text: 'Why', link: '/why' },
       { text: 'Getting Started', link: '/getting-started' },
       { text: 'Workflows', link: '/core-workflows' },
       { text: 'Config', link: '/configuration' },
@@ -45,19 +45,18 @@ export default withMermaid(defineConfig({
       {
         text: 'Start Here',
         items: [
-          { text: 'Getting Started', link: '/getting-started' },
           { text: 'Why not just a wiki or RAG?', link: '/why' },
-          { text: 'Architecture', link: '/architecture' },
-          { text: 'Core Workflows', link: '/core-workflows' }
+          { text: 'Getting Started', link: '/getting-started' },
+          { text: 'Core Workflows', link: '/core-workflows' },
+          { text: 'Task Context (wf context)', link: '/context' }
         ]
       },
       {
         text: 'Using the Fabric',
         items: [
           { text: 'Configuration', link: '/configuration' },
-          { text: 'Task Context (wf context)', link: '/context' },
-          { text: 'Team Sync', link: '/sync' },
-          { text: 'Optional Integrations', link: '/integrations' }
+          { text: 'Optional Integrations', link: '/integrations' },
+          { text: 'Team Sync', link: '/sync' }
         ]
       },
       {
@@ -66,8 +65,8 @@ export default withMermaid(defineConfig({
           { text: 'CLI & Scripts', link: '/cli' },
           { text: 'Model Policy & Evals', link: '/evals' },
           { text: 'OKF v0.2 Conformance', link: '/okf' },
-          { text: 'Machine-Readable Contract', link: '/machine-contract' },
           { text: 'Governance', link: '/governance' },
+          { text: 'Machine-Readable Contract', link: '/machine-contract' },
           { text: 'Troubleshooting', link: '/troubleshooting' }
         ]
       }
