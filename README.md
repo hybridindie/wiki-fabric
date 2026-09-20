@@ -103,7 +103,7 @@ curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/script
 curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/scripts/wiki-fabric.sh | bash -s -- --corpus git@github.com:your-org/wiki-fabric-corpus.git
 
 wf status                              # check fabric health
-wf bootstrap /path/to/my-project       # connect a project
+wf bootstrap /path/to/my-project       # connect a project (auto-discovered; --extract local for privacy)
 wf capture my-project                  # pull docs from upstream repos → evidence/raw/
 wf ingest evidence/raw/my-project/docs/readme.md --extract-claims
 wf query "Why does my code batch writes?"

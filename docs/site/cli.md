@@ -149,7 +149,7 @@ The repo ships only the harness — examples, templates, schemas, and scripts. Y
 
 ## Vault & status commands (the human views)
 
-### `wf vault [PATH]` — browse the fabric in Obsidian
+### `wf vault [PATH] [--check]` — browse the fabric in Obsidian
 
 Creates a directory of **symlinks** to the fabric's human-readable content
 (`AGENTS.md`, `concepts/`, `patterns/`, `skills/`, `evidence/`, ...). Obsidian
@@ -158,10 +158,28 @@ follows symlinks, so you browse and graph the real files with zero duplication
 `~/Development/vault` (beside the fabric); pass a path to override; existing
 `.obsidian/` workspace config is preserved.
 
-```bash
-wf vault                     # ~/Development/vault
-wf vault ~/vaults/my-fabric  # custom location
-```
+**Freshness guarantee, three layers:**
+
+1. **View freshness — structural.** The vault holds symlinks, not copies: a
+   fabric write is visible immediately. The vault cannot go stale.
+2. **Structural freshness — `wf vault` is idempotent and self-healing**:
+   repairs broken links, links new top-level dirs, and regenerates each
+   project's `projects/<slug>/overlay.yml` view (the fabric-side snapshot of
+   the project's overlay config). It runs automatically on `wf bootstrap`,
+   `wf update`, and can be audited anytime:
+   `wf vault --check` (exit 1 on drift — CI-friendly).
+3. **Content freshness — governance, not the vault**: sha256 drift,
+   `review_after` gates, graphify AST diff (see [Governance](./governance)).
+
+`wf status` shows the vault verdict (`fresh` / `structure drift — run: wf vault`)
+inline, so staleness is one glance away.
+
+### `wf repos migrate` — config-per-project migration
+
+Moves explicit per-repo routing keys from fabric.yaml into each project's
+`.wiki-overlay.md` (`--dry-run` to preview, `--apply` to write). fabric.yaml
+stays untouched — prune by hand after verifying. New projects don't need it:
+`wf bootstrap --extract local` writes routing directly.
 
 ### `wf status` — the health dashboard
 

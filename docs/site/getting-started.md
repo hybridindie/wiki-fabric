@@ -96,7 +96,7 @@ backend.
 # One-time: pick your LLM provider if Ollama isn't your choice
 # (see Configuration — or run `wf install --interactive` to be prompted)
 
-wf bootstrap /path/to/my-project      # connect a project
+wf bootstrap /path/to/my-project      # connect a project (auto-discovered; --extract local for privacy)
 wf capture my-project                 # pull docs from upstream repos → evidence/raw/
 wf ingest evidence/raw/my-project/docs/readme.md --extract-claims
 wf query "Why does my code batch writes?"

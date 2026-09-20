@@ -188,7 +188,7 @@ def get_config_clear_cache():
 
 def resolve_repo_path(config, repo_name):
     """Resolve a repo path from fabric.yaml config (relative to fabric root or absolute)."""
-    repo_cfg = config.get("repos", {}).get(repo_name, {})
+    repo_cfg = get_repo_config(config, repo_name)
     path_str = repo_cfg.get("path", "")
     if not path_str:
         return None
@@ -199,8 +199,103 @@ def resolve_repo_path(config, repo_name):
 
 
 def get_all_repo_names(config):
-    """Return list of configured repo names."""
-    return list(config.get("repos", {}).keys())
+    """Return list of configured repo names (explicit + discovered)."""
+    merged = get_discovered_repos(config)
+    names = list(config.get("repos", {}).keys())
+    for slug in merged:
+        if slug not in names:
+            names.append(slug)
+    return names
+
+
+# === Overlay-as-config + sibling discovery ================================
+# Per-project config lives in the project's .wiki-overlay.md (written by
+# bootstrap, versioned with the project repo). fabric.yaml keeps fabric-global
+# settings; repos entries are only needed for exceptions. Discovery scans the
+# fabric's sibling directories for overlays and merges their `routing:` block.
+
+_OVERLAY_CACHE = None  # (fingerprint, {slug: overlay_dict})
+
+
+def _overlay_fingerprint():
+    """Cheap identity of the discovery inputs: fabric parent dir + overlay mtimes."""
+    import hashlib
+    parent = FABRIC_ROOT.parent
+    sig = [str(parent)]
+    try:
+        for overlay in sorted(parent.glob("*/.wiki-overlay.md")):
+            st = overlay.stat()
+            sig.append(f"{overlay}:{st.st_mtime_ns}")
+    except OSError:
+        pass
+    return hashlib.sha1("|".join(sig).encode()).hexdigest()
+
+
+def get_discovered_repos(config):
+    """Scan fabric siblings for project overlays. Returns {slug: repo_cfg} for
+    every sibling with a .wiki-overlay.md. Cached per-process on mtimes;
+    respects repos.auto_discover: false. Explicit repos entries always win on
+    key conflicts (see get_repo_config)."""
+    global _OVERLAY_CACHE
+    repos_cfg = config.get("repos") or {}
+    if repos_cfg.get("auto_discover") is False:
+        return {}
+    fp = _overlay_fingerprint()
+    if _OVERLAY_CACHE is not None and _OVERLAY_CACHE[0] == fp:
+        return _OVERLAY_CACHE[1]
+
+    found = {}
+    parent = FABRIC_ROOT.parent
+    try:
+        overlays = sorted(parent.glob("*/.wiki-overlay.md"))
+    except OSError:
+        overlays = []
+    for overlay in overlays:
+        try:
+            text = overlay.read_text(encoding="utf-8", errors="replace")
+            if not HAVE_YAML:
+                continue
+            m = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
+            if not m:
+                continue
+            fm = yaml.safe_load(m.group(1)) or {}
+        except Exception:
+            continue
+        slug = str(fm.get("namespace") or "").strip()
+        if not slug or slug in found:
+            continue  # sibling name collision: first found wins; lint flags ambiguity
+        found[slug] = {
+            "path": str(overlay.parent),
+            "discovered": True,
+            "routing": fm.get("routing") or {},
+            "overlay_path": str(overlay),
+        }
+    _OVERLAY_CACHE = (fp, found)
+    return found
+
+
+def get_repo_config(config, repo_name):
+    """Effective per-repo config: explicit fabric.yaml entry merged over the
+    discovered overlay (explicit wins on every key; routing from the overlay
+    applies unless the fabric.yaml entry sets the same key). Returns {} for
+    unknown repos."""
+    repos_cfg = config.get("repos") or {}
+    explicit = repos_cfg.get(repo_name) or {}
+    discovered = get_discovered_repos(config).get(repo_name) or {}
+    if not explicit and not discovered:
+        return {}
+    merged = dict(discovered)
+    overlay_routing = dict(discovered.get("routing") or {})
+    for k, v in explicit.items():
+        merged[k] = v
+        if isinstance(v, dict) and k == "routing":
+            overlay_routing = {**overlay_routing, **v}  # explicit routing keys win
+    # promote overlay routing to the standard keys consumers read, without
+    # clobbering explicit fabric.yaml stage keys
+    for k, v in overlay_routing.items():
+        merged.setdefault(k, v)
+    merged.setdefault("routing", overlay_routing)
+    return merged
 
 
 def get_domain_signals(config):
@@ -256,7 +351,7 @@ def get_stage_route(config, repo_name=None, stage="extract"):
              or config.get("llm", {}).get("model") or "deepseek-v4.1-flash:cloud")
     if not repo_name:
         return cloud
-    repo_cfg = (config.get("repos") or {}).get(repo_name) or {}
+    repo_cfg = get_repo_config(config, repo_name)
     route = repo_cfg.get(stage) or repo_cfg.get("extract") or "cloud"
     if route == "local":
         # Cross-platform: MLX on Apple Silicon, GGUF elsewhere (local_llm.py
@@ -577,6 +672,9 @@ def compiler_eval_recorded(config, log_path=None):
 
 
 def get_repo_graph_dir(config, repo_name):
-    """Get the graphify graph directory for a repo."""
-    repo_cfg = config.get("repos", {}).get(repo_name, {})
-    return repo_cfg.get("graph_dir", "graphify-out")
+    """Get the graphify graph directory for a repo. Priority: explicit repo
+    graph_dir > overlay routing.graph_dir > integrations.graphify.graph_dir
+    > 'graphify-out'."""
+    repo_cfg = get_repo_config(config, repo_name)
+    default = get_integrations(config).get("graphify", {}).get("graph_dir", "graphify-out")
+    return repo_cfg.get("graph_dir") or (repo_cfg.get("routing") or {}).get("graph_dir") or default

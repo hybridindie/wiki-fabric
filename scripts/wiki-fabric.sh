@@ -385,7 +385,8 @@ cmd_install() {
     if [[ "${skip_vault}" == false ]]; then
         local vault_path="$(dirname "${install_dir}")/vault"
         info "Setting up Obsidian vault at ${vault_path}..."
-        bash "${install_dir}/scripts/setup-vault.sh" "${vault_path}"
+        bash "${install_dir}/scripts/setup-vault.sh" "${vault_path}" 2>/dev/null || true
+        run_python "${install_dir}" "${install_dir}/scripts/vault-refresh.py" "${vault_path}" 2>/dev/null || true
         echo ""
     fi
 
@@ -522,12 +523,13 @@ EOF
         warn "Lint has errors — run: wf lint"
     fi
 
-    # Update vault symlinks if vault exists
+    # Update vault symlinks + structure if vault exists
     local vault_path="$(dirname "${fabric_dir}")/vault"
     if [[ -d "${vault_path}" ]]; then
         echo ""
-        info "Refreshing vault symlinks..."
-        bash "scripts/setup-vault.sh" "${vault_path}" 2>/dev/null
+        info "Refreshing vault..."
+        bash "scripts/setup-vault.sh" "${vault_path}" 2>/dev/null || true
+        run_python "${fabric_dir}" "${fabric_dir}/scripts/vault-refresh.py" "${vault_path}" || true
     fi
 
     echo ""
@@ -554,7 +556,13 @@ cmd_status() {
     # Vault
     local vault_path="$(dirname "${fabric_dir}")/vault"
     if [[ -d "${vault_path}" ]]; then
-        ok "Vault:  ${vault_path}"
+        local vault_state
+        vault_state=$(run_python "${fabric_dir}" "${fabric_dir}/scripts/vault-refresh.py" "${vault_path}" --check --quiet 2>/dev/null; echo "exit=$?")
+        if [[ "$vault_state" == *"exit=0"* ]]; then
+            ok "Vault:  ${vault_path} (fresh)"
+        else
+            warn "Vault:  ${vault_path} (structure drift — run: wf vault)"
+        fi
     else
         warn "Vault:  not set up (run: ${SCRIPT_NAME} vault)"
     fi
@@ -590,6 +598,11 @@ sys.exit(0 if find_local_model_path(mid) or os.path.isdir(os.path.expanduser(mid
     local patterns=$(find patterns -name "pattern-*.md" 2>/dev/null | wc -l | tr -d ' ')
     local projects=$(find projects -maxdepth 1 -type d | wc -l | tr -d ' ')
     local entities=$(find global/entities -name "entity-*.md" 2>/dev/null | wc -l | tr -d ' ')
+    local discovered
+    discovered=$(run_python "${fabric_dir}" -c "
+import sys; sys.path.insert(0, '${fabric_dir}/scripts')
+from fabric_config import get_config, get_discovered_repos
+print(len(get_discovered_repos(get_config())))" 2>/dev/null || echo 0)
 
     echo ""
     echo "  Inventory:"
@@ -598,6 +611,7 @@ sys.exit(0 if find_local_model_path(mid) or os.path.isdir(os.path.expanduser(mid
     echo "    Concepts:           ${concepts}"
     echo "    Patterns:           ${patterns}"
     echo "    Projects connected: ${projects}"
+    echo "    Discovered:         ${discovered} (overlay auto-discovery)"
     echo "    Entity pages:       ${entities}"
 
     # Lint health
@@ -627,9 +641,24 @@ cmd_vault() {
     fi
 
     local vault_path="${1:-$(dirname "${fabric_dir}")/vault}"
+    # --check: report drift only; --quiet: no output (used by status/update)
+    local check=false quiet=false
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --check) check=true; shift ;;
+            --quiet) quiet=true; shift ;;
+            *) vault_path="$1"; shift ;;
+        esac
+    done
     echo ""
-    info "Setting up Obsidian vault at ${vault_path}..."
-    bash "${fabric_dir}/scripts/setup-vault.sh" "${vault_path}"
+    if [[ "$check" == true ]]; then
+        info "Checking Obsidian vault at ${vault_path}..."
+        run_python "${fabric_dir}" "${fabric_dir}/scripts/vault-refresh.py" "${vault_path}" --check
+    else
+        info "Setting up / refreshing Obsidian vault at ${vault_path}..."
+        bash "${fabric_dir}/scripts/setup-vault.sh" "${vault_path}" 2>/dev/null || true
+        run_python "${fabric_dir}" "${fabric_dir}/scripts/vault-refresh.py" "${vault_path}"
+    fi
 }
 
 # === Command: bootstrap ===
@@ -756,6 +785,21 @@ case "${1:-help}" in
                 ;;
             *)
                 err "Usage: ${SCRIPT_NAME} models {ensure} [--model <hf-id>] [--yes]"
+                exit 1
+                ;;
+        esac
+        ;;
+    repos)
+        shift
+        fdir=$(find_fabric)
+        subcmd="${1:-migrate}"
+        shift 2>/dev/null || true
+        case "${subcmd}" in
+            migrate)
+                run_python "${fdir}" "${fdir}/scripts/repos-migrate.py" "$@"
+                ;;
+            *)
+                err "Usage: ${SCRIPT_NAME} repos migrate [--dry-run|--apply]"
                 exit 1
                 ;;
         esac

@@ -223,14 +223,49 @@ Install the backends: `pip install -e ".[local]"`.
 0.68–0.78 — the full local-vs-cloud test story with numbers lives in
 [Model Policy & Evals](./evals#local-vs-cloud-what-the-small-model-tests-actually-showed).
 
-## Connecting repos
+## Connecting repos: config lives in the project
+
+Every project carries its own config in `.wiki-overlay.md` (written by
+`wf bootstrap`, **versioned with the project repo**) — identity, domains,
+capture globs, and the LLM `routing:` block:
+
+```yaml
+# /path/to/my-project/.wiki-overlay.md (frontmatter)
+project: my-project
+namespace: my-project
+routing:
+  extract: local      # raw docs never leave the machine
+  synthesize: local
+  dossier: cloud
+```
+
+The fabric **discovers** these automatically: it scans its sibling directories
+for `.wiki-overlay.md` files (respects `namespace:` for the slug), so a
+bootstrap'd project appears in `wf status` with no fabric.yaml edit. Explicit
+`repos:` entries merge **over** the overlay — explicit keys win:
 
 ```yaml
 repos:
-  my-project:
-    path: ../my-project      # relative to fabric root, or absolute
-    graph_dir: graphify-out  # optional, for graphify integration
+  # auto_discover: siblings is the default (set false to disable)
+  # Only exceptions need entries here:
+  my-private-repo:
+    path: ../elsewhere/my-private-repo   # non-sibling location
+    extract: local                        # explicit routing overrides overlay
+  wiki-fabric:
+    path: .                               # the fabric itself
 ```
+
+Stages: `extract` (sees raw docs — highest sensitivity), `synthesize`
+(sanitized statements), `dossier` (experience events). Values: `"cloud"`
+(default) · `"local"` (on-device via `llm.local_model`) · any explicit model id.
+
+Migrating an existing fabric: `wf repos migrate --dry-run` shows which
+per-repo keys would move into overlays; `--apply` writes them. fabric.yaml is
+never modified automatically — prune the moved keys once verified.
+
+The vault mirrors each project's effective config as a generated
+`projects/<slug>/overlay.yml` view (refreshed by `wf vault`/`wf bootstrap`;
+see [CLI Reference](./cli#vault-status-commands-the-human-views)).
 
 ## Ignoring files
 

@@ -52,3 +52,4 @@ graphify-out/.graphify_*
 docs/site/node_modules/
 docs/site/dist/
 docs/site/node_modules
+projects/*/overlay.yml

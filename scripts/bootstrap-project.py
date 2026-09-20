@@ -210,6 +210,10 @@ def main():
     parser.add_argument("--domain", action="append", help="Domain to load (repeatable)")
     parser.add_argument("--skill", action="append", help="Global skill to auto-load (repeatable)")
     parser.add_argument("--source-repo", action="append", help="Upstream repo: path:raw_path:globs")
+    parser.add_argument("--extract", default=None, help="Stage route: local | cloud | model id (raw docs — highest sensitivity)")
+    parser.add_argument("--synthesize", default=None, help="Stage route: local | cloud | model id (sanitized claims)")
+    parser.add_argument("--dossier", default=None, help="Stage route: local | cloud | model id (experience events)")
+    parser.add_argument("--graph-dir", default=None, help="Per-repo graphify graph dir (default: integrations.graphify.graph_dir)")
     parser.add_argument("--init-git", action="store_true", help="Initialize git repo")
     parser.add_argument("--hook", action="store_true", help="Install git post-commit hook (auto-capture+ingest on doc drift)")
     parser.add_argument("--hook-extract-claims", action="store_true", help="Hook also runs LLM claim extraction on drift")
@@ -306,6 +310,11 @@ def main():
         print(f"  Slug:       {project_slug}")
         print(f"  Root:       {project_root}")
         print(f"  Domains:    {', '.join(domains)}")
+        if any(v for v in routing_keys.values()):
+            routes = ", ".join(f"{k}={v}" for k, v in routing_keys.items() if v)
+            print(f"  Routing:    {routes}")
+        else:
+            print(f"  Routing:    all stages cloud (default)")
         print(f"  Skills:     {', '.join(skills)}")
         print(f"  Owner:      {owner}")
         print()
@@ -349,6 +358,30 @@ def main():
   #     - "docs/**/*.md"
 """
 
+    # Per-project LLM routing + integration config (lives in the overlay so it
+    # versions with the project repo; fabric.yaml stays fabric-global).
+    routing_keys = {"extract": args.extract, "synthesize": args.synthesize,
+                    "dossier": args.dossier, "graph_dir": args.graph_dir}
+    if not args.non_interactive and not any(v for v in routing_keys.values()):
+        # Interactive routing prompt (privacy tiering) unless flags given
+        print()
+        print("  LLM routing for this project (stage: where raw docs / claims /")
+        print("  experience events are compiled — privacy + quality tiering):")
+        print("    1) cloud — compiler model, fastest [default]")
+        print("    2) local — on-device (GGUF/MLX), zero egress")
+        for stage in ("extract", "synthesize", "dossier"):
+            choice = input(f"    {stage} [1]: ").strip()
+            if choice == "2":
+                routing_keys[stage] = "local"
+        print()
+    routing_yaml = ""
+    if any(v for v in routing_keys.values()):
+        routing_yaml = "# LLM stage routing + integration (per-project; overrides fabric defaults)\nrouting:\n"
+        for k, v in routing_keys.items():
+            if v:
+                routing_yaml += f"  {k}: {v}\n"
+        routing_yaml += "\n"
+
     overlay_content = f"""---
 project: {project_name}
 namespace: {project_slug}
@@ -358,7 +391,7 @@ domains:
 {domains_yaml}
 skills:
 {skills_yaml}
-source_repos:
+{routing_yaml}source_repos:
 {source_repos_yaml}
 created: {today}
 updated: {today}
@@ -366,7 +399,9 @@ updated: {today}
 
 # Project Overlay: {project_name}
 
-This file configures how the global Wiki Fabric connects to this project.
+This file configures how the global Wiki Fabric connects to this project —
+including LLM stage routing and integration settings. It is the project's
+config; the fabric discovers it (see fabric.yaml repos.auto_discover).
 """
     Path(".wiki-overlay.md").write_text(overlay_content)
     print("Created .wiki-overlay.md")
@@ -455,6 +490,21 @@ This file configures how the global Wiki Fabric connects to this project.
     (namespace_dir / "experience-events").mkdir(parents=True, exist_ok=True)
     (namespace_dir / "decisions").mkdir(parents=True, exist_ok=True)
     print(f"Created project namespace: {namespace_dir.relative_to(find_fabric_root())}")
+
+    # 5b. Vault freshness: write the fabric-side overlay view + refresh links
+    try:
+        fabric_root = find_fabric_root()
+        vr = fabric_root / "scripts" / "vault-refresh.py"
+        if vr.exists():
+            import importlib.util as _ilu
+            spec = _ilu.spec_from_file_location("vault_refresh", str(vr))
+            vrmod = _ilu.module_from_spec(spec)
+            spec.loader.exec_module(vrmod)
+            vault_path = vrmod.default_vault_path()
+            if vault_path.exists():
+                vrmod.refresh(vault_path)
+    except Exception as e:
+        print(f"  (vault refresh skipped: {e})", file=sys.stderr)
 
     # 5a. Namespace README → syncs to the corpus so teammates see what this project is
     write_namespace_readme(namespace_dir, project_slug, project_name, owner, args.source_repo or [])
