@@ -68,11 +68,9 @@ class TestGraphifyGate:
         assert "not enabled" in out.stdout
 
     def _make_fabric(self, enabled=True):
-        scripts = Path(__file__).parent / "_bridge_fixture_scripts"
-        fab = Path(__file__).parent / "_bridge_fixture_fabric"
         import shutil
-        if fab.exists():
-            shutil.rmtree(fab)
+        import tempfile
+        fab = Path(tempfile.mkdtemp()) / "_bridge_fixture_fabric"
         fab.mkdir(parents=True)
         (fab / "scripts").mkdir()
         for mod in ("graphify-bridge.py", "fabric_config.py", "wf_common.py"):
