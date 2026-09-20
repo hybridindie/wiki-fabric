@@ -9,8 +9,8 @@
 set -euo pipefail
 
 FABRIC_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# Default: vault sits beside the fabric, in the same parent directory as all projects
-# e.g. if fabric is at ~/Development/wiki-fabric → vault defaults to ~/Development/vault
+# Default: vault sits beside the fabric (dirname of the fabric root) —
+# wherever the fabric lives, the vault is created next to it
 VAULT_PATH="${1:-$(dirname "${FABRIC_ROOT}")/vault}"
 
 echo "=== Setting up Obsidian vault ==="

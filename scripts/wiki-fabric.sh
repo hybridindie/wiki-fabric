@@ -17,8 +17,7 @@ set -euo pipefail
 
 # === Constants ===
 FABRIC_REPO="${WIKI_FABRIC_REPO:-https://github.com/hybridindie/wiki-fabric.git}"
-DEFAULT_DIR="${HOME}/Development/wiki-fabric"
-DEFAULT_VAULT="${HOME}/Development/vault"
+DEFAULT_DIR="$(pwd)/wiki-fabric"   # harness clone default: CWD (override with --dir)
 SCRIPT_NAME="wf"
 
 # Colors
@@ -109,6 +108,10 @@ find_harness() {
         echo "${DEFAULT_DIR}"
         return 0
     fi
+    if [[ -d "${HOME}/wiki-fabric/scripts" ]]; then
+        echo "${HOME}/wiki-fabric"
+        return 0
+    fi
     return 1
 }
 
@@ -126,16 +129,20 @@ find_fabric() {
         return 0
     fi
     # 3. Dev fallback: harness clone doubles as fabric when configured
-    if [[ -f "${DEFAULT_DIR}/fabric.yaml" ]]; then
-        echo "${DEFAULT_DIR}"
-        return 0
-    fi
+    for cand in "${DEFAULT_DIR}" "${HOME}/wiki-fabric"; do
+        if [[ -f "${cand}/fabric.yaml" ]]; then
+            echo "${cand}"
+            return 0
+        fi
+    done
     # 4. Bare harness clone: scripts still runnable (lint/tests/help), commands
     #    needing content will fail with a helpful message
-    if [[ -d "${DEFAULT_DIR}/scripts" ]]; then
-        echo "${DEFAULT_DIR}"
-        return 0
-    fi
+    for cand in "${DEFAULT_DIR}" "${HOME}/wiki-fabric"; do
+        if [[ -d "${cand}/scripts" ]]; then
+            echo "${cand}"
+            return 0
+        fi
+    done
     # 5. Sibling of current directory (dev checkouts)
     local parent="$(dirname "$(pwd)")"
     if [[ -d "${parent}/wiki-fabric/scripts" ]]; then
@@ -388,7 +395,8 @@ cmd_install() {
     # Harness needs no content dirs — they live in the fabric (created below)
 
     # === Fabric dir: content + config live SEPARATELY from the harness clone ===
-    local fabric_dir; fabric_dir="$(fabric_home)"
+    # WIKI_FABRIC_DIR overrides the XDG default.
+    local fabric_dir="${WIKI_FABRIC_DIR:-$(fabric_home)}"
     if [[ ! -f "${fabric_dir}/fabric.yaml" ]]; then
         mkdir -p "${fabric_dir}"
         info "Creating fabric at ${fabric_dir} (content + config; harness code stays in ${install_dir})"
@@ -428,7 +436,8 @@ cmd_install() {
     ok "Wiki Fabric installed (harness: ${install_dir}; fabric: ${fabric_dir})"
     echo ""
 
-    # Set up vault
+    # Set up vault (beside the fabric by default — relative to where the
+    # fabric actually lives, never a hard-coded home path)
     if [[ "${skip_vault}" == false ]]; then
         local vault_path="$(dirname "${fabric_dir}")/vault"
         info "Setting up Obsidian vault at ${vault_path}..."

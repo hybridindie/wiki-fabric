@@ -31,8 +31,9 @@ manifest.
 ## 2. Install the `wf` CLI
 
 ```bash
-# One-liner: installs uv if missing, clones to ~/Development/wiki-fabric,
-# sets up the venv, installs the wf CLI at ~/.local/bin/
+# One-liner: installs uv if missing, clones the harness to ./wiki-fabric
+# (CWD), creates the fabric at ~/.local/share/wiki-fabric, installs the wf CLI
+# at ~/.local/bin/
 curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/scripts/wiki-fabric.sh | bash
 ```
 
@@ -42,14 +43,15 @@ Install flags:
 |------|--------|
 | `--corpus <git-url>` | Wire team corpus sync at install time (see [Team Sync](./sync)) |
 | `--with-graphify` | Enable the graphify integration (see [Integrations](./integrations)) |
-| `--dir <path>` | Harness clone location (default `~/Development/wiki-fabric`) |
+| `--dir <path>` | Harness clone location (default `./wiki-fabric` — the current directory) |
 | `--repo <url>` | Install from a fork |
 | `--interactive` | Walk through provider/model/routing config (prompts for everything — see [Configuration](./configuration)) |
 | `--no-vault` | Skip the Obsidian vault symlink |
 
 **What the one-liner actually does:** checks for **uv** (Astral's Python
 package manager) and installs it if missing, clones the **harness** (the code —
-this repo) to `~/Development/wiki-fabric`, creates the **fabric** (your content
+this repo) to `./wiki-fabric` (your current directory — use `--dir` to choose
+another spot), creates the **fabric** (your content
 + config) at `~/.local/share/wiki-fabric/` (XDG data dir), sets up the venv in
 the harness, and symlinks `wf` into `~/.local/bin/`. Everything Python runs
 inside that venv — no system pip pollution, no version drift. If uv can't be
@@ -70,8 +72,8 @@ run with plain `python3` from a clone (dev mode: a clone holding a
 ### Manual install (equivalent)
 
 ```bash
-git clone https://github.com/hybridindie/wiki-fabric ~/Development/wiki-fabric
-cd ~/Development/wiki-fabric
+git clone https://github.com/hybridindie/wiki-fabric wiki-fabric
+cd wiki-fabric
 uv venv && uv pip install -r requirements.txt
 mkdir -p ~/.local/bin
 ln -sf "$PWD/scripts/wiki-fabric.sh" ~/.local/bin/wf

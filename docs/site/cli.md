@@ -155,7 +155,7 @@ Creates a directory of **symlinks** to the fabric's human-readable content
 (`AGENTS.md`, `concepts/`, `patterns/`, `skills/`, `evidence/`, ...). Obsidian
 follows symlinks, so you browse and graph the real files with zero duplication
 — edit in the vault, and you're editing the fabric. Default location is
-`~/Development/vault` (beside the fabric); pass a path to override; existing
+beside the fabric (`<fabric-parent>/vault`); pass a path to override; existing
 `.obsidian/` workspace config is preserved.
 
 **Freshness guarantee, three layers:**
