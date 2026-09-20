@@ -145,7 +145,7 @@ def gate_rebuild_determinism(tmp, runs=3):
                    capture_output=True, cwd=str(tmp))
     idx2 = (tmp / "registry" / "catalog.json").read_text()
     js2 = (tmp / "registry" / "catalog.json").read_text() if (tmp / "registry" / "catalog.json").exists() else ""
-    strip = lambda s: "\n".join(l for l in s.split("\n") if not l.startswith(("updated:", '"generated"')))
+    strip = lambda s: "\n".join(l for l in s.split("\n") if not l.lstrip().startswith(("updated:", '"generated"')))
     return {"gate": "G2", "name": "rebuild determinism",
             "detail": "catalog.json identical across rebuilds",
             "passed": strip(idx1) == strip(idx2) and js1 == js2}
