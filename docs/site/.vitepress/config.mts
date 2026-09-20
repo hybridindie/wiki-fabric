@@ -52,6 +52,15 @@ export default withMermaid(defineConfig({
         ]
       },
       {
+        text: 'How It Works',
+        items: [
+          { text: 'The Compiler (capture → claims)', link: '/how-compiler' },
+          { text: 'Retrieval & Delivery', link: '/how-retrieval' },
+          { text: 'The Compounding Loop', link: '/how-compounding' },
+          { text: 'Trust & Governance', link: '/how-trust' }
+        ]
+      },
+      {
         text: 'Using the Fabric',
         items: [
           { text: 'Configuration', link: '/configuration' },

@@ -50,7 +50,10 @@ graph TB
 2. [Core Workflows](./core-workflows) — the loop in practice: ingest → query → learn.
 3. [Task Context](./context) — the payoff: what the agent receives at task time.
 4. [Configuration](./configuration) — providers, model tiers, routing.
-5. The Reference section (CLI, OKF, governance) — for operating and extending the fabric.
+5. **How It Works** — narrative deep-dives into each component:
+   [the compiler](./how-compiler) · [retrieval & delivery](./how-retrieval) ·
+   [the compounding loop](./how-compounding) · [trust & governance](./how-trust)
+6. The Reference section (CLI, OKF, governance) — for operating and extending the fabric.
 
 ## Module map
 
