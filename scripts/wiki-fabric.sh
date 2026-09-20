@@ -413,6 +413,15 @@ cmd_install() {
     # Ensure content dirs in the fabric (evidence/, projects/, patterns/, ...)
     ensure_directories "${fabric_dir}"
 
+    # The fabric is a git repo — `wf sync init` needs commits to publish the
+    # initial corpus, and a local history lets you diff/revert knowledge.
+    if [[ ! -d "${fabric_dir}/.git" ]]; then
+        (cd "${fabric_dir}" && git init -q && git add -A && \
+         git -c user.name="${owner:-wf}" -c user.email="${owner:-wf}@fabric.local" \
+             commit -q -m "chore: initialize fabric" 2>/dev/null || true)
+        ok "Fabric initialized as a git repo (corpus sync ready: wf sync init <url>)"
+    fi
+
     # Ensure uv + python, then sync dependencies into the HARNESS venv
     if ensure_uv; then
         sync_deps "${install_dir}"

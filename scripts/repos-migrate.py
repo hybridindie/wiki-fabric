@@ -63,6 +63,38 @@ def apply_moves(moves, dry_run=True):
         print(f"  {slug}: routing written to {overlay_path}")
 
 
+def prune_fabric_yaml(config, moves):
+    """Remove migrated routing keys from fabric.yaml. For discoverable siblings
+    (overlay exists beside the fabric), drop the whole repos entry; for
+    non-siblings keep path:. Writes fabric.yaml.bak first. Returns count."""
+    import shutil
+    import yaml as _yaml
+    cfg_path = None
+    from fabric_config import _find_config_file
+    cfg_path = _find_config_file()
+    if cfg_path is None:
+        print("  no fabric.yaml found — nothing to prune")
+        return 0
+    shutil.copy(cfg_path, cfg_path.with_suffix(cfg_path.suffix + ".bak"))
+    data = _yaml.safe_load(cfg_path.read_text()) or {}
+    repos = data.get("repos") or {}
+    from fabric_config import FABRIC_ROOT
+    parent = FABRIC_ROOT.parent
+    n = 0
+    for slug, keys, overlay_path in moves:
+        if slug not in repos:
+            continue
+        entry = repos[slug] or {}
+        is_sibling = overlay_path is not None and overlay_path.exists()
+        for k in keys:
+            entry.pop(k, None)
+        if overlay_path is not None and overlay_path.parent.parent == parent and not entry:
+            del repos[slug]  # fully discoverable — entry adds nothing
+        n += 1
+    cfg_path.write_text(_yaml.dump(data, sort_keys=False, allow_unicode=True))
+    return n
+
+
 def yaml_safe_dump(fm):
     import yaml
     return yaml.dump(fm, sort_keys=False, allow_unicode=True, default_flow_style=False)
@@ -73,6 +105,9 @@ def main():
     parser = argparse.ArgumentParser(description="Move per-repo config from fabric.yaml into project overlays")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--prune", action="store_true",
+                        help="After writing overlays, remove migrated keys from fabric.yaml "
+                             "(sibling repos become fully overlay-driven; non-siblings keep path:)")
     args = parser.parse_args()
     config = get_config()
     moves = plan(config)
@@ -82,8 +117,13 @@ def main():
     print(f"Migrating {len(moves)} repo(s):")
     if args.apply:
         apply_moves(moves, dry_run=False)
-        print("\nfabric.yaml NOT modified — prune the moved keys (and path: entries for")
-        print("discoverable siblings) when you've verified the overlays.")
+        if getattr(args, "prune", False):
+            pruned = prune_fabric_yaml(config, moves)
+            print(f"\nfabric.yaml pruned: {pruned} repo(s) now overlay-driven "
+                  f"(backup: fabric.yaml.bak)")
+        else:
+            print("\nfabric.yaml NOT modified — re-run with --prune to remove the migrated keys,")
+            print("or prune by hand (sibling repos become fully overlay-driven).")
     else:
         apply_moves(moves, dry_run=True)
         print("\n(dry run — use --apply to write)")

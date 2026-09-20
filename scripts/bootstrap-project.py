@@ -407,16 +407,20 @@ config; the fabric discovers it (see fabric.yaml repos.auto_discover).
     print("Created .wiki-overlay.md")
 
     # 2. Create/Update opencode config (additive merge)
+    # Resolve harness/fabric locations at bootstrap time (never hard-code
+    # home-relative guesses — the harness may live anywhere).
+    fabric_root = find_fabric_root()
+    harness_root = fabric_root if (fabric_root / "scripts").exists() else fabric_root.parent
     WIKI_FABRIC_BLOCK = {
         "references": {
             "wiki-fabric": {
-                "path": "~/wiki-fabric",
+                "path": str(fabric_root),
                 "description": "Global knowledge fabric (evidence-first wiki + cross-project promotion)"
             }
         },
-        "instructions_add": ["~/wiki-fabric/AGENTS.md", ".wiki-overlay.md"],
+        "instructions_add": [str(fabric_root / "AGENTS.md"), ".wiki-overlay.md"],
         "watcher_ignore_add": ["evidence/raw/**", ".obsidian/**"],
-        "skills_paths_add": ["~/wiki-fabric/system/.opencode/skills"]
+        "skills_paths_add": [str(harness_root / "system" / "opencode" / "skills")]
     }
 
     oc_candidates = [Path("opencode.json"), Path(".opencode/opencode.json")]

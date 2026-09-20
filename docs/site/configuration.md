@@ -268,8 +268,12 @@ Stages: `extract` (sees raw docs — highest sensitivity), `synthesize`
 (default) · `"local"` (on-device via `llm.local_model`) · any explicit model id.
 
 Migrating an existing fabric: `wf repos migrate --dry-run` shows which
-per-repo keys would move into overlays; `--apply` writes them. fabric.yaml is
-never modified automatically — prune the moved keys once verified.
+per-repo keys would move into overlays; `--apply --prune` writes them **and**
+removes the migrated keys from fabric.yaml (backup at `fabric.yaml.bak`).
+Discoverable siblings become fully overlay-driven — their `repos:` entries
+disappear entirely. After pruning, a multi-project fabric.yaml is ~15 lines:
+owner, llm, integrations, domains, and `repos:` entries only for the fabric
+itself and non-sibling repos.
 
 The vault mirrors each project's effective config as a generated
 `projects/<slug>/overlay.yml` view (refreshed by `wf vault`/`wf bootstrap`;

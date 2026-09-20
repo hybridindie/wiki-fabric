@@ -41,7 +41,7 @@ _PYTHON_DETECT = """\
 # Resolve the fabric root + venv python at hook time (not install time):
 # the fabric can be re-installed or updated after the hook is installed.
 _WF_FABRIC=""
-for _wf_cand in "${WIKI_FABRIC_DIR:-}" "$HOME/Development/wiki-fabric" "$HOME/wiki-fabric" "$(dirname "$(pwd)")/wiki-fabric"; do
+for _wf_cand in "${WIKI_FABRIC_DIR:-}" "${XDG_DATA_HOME:-$HOME/.local/share}/wiki-fabric" "$HOME/Development/wiki-fabric" "$HOME/wiki-fabric" "$(dirname "$(pwd)")/wiki-fabric"; do
     [ -n "$_wf_cand" ] || continue
     [ -d "$_wf_cand/scripts" ] || continue
     _WF_FABRIC="$_wf_cand"
