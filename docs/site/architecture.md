@@ -52,7 +52,9 @@ graph TB
 4. [Configuration](./configuration) — providers, model tiers, routing.
 5. **How It Works** — narrative deep-dives into each component:
    [the compiler](./how-compiler) · [retrieval & delivery](./how-retrieval) ·
-   [the compounding loop](./how-compounding) · [trust & governance](./how-trust)
+   [the compounding loop](./how-compounding) · [trust & governance](./how-trust) ·
+   [the corpus & connected projects](./how-corpus) ·
+   [staying in sync (hooks & CI)](./how-sync)
 6. The Reference section (CLI, OKF, governance) — for operating and extending the fabric.
 
 ## Module map

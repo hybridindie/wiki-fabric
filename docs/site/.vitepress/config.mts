@@ -57,7 +57,9 @@ export default withMermaid(defineConfig({
           { text: 'The Compiler (capture → claims)', link: '/how-compiler' },
           { text: 'Retrieval & Delivery', link: '/how-retrieval' },
           { text: 'The Compounding Loop', link: '/how-compounding' },
-          { text: 'Trust & Governance', link: '/how-trust' }
+          { text: 'Trust & Governance', link: '/how-trust' },
+          { text: 'The Corpus & Connected Projects', link: '/how-corpus' },
+          { text: 'Staying in Sync (Hooks & CI)', link: '/how-sync' }
         ]
       },
       {

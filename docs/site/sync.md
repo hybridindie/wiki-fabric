@@ -65,4 +65,4 @@ never publishes your corpus to a public URL.
 
 ---
 
-Next: [Moving knowledge between fabrics: OKF exchange](./okf)
+Next: [How It Works: Staying in Sync (Hooks & CI)](./how-sync)
