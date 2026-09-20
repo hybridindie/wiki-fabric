@@ -28,7 +28,7 @@ verified:
 ---
 ```
 
-- **Actors** (§7): `agent/<owner>/<model>` · `human:<id>` · `process:<id>`
+- **Actors** (§7 — section numbers refer to the [OKF v0.2 specification](https://okf.md/spec/)): `agent/<owner>/<model>` · `human:<id>` · `process:<id>`
 
 ### Writing provenance: the actor convention
 
@@ -47,7 +47,7 @@ rules for agent authors:
 - Claim pages minted by extraction carry the compiler model — that's the
   audit trail for "which model asserted this".
 - Pages a human edited by hand get `verified: [{by: human:<id>, at: ...}]`
-  added — that's what pushes trust tier to `human-reviewed` and what the
+  added — that's what pushes trust tier to `human-reviewed` and what the maturity gate (maturity = how many independent projects have observed the pattern — see the [lifecycle](./cli#lifecycle-how-pages-move-through-statuses)) requires at maturity ≥ 2 — the
   maturity gate requires at maturity ≥ 2.
 - Never fake a `process:` actor for LLM output; the tier system only means
   something if actors are honest.

@@ -41,7 +41,7 @@ Install flags:
 
 | Flag | Effect |
 |------|--------|
-| `--corpus <git-url>` | Wire team corpus sync at install time (see [Team Sync](./sync)) |
+| `--corpus <git-url>` | Point the fabric at a team-shared corpus (the shared knowledge content, synced via git — see [Team Sync](./sync)) |
 | `--with-graphify` | Enable the graphify integration (see [Integrations](./integrations)) |
 | `--dir <path>` | Harness clone location (default `./wiki-fabric` — the current directory) |
 | `--repo <url>` | Install from a fork |
@@ -110,7 +110,7 @@ wf bootstrap /path/to/my-project      # connect a project (auto-discovered; --ex
 wf capture my-project                 # pull docs from upstream repos → evidence/raw/
 wf ingest evidence/raw/my-project/docs/readme.md --extract-claims
 wf query "Why does my code batch writes?"
-wf log --project my-project --problem "..." --intervention "..." --outcomes "..."
+wf log --project my-project --problem "..." --intervention "..." --outcomes "..."   # log an experience event: problem → what you did → measured outcome
 ```
 
 `wf bootstrap` writes `.wiki-overlay.md` into the project, creates its

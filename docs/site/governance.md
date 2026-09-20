@@ -8,7 +8,12 @@ updated: 2026-09-19
 
 # Governance: The Answers, Enforced
 
-Agent-maintained knowledge raises hard questions: who verified this? does it still hold? how do you know the agent followed it? Each answer below points at the mechanism that enforces it — not a policy sentence.
+Agent-maintained knowledge raises hard questions: who verified this? does it
+still hold? how do you know the agent followed it? Each answer below points at
+the mechanism that enforces it — not a policy sentence. Two terms recur:
+**source_refs** — the per-claim citation (source file, locator, verbatim
+quote) — and **change-sets** — proposed edits staged for human approval before
+they touch canonical pages.
 
 
 | Question | The fabric's answer | Where it lives |

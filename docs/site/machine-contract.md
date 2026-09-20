@@ -21,7 +21,10 @@ python3 scripts/rebuild-index.py # writes registry/catalog.json (catalog with id
 The lint report codes are stable: `FRONTMATTER`, `BROKEN-LINK`, `SCOPE`,
 `REVIEW-AFTER`, `CLAIM`, `CONCEPT`, `PATTERN`, `DUP-ID`, `SOURCE`,
 `SOURCE-DRIFT`, `SYNC-CONFLICT`, `ORPHAN`, `LLM-CONFIG`, `GENERATED`,
-`STALE-AFTER`, `TRUST-TIER`. `registry/catalog.json` carries every
+`STALE-AFTER`, `TRUST-TIER`, `IGNORE-CONFIG`, `VERIFIED`, plus the OKF-floor
+`OKF-*` codes (`--okf` mode). The rest are structural — `FRONTMATTER`
+(malformed metadata), `BROKEN-LINK`, `DUP-ID`, `SOURCE` — and each message
+names the offending page and field. `registry/catalog.json` carries every
 cataloged page with its `id`, `type`, `scope`, `status`, `maturity`,
 `review_after`, and `last_verified` — a deterministic, auditable answer to
 "what knowledge exists and how fresh is it."
@@ -73,10 +76,10 @@ CI and dashboards consume. `--json` prints it to stdout for piping.
 
 ### `registry/log.md` — the append-only timeline
 
-OKF §9 shape: one `## YYYY-MM-DD` heading per day, `* **<op> | <subject>**`
+OKF §9 shape (the OKF bundle standard's log format — see [OKF](./okf)): one `## YYYY-MM-DD` heading per day, `* **<op> | <subject>**`
 bullets beneath. Eval scripts, imports, hooks, and promotions **append**; no
 tooling rewrites past entries (CONTRIBUTING.md: "never rewrite history — the
-log is the history"). It's also the compiler-eval gate's data source:
+log is the history"). It's also the data source for the compiler-eval gate (why model swaps require re-evaluation — see [Model Policy & Evals](./evals)):
 `promote`/`mine-promotions` scan it for a PASS eval naming the current
 compiler model.
 

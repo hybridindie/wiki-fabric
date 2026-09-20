@@ -10,12 +10,13 @@ updated: 2026-09-19
 
 Team sync is the deployment story: one fabric per machine, one corpus shared via git. Configure the corpus remote in [Configuration](./configuration) or at install time.
 
-One fabric per machine, **one corpus shared via git**. `wf sync` pushes/pulls
-your knowledge content (claims, sources, patterns, skills, concepts, experience
-events, decisions, syntheses, registry) to a shared git remote — a private
-GitHub repo works well. The harness (scripts, schemas) stays per-machine and
-updates via `wf update` from the public repo; content and code have different
-lifecycles and remotes.
+One fabric per machine, **one corpus shared via git**. Throughout the docs:
+**the fabric** is your local knowledge base; **the corpus** is the shared
+subset of it that syncs to your team remote. `wf sync` pushes/pulls that
+content (claims, sources, patterns, experience events, registry) to a git
+remote — a private GitHub repo works well. The harness (scripts, schemas)
+stays per-machine and updates via `wf update` from the public repo; content
+and code have different lifecycles and remotes.
 
 ```bash
 # One-time: point your fabric at the shared corpus remote
@@ -46,17 +47,16 @@ new projects by pulling — nothing to configure on their side.
 
 ## Conflict policy: review queue, never silent overwrite
 
- if two machines
-changed the same file, `wf sync pull` aborts the merge and writes a conflict
-dossier to `registry/conflicts/<date>/` containing *both* versions (ours vs
-theirs) side by side. The fabric stays clean; you decide. Unresolved conflicts
+When two machines changed the same file, `wf sync pull` aborts the merge and
+writes a conflict record to `registry/conflicts/<date>/` containing *both*
+versions (ours vs theirs) side by side. The fabric stays clean; you decide. Unresolved conflicts
 make `wf lint` fail (SYNC-CONFLICT errors) and block `wf sync push`, so a
 disagreement can't sneak into the shared truth. Resolve by picking the correct
 version for the source page, delete the conflict file, then push.
 
 ## Why a separate remote from this public repo
 
- this repo is the public
+This repo is the public
 harness; your corpus is your private knowledge. Keeping them on different
 remotes means `wf update` (harness) never touches team content, and `wf sync`
 never publishes your corpus to a public URL.

@@ -8,7 +8,10 @@ updated: 2026-09-19
 
 # Behavior Evals & Model Policy
 
-The compiler evals (`eval.py`, golden corpus) measure extraction quality.
+The compiler evals measure extraction quality against the **golden corpus** —
+a fixed set of 9 test sources with known-correct claim extractions. Every
+compiler model must score above thresholds on it (recall, exact locators,
+verbatim quotes) before it's trusted to write canonical evidence.
 **Behavior evals** measure the thing that actually matters: when an agent
 receives the context manifest, does it make a better decision?
 
@@ -105,7 +108,7 @@ coverage delta isolates the value of the ingest step itself.
 
 ## Stability & sensitivity evaluation
 
-Closes the rubric's reproducibility rows with hard gates:
+Closes the reproducibility requirements with hard, machine-checkable gates:
 
 ```bash
 python3 scripts/eval-stability.py --skip-llm          # deterministic gates (CI)
@@ -117,11 +120,16 @@ python3 scripts/eval-stability.py --record            # append metrics to regist
 |------|----------------|-----------|
 | G1 context determinism | 20 manifest runs byte-identical | exact (0-token code must not vary) |
 | G2 rebuild determinism | `rebuild-index` output identical across runs | exact |
-| G3 ingest stability | same model, same source, 2 runs | fuzzy word-coverage ≥ 0.7 (exact Jaccard reported; paraphrase ≠ instability) |
+| G3 ingest stability | same model, same source, 2 runs | fuzzy word-coverage ≥ 0.7 (exact Jaccard reported — literal word-set overlap; paraphrase ≠ instability) |
 | G6 locator presence | every claim carries an L-locator | 1.0 |
 | G4 model sensitivity | two models on the same source | fuzzy ≥ 0.5 (target 0.8); a fail means model swap requires re-running compiler evals |
 
-**Live findings** (recorded in `registry/log.md`): context/rebuild are exactly
+These runs produced findings worth knowing. First, the deterministic parts
+are exactly deterministic. Second, the same model re-extracting the same source
+paraphrases rather than repeating. Third — the important one — different models
+initially disagreed wildly, and the fix was a prompt contract, not a bigger
+model. (Recorded in `registry/log.md`; commands are reproducible.):
+context/rebuild are exactly
 deterministic (~40ms); same-model extraction is semantically stable (fuzzy 0.76–0.86)
 but drifts in wording (exact 0.31–0.73). A **5-model matrix** — local
 (qwen2.5-coder:7b, qwen3.8:27b-mlx) vs Ollama cloud (deepseek-v4.1-flash:cloud,
@@ -156,7 +164,7 @@ G4 cross-model agreement against the cloud compiler):
 | Model | Size | Golden recall | Locator | Quote rate | Verdict |
 |-------|------|--------------|---------|------------|---------|
 | `qwen2.5-coder:7b` (GGUF/llama.cpp) | 4.7 GB | PASS | 1.0 PASS | 0.88 PASS | solid local fallback |
-| `gemma4:e4b` stock QAT | 6.1 GB | 0.89 PASS | 1.0 PASS | **0.65 FAIL** | close, two gates failed |
+| `gemma4:e4b` stock QAT (quantization-aware training) | 6.1 GB | 0.89 PASS | 1.0 PASS | **0.65 FAIL** | close, two gates failed |
 | `gemma4:e4b-fixed` (temp 0.1 baked) | 6.1 GB | 0.89 PASS | 1.0 PASS | **0.96 PASS** | **viable local compiler** |
 | `deepseek-v4.1-flash:cloud` | — | 0.89 | 1.0 | 0.96 | precision-critical tier |
 

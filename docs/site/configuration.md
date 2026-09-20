@@ -49,7 +49,8 @@ llm:
   # or pre-fetch with: wf models ensure [--yes]
   local_model: mlx-community/gemma-4-e4b-it-4bit
 
-# ─── Connected repos (namespaces) ───────────────────────────────────────────
+# ─── Connected repos (namespaces): each project gets its own folder ────────
+# inside the fabric, so its claims stay separate from global knowledge ─────
 repos:
   # Every connected project gets an entry. path is relative to the fabric
   # root (or absolute). The fabric itself can be its own namespace ("path: .")
@@ -225,8 +226,9 @@ wf models ensure [--yes]      # check + offer download; --check exits 0/1 for sc
 Install the backends: `pip install -e ".[local]"`.
 
 **Quality expectations:** the default local models pass the golden-corpus eval
-(recall 0.89, quote-verbatim 0.96) and agree with the cloud compiler at G4
-0.68–0.78 — the full local-vs-cloud test story with numbers lives in
+(recall 0.89, quote-verbatim 0.96) and agree with the cloud compiler at 0.68–0.78 on the cross-model
+agreement gate (G4 — see [Model Policy & Evals](./evals)) — the full
+local-vs-cloud test story with numbers lives in
 [Model Policy & Evals](./evals#local-vs-cloud-what-the-small-model-tests-actually-showed).
 
 ## Connecting repos: config lives in the project

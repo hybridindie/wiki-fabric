@@ -8,7 +8,7 @@ updated: 2026-09-19
 
 # Task Context: Deterministic Context Assembly
 
-This page is the deep-dive on step 5 of [the loop](./core-workflows) — the command that turns governance into something an agent actually receives.
+This page is the deep-dive on the command the whole loop feeds: after you capture → ingest → query ([Core Workflows](./core-workflows)), `wf context` is what the agent actually receives before writing code.
 
 Before an agent starts work, compile exactly the knowledge it needs — no
 recursive filesystem scanning, no dumping the whole corpus, no LLM retrieval:

@@ -8,6 +8,11 @@ updated: 2026-09-19
 
 # Optional Integrations
 
+**Graphify** is a companion tool that parses a repo's code into a call-graph
+(function → function → import edges) using AST parsing — no LLM. Wiki-fabric
+consults that graph to detect stale claims after refactors and to enrich
+claims with code provenance.
+
 Integrations add capabilities on top of the core loop. They are declared in `fabric.yaml` (see [Configuration](./configuration)) and are **never load-bearing** — with the integration off, every script behaves exactly as the core docs describe. The design rule: *integrations add capabilities; they are never load-bearing.*
 
 ## What each integration does

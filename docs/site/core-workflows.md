@@ -10,6 +10,13 @@ updated: 2026-09-19
 
 ## 1. Ingest: Source → Claims
 
+Ingesting a document is not fire-and-forget: everything the LLM extracts is
+**staged for human review** before it can become canonical knowledge. Two terms
+recur below — a **change-set** is the proposed edit (a manifest of what changed
+plus a diff) that a human approves or rejects, and a **locator** is the exact
+file-and-line pointer every claim carries, so each statement can be checked
+against its source.
+
 ```mermaid
 flowchart LR
     A["Raw source<br/>evidence/raw/"] --> B["Source record<br/>(sha256, metadata)"]
@@ -54,7 +61,7 @@ wf capture my-project --git owner/repo --dry-run
 
 | Signal | What it gives the fabric | Cost control |
 |---|---|---|
-| PR bodies + review threads | The *why* behind changes — problem, debate, tradeoffs rejected and chosen. This is `experience-event` material pre-written by people who were there | 1 LLM call per PR, so `--limit` and `--since` bound the blast radius |
+| PR bodies + review threads | The *why* behind changes — problem, debate, tradeoffs rejected and chosen. This is pre-written `experience-event` material (structured records of problem → what we tried → what happened — see §3 below), written by people who were there | 1 LLM call per PR, so `--limit` and `--since` bound the blast radius |
 | Issues | Structured `observed_problem` reports, often with repro steps and environment details | Filtered by date window; closed/stale issues usually aren't worth extracting |
 | Revert commits | Failed interventions — the seeds of anti-patterns. A revert says "we tried this and it was wrong", which docs never record | Deterministic prefix filter, 0 tokens |
 | Conventional commits (`fix:`, `feat:`, `perf:`) | Hotspot trail: which subsystems keep breaking | `chore:`/`style:`/`test:`/`ci:` skipped — most commits are noise |
@@ -67,7 +74,7 @@ capturable threads — and those 40 carry more decision history than all the doc
 combined. Every captured thread keeps its PR number / commit SHA, which are valid
 claim locators — auditable the same way line ranges are.
 
-**Scenario — archaeology on a inherited codebase.** You inherit a repo with
+**Scenario — archaeology on an inherited codebase.** You inherit a repo with
 thin docs and 8,000 commits. Instead of skimming `git log` by hand, run
 `wf capture my-project --git owner/repo --since 1y` then ingest the captured
 threads. The fabric compiles claims like "auth middleware was rewritten to
@@ -118,6 +125,10 @@ budget at the highest-traffic areas.
 
 ## 2. Query: Question → Evidence-Backed Answer
 
+When the agent asks a question mid-task, it can't afford hallucinated summaries
+or token-billed retrieval. `wf query` routes the question by type, scores pages
+deterministically, and returns a structured answer with citations you can open:
+
 ```mermaid
 flowchart TD
     Q["Question"] --> R{"Query type"}
@@ -137,7 +148,7 @@ flowchart TD
 wf query "Why does my code batch writes but pipeline reads?"
 
 # Save reusable answers as synthesis pages
-wf query "What patterns apply to batch-write systems?" --save
+wf query "What patterns apply to batch-write systems?" --save   # file as a synthesis page (a reusable, citable query result)
 
 # Force query type
 wf query "What did we decide about the bridge?" --type decision
@@ -242,6 +253,8 @@ of wiki folders, no "let me catch you up" prompt engineering.
 
 ## 5. Maintenance
 
+Keeping the fabric current is mostly deterministic. (Graphify — an optional integration, see [Integrations](./integrations) — builds a code call-graph so the fabric can detect when code changes invalidate stored claims.)
+
 ```mermaid
 flowchart TD
     subgraph "Keep Fabric Current"
@@ -296,14 +309,14 @@ it has a `repos:` entry pointing at `.` — its self-graph lives in
 
 **Scenario — docs went stale.** You refactor `gather_reads` into
 `collect_reads`; the claim "gather_reads makes O(N) reads ~O(1)" now points at a
-symbol that no longer exists. The graphify diff (AST-only, 0 tokens) detects the
+symbol that no longer exists. The graphify diff (AST-only — Abstract Syntax Tree parsing, no LLM) detects the
 rename and flags the affected claims as stale. Refresh re-ingests only the
 changed source, and the claim either updates or is superseded — with the change
 recorded in the change-set manifest, never silently rewritten.
 
 ## 6. Hooks: The Loop Runs Itself (opt-in)
 
-Modeled on graphify's git-hook system — marker-delimited, append-safe, detached.
+Modeled on graphify's git-hook system (marker-delimited, append-safe, detached): a post-commit hook captures doc drift and ingests it automatically.
 
 ```mermaid
 flowchart TD

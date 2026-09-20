@@ -13,6 +13,11 @@ Every `wf` command, every page type, and the module layout of the harness. For c
 
 ## Note Types
 
+Every page in the fabric is one of twelve types. The type drives what lint
+demands of it and who can change its status — that's how a claim and a pattern
+can have different trust rules. The ones you'll touch daily are `claim`,
+`experience-event`, `pattern`, and `decision`.
+
 | Type | Location | Purpose |
 |------|----------|---------|
 | `source` | `evidence/sources/` | Immutable bibliographic record + sha256 |
@@ -52,13 +57,13 @@ proposed ──(locator verified)──> supported ──(newer claim wins)─�
 **Patterns (maturity ladder):**
 
 ```text
-candidate (m0-m1) ──(2 independent lineages)──> recommended (m2) ──(human review)──> standard (m3)
+candidate (m0-m1) ──(observed in ≥2 independent projects)──> recommended (m2) ──(human review)──> standard (m3)
       │                                                                                      │
       └────────────────────── deprecated ←──────────── any time ─────────────────────────────┘
 ```
 
 - `recommended` is **lint-enforced** to have maturity ≥ 2 and evidence from
-  ≥2 independent projects (the [independence rule](./why))
+  ≥2 independent projects (independent = the observations came from different codebases, not one project copied to another (the independence rule))
 - `standard` requires a `human:` verifier — the machine can never bless a
   pattern into load-bearing status
 - `deprecated` keeps the page for history; context compilation stops selecting it
@@ -119,7 +124,7 @@ Pipeline scripts (each runs standalone: `python3 scripts/<script>.py --help`):
 | `bootstrap-project.py` | Connect new project to fabric | 0 tokens |
 | `ensure-local-model.py` | Check/download `llm.local_model` (`wf models ensure`) | 0 tokens |
 | `bootstrap-fabric.sh` | One-time global install | 0 tokens |
-| `apply-changeset.sh` | Apply a change-set to canonical pages | 0 tokens |
+| `apply-changeset.sh` | Apply a change-set (the change-set apply script) | 0 tokens |
 
 Shared modules (imported by the scripts above; not entry points):
 
