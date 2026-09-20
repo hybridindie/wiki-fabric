@@ -5,10 +5,14 @@ fabric.yaml
 evidence/
 global/entities/
 global/graphs/
-patterns/*.md
-anti-patterns/*.md
-skills/*.md
-concepts/*.md
+patterns/**
+!patterns/.gitkeep
+anti-patterns/**
+!anti-patterns/.gitkeep
+skills/**
+!skills/.gitkeep
+concepts/**
+!concepts/.gitkeep
 projects/*/experience-events/*.md
 projects/*/decisions/*.md
 projects/*/README.md
@@ -16,8 +20,10 @@ registry/log.md
 registry/catalog.json
 registry/promotions/
 registry/epics/
-domains/
-syntheses/
+domains/**
+!domains/.gitkeep
+syntheses/**
+!syntheses/.gitkeep
 registry/conflicts/
 
 # === Obsidian workspace ===

@@ -157,7 +157,7 @@ def scope_for(rel):
     """Derive the expected scope from a page's path (AGENTS.md scope mapping)."""
     s = rel.as_posix()
     if s.startswith(("global/", "registry/", "schemas/", "evaluations/", "syntheses/", "concepts/",
-                     "patterns/", "anti-patterns/", "skills/", "system/", "tests/", "examples/")):
+                     "patterns/", "anti-patterns/", "skills/", "system/", "tests/", "templates/")):
         return "global"
     if s.startswith("domains/"):
         return "domain"

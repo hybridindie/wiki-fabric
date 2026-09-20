@@ -78,9 +78,13 @@ persistent memory layer.
 
 ## Where Things Live
 
-- **Content**: `evidence/` (sources, summaries, claims), `patterns/`,
-  `skills/`, `concepts/`, `domains/`, `projects/`
-- **Registry**: `registry/catalog.json` (machine registry, auto-generated),
+Two trees: the **harness** (shipped here) and the **fabric** (gitignored user
+content; fresh clones carry `.gitkeep`ed skeletons of the content dirs).
+
+- **Content (fabric)**: `evidence/` (sources, summaries, claims), `patterns/`,
+  `skills/`, `concepts/`, `domains/`, `projects/` — these paths are the OKF
+  bundle layout and are load-bearing (scope model, lint, okflint)
+- **Registry (fabric+harness)**: `registry/catalog.json` (auto-generated),
   `registry/log.md` (append-only timeline, OKF §9 shape)
 - **Schemas**: `schemas/frontmatter.md` (per-type contracts),
   `schemas/ontology.md` (domain taxonomy)
@@ -89,7 +93,9 @@ persistent memory layer.
 - **Attesters + executor skills**: `references/attesters/`, `references/skills/`
 - **Agent-facing assets**: `system/skills/` (6), `system/always-on/`,
   `system/opencode/plugins/`
+- **Templates + examples**: `templates/` (page scaffolds), `templates/examples/`
 - **Project overlay**: `.wiki-overlay.md` in each connected project root
+  (per-project config — routing, identity; discovered by the fabric)
 - **Shared modules**: `scripts/fabric_config.py`, `scripts/extract_backends.py`,
   `scripts/local_llm.py`, `scripts/wf_common.py`, `scripts/eval_core.py`
   (see README Scripts Reference for the map)

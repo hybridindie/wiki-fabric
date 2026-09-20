@@ -143,7 +143,7 @@ Counts live in your fabric, not the repo. Check yours anytime:
 wf status
 ```
 
-The repo ships only the harness — examples, templates, schemas, and scripts. Your claims, captures, and patterns accumulate locally as you connect projects.
+The repo ships only the harness — templates, examples (`templates/examples/`), schemas, and scripts. Your claims, captures, and patterns accumulate locally as you connect projects.
 
 ---
 

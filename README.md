@@ -136,6 +136,34 @@ model isn't cached or the platform lacks the backend.
 
 ---
 
+## Repository layout
+
+Two kinds of tree live here: the **harness** (tooling, shipped in this repo) and the **fabric** (your knowledge, gitignored — lives in your corpus/vault).
+
+| Path | Kind | What it is |
+|------|------|-----------|
+| `README.md` `AGENTS.md` `CONTRIBUTING.md` `LICENSE` `index.md` | harness | entry points (index.md is the OKF root index) |
+| `pyproject.toml` `requirements.txt` `okf-base.yaml` | harness | Python packaging, deps, okflint profile |
+| `scripts/` | harness | the pipeline: ingest, query, context, lint, promote, sync, hooks |
+| `tests/` | harness | 220+ unit tests (`-m "not live"` for fast suite) |
+| `docs/site/` | harness | this documentation (VitePress, deployed to Pages) |
+| `system/` | harness | agent-facing assets: `skills/` (6 SKILL.md), `always-on/`, `opencode/plugins/` |
+| `schemas/` | harness | frontmatter contracts (`frontmatter.md`) + domain ontology |
+| `templates/` | harness | page scaffolds (`pattern.md`, `decision.md`, ...) + `examples/` |
+| `references/` | harness | attesters (deterministic receipt checks) + executor skills |
+| `evaluations/` | harness | golden corpus, behavior fixtures, eval scripts' data |
+| `global/computations/` | harness | attested-computation contracts (OKF §10) |
+| `evidence/` | **fabric** | captured sources, summaries, claims (gitignored) |
+| `projects/` | **fabric** | per-project namespaces (gitignored) |
+| `patterns/` `concepts/` `skills/` `anti-patterns/` `domains/` `syntheses/` | **fabric** | canonical knowledge (gitignored) |
+| `registry/` | fabric+harness | `promotion-queue.md` tracked; `log.md`, `catalog.json` generated |
+| `fabric.yaml` | yours | config (gitignored — see [Configuration](docs/site/configuration.md)) |
+| `graphify-out/` | generated | the self knowledge graph |
+
+Fresh clones ship the harness plus the layout skeleton (`.gitkeep`ed content dirs); your knowledge accumulates locally and syncs via [Team Sync](docs/site/sync.md).
+
+---
+
 ## Documentation
 
 Full docs at **[hybridindie.github.io/wiki-fabric](https://hybridindie.github.io/wiki-fabric/)** — with search.
