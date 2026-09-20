@@ -197,6 +197,17 @@ The 0.78-vs-0.8 G4 shortfall is small-model capability variance — acceptable
 precision-critical path to the cloud compiler. The local tier exists for
 privacy and availability, not to beat the cloud on recall.
 
+**Sources.** Every number in this section is recorded in
+`registry/log.md` inside your fabric dir (`~/.local/share/wiki-fabric/` after
+a standard install) — grep for the model id to find the eval block:
+
+```bash
+grep -B2 -A8 "gemma4:e4b-fixed" ~/.local/share/wiki-fabric/registry/log.md
+```
+
+Each entry carries the command that produced it (`eval.py`, `eval-stability.py --record`),
+so any number can be re-run to verify.
+
 ### Policy consequences
 
 - The compiler-eval gate (promote/mine refuse without a recorded PASS eval)
