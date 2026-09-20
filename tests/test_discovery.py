@@ -118,7 +118,8 @@ class TestSiblingDiscovery(unittest.TestCase):
         cfg["llm"] = {"compiler_model": "deepseek-v4.1-flash:cloud"}
         with mock.patch.object(fc, "FABRIC_ROOT", self.fabric), \
              mock.patch.object(fc, "_OVERLAY_CACHE", None):
-            self.assertEqual(fc.get_stage_route(cfg, "proj-a", "extract"), "mlx-community/gemma-4-e4b-it-4bit")
+            from fabric_config import get_local_model
+            self.assertEqual(fc.get_stage_route(cfg, "proj-a", "extract"), get_local_model(cfg))
             self.assertTrue(fc.is_local_route(cfg, "proj-a", "extract"))
             # proj-b has no routing: cloud
             self.assertEqual(fc.get_stage_route(cfg, "proj-b", "extract"), "deepseek-v4.1-flash:cloud")
