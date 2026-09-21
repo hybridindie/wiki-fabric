@@ -600,6 +600,14 @@ def main():
         
         print(f"  → Created promotion dossier and pattern for '{cluster_key}'")
 
+    # Self-describing next step: graphify enrichment (when active) belongs in
+    # the command flow, not just skill prose.
+    if _local_model is None or True:
+        from fabric_config import is_integration_active
+        if is_integration_active(_cfg, "graphify"):
+            print("\nNext (graphify active): python3 scripts/graphify-bridge.py --enrich "
+                  "— attaches code provenance to code-adjacent dossiers before review.")
+
 
 if __name__ == "__main__":
     main()

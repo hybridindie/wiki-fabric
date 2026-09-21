@@ -205,6 +205,8 @@ def ingest_source(source_path, extract_claims=False, model=None, dry_run=False, 
             print(f"Resuming pending source {existing.name}")
         else:
             print(f"Skipped — already ingested as {existing.name} (matching sha256)")
+            print("  (anti-loop: unchanged sources are never re-ingested. If claims are "
+                  "missing, run: wf ingest --pending <project> --extract-claims)")
             return False
 
     namespace = namespace or find_project_namespace(Path.cwd())

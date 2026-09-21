@@ -852,6 +852,11 @@ case "${1:-help}" in
         shift
         run_python "$(find_fabric)" "$(find_fabric)/scripts/log-experience.py" "$@"
         ;;
+    skill)
+        shift
+        fdir=$(find_fabric)
+        run_python "${fdir}" "${fdir}/scripts/skill.py" "$@"
+        ;;
     models)
         shift
         fdir=$(find_fabric)
@@ -931,7 +936,9 @@ case "${1:-help}" in
         echo "  sync {init|status|push|pull}      Share the corpus with a team via a git remote"
         echo "  hook {install|uninstall|status}   Git post-commit auto-capture+ingest in a project"
         echo "                                    (--extract-claims: LLM runs on drift)"
-        echo "  harness {install|status}          Install always-on + skills into detected agent"
+        echo "  skill [--list] [<name>]           Print the procedure for a workflow (ingest, promote, ..."
+        echo "                                    refresh) — universal across agent harnesses"
+        echo "  harness {install|status}          Install always-on + procedures into detected agent"
         echo "                                    harnesses (--all|--only claude,copilot| --force)"
         echo "                                    (alias: claude — legacy always_on.py via 'claude legacy')"
         echo "  okf export --out DIR            Export fabric as a portable OKF v0.2 bundle"

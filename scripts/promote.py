@@ -128,8 +128,15 @@ def promote_dossier(dossier_path, dry_run=False):
         
         # Update promotion queue
         update_promotion_queue_file()
-        
+
         print(f"Promoted pattern: {pattern_path.name}")
+        # Self-describing next steps (graphify provenance + usage feedback)
+        from fabric_config import is_integration_active, get_config as _gc
+        if is_integration_active(get_config(), "graphify"):
+            print("Next (graphify active): python3 scripts/graphify-bridge.py --enrich "
+                  "— attach code provenance to code-adjacent patterns.")
+        print("Track usage on the pattern page (usage: retrieved/applied counts) — "
+              "a pattern read but never applied is too abstract.")
         return True
     else:
         print(f"[DRY RUN] Would promote: {dossier_path}")

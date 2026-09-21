@@ -143,7 +143,7 @@ wf hook install --extract-claims   # doc-drift commits auto-capture + auto-inges
 
 | Harness | Always-on instructions | Skills |
 |---------|----------------------|--------|
-| Claude Code | `CLAUDE.md` + `AGENTS.md` | `.claude/skills/` |
+| Claude Code | `CLAUDE.md` + `AGENTS.md` | `.claude/skills/` (native skills) |
 | opencode | `AGENTS.md` + `opencode.json` merge | `.opencode/skill/` + plugin |
 | OpenAI Codex CLI | `AGENTS.md` (native) | — |
 | GitHub Copilot | `.github/copilot-instructions.md` | — |
@@ -152,10 +152,15 @@ wf hook install --extract-claims   # doc-drift commits auto-capture + auto-inges
 | Pi | `AGENTS.md` / `PI.md` | — |
 | Aider / Zed / Cline / Windsurf | `CONVENTIONS.md` / `.rules` / `.clinerules/` / `.windsurf/rules/` | — |
 
-The instruction content is identical everywhere — the same always-on block and
-the same six SKILL.md files, in whichever format each tool reads. `wf harness
-status` shows what's detected and installed. `bootstrap` runs this
-automatically.
+The instruction content is identical everywhere — the same always-on block,
+which includes the procedures pointer (`wf skill <name>`). Workflow
+**procedures** (`ingest`, `promote`, `refresh`) are printed on demand by
+`wf skill <name>` — a universal mechanism that works on every harness, no
+skill support required. Only Claude Code and opencode additionally get native
+skill folders (lazy-loaded, where that's a real feature). The conditional
+logic that used to live only in skill prose (graphify enrichment hints,
+anti-loop reminders) now lives in the commands themselves — `wf` tells you the
+next step when it matters.
 
 ## Next steps
 
