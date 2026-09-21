@@ -85,6 +85,54 @@ def _project_slug_from_claim(claim_stem):
     return m.group(1) if m else "unknown"
 
 
+WIKI_ARTICLE_PROMPT = """You are writing a wiki article for a knowledge fabric.
+The article covers: {title}
+
+You have the following evidence (claims, concepts, insights) that MUST be
+incorporated. Every claim cited inline carries a numbered footnote.
+
+{evidence}
+
+Write a 400-800 word article that:
+1. Opens with a clear statement of what the topic covers and why it matters
+2. Groups the evidence into logical sections with ## subheadings
+3. Cites claims inline as numbered footnotes [N] where N matches the evidence
+4. Includes a mermaid diagram IF the topic has a clear flow/architecture
+5. Ends with '## See also' linking related concepts
+6. Every factual statement must trace to a provided claim — never invent evidence
+7. Uses plain engineering language, no marketing tone
+
+Return ONLY the markdown article body (no YAML frontmatter).
+"""
+
+def _llm_topic_article(topic, claims, dry_run=False):
+    """Generate a narrative wiki article using the compiler model."""
+    from extract_backends import parse_json_array, llm_config
+    import openai, os
+    cfg = llm_config(compiler=True)
+    client = openai.OpenAI(base_url=cfg["base_url"], api_key=cfg["api_key"],
+                           timeout=float(os.environ.get("WIKI_LLM_TIMEOUT", "600")))
+
+    evidence_parts = []
+    for i, cp in enumerate(claims, 1):
+        s = cp.read_text(encoding="utf-8", errors="replace")
+        statement = re.search(r"statement: \"?([^\n]+)", s)
+        locator = re.search(r'locator: "?([^\n]+?)"?\s*$', s, re.MULTILINE)
+        project = re.search(r"claim-([a-z0-9-]+?)-", cp.stem)
+        evidence_parts.append(
+            f"[{i}] {statement.group(1) if statement else cp.stem} "
+            f"(from {project.group(1) if project else '?'}"
+            f"{', ' + locator.group(1) if locator else ''})")
+    evidence_text = "\n".join(evidence_parts)
+
+    prompt = WIKI_ARTICLE_PROMPT.format(title=topic["title"], evidence=evidence_text)
+    resp = client.chat.completions.create(
+        model=cfg["model"], temperature=0.1, max_tokens=4096,
+        messages=[{"role": "system", "content": "You write wiki articles. Return ONLY valid markdown."},
+                  {"role": "user", "content": prompt}])
+    return resp.choices[0].message.content or ""
+
+
 def _generate_topic_article(topic, mode="mechanical", dry_run=False):
     """Generate one topic article from a concept + its claims."""
     title = topic["title"]
@@ -111,6 +159,35 @@ def _generate_topic_article(topic, mode="mechanical", dry_run=False):
             flagged.append((cp, st))
         else:
             current.append((cp, st))
+
+    # LLM mode: generate narrative prose with the compiler model
+    if mode in ("llm", "hybrid") and (mode == "llm" or len(current) >= 5):
+        try:
+            body = _llm_topic_article(topic, claims, dry_run=dry_run)
+            if body:
+                lines = [
+                    "---",
+                    f"type: wiki-article",
+                    f"title: \"{title}\"",
+                    f"domain: [{topic['domain']}]",
+                    f"review_after: {(TODAY + timedelta(days=120)).isoformat()}",
+                    f"---",
+                    f"",
+                    body,
+                    f"",
+                    f"---",
+                    f"",
+                    f"_Citations link to claims in evidence/claims/. Generated on {TODAY.isoformat()}._",
+                ]
+                article = "\n".join(lines) + "\n"
+                out_dir = FABRIC_ROOT / "wiki" / "topics"
+                out_dir.mkdir(parents=True, exist_ok=True)
+                out_path = out_dir / f"{slug}.md"
+                if not dry_run:
+                    out_path.write_text(article, encoding="utf-8")
+                return out_path, len(claims)
+        except Exception as e:
+            print(f"  LLM generation failed for {title}: {e} — falling back to mechanical", file=sys.stderr)
 
     lines = [
         "---",

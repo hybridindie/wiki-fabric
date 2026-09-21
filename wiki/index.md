@@ -8,8 +8,8 @@ generated: 2026-09-21
 
 ## Review Status
 
-- ✅ Current: 2070
-- ⚠️ Due for review: 109
+- ✅ Current: 0
+- ⚠️ Due for review: 2179
 - ⚠️ Overdue: 0
 - ❌ Archived: 0
 
