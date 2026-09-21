@@ -162,7 +162,9 @@ def build_catalog(categories):
 
     registry = {
         "$schema": "wiki-fabric/registry-v1",
-        "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        # date-grain (not seconds): makes rebuilds byte-deterministic (G2 gate),
+        # while still conveying freshness to consumers
+        "generated": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         "total": len(pages),
         "counts": dict(sorted(counts.items())),
         "pages": pages,
