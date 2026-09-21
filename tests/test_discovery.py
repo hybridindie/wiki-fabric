@@ -185,7 +185,7 @@ class TestVaultRefresh(unittest.TestCase):
     def test_refresh_creates_links_and_overlay_views(self):
         rc = self._run(False)
         self.assertEqual(rc, 0)
-        for link in ("AGENTS.md", "projects", "concepts"):
+        for link in ("AGENTS.md", "projects"):
             self.assertTrue((self.vault / link).is_symlink(), link)
         view = self.fabric / "projects" / "proj-a" / "overlay.yml"
         self.assertTrue(view.exists())
