@@ -59,7 +59,7 @@ def seed_fabric(tmp, seeds):
     (tmp / "registry").mkdir(exist_ok=True)
     (tmp / "registry" / "log.md").write_text("# Log\n\nAppend-only timeline.\n")
     for seed in seeds:
-        dest = tmp / seed["path"]
+        dest = tmp / "corpus" / seed["path"]
         dest.parent.mkdir(parents=True, exist_ok=True)
         stem = Path(seed["path"]).stem
         fm_lines = [f"type: {seed['type']}", f"id: {stem}", f"title: {stem}"]
@@ -84,7 +84,7 @@ def assemble_prompt(fabric, manifest):
     """Agent prompt assembled from the manifest (same shape as demo.sh)."""
     parts = [f"# Task\n{manifest['task']}\n", "# Knowledge you must follow (from wiki-fabric)\n"]
     for s in manifest["selected"]:
-        text = (fabric / s["path"]).read_text()
+        text = (fabric / "corpus" / s["path"]).read_text()
         body = text.split("---", 2)[-1].strip() if text.count("---") >= 2 else text
         body = "\n".join(l for l in body.split("\n")
                          if l.strip() and not l.strip().startswith(

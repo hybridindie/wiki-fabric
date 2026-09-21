@@ -47,9 +47,14 @@ cp -R "${REPO_ROOT}/." "${FABRIC}/"
 # Strip user content + caches: the demo seeds its own artifacts and must not
 # pick up claims/entities from a populated fabric checkout.
 rm -rf "${FABRIC}/.git" "${FABRIC}/.venv" "${FABRIC}/corpus/fabric.yaml" \
-       "${FABRIC}/corpus/evidence" "${FABRIC}/corpus/global/entities" "${FABRIC}/.okflint" \
+       "${FABRIC}/corpus/evidence" "${FABRIC}/corpus/global" "${FABRIC}/corpus/concepts" \
+       "${FABRIC}/corpus/skills" "${FABRIC}/corpus/syntheses" "${FABRIC}/corpus/domains" \
+       "${FABRIC}/corpus/registry" "${FABRIC}/corpus/projects" "${FABRIC}/.okflint" \
        "${FABRIC}/.obsidian" "${FABRIC}/.pytest_cache" "${FABRIC}/index.md" \
-       "${FABRIC}/corpus/registry/catalog.md" "${FABRIC}/corpus/registry/catalog.json" "${FABRIC}/corpus/registry/log.md"
+       "${FABRIC}/evidence" "${FABRIC}/global" "${FABRIC}/concepts" \
+       "${FABRIC}/projects" "${FABRIC}/registry" "${FABRIC}/patterns" \
+       "${FABRIC}/anti-patterns" "${FABRIC}/skills" "${FABRIC}/syntheses" \
+       "${FABRIC}/domains" "${FABRIC}/graphify-out" "${FABRIC}/wiki"
 pass "fabric at ${FABRIC}"
 
 mkdir -p "${FABRIC}/corpus/patterns" "${FABRIC}/corpus/anti-patterns" "${FABRIC}/corpus/projects/auth-service/decisions" "${FABRIC}/corpus/projects/auth-service/experience-events" "${FABRIC}/corpus/domains/oauth/concepts"
@@ -166,7 +171,7 @@ manifest = json.loads(subprocess.run(
     capture_output=True, text=True).stdout)
 parts = [f"# Task\n{task}\n", "# Knowledge you must follow (from wiki-fabric)\n"]
 for s in manifest["selected"]:
-    text = (fabric / s["path"]).read_text()
+    text = (fabric / "corpus" / s["path"]).read_text()
     body = text.split("---", 2)[-1].strip() if text.count("---") >= 2 else text
     # strip frontmatter keys that leaked (indented or key: lines), keep prose
     lines = [l for l in body.split("\n") if l.strip() and not l.strip().startswith(("#", "observed_problem:", "intervention:", "outcomes:", "confidence:", "created:", "review_after:", "evidence:"))]

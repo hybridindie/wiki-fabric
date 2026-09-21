@@ -158,8 +158,8 @@ class TestSelection:
 
 class TestOutputs:
     def test_json_manifest_shape(self, tmp_path):
-        (tmp_path / "patterns").mkdir()
-        (tmp_path / "patterns" / "pattern-x.md").write_text(
+        (tmp_path / "corpus" / "patterns").mkdir(parents=True)
+        (tmp_path / "corpus" / "patterns" / "pattern-x.md").write_text(
             "---\ntype: pattern\nid: pattern-x\nstatus: recommended\n---\n\nRotate tokens on refresh.\n"
         )
         env_root = tmp_path
