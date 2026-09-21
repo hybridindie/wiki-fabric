@@ -31,6 +31,10 @@ from extract_backends import (
     extract_claims_anthropic, extract_claims_opencode, extract_claims,
 )
 
+# Alias: ingest_source() has a bool parameter named extract_claims that shadows
+# the function inside its scope — reference the function via this alias.
+extract_claims_fn = extract_claims
+
 _MLX_ENSURE_DONE = False
 
 VAULT_ROOT = FABRIC_ROOT
