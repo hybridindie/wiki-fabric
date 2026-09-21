@@ -7,7 +7,7 @@
 #   codex    : ~/.codex/sessions/*.jsonl (best-effort format)
 #
 # Usage:
-#   python3 scripts/capture-chat.py <project> --since 30d [--limit 20]
+#   python3 scripts/capture-chat.py <project> --since 90d [--limit 20]
 #        [--harness opencode|claude|codex|all] [--min-turns 4] [--dry-run]
 #        [--project-root /path/to/project]
 #
@@ -237,7 +237,7 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="Capture agent-harness chat sessions as raw evidence")
     parser.add_argument("project", help="Project slug")
-    parser.add_argument("--since", default="30d", help="Window: 30d, 2w, 1y (default 30d)")
+    parser.add_argument("--since", default="90d", help="Window: 90d, 2w, 1y (default 90d — chat formats change fast; older sessions rarely match current reality)")
     parser.add_argument("--limit", type=int, default=20, help="Max sessions per harness")
     parser.add_argument("--min-turns", type=int, default=1, help="Skip sessions with fewer user turns")
     parser.add_argument("--harness", default="all", choices=["opencode", "claude", "codex", "all"])
