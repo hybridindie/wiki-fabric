@@ -130,9 +130,9 @@ def zero_llm_checks(fixture, manifest, fabric):
 
 def llm_probe(fixture, prompt, model=None):
     try:
-        from fabric_config import get_llm_config
+        from fabric_config import get_llm_config, get_config
         import openai
-        cfg = get_llm_config()
+        cfg = get_llm_config(get_config())
         client = openai.OpenAI(base_url=cfg["base_url"], api_key=cfg["api_key"])
         resp = client.chat.completions.create(
             model=model or cfg["model"],
