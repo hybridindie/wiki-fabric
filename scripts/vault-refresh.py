@@ -108,6 +108,7 @@ def refresh(vault_path, check_only=False, quiet=False):
             # neither link nor target: create empty target + link
             target.mkdir(parents=True, exist_ok=True)
             vault.mkdir(parents=True, exist_ok=True)
+            lp.parent.mkdir(parents=True, exist_ok=True)
             os.symlink(target, lp)
             _say(f"  linked (new dir): {link}")
             created += 1
