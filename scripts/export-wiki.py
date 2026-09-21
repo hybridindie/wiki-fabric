@@ -133,6 +133,53 @@ def _llm_topic_article(topic, claims, dry_run=False):
     return resp.choices[0].message.content or ""
 
 
+PROJECT_ARTICLE_PROMPT = """You are writing a project retrospective article for a knowledge fabric.
+The project is: {project}
+
+You have the following evidence:
+
+{evidence}
+
+Related wiki articles (topics this project contributed to):
+{topic_refs}
+
+Write a 400-700 word project retrospective that:
+1. Opens with what the project is and its role in the ecosystem
+2. Groups findings into thematic ## sections (constraints discovered, patterns that emerged, decisions made)
+3. References the related topic articles by wikilink: [[<topic-slug>]] for mechanics
+4. Notes the current state (claims count, graph status)
+5. Excludes transient details (CI states, PR counts, review queue states)
+6. Uses plain engineering language
+
+Return ONLY the markdown article body (no YAML frontmatter).
+"""
+
+def _llm_project_article(project, claims, topic_links, dry_run=False):
+    """Generate a project retrospective using the compiler model."""
+    from extract_backends import llm_config
+    import openai, os
+    cfg = llm_config(compiler=True)
+    client = openai.OpenAI(base_url=cfg["base_url"], api_key=cfg["api_key"],
+                           timeout=float(os.environ.get("WIKI_LLM_TIMEOUT", "600")))
+
+    # evidence: durable claims (not transient)
+    evidence_parts = []
+    for i, cp in enumerate(claims, 1):
+        s = cp.read_text(encoding="utf-8", errors="replace")
+        statement = re.search(r"statement: \"?([^\n]+)", s)
+        evidence_parts.append(f"[{i}] {statement.group(1) if statement else cp.stem}")
+    evidence_text = "\n".join(evidence_parts[:30])  # cap at 30 for context
+
+    topic_refs = "\n".join(f"- [[{slug}]] {title}" for slug, title in topic_links)
+    prompt = PROJECT_ARTICLE_PROMPT.format(
+        project=project, evidence=evidence_text, topic_refs=topic_refs)
+    resp = client.chat.completions.create(
+        model=cfg["model"], temperature=0.1, max_tokens=4096,
+        messages=[{"role": "system", "content": "You write project retrospectives. Return ONLY valid markdown."},
+                  {"role": "user", "content": prompt}])
+    return resp.choices[0].message.content or ""
+
+
 def _generate_topic_article(topic, mode="mechanical", dry_run=False):
     """Generate one topic article from a concept + its claims."""
     title = topic["title"]
@@ -253,7 +300,7 @@ def _generate_topic_article(topic, mode="mechanical", dry_run=False):
     return out_path, len(claims)
 
 
-def _generate_project_article(project, config, dry_run=False):
+def _generate_project_article(project, config, dry_run=False, mode=None):
     """Generate a project narrative summary from claims + decisions."""
     rc = get_repo_config(config, project)
     if not rc:
@@ -286,6 +333,47 @@ def _generate_project_article(project, config, dry_run=False):
     decisions = sorted((decisions_dir := FABRIC_ROOT / "projects" / project / "decisions").glob("*.md")) if decisions_dir.is_dir() else []
 
     slug = re.sub(r"[^a-z0-9-]+", "-", project).strip("-")
+
+    # LLM mode: generate a project retrospective
+    mode = mode or config.get("wiki", {}).get("generation", {}).get("default") or "hybrid"
+    if mode in ("llm", "hybrid") and (mode == "llm" or len(current) >= 10):
+        try:
+            # find topic articles that cite this project's claims
+            topic_links = []
+            topics_dir = FABRIC_ROOT / "wiki" / "topics"
+            if topics_dir.is_dir():
+                for tf in sorted(topics_dir.glob("*.md")):
+                    tf_text = tf.read_text(encoding="utf-8", errors="replace")
+                    if f"claim-{project}" in tf_text or f"claim-{project.replace('-','_')}" in tf_text:
+                        title_m = re.search(r"^title: (.+)$", tf_text, re.MULTILINE)
+                        topic_links.append((tf.stem, title_m.group(1) if title_m else tf.stem))
+
+            body = _llm_project_article(project, [cp for cp, st in current[:30]], topic_links, dry_run=dry_run)
+            if body:
+                lines = [
+                    "---",
+                    f"type: index",
+                    f"title: \"{project}: What We Learned\"",
+                    f"review_after: {(TODAY + timedelta(days=180)).isoformat()}",
+                    f"---",
+                    f"",
+                    body,
+                    f"",
+                    f"---",
+                    f"",
+                    f"_Generated from the evidence fabric on {TODAY.isoformat()}. "
+                    f"{len(current)} current claim(s) from {len(claims)} analyzed sources._",
+                ]
+                article = "\n".join(lines) + "\n"
+                out_dir = FABRIC_ROOT / "wiki" / "projects"
+                out_dir.mkdir(parents=True, exist_ok=True)
+                out_path = out_dir / f"{project}.md"
+                if not dry_run:
+                    out_path.write_text(article, encoding="utf-8")
+                return out_path, len(current)
+        except Exception as e:
+            print(f"  LLM generation failed for {project}: {e} — falling back to mechanical", file=sys.stderr)
+
     lines = [
         "---",
         f"type: index",
@@ -401,7 +489,7 @@ def main():
     for proj in get_all_repo_names(config):
         if proj == "wiki-fabric":
             continue
-        out, n = _generate_project_article(proj, config, dry_run=args.dry_run)
+        out, n = _generate_project_article(proj, config, dry_run=args.dry_run, mode=mode)
         if out:
             n_projects += 1
             print(f"  project: {out.name} ({n} current claims)")

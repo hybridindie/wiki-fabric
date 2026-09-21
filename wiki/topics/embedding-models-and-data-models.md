@@ -5,49 +5,58 @@ domain: [agent-systems, godot-systems]
 review_after: 2027-01-19
 ---
 
-This article covers two coupled design decisions in the analysis pipeline: the embedding model used to vectorize each analysis, and the data models that record deliberation output and confidence calibration state. The two are linked because the embedding fixes the vector representation stored alongside the structured records, while the structured records determine what the system can later calibrate or test. Both are expensive to change after data has accumulated, so the constraints are worth stating explicitly.
+Embedding models and data models are the two structural layers that determine what an analysis system can store, compare, and later reason about. The embedding model fixes the vector representation used for each analysis, while the data model fixes the shape of the records produced during deliberation, calibration, and cost accounting. Getting either wrong is expensive to reverse: embeddings are baked into stored vectors, and record schemas propagate into every downstream consumer. This article covers the concrete choices in this system — the embedding model and its dimensionality, the per-round deliberation record, the calibration threshold, the cost model, and a known gap in test coverage.
 
-## Embedding generation
+## Embedding model
 
-Each analysis is embedded with the all-MiniLM-L6-v2 model, which produces a 384-dimensional vector per analysis [1][6]. The vector width is therefore fixed at 384 for every downstream consumer — any index, similarity search, or storage schema built on these embeddings has to assume that dimensionality. Embedding is generated per analysis, so the number of vectors tracks the number of analyses rather than the number of deliberation rounds.
+Embedding generation uses the `all-MiniLM-L6-v2` model, which produces a 384-dimensional vector for each analysis [1][6]. The dimensionality is the load-bearing detail: it defines the width of every stored vector, the size of any similarity index, and the memory footprint per analysis. Because the model name and the vector width are fixed together, swapping models is a migration, not a configuration change — existing vectors would need regeneration to remain comparable with new ones.
 
-## Deliberation data model
+## Deliberation record model
 
-Each deliberation round records three fields: the bullish argument, the bearish argument, and the disagreement level between the two positions [3][8]. Storing the disagreement level as a first-class field, rather than deriving it later from the two arguments, makes each round record self-contained and queryable without re-running a model. The round is the unit of record, so a multi-round deliberation produces one record per round.
-
-## Cost model
-
-Computational cost scales linearly with the number of rounds: three rounds equate to three times the API call cost of a single round [4][9]. Round count is therefore the primary cost lever, and it interacts directly with the deliberation data model above — every additional round adds both a cost multiple and another round record.
+Each deliberation round records three fields: the bullish argument, the bearish argument, and the disagreement level between the two positions [3][8]. Storing the disagreement level alongside the two arguments means the record is self-describing — a consumer can read the tension between positions without re-deriving it from the argument text. It also means the round is the unit of storage, so a multi-round deliberation produces a sequence of these records rather than a single merged verdict.
 
 ## Confidence calibration
 
-Confidence calibration requires a minimum of 20 outcome data points before the system can begin tracking and calibrating agent confidence [2][7]. Below that threshold, no calibration is tracked. This is a data-model constraint as much as a statistical one: outcomes must be persisted in a form that can be joined back to the agent's original confidence, and at least 20 of them must accumulate before the calibration path activates.
+Confidence calibration requires a minimum of 20 outcome data points before the system can begin tracking and calibrating agent confidence [2][7]. Until that threshold is reached, confidence values are recorded but not calibrated. This is a data-model constraint as much as a statistical one: the system needs a place to accumulate outcomes and a gate that prevents calibration from running on a sample too small to be meaningful.
 
-## Test coverage gap
+## Cost model
 
-The seeded-sidecar path is not covered by a test; the contract test only exercises the case where the sidecar already exists [5][10]. The path that creates and seeds a sidecar from scratch is therefore unverified, while the pre-existing-sidecar case is verified. Any change to seeding logic has no test to catch a regression.
+Computational cost scales linearly with the number of rounds — three rounds equate to three times the API call cost [4][9]. There is no batching discount or shared-prefix saving assumed in this model. The practical consequence is that round count is the primary cost lever, and any change to the deliberation record model that adds rounds has a directly proportional cost impact.
 
 ## Flow
 
 ```mermaid
-flowchart LR
-    A[Analysis] --> B[all-MiniLM-L6-v2 embedding<br/>384-dim vector]
-    A --> C[Deliberation rounds]
-    C --> D[Round record:<br/>bullish, bearish, disagreement]
-    C --> E[Cost: linear in rounds]
-    D --> F[Outcomes]
-    F --> G{At least 20 outcome<br/>data points?}
-    G -- yes --> H[Confidence calibration active]
-    G -- no --> I[Calibration not tracked]
+flowchart TD
+    A[Analysis input] --> B[Embedding: all-MiniLM-L6-v2]
+    B --> C[384-dimensional vector]
+    A --> D[Deliberation round]
+    D --> E[Bullish argument]
+    D --> F[Bearish argument]
+    D --> G[Disagreement level]
+    E --> H[Outcome records]
+    F --> H
+    G --> H
+    H --> I{At least 20 outcome data points?}
+    I -- No --> J[Record only, no calibration]
+    I -- Yes --> K[Track and calibrate confidence]
+    D --> L[Cost: linear in round count]
 ```
+
+## Test coverage gap
+
+The seeded-sidecar path is not covered by a test; the contract test only exercises the case where the sidecar already exists [5][10]. This matters for the data model because the seeded path is where initial state is written. A contract test that only runs against a pre-existing sidecar verifies the read/update contract but leaves the creation contract unverified — the branch most likely to drift when the record schema changes.
+
+## Summary of constraints
+
+The embedding layer is fixed at 384 dimensions by the chosen model [1][6]. The deliberation layer stores three fields per round [3][8]. Calibration is gated on 20 outcome data points [2][7]. Cost is linear in rounds [4][9]. And the seeded-sidecar creation path lacks test coverage [5][10]. Each of these is a constraint on what the data model can safely change without a migration or a new test.
 
 ## See also
 
-- Vector storage and index sizing
-- Deliberation round aggregation
-- Confidence calibration thresholds
-- Contract test coverage
-- Sidecar lifecycle and seeding
+- Vector embeddings and similarity search
+- Deliberation and multi-agent argumentation
+- Confidence calibration and outcome tracking
+- API cost modeling for multi-round pipelines
+- Contract testing and fixture seeding
 
 ---
 

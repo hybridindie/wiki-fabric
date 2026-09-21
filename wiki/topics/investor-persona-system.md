@@ -5,48 +5,52 @@ domain: [agent-systems]
 review_after: 2027-01-19
 ---
 
-# Investor Persona System
+The Investor Persona System is the part of the decision stack that runs a set of persona agents as an Investment Committee, gated by configuration, alongside a market regime detector that supplies market context. It matters for two reasons: the persona layer is where a measurable accuracy gain in edge cases is reported, and the regime layer fixes the proxy and window that define what "the market" means to the rest of the system. This article covers the three mechanisms the evidence supports — regime detection, the persona agents themselves, and the configuration gate that decides whether the committee runs — and is explicit about where the evidence stops.
 
-The Investor Persona System is the part of the decision pipeline that runs multi-agent deliberation over a market view. It covers two distinct things: the configuration gate that decides whether persona-based deliberation runs at all, and the persona agents themselves, which are used to improve decision accuracy in edge cases. It matters because the persona path is optional rather than always-on, and because its measured benefit is concentrated in the cases where a single-pass decision is least reliable. Understanding the system therefore means understanding three separable pieces — the gate, the agents, and the market context they operate in.
+## Market regime detection
 
-## Configuration Gate: Investment Committee Mode
+Market regime detection uses SPY as the market proxy and a 200-bar lookback period [1][4]. Two parameters are therefore fixed by definition: the instrument (SPY, standing in for the market as a whole) and the depth of history read (the trailing 200 bars). Regime classification is consequently a function of SPY price history over that window, not of a broader basket of instruments and not of a shorter or longer horizon.
 
-The system checks the configuration to determine if the Investment Committee mode should run using personas [3][6]. This is a runtime branch rather than a build-time choice: the persona path is entered only when the configuration says so. Two consequences follow directly. First, the persona system is not on the critical path for every run — a configuration that does not enable Investment Committee mode bypasses it. Second, the behavior of a given run is a function of configuration state, so reproducing a run requires capturing that state alongside the market inputs. Any evaluation that does not record the gate setting cannot distinguish a persona-driven result from a non-persona result.
+This is the context layer. Because the proxy and the lookback are both pinned, the regime label is reproducible: the same SPY history produces the same classification. That property is what makes the regime output usable as an input elsewhere in the system rather than as a discretionary judgement.
 
-## Persona Agents and Measured Accuracy
+## Persona agents and edge-case accuracy
 
-The persona layer is implemented with 23 persona agents [2][5]. The reported effect of using them is a 13% accuracy improvement in edge cases [2][5]. The qualifier carries weight: the improvement is stated for edge cases, not for the aggregate or the median case. An engineering reading is that the persona layer behaves as a variance-reduction mechanism — it pays off where the ordinary decision path is least confident — rather than as a uniform accuracy lift across all inputs. Evaluations of this system should therefore be stratified by case difficulty. A flat accuracy number computed over a mixed workload would dilute or hide the effect, and a benchmark composed only of routine cases would show little of it.
+The system uses 23 persona agents, and their use resulted in a 13% accuracy improvement in edge cases [2][5]. The claim has two separable parts and they should not be conflated. The first is structural: 23 distinct persona agents participate. The second is measured: a 13% improvement, reported specifically for edge cases.
 
-## Market Regime Detection
+The qualifier matters. The improvement is attributed to edge cases, not to aggregate accuracy and not to the bulk of routine decisions. Edge cases are where a single undifferentiated decision path is most likely to be underdetermined, so a gain concentrated there is consistent with the personas contributing differentiated reasoning rather than redundant agreement. The evidence does not break the 13% down further, and no per-persona contribution is stated.
 
-Market regime detection uses SPY as the market proxy and a 200-bar lookback period [1][4]. Both are fixed parameter choices that define the regime signal: SPY stands in for "the market," and 200 bars is the window over which the regime is characterized. Because the lookback is expressed in bars rather than calendar time, the effective horizon depends on the bar interval of the data being fed in — the same 200-bar window covers different wall-clock spans at different sampling frequencies. The regime output is the context in which persona deliberation is framed, so the same persona set evaluated under different regimes is not evaluating the same problem.
+## Configuration gate for Investment Committee mode
+
+The system checks the configuration to determine whether the Investment Committee mode should run using personas [3][6]. This is a gate rather than a default. Persona-based committee operation is conditional on configuration state, and the check occurs before the mode runs. The practical consequence is that the same codebase can operate with or without the persona committee depending on how it is configured, without requiring a separate build or a code change.
 
 ## Flow
 
+The diagram below is a schematic of the cited claims only. It deliberately does not draw an edge between regime detection and the persona committee, because the evidence does not specify how, or whether, the two are coupled.
+
 ```mermaid
 flowchart TD
-    A[Configuration] --> B{Investment Committee mode enabled?}
-    B -- No --> C[Non-persona decision path]
-    B -- Yes --> D[Persona agents: 23]
-    E[Market regime detection<br/>SPY proxy, 200-bar lookback] --> D
-    D --> F[Deliberated decision<br/>13% accuracy gain in edge cases]
+    A[Configuration check] --> B{Investment Committee mode with personas?}
+    B -- yes --> C[Run Investment Committee using personas]
+    B -- no --> D[Persona committee does not run]
+    C --> E[23 persona agents]
+    E --> F[13% accuracy improvement in edge cases]
+
+    G[SPY as market proxy] --> H[200-bar lookback]
+    H --> I[Market regime detection]
 ```
 
-The diagram reflects the three cited facts and nothing more: the configuration check gates the persona branch [3][6], the persona branch is populated by 23 agents [2][5], and regime detection supplies context using SPY over a 200-bar lookback [1][4].
+## What the evidence does not cover
 
-## Operational Notes
-
-- The persona path is gated by configuration [3][6]; treat the gate setting as part of the experiment record.
-- Persona count is 23 [2][5]; the accuracy delta is 13% and is scoped to edge cases [2][5].
-- Regime detection parameters are SPY and 200 bars [1][4]; the bar interval determines the wall-clock horizon of the lookback.
+Three gaps are worth recording so the article is not read as more complete than it is. First, the coupling between the regime detector and the persona committee is unspecified — the regime detector's proxy and window are known [1][4], and the committee's gating and agent count are known [3][6][2][5], but no claim links them. Second, the 13% figure is scoped to edge cases only; no aggregate accuracy number is given [2][5]. Third, the composition of the 23 personas, their individual roles, and how their outputs are aggregated into a committee decision are not described in the available claims.
 
 ## See also
 
-- Investment Committee Mode
 - Market Regime Detection
+- Investment Committee Mode
 - Persona Agents
 - Configuration Gating
-- Edge Case Evaluation
+- SPY Market Proxy
+- Edge-Case Accuracy
 
 ---
 

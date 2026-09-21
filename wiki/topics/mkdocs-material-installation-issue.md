@@ -7,49 +7,53 @@ review_after: 2027-01-19
 
 # MkDocs Material Installation Issue
 
-This article covers a packaging defect in the MkDocs Material toolchain: installations that declared the Material theme as an ordinary dependency failed with a missing executable error. It matters because the failure is not a bug in the theme itself — it is a dependency-declaration problem, and the fix is a one-line change in how the package is attached to the command that runs it. Understanding which package owns the executable is the whole of the diagnosis.
+This article covers the installation failure that occurs when MkDocs Material is set up as a standalone tool instead of as a companion dependency of MkDocs, and the change that resolved it. It matters because the failure presents as a missing executable rather than as a configuration error, which makes the cause non-obvious: the package that provides the theme is not the package that provides the command being invoked. The fix was a packaging change, not a code change, and it was merged as PR #512 on 2026-09-19 [1][4].
 
 ## Symptom
 
-The observable failure was a missing executable error during installation or first run. The Material theme package was requested, but the command the build expected to invoke was not present on the path, so the toolchain could not start. The error surfaced as an installation problem even though nothing was wrong with the installed files themselves [3][6].
+The observable failure is a missing executable error. The command that the user expects to run is not present on the system after installation, even though the Material package itself was installed successfully [3][6]. Because the install step reports success, the error surfaces later, at invocation time, and points at the executable rather than at the dependency graph that produced it.
 
-## Root cause: the executable belongs to `mkdocs`
+## Root cause
 
-The key diagnostic fact is that the executable belongs to `mkdocs`, not to the theme package. Material is a theme that rides alongside the core tool; it does not provide the entry point. Therefore Material must ride as a `--with` dependency rather than as the primary package being installed [2][5].
+The executable belongs to `mkdocs`; Material must ride as a `--with` dependency [2][5]. In other words, the entry point that users invoke is owned by the core MkDocs package. Material is a theme and extension layer that attaches to that entry point. When Material is installed on its own, the theme files are present but the executable they are meant to extend is not, so the invocation fails.
 
-This distinction is easy to miss. A `--with` dependency attaches a package to a command invocation without making it the package that supplies the executable. When Material was declared the other way around, the resolver satisfied the theme requirement but never placed the `mkdocs` executable where the invocation expected it — producing exactly the missing executable error observed [2][5].
+This is a dependency-ownership problem rather than a version or compatibility problem. The two packages have different roles:
 
-## Fix
+- `mkdocs` provides the executable and the build pipeline.
+- `mkdocs-material` provides the theme and its supporting assets, and is expected to be layered onto the `mkdocs` environment.
 
-The resolution was to move `mkdocs-material` to a `--with` dependency. That change directly addressed the missing executable error, because it restored the correct relationship between the executable provider (`mkdocs`) and the theme that accompanies it [3][6].
+Treating Material as a top-level tool inverts that relationship. The installer creates an isolated environment containing only Material, and the executable that Material depends on is never pulled in.
 
-The change was carried in PR #512, which was merged on 2026-09-19 [1][4]. After the merge, the dependency declaration matched the ownership model: the core tool supplies the executable, and Material is attached as a companion dependency.
+## Resolution
 
-## Flow of the diagnosis and fix
+`mkdocs-material` was moved to a `--with` dependency to resolve the missing executable error [3][6]. The `--with` mechanism attaches an additional package to the environment created for a primary tool, so the primary tool's executable and the companion package coexist in the same environment. Moving Material into that position means the `mkdocs` executable is installed as the primary tool and Material is layered alongside it, which matches the ownership model described above [2][5].
+
+The change was merged as PR #512 on 2026-09-19 [1][4].
+
+## Flow
 
 ```mermaid
 flowchart TD
-    A[Install documentation toolchain] --> B[Missing executable error]
-    B --> C{Which package owns the executable?}
-    C -->|mkdocs| D[Material is not the executable provider]
+    A[Install mkdocs-material as a standalone tool] --> B[Environment contains Material only]
+    B --> C[Invocation fails: missing executable]
+    C --> D[Diagnosis: executable belongs to mkdocs]
     D --> E[Move mkdocs-material to a --with dependency]
-    E --> F[PR #512 merged 2026-09-19]
-    F --> G[Executable resolves; toolchain runs]
+    E --> F[mkdocs installed as primary tool]
+    F --> G[Material layered into the same environment]
+    G --> H[Executable resolves; Material available]
 ```
-
-The diagram reflects the actual reasoning order recorded in the evidence: the error is observed first, the ownership question is answered second, and the dependency change follows from that answer rather than from trial and error [2][5][3][6].
 
 ## Practical takeaway
 
-When a toolchain reports a missing executable, check which package in the dependency set actually ships that executable before adjusting versions or reinstalling. In this case the answer was unambiguous — the executable belongs to `mkdocs`, and Material must ride as a `--with` dependency [2][5]. Any future change to the dependency declaration should preserve that split; collapsing Material back into the primary dependency position would reintroduce the same failure mode.
+When a plugin, theme, or extension package is installed as a standalone tool and the resulting command is missing, check which package actually owns the executable before changing versions or reinstalling. If the executable belongs to a different package than the one being installed, the correct fix is to install that package as the primary tool and attach the companion package as a `--with` dependency [2][5]. That is exactly the shape of the change made in PR #512 [1][4].
 
 ## See also
 
-- MkDocs — the core tool that provides the executable [2][5]
-- MkDocs Material — the theme package attached as a `--with` dependency [3][6]
-- `--with` dependencies — attaching a package to a command without making it the executable provider [2][5]
-- PR #512 — the merged change that moved `mkdocs-material` to a `--with` dependency, merged 2026-09-19 [1][4]
-- Missing executable errors — diagnosing which package owns a command before changing dependency declarations [3][6]
+- MkDocs
+- Material for MkDocs
+- `--with` dependency
+- Missing executable error
+- PR #512
 
 ---
 

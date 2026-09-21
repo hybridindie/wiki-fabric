@@ -5,61 +5,60 @@ domain: [godot-systems]
 review_after: 2027-01-19
 ---
 
-# GLE Task Set
+## GLE Task Set
 
-The GLE task set is the evaluation unit used to score GLE submissions. It is composed of five tasks spanning four genres [1][4]. The GLE-v1 content packages these as five composite tasks across the same four genres, and each task carries two distinct artifacts: a `gold_reference` and a `judge_only` behavioral residual [2][5]. Understanding the task set matters because it fixes both the scope of the evaluation and the way results are produced — the set defines what is measured, and the grading model defines which parts of a result are deterministic and which are advisory.
+The GLE task set is the collection of evaluation tasks that defines what a GLE submission is measured against. Its composition and grading structure matter because they determine both what the benchmark can observe and how much of a submission's behavior is scored mechanically versus judged. This article covers two things: what the set contains, and the two-track grading model applied to it.
 
 ## Composition
 
-The set is small and deliberately bounded: five tasks, four genres [1][4]. The genre count is lower than the task count, so at least one genre is represented by more than one task. The tasks are composite rather than atomic, meaning a single task is not a single check but a bundle of required behavior [2][5].
+The set is composed of five tasks spanning four genres [1][4]. In the GLE-v1 content specifically, these are five composite tasks across four genres [2][5]. Two properties follow directly from that description. First, the tasks are *composite* — each is a bundle of work rather than a single narrow prompt. Second, the genre spread means the five tasks are not five variations of the same thing; four distinct genres are represented across five tasks.
 
-Because the same five-task, four-genre structure appears in both the general description of the task set and the description of the GLE-v1 content [1][2][4][5], the composition is stable across those two descriptions rather than varying between them.
+Each task carries two distinct artifacts:
 
-## Per-task artifacts
+- a **gold_reference** — reference material associated with the task [2][5]
+- a **judge_only behavioral residual** — a portion of the task's expected behavior reserved for the judge rather than exposed as a deterministic check [2][5]
 
-Each composite task in GLE-v1 has two associated artifacts [2][5]:
-
-- **`gold_reference`** — the reference material used to judge the behavioral residual.
-- **`judge_only` behavioral residual** — a residual that is marked judge-only, i.e. it is not part of the deterministic read-back path and is instead handled by the judge.
-
-The `judge_only` designation is the key structural detail. It separates the residual from the mechanically checkable portion of the task and routes it to a different grading mechanism.
+The pairing is the key structural fact. Every task in the set has both a reference and a residual. The reference supports comparison against expected output; the residual captures behavior that cannot be reduced to a read-back check. Because the residual is marked *judge_only*, it is not part of the deterministic surface of the task.
 
 ## Grading model
 
-Grading is split into two paths [3][6]:
+Grading runs on two tracks [3][6].
 
-1. **Deterministic read-back plus partial credit.** The main body of a GLE task is graded by reading back the submission deterministically and awarding partial credit. This path is mechanical and reproducible.
-2. **Advisory gold-reference judge.** The behavioral residual is graded by a judge that uses the gold reference. This path is explicitly advisory — it produces a judgment rather than a deterministic score.
+The first track is **deterministic read-back plus partial credit** [3][6]. Read-back means the grader checks the submission against expected values directly, without interpretation. Partial credit means a submission is not scored as a single pass/fail outcome — it earns credit for the portions it gets right. This track is reproducible: the same submission yields the same result.
 
-The split means a GLE result is not a single uniform number produced by one mechanism. Part of the score comes from deterministic read-back with partial credit, and part comes from an advisory judge operating against the gold reference [3][6].
+The second track handles the **behavioral residual**, and it is graded by an **advisory gold-reference judge** [3][6]. Two properties of that judge matter. It is *gold-reference* based, meaning it works against the task's gold_reference rather than an open-ended rubric. And it is *advisory*, meaning its output informs the evaluation rather than replacing the deterministic track.
+
+The division of labor is therefore explicit: mechanical checks carry the reproducible score, and the judge covers the residual behavior that read-back cannot reach.
 
 ```mermaid
 flowchart TD
-    A[GLE task set<br/>5 tasks / 4 genres] --> B[Composite task]
-    B --> C[Deterministic read-back<br/>+ partial credit]
-    B --> D[Behavioral residual<br/>judge_only]
-    D --> E[Advisory gold-reference judge]
-    C --> F[Deterministic score<br/>with partial credit]
-    E --> G[Advisory judgment]
+    T[GLE task] --> G[gold_reference]
+    T --> R[judge_only behavioral residual]
+    T --> D[Deterministic read-back + partial credit]
+    G --> J[Advisory gold-reference judge]
+    R --> J
+    D --> S[Task score]
+    J -.advisory signal.-> S
 ```
 
-## Implications for interpreting results
+## What the structure implies
 
-Two consequences follow directly from the structure above.
+Three consequences follow from the evidence above.
 
-First, the deterministic portion of a GLE score is reproducible by construction, since it relies on read-back and partial credit rather than judgment [3][6]. Second, the behavioral residual portion is not reproducible in the same way, because it is produced by an advisory judge rather than a deterministic procedure [3][6]. Any comparison of GLE results should therefore keep the two paths distinct: the deterministic component and the advisory component are not interchangeable, and the `judge_only` residual is not part of the read-back path [2][5].
+Coverage is broad relative to task count: five tasks across four genres [1][4] means the set is not concentrated in a single genre, so a submission cannot pass by being strong in one mode of work alone.
 
-The task set itself remains fixed at five tasks across four genres, with each task carrying a gold reference and a judge-only behavioral residual [1][2][4][5].
+Every task has a judged component. Because each of the five composite tasks possesses a judge_only behavioral residual [2][5], no task in the set is fully scored by deterministic means.
+
+The deterministic track remains the backbone. Since the judge is advisory [3][6], the read-back plus partial-credit result is the reproducible part of the score, and the judge's contribution sits alongside it rather than overriding it.
 
 ## See also
 
-- GLE-v1
 - Gold Reference
 - Behavioral Residual
-- Judge-Only Artifact
 - Deterministic Read-Back
-- Partial Credit
-- Advisory Gold-Reference Judge
+- Partial Credit Scoring
+- Advisory Judge
+- GLE-v1
 
 ---
 

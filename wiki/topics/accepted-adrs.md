@@ -5,51 +5,51 @@ domain: [agent-systems]
 review_after: 2027-01-19
 ---
 
-# Accepted ADRs
+Accepted ADRs are architecture decision records that have moved past proposal and are now binding on the codebase. This article covers the accepted decisions currently in force, how each one is enforced, and where its boundaries sit. It matters because an accepted ADR is not documentation — it is a constraint that CI, review agents, and deployment configuration are expected to uphold. When an accepted record and the code disagree, the record wins until a superseding record is accepted.
 
-This page tracks the architecture decision records (ADRs) that have been accepted for this repository and are therefore binding on implementation work. An accepted ADR is not a proposal: it fixes a choice, and the surrounding tooling — CI gates, review agents, feature flags — is expected to reflect that choice. The decisions recorded here matter because they determine what the build enforces automatically, what reviewers must enforce by hand, and how new surfaces are exposed to production traffic. The entries below cover the accepted decision on AIFitService composition, the quality-gate policy that accompanies it, and the rollout control that governs its exposure.
+## Enforcement model: one hard gate, tier targets by review
 
-## ADR 0004: pure heuristic composition for AIFitService v1
+The 68% CI aggregate remains the hard gate [1][4]. Tier-specific targets are not implemented as separate CI jobs; they are enforced by the article-compliance-reviewer agent and by PR reviews [1][4].
 
-ADR 0004 adopts option 2, pure heuristic composition, for v1 of AIFitService [2][5]. This is the core accepted decision on this page. The choice is scoped explicitly to v1, which means the heuristic path is the intended implementation for the first release rather than a stopgap that reviewers should treat as provisional. Any work that assumes a different composition strategy for v1 is out of step with the accepted record and should be raised as a new ADR rather than resolved ad hoc in a pull request.
+That split has a concrete consequence. The automated pipeline enforces a single aggregate threshold that must pass before merge, while finer-grained, per-tier expectations are handled by review rather than by additional pipeline stages [1][4]. A change can therefore pass CI and still be rejected in review if it misses a tier-specific target [1][4]. Anyone reasoning about "will this merge" needs to check both surfaces, not just the green check on the PR.
 
-## Quality gates: the 68% CI aggregate
+## ADR 0004: heuristic composition for AIFitService v1
 
-The 68% CI aggregate remains the hard gate [1][4]. That aggregate is the only threshold enforced as a blocking CI job. Tier-specific targets are not implemented as separate CI jobs; they are enforced by the article-compliance-reviewer agent and by PR reviews [1][4]. The practical consequence is a split of responsibility: CI will fail on the aggregate number, while finer-grained, tier-specific expectations depend on the reviewer agent and on human review. Contributors should not assume that a green CI run means every tier-specific target has been satisfied — the aggregate can pass while tier-level gaps remain, and those gaps are caught downstream.
+ADR 0004 adopts option 2, pure heuristic composition, for v1 of AIFitService [2][5]. The accepted scope for the first version of the service is therefore heuristic composition [2][5]. This is a v1 decision, and it is recorded as such — the record names the version it governs, so the constraint applies to v1 of AIFitService specifically [2][5].
 
 ## Rollout control: AI_FIT_SERVICE_ENABLED
 
-Exposure of the AIFitService surface is controlled by the `AI_FIT_SERVICE_ENABLED` flag. It defaults to `True` for dev and staging, while production deploys must set it to `False` until the surface is dark-launched [3][6]. The asymmetry is deliberate: non-production environments exercise the surface by default so that the heuristic composition path is exercised during normal development, whereas production stays off until the dark-launch step is carried out. Production configuration that leaves the flag at its default is therefore incorrect, and the flag must be set explicitly to `False` in production deploys.
+The flag `AI_FIT_SERVICE_ENABLED` defaults to True for dev and staging [3][6]. Production deploys must set it to False until the surface is dark-launched [3][6].
 
-## How the decisions connect
+The accepted configuration is not "off everywhere." It is on by default outside production, and explicitly off in production until the dark launch happens [3][6]. Because the production value must be set at deploy time rather than inherited from the default, a production deploy that does not override the flag is misconfigured against this record [3][6].
 
-The accepted decisions form a chain from the ADR itself through enforcement and finally to runtime exposure.
+## How the accepted decisions relate
 
 ```mermaid
 flowchart TD
-    A[ADR accepted] --> B["ADR 0004: pure heuristic composition for AIFitService v1"]
-    A --> C[Quality gate policy]
-    C --> D["68% CI aggregate - hard gate"]
-    C --> E["Tier-specific targets - article-compliance-reviewer agent + PR reviews"]
-    A --> F["Rollout control: AI_FIT_SERVICE_ENABLED"]
-    F --> G["dev / staging: defaults to True"]
-    F --> H["production: must be set to False until dark-launched"]
+    A[Accepted ADR] --> B[CI hard gate: 68% aggregate]
+    A --> C[article-compliance-reviewer agent + PR review: tier-specific targets]
+    A --> D[ADR 0004: pure heuristic composition for AIFitService v1]
+    A --> E[AI_FIT_SERVICE_ENABLED]
+    E --> F[dev / staging: default True]
+    E --> G[production: must be False until dark-launched]
 ```
 
-Read top to bottom, the diagram shows that a single accepted decision fans out into three enforcement surfaces: the implementation choice for v1, the gate that blocks merges, and the flag that decides whether the surface is reachable in production. Changing any one of these without revisiting the ADR would leave the record inconsistent with the code.
+The diagram shows the three enforcement surfaces an accepted decision can land on: the aggregate CI gate, the review path, and deploy-time configuration. The first two are the two halves of the quality enforcement model [1][4]; the third is where the feature-flag decision is actually applied [3][6].
 
-## Working with accepted ADRs
+## Working with accepted records
 
-Because these decisions are accepted rather than proposed, the correct way to change them is to supersede them with a new ADR, not to work around them. When reviewing a change that touches AIFitService composition, the quality gate, or the enablement flag, check it against the accepted record first. Where a tier-specific target is at stake, remember that the reviewer agent and PR review carry that enforcement [1][4], so the review conversation is the place to resolve it.
+Two habits follow from the above. First, when a change touches tier-specific targets, expect the review path — the article-compliance-reviewer agent and PR review — to be the place where it is judged, because no separate CI job covers it [1][4]. Second, when a change touches AIFitService v1 composition, the accepted answer is pure heuristic composition, and any alternative needs a new or superseding record rather than an in-code exception [2][5]. Third, when a change touches production deployment of the AI fit surface, verify the flag override explicitly, since the default will not do it for you [3][6].
 
 ## See also
 
-- ADR 0004 — pure heuristic composition for AIFitService v1
-- AIFitService
+- Architecture Decision Records
+- CI quality gates and aggregate thresholds
 - article-compliance-reviewer agent
-- CI quality gates and the 68% aggregate
+- PR review as an enforcement surface
+- AIFitService
 - Feature flags and dark launches
-- `AI_FIT_SERVICE_ENABLED`
+- Deployment-time configuration overrides
 
 ---
 

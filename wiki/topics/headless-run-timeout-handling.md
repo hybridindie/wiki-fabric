@@ -7,48 +7,50 @@ review_after: 2027-01-19
 
 # Headless Run Timeout Handling
 
-Headless run timeout handling covers how the `godot_debug_workflow` tooling decides what to report when a game launched without a display does not exit before its timeout expires. The topic matters because the current behavior produces findings that are wrong: a game that is running correctly but is designed to keep running is reported as if it were stuck. This article describes how the headless run works, why the timeout findings are false positives, and the proposed `expected_timeout` parameter that would let the tool distinguish the two cases.
+Headless run timeout handling covers how the `godot_debug_workflow` tool bounds a game's execution and how it interprets the case where that bound is reached. The tool runs the game headless with a timeout [2][7]. That timeout is a safety mechanism, but it produces findings that are not always defects: when a game is designed to keep running, the timeout fires even though nothing is wrong. Getting this distinction right matters because a misleading finding sends developers chasing bugs that do not exist.
 
-## How the headless run works
+## How the headless run is bounded
 
-The `godot_debug_workflow` tool runs the game headless with a timeout [2][7]. The game is started without a rendering window, and the tool waits for it to finish. If the process is still alive when the timeout elapses, the tool treats that as a finding and emits a suggestion to the user.
+The workflow executes the game without a display and applies a timeout to the run [2][7]. The timeout exists so that a run cannot hang indefinitely and so the tool can return a result within a predictable window. When the game exits on its own before the timeout elapses, the run completes normally. When the timeout elapses first, the tool raises a timeout finding.
 
-This workflow is the same one used to investigate runtime defects in the engine. One example is Issue #489, a closed bug report titled "[Bug] AnimationPlayer path resolution fails for instanced scenes" [1][6]. That report is closed, but it illustrates the class of runtime problem the headless debug run is meant to surface — problems that only appear when the scene tree is actually instantiated and executed.
+## Why timeout findings can be false positives
 
-## Why the timeout findings are false positives
+A timeout finding does not by itself prove a defect. In the observed case, the timeout findings are false positives because the game is working correctly and simply does not quit on its own [3][8]. The game is behaving as intended; it is the tool's assumption that a run should terminate that is wrong for this class of program.
 
-The timeout findings are false positives because the game is working correctly and simply does not quit on its own [3][8]. A game that is meant to run indefinitely — a normal interactive game loop, for instance — has no reason to terminate. The absence of an exit is the expected behavior, not a symptom.
+The problem is compounded by the wording attached to the finding. The suggestion text incorrectly blames the game for infinite loops when the game is functioning correctly [4][9]. A developer reading that suggestion is pointed toward a loop defect that does not exist, which wastes triage time and erodes trust in the tool's output. The defect here is in the diagnostic message, not in the game.
 
-The problem is compounded by the wording of the output. The suggestion text incorrectly blames the game for infinite loops when the game is functioning correctly [4][9]. A developer reading that suggestion is pointed at a defect that does not exist, which costs time and can lead to unnecessary changes to working code. The tool has no way, in its current form, to tell "this game is hung" apart from "this game is supposed to keep running," so it reports both the same way.
+## Proposed enhancement: `expected_timeout`
 
-## Proposed enhancement: the `expected_timeout` parameter
+The proposed fix is a new parameter rather than a change to the timeout itself. A proposed enhancement adds an `expected_timeout` boolean parameter for games meant to run indefinitely so the timeout finding is suppressed or reworded [5][10]. Setting the flag declares that non-termination is the intended behavior for that run. The tool can then either drop the finding entirely or restate it in neutral terms, instead of asserting an infinite loop.
 
-A proposed enhancement adds an `expected_timeout` boolean parameter for games meant to run indefinitely, so the timeout finding is suppressed or reworded [5][10]. Under this proposal, the caller declares up front whether a timeout is a legitimate outcome for the run. When `expected_timeout` is set, the tool either drops the finding entirely or restates it in neutral terms rather than blaming the game for an infinite loop.
+This keeps the timeout in place as a genuine safeguard for runs that are supposed to finish, while removing the false signal for runs that are not. The decision is left to the caller, who knows whether the game is expected to quit.
 
-The flow below shows where that decision would sit in the run.
+## Flow
 
 ```mermaid
 flowchart TD
-    A[godot_debug_workflow starts] --> B[Run game headless with timeout]
-    B --> C{Timeout reached?}
-    C -- Yes --> D{expected_timeout set?}
-    D -- Yes --> E[Suppress or reword the timeout finding]
-    D -- No --> F[Report timeout finding with suggestion text]
+    A[Start headless run] --> B[Run game with timeout]
+    B --> C{Game exits before timeout?}
+    C -- Yes --> D[Normal completion]
+    C -- No --> E[Timeout finding raised]
+    E --> F{expected_timeout set?}
+    F -- Yes --> G[Suppress or reword finding]
+    F -- No --> H[Report as potential infinite loop]
 ```
 
-The key point is that the timeout itself is not the signal — the caller's expectation about the timeout is. Without that input, the tool can only guess, and its current guess is wrong for any game that runs indefinitely.
+The branch point is the `expected_timeout` flag: it determines whether a reached timeout is treated as a defect signal or as an anticipated outcome.
 
 ## Summary
 
-Headless runs are terminated by a timeout [2][7]. For games that do not quit on their own, that timeout is expected behavior, so the resulting findings are false positives [3][8] and the accompanying suggestion text misattributes the cause to infinite loops [4][9]. Adding an `expected_timeout` boolean lets callers mark runs where a timeout is normal, so the finding is suppressed or reworded [5][10].
+Timeout handling in the headless workflow has two parts: bounding the run, and interpreting the bound when it is hit. The bounding is straightforward. The interpretation is where the current behavior falls short, because it reports a correct, non-terminating game as an infinite loop [3][4][8][9]. The `expected_timeout` parameter addresses this by letting the caller declare intent up front [5][10].
 
 ## See also
 
-- `godot_debug_workflow` — the tool that performs the headless run [2][7]
-- False-positive findings in automated debug output [3][8]
-- Suggestion text generation and its failure modes [4][9]
-- `expected_timeout` parameter proposal [5][10]
-- Issue #489, "[Bug] AnimationPlayer path resolution fails for instanced scenes" — an example of a runtime defect investigated through headless runs [1][6]
+- `godot_debug_workflow` — the tool that runs the game headless with a timeout [2][7]
+- `expected_timeout` parameter — proposed boolean flag for games meant to run indefinitely [5][10]
+- False positive triage in automated test findings [3][8]
+- Diagnostic message wording and its effect on developer triage [4][9]
+- Issue #489 — closed bug report titled "[Bug] AnimationPlayer path resolution fails for instanced scenes" [1][6]
 
 ---
 

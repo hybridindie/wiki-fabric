@@ -7,52 +7,55 @@ review_after: 2027-01-19
 
 # No Code Change Required
 
-"No code change required" is a verification outcome, not a null result. It records that a requirement was checked against existing code and found already satisfied, so the correct action was to leave production code untouched. In this case, no production change was needed because the addon already conforms to the enum [3][6]. That finding is worth writing down precisely because it is invisible in a diff: a later reader sees no commit and cannot tell whether the work was done and passed, or skipped entirely.
-
-The outcome also has boundaries. Conformance to the enum is certified; enforcement behavior and one code path are not. Separating those categories is the point of the record.
+"No code change required" is the outcome of a verification pass in which a planned production edit turned out to be unnecessary because the existing implementation already satisfied the requirement. It matters for two reasons. First, it prevents churn: editing code that already conforms adds review surface and regression risk for no behavioral gain. Second, it is a narrow claim. Establishing that no change is required for one requirement says nothing about adjacent gaps, and it says nothing about assumptions that were never verified. This article covers the conformance finding itself, the behavioral gap that survives it, and the unverified assumption that remains open.
 
 ## The conformance finding
 
-The primary result is that the addon already conforms to the enum, and therefore no production change was needed [3][6]. This is the strongest form of the outcome: the requirement was met by code as written, and the appropriate response was to avoid a refactor toward a nominal target that would have added risk without changing behavior. Documenting the check preserves the evidence that the requirement was evaluated rather than overlooked.
+The core result is direct: no production change was needed because the addon already conforms to the enum [3][6]. The requirement was checked against the addon's existing behavior, and the existing behavior already matched. There was no partial match to patch, no migration to write, and no compatibility shim to add. The correct action was to record the finding and leave the production code untouched [3][6].
 
-## Residual gap: strict mode informs rather than blocks
+This is the strongest form of the result. It is not "the change is small" or "the change can be deferred" — it is that the change has no content, because the target state is the current state.
 
-The one real behavioral gap is that strict mode informs rather than blocks [1][4]. Strict mode surfaces a violation; it does not prevent one. The only deny-capable surface available is opencode's `permission.ask` hook or a `permission.read` rule [1][4]. Both are pattern-based and have no access to the manifest logic [1][4].
+## What "no change" does not cover
 
-That last constraint is structural. The enforcement boundary sits outside the code that actually knows whether a given action is permitted, so the pattern matcher can only approximate the decision the manifest would make. This is not a configuration oversight that tighter patterns would fix — the deny-capable surface simply cannot see the inputs the manifest uses. Any expectation of blocking behavior has to be scoped to what pattern matching can express.
+The conformance finding is scoped to the enum. It does not close the one real behavioral gap identified in the same pass: strict mode informs rather than blocks [1][4]. Strict mode reports; it does not prevent. That distinction is the whole gap.
 
-## Unverified assumption: the undo trigger path
+The only deny-capable surface available is opencode's `permission.ask` hook or a `permission.read` rule [1][4]. Either can refuse an operation, which is what blocking requires. But both are pattern-based, and neither has access to the manifest logic [1][4]. So the deny-capable surface cannot express the condition that actually matters — it can match on shape, not on the manifest-derived decision. A rule can be written; it cannot be written to encode the same reasoning strict mode uses to inform.
 
-The `_cmd_undo` comment at command_router.gd:248-250 hedges that the undo-trigger path is an assumed form pending the Task-1 live spike [2][5]. The path is documented as an assumption rather than a confirmed behavior. Until the live spike runs, the undo trigger should be treated as unvalidated.
+The practical consequence is that "no code change required" is true for the enum and false as a general statement about enforcement. The gap is not a missing edit; it is a missing capability in the surface that would have to carry the edit.
 
-This is a different category of residual risk from the strict-mode gap. The strict-mode gap is known and characterized; the undo trigger is unknown pending measurement. Both survive the "no code change required" verdict, and neither is resolved by it.
+## An assumption still pending verification
 
-## What the outcome does and does not certify
+One path in the same area is explicitly hedged rather than settled. The `_cmd_undo` comment at `command_router.gd:248-250` states that the undo-trigger path is an assumed form pending the Task-1 live spike [2][5]. The comment is a marker, not a conclusion: the shape of the path is believed, not observed.
 
-The verdict certifies enum conformance [3][6]. It does not certify blocking enforcement, which strict mode does not provide [1][4], and it does not certify the undo-trigger path, which remains an assumption pending the Task-1 live spike [2][5].
+This is the reason the "no change required" result should be read alongside the hedge. A conformance check can pass against an assumed form and still be wrong if the assumption does not hold under live conditions. The Task-1 live spike is the step that converts the assumption into a verified fact [2][5].
+
+## Flow of the verification outcome
 
 ```mermaid
 flowchart TD
-    A[Requirement: conform to target enum] --> B{Addon already conforms?}
-    B -- Yes --> C[No production change required]
-    B -- No --> D[Edit addon]
+    A[Requirement: enum conformance] --> B{Addon already conforms}
+    B -->|yes| C[No production change required]
+    B -->|no| D[Edit addon]
     C --> E[Residual gap: strict mode informs, does not block]
-    C --> F[Unverified: undo-trigger path pending Task-1 live spike]
-    E --> G[Only deny-capable surface: permission.ask hook or permission.read rule]
-    G --> H[Pattern-based, no access to manifest logic]
+    E --> F{Deny-capable surface}
+    F -->|permission.ask or permission.read| G[Pattern-based only, no manifest logic access]
+    F -->|none| H[Gap remains open]
+    C --> I[Assumed undo-trigger path in command_router.gd]
+    I --> J[Pending Task-1 live spike]
 ```
 
-Read this way, "no code change required" is a scoped claim. It says the enum requirement is satisfied by existing code and that editing production code would have been unnecessary churn. It does not say the system blocks what it should, and it does not say the undo trigger behaves as assumed. Those two items remain open and are tracked separately.
+## Summary
+
+The enum requirement is satisfied by existing code, so no production change is required [3][6]. Strict mode still informs rather than blocks, and the only deny-capable surfaces are pattern-based with no access to the manifest logic [1][4]. The undo-trigger path remains an assumed form pending the Task-1 live spike [2][5].
 
 ## See also
 
-- Enum conformance
-- Strict mode (inform vs. block)
-- `permission.ask` hook
-- `permission.read` rule
-- Manifest logic
+- Enum conformance checks
+- Strict mode semantics: inform versus block
+- `permission.ask` hook and `permission.read` rules
+- Manifest logic and pattern-based matching limits
+- `command_router.gd` undo-trigger path
 - Task-1 live spike
-- `command_router.gd` `_cmd_undo`
 
 ---
 

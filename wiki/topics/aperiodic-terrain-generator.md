@@ -5,29 +5,31 @@ domain: [agent-systems]
 review_after: 2027-01-19
 ---
 
-The aperiodic terrain generator is the subsystem that translates the output of an aperiodic tiling grammar into terrain: elevation, cliffs, and vegetation. It matters because the coupling between the grammar and the terrain is narrow. Only a small fraction of the signals the grammar produces actually reach the terrain, and at least one of those signals is collapsed before use. The result is a world whose large-scale structure is driven by the tiling, but whose fine-grained aperiodic detail is largely invisible — both to the terrain and to anyone trying to debug it.
+# Aperiodic Terrain Generator
 
-## Grammar signals consumed
+The aperiodic terrain generator is the component that turns the output of the aperiodic grammar into visible world geometry: elevation, cliffs, and vegetation. It matters because it defines the actual contract between the tiling system and the rendered world — and that contract is much narrower than the grammar's full output. Understanding which signals are consumed, how they are transformed by providers, and what is observable at runtime is necessary for anyone debugging terrain that does not match the underlying tiling.
 
-The terrain generator consumes exactly 3.5 of the grammar signals [1][5]. The mapping is:
+## Grammar signal consumption
 
-- `boundary_dist` drives ridge lift and stone cliffs.
-- `region_id` applies a uniform elevation bias.
-- `label == "H1"` controls tree density.
+The generator consumes exactly 3.5 of the grammar signals [1][5]. The three usages are:
 
-The fractional count comes from the label channel: it is consumed only through a single equality predicate rather than as a full value, while `boundary_dist` and `region_id` are used as complete signals [1][5]. Everything else the grammar emits — `tile_id`, `path`, `junction_dist`, `orientation` — has no terrain-side consumer.
+- **`boundary_dist`** — drives ridge lift and stone cliffs [1][5].
+- **`region_id`** — applies a uniform elevation bias across a region [1][5].
+- **`label == "H1"`** — controls tree density [1][5].
 
-## The Hat provider collapses boundary_dist
+Everything else the grammar produces — `tile_id`, `path`, `junction_dist`, `orientation`, and the rest — has no consumer in the terrain pipeline. The fractional count reflects that the third usage is a boolean test on a label rather than a full use of the signal.
 
-In the Hat provider, `boundary_dist` is literally assigned `edist` [2][6]. This collapses the leaf-vs-metatile distinction: whatever distance the provider computes is passed through unchanged, so downstream terrain code cannot tell whether the nearest boundary belongs to a leaf tile or a metatile. Since `boundary_dist` is the input to both ridge lift and stone cliffs [1][5], that lost distinction propagates directly into the terrain geometry.
+## Signal collapse in the Hat provider
 
-## Observability gap in the debug overlay
+The provider layer can destroy information before the terrain generator ever sees it. In the Hat provider, `boundary_dist` is literally assigned `edist`, which collapses the leaf-vs-metatile distinction [2][6]. Any downstream logic that would have treated leaf edges and metatile edges differently receives a single undifferentiated distance value instead. Because the terrain generator's ridge lift and stone cliffs are driven by `boundary_dist` [1][5], this collapse propagates directly into the geometry.
 
-The runtime debug overlay shows fps, chunks, mem, and pos — and nothing about the grammar [3][7]. Specifically, it exposes no `tile_id`, `label`, `path`, `region_id`, `boundary_dist`, `junction_dist`, or `orientation` [3][7]. Combined with the narrow signal consumption described above, this means there is no runtime view of which grammar values are reaching the terrain generator or how they are being interpreted. Verifying the grammar-to-terrain mapping requires reading code rather than inspecting a running world.
+## Edge classification loss
 
-## Undifferentiated edge minimum in the Hat outline
+A related loss occurs in the outline handling. The Hat outline has 13 edges belonging to different legal classes, but the code takes an undifferentiated minimum over all edges [4][8]. The class structure of the outline is therefore not respected when the minimum is computed, in the same way that the leaf/metatile structure is not respected in the `boundary_dist` assignment [2][6]. Both are cases where a richer grammar output is reduced to a scalar before consumption.
 
-The Hat outline has 13 edges belonging to different legal classes, but the code takes an undifferentiated minimum over all of them [4][8]. Edge class is therefore discarded at the point where the minimum is computed. Any terrain or geometry logic that depends on which class of edge is nearest cannot recover that information afterward.
+## Observability gap
+
+The runtime debug overlay shows fps, chunks, mem, and pos, but nothing about the grammar [3][7]. There is no display of `tile_id`, `label`, `path`, `region_id`, `boundary_dist`, `junction_dist`, or `orientation` [3][7]. Combined with the signal collapse [2][6] and the undifferentiated edge minimum [4][8], this means a developer observing a terrain anomaly has no runtime view of the grammar state that produced it. The only grammar-derived quantities that reach the screen are the ones the terrain generator already consumed [1][5].
 
 ## Flow
 
@@ -35,29 +37,30 @@ The Hat outline has 13 edges belonging to different legal classes, but the code 
 flowchart LR
     G[Aperiodic grammar] -->|boundary_dist| T[Terrain generator]
     G -->|region_id| T
-    G -->|label == "H1"| T
-    G -.->|tile_id, path, junction_dist, orientation| N[No consumer]
+    G -->|label == H1| T
+    G -.->|tile_id, path, junction_dist, orientation| U[No consumer]
+    P[Hat provider] -->|boundary_dist := edist| T
     T --> R[Ridge lift + stone cliffs]
     T --> E[Uniform elevation bias]
-    T --> V[Tree density]
-    H[Hat provider: boundary_dist = edist] --> T
-    O[Debug overlay: fps / chunks / mem / pos] -.->|no grammar state| G
+    T --> D[Tree density]
+    O[Runtime debug overlay] --> M[fps / chunks / mem / pos]
+    G -.->|not shown| O
 ```
 
-The diagram shows the three consumed signals entering the generator, the unconsumed signals dropping out, and the overlay's lack of visibility into any of it. The Hat provider feeds `boundary_dist` in already collapsed [2][6], and the edge minimum is taken without regard to class [4][8].
+The diagram shows the three consumed signals feeding the generator, the remaining signals terminating with no consumer, the Hat provider overwriting `boundary_dist` before it arrives, and the debug overlay sitting outside the grammar path entirely.
 
-## Summary of constraints
+## Summary of gaps
 
-Three constraints define the current design: a 3.5-signal consumption budget [1][5], a collapsed `boundary_dist` in the Hat provider [2][6], and an undifferentiated edge minimum over 13 legal edge classes [4][8]. The debug overlay provides no counterweight to any of these, since it reports only runtime performance and position [3][7].
+Three distinct issues compound: only 3.5 grammar signals reach the terrain generator [1][5]; the Hat provider flattens `boundary_dist` to `edist`, losing the leaf-vs-metatile distinction [2][6]; and the outline minimum ignores the 13 legal edge classes [4][8]. None of these are visible in the runtime overlay, which reports only fps, chunks, mem, and pos [3][7].
 
 ## See also
 
-- Aperiodic Tiling Grammar
-- Hat Monotile
-- Boundary Distance Field
-- Region ID and Elevation Bias
-- Edge Classification
+- Aperiodic Grammar
+- Hat Provider
+- Boundary Distance
+- Region ID
 - Runtime Debug Overlay
+- Edge Classification
 
 ---
 

@@ -5,49 +5,59 @@ domain: [godot-systems]
 review_after: 2027-01-19
 ---
 
-Multi-target handling in Godot covers how editor-side mutations decide whether a change to a node will actually be written back to a scene file. The problem is that a node's parent may live inside an instanced scene, and whether that instance is editable determines whether a create, instance, move, or duplicate operation survives a save. Getting this wrong produces the worst class of bug: an operation that reports success, applies visibly in the editor, and then silently disappears. This article describes the parent rule the engine applies, the target-resolution walk that backs it, and the probe commands that let callers ask about persistence before committing to a mutation.
+# Multi-Target Handling in Godot
 
-## The parent rule and skipped subtrees
+In Godot's editor tooling, a single mutation command — create a node, instance a scene, move a node, duplicate one — can be aimed at a node whose ancestry crosses one or more scene instance boundaries. Multi-target handling is the set of rules and probes that decide which scene file, if any, actually receives that change. The distinction matters because a mutation can apply successfully in the running editor and still never be written to disk, so the result is lost the next time the scene is loaded [1][4].
 
-The engine's traversal is the root of the behaviour. It visits the children of a skipped node's subtree, which means the skip is not a hard stop for the whole branch — descendants are still considered. The practical consequence is a create whose parent sits inside a non-editable instance is never saved, while the same create under an editable instance is saved [1][4]. The deciding factor is therefore not the node being created, but the editability of the instance that owns its parent. Any tooling that reasons about persistence has to resolve the parent chain rather than inspect the node in isolation.
+## The persistence rule: skipped subtrees and editable instances
 
-## Resolving the persistent target
+The engine visits the children of a skipped node's subtree [1][4]. That traversal detail is what makes the parent rule observable in practice: a create whose parent sits inside a non-editable instance is never saved, while the same create under an editable instance is saved [1][4]. The deciding factor is therefore not the node being created, but the editability of the instance that owns its parent.
 
-`_persistent_target` implements that resolution. It walks parents upward to the edited scene root, establishing the node that a mutation will actually be attributed to for persistence purposes [2][5]. The walk is what connects a deeply nested node back to the scene that owns the save.
+## Resolving the target: `_persistent_target`
 
-The result contract is deliberately split. Mutations apply live, returning `ok: true` together with a warning-with-effect — the change happens in the running editor state, and the warning signals that persistence is not guaranteed [2][5]. Separately, the result carries `persisted`, and when that value is false it also carries `reason` and `hint` [2][5]. This separation matters: `ok` describes whether the mutation was applied, while `persisted` describes whether it will survive. Callers that conflate the two will report success for changes that are never written.
+`_persistent_target` is the resolver for this decision. It walks parents up to the edited scene root to determine which scene should own the mutation [2][5]. Two behaviours follow from that design:
 
-## Probing before mutating
+- **Mutations apply live.** The change takes effect in the editor immediately, reported with `ok: true` and a warning-with-effect — the warning signals that persistence is uncertain, not that the operation failed [2][5].
+- **Persistence is reported separately.** The result carries `persisted`, and when that value is false it also carries `reason` and `hint`, so callers can distinguish "applied but not saved" from "rejected" [2][5].
 
-`cmd_node_persistence` exposes the rule as a query so callers can check before acting. It gains two probes: `probe_parent`, which applies the parent rule for create, instance, and move operations, and `probe_parent_of`, which resolves the parent of the named node for duplicate operations [3][6]. The split reflects the fact that duplicate needs to resolve a parent from a node name rather than from an operation's own parent argument.
+Keeping these two signals apart is what allows a caller to react correctly: a live mutation with `persisted: false` is a different situation from a command that never ran.
+
+## Probing before mutating: `probe_parent` and `probe_parent_of`
+
+`cmd_node_persistence` gains two probes that let a caller ask the persistence question before committing to it [3][6]:
+
+- `probe_parent` covers create, instance, and move — the operations governed by the parent rule [3][6].
+- `probe_parent_of` covers duplicate, and resolves the parent of the named node rather than assuming the caller already knows it [3][6].
+
+Splitting the probes this way reflects that duplicate does not follow the same path as the other three operations: it has to locate the source node's parent first, which is why it takes a node name and resolves the parent itself [3][6].
+
+## Flow
 
 ```mermaid
 flowchart TD
-    A[Mutation request: create / instance / move / duplicate] --> B{cmd_node_persistence probe}
-    B -->|create, instance, move| C[probe_parent: apply parent rule]
+    A[Mutation request] --> B{Operation}
+    B -->|create / instance / move| C[probe_parent: apply parent rule]
     B -->|duplicate| D[probe_parent_of: resolve parent of named node]
     C --> E[_persistent_target: walk parents to edited scene root]
     D --> E
-    E --> F{Parent inside non-editable instance?}
-    F -->|yes| G[Subtree skipped: create never saved]
-    F -->|no, editable instance| H[Create is saved]
+    E --> F{Parent inside a non-editable instance?}
+    F -->|yes| G[Not saved: persisted false, with reason and hint]
+    F -->|no, editable instance| H[Saved: persisted true]
     E --> I[Mutation applies live: ok true, warning-with-effect]
-    I --> J{persisted?}
-    J -->|false| K[reason and hint returned]
-    J -->|true| L[No reason or hint]
 ```
 
-## Why the split contract is useful
-
-Because `ok` and `persisted` are independent, a caller can apply a mutation immediately and still surface an accurate warning to the user. The `reason` and `hint` fields give that warning something actionable to say when `persisted` is false [2][5]. Combined with the probes, this lets a tool either pre-check with `probe_parent` or `probe_parent_of` and avoid the mutation entirely, or apply it and report the persistence outcome afterwards [3][6]. Both paths depend on the same underlying walk to the edited scene root [2][5] and the same parent rule about skipped subtrees [1][4].
+The diagram shows the two entry points converging on the same resolver, and the two outcomes that the resolver can report. Note that the live application of the mutation is not conditional on the persistence outcome — it happens either way, with the warning-with-effect attached [2][5].
 
 ## See also
 
-- Editable instances and scene instancing
-- Scene save and persistence semantics
-- `_persistent_target` parent resolution
-- `cmd_node_persistence` probe commands
-- Editor mutation result contracts (`ok`, `persisted`, `reason`, `hint`)
+- Editable instances
+- Skipped nodes and subtree traversal
+- `_persistent_target`
+- `cmd_node_persistence`
+- `probe_parent` and `probe_parent_of`
+- Create, instance, move, and duplicate commands
+- Warning-with-effect semantics
+- `persisted`, `reason`, and `hint` result fields
 
 ---
 

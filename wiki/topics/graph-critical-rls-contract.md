@@ -5,50 +5,51 @@ domain: [agent-systems]
 review_after: 2027-01-19
 ---
 
-The Graph Critical RLS Contract is the set of row-level security (RLS) expectations that the graph ingestion path depends on. It defines, per table, whether RLS is enabled, which policies must exist, which roles those policies target, and what happens when a request arrives through PostgREST without the service role. It matters because the ingestion review queue sits between untrusted client traffic and the graph write path: if its policy set drifts, either end users gain a direct write channel into review data or the ingestion pipeline silently loses the ability to write at all. The contract is not documentation-only — it is enforced by migration and CI contract tests, so any divergence is a build failure rather than a runtime surprise [4][10].
+The Graph-Critical RLS Contract is the set of row-level security expectations that the graph data layer must satisfy at all times. It exists because RLS state is easy to change accidentally — a migration, a manual `ALTER TABLE`, or a policy rename can silently open or close an access path — and because PostgREST exposes tables directly to clients, meaning a missing policy is not a theoretical risk but an immediately reachable endpoint. The contract pins the RLS state, policy names, and policy commands for graph-critical tables, and it is enforced by migration and CI contract tests rather than by convention alone [4][10].
 
-## Contracted tables and their policies
+## What the contract pins
 
-The primary contracted table is `ingestion_review_queue`. RLS is enabled on it, and it carries exactly one policy: a service-role policy named `graph_ingestion_review_queue_service_all` [1][7]. That single policy is the whole access surface for the table.
+The contract covers three things per table: whether RLS is enabled, which policies exist, and what commands those policies permit. Any drift in policy names, commands, or table RLS state is treated as a failure [5][11]. That definition matters because it makes the contract checkable. A reviewer does not have to reason about intent; the migration and the CI contract tests compare the live schema against the expected shape and fail the build on any mismatch [4][10].
 
-There are no authenticated-role policies on the review queue. As a consequence, a direct PostgREST call carrying an end-user JWT is denied [2][8]. This is the intended behavior, not an oversight: the absence of a policy is the enforcement mechanism. An authenticated request reaches the table, RLS evaluates it, finds no matching policy, and the row set is empty or the write is rejected.
+## Service-only tables: ingestion_review_queue
 
-The second table in scope is `media_titles`. It has RLS disabled and no contracted policies, and its public read/write behavior remains application-controlled [6][12]. This is a deliberate contrast with the review queue: `media_titles` is not part of the service-only contract, so the contract tests do not assert a policy shape for it. Its access rules live in application code rather than in the database policy layer.
+The `ingestion_review_queue` table is the clearest example of the contract in action. RLS is enabled on it, and it carries a single service-role policy named `graph_ingestion_review_queue_service_all` [1][7]. There are no authenticated-role policies on the review queue, so a direct PostgREST call with an end-user JWT is denied [2][8].
 
-## The service-only access pattern
+This is the Service-Only Access pattern: no user policies exist, and all access goes through the service role [3][9]. The practical consequence is that the review queue is not reachable from a browser session or any other client holding an end-user token. Only server-side code holding the service role can read or write it. The single `_service_all` policy is what makes that explicit — the policy name itself records both the role it applies to and the breadth of the commands it grants.
 
-The review queue follows what the codebase calls the Service-Only Access pattern: no user policies exist, and all access goes through the service role [3][9]. Under this pattern, the database is not the place where per-user authorization is expressed. Instead, the table is effectively closed to end-user credentials, and the only principal that can read or write it is the service role used by trusted server-side code.
+## Tables outside the contract: media_titles
 
-The practical implication is that any feature needing to read or mutate review-queue rows must run behind the service role. Client-side code cannot be given a scoped policy to reach the table without breaking the contract, because adding an authenticated-role policy would change the policy set that the contract tests assert.
+Not every table is graph-critical in the same way. `media_titles` has RLS disabled and no contracted policies, with public read/write behavior remaining application-controlled [6][12]. That is a deliberate difference, not an oversight: the contract does not assert anything about `media_titles`, so its access behavior is governed by application logic rather than by database-level policy. The distinction is worth stating plainly, because "RLS disabled" on one table and "RLS enabled with a service-only policy" on another are both valid states under this contract — they are simply different entries in it.
 
-## Enforcement: migration and CI contract tests
-
-The contract is enforced in two places. First, migrations define the RLS state and policy definitions, so the expected shape is created declaratively rather than by hand. Second, CI contract tests assert that shape against the live schema [4][10].
-
-Drift is treated as a failure. Any change to policy names, the commands a policy permits, or a table's RLS state causes the contract tests to fail [5][11]. This covers the obvious cases — dropping `graph_ingestion_review_queue_service_all`, renaming it, widening its command set, or disabling RLS on the review queue — and it also covers the quieter case of adding a policy that was never contracted. Because the check runs in CI, a schema change that would alter the access surface cannot merge without an explicit contract update.
+## Enforcement path
 
 ```mermaid
 flowchart TD
     A[Client request] --> B[PostgREST]
-    B -->|End-user JWT| C[ingestion_review_queue]
-    B -->|Service role key| C
+    B -->|end-user JWT| C[ingestion_review_queue]
     C --> D{RLS enabled}
-    D -->|authenticated role| E[No matching policy - denied]
-    D -->|service_role| F[graph_ingestion_review_queue_service_all - allowed]
-    B --> G[media_titles]
-    G --> H[RLS disabled - application-controlled access]
+    D -->|no authenticated-role policy| E[Denied]
+    B -->|service role| F[graph_ingestion_review_queue_service_all]
+    F --> G[Access granted]
+    B --> H[media_titles]
+    H --> I[RLS disabled - application-controlled]
+    J[Migration] --> K[CI contract tests]
+    K -->|drift in names, commands, or RLS state| L[Failure]
 ```
 
-The diagram summarizes the two paths: end-user credentials are denied at the review queue by the absence of a policy, while the service role is admitted by the single contracted policy. `media_titles` bypasses the RLS decision entirely because RLS is disabled there.
+The enforcement side is deliberately boring. The contract is applied by migration and verified by CI contract tests [4][10]. If a policy is renamed, a command is widened, or a table's RLS flag flips, the tests fail [5][11]. This keeps the access model from drifting one migration at a time, which is the failure mode the contract is designed to prevent.
+
+## Why it matters
+
+Without a contract, the security posture of the graph layer is only as good as the last person who read the migration. With it, the posture is a testable property: `ingestion_review_queue` is service-only and unreachable with an end-user JWT [2][8], `media_titles` is application-controlled [6][12], and any deviation from either state stops the pipeline [5][11].
 
 ## See also
 
 - Service-Only Access pattern
-- Row-level security (RLS) in Postgres
+- Row-Level Security (RLS)
 - PostgREST role and JWT handling
-- Graph ingestion pipeline
-- Schema contract testing in CI
-- Migration-managed policy definitions
+- CI contract tests
+- Migration-driven schema governance
 
 ---
 

@@ -7,46 +7,46 @@ review_after: 2027-01-19
 
 # Task-1 Live Spike
 
-This article covers the outcome of the Task-1 live spike and the state of the code that came out of it. The spike is the point where the design questions for Task-1 were answered against a running system rather than on paper, so its conclusion is what unblocks the follow-on work: the undo-trigger path, the serialization boundary in `type_coerce.gd`, and the verification baseline that later changes are measured against. Anyone touching Task-1 code needs to know that the spike is closed, which direction the type coercion layer currently supports, and what the test and lint suites reported at that point.
+This article covers the Task-1 live spike: what it set out to de-risk, what it produced, and what state the resulting code is in today. It matters because the spike is the origin point for the undo-trigger path and for the serialization boundary in `type_coerce.gd`. Anyone touching either area needs to know that the spike is closed, that the undo-trigger path is no longer experimental, and that one half of the serialization boundary is deliberately unimplemented.
 
-## Spike status and the undo-trigger path
+## Spike status
 
-The Task-1 live spike concluded long ago, and the undo-trigger path has shipped and is contract-tested [1][4]. Two things follow from that. First, the spike is not an open investigation — it is historical context, and work that treats it as still in progress is working from a stale premise. Second, the undo-trigger path is not a prototype: it is shipped code with contract coverage, meaning its interface is pinned by tests rather than by convention. Contract tests are the relevant kind of coverage here because the undo trigger is a boundary between components; a contract suite asserts the shape of that boundary, so a change that breaks the trigger's callers fails in CI rather than at runtime.
+The Task-1 live spike concluded long ago, and the undo-trigger path has shipped and is contract-tested [1][4]. The practical consequence is that the spike should not be treated as open work or as a source of pending decisions. The exploratory phase is over; the output of that phase is now production code with contract coverage behind it. If you find references to the spike as an active investigation, they are stale.
+
+## The undo-trigger path
+
+The undo-trigger path is the concrete deliverable that came out of the spike. It has shipped, and it is covered by contract tests rather than only by ad hoc manual checks [1][4]. Contract tests are the relevant category here because the path crosses a boundary — the trigger is exercised against a defined interface, so regressions in the interface surface are caught rather than discovered later.
 
 ## Serialization direction in `type_coerce.gd`
 
-The `type_coerce.gd:9` class docstring states the read direction (Godot → JSON) is the only direction for now, and that `from_json()` lands with the mutation tools (#6) [2][5]. This is a deliberate scope boundary, not an oversight. The coercion layer currently converts Godot values into JSON-compatible values; the inverse conversion is deferred and tied to a specific piece of work, the mutation tools tracked as #6. Practically, this means:
-
-- Code that only reads and serializes Godot state can rely on `type_coerce.gd` today.
-- Code that needs to reconstruct Godot values from JSON cannot use this layer yet, because `from_json()` does not exist.
-- The dependency is explicit: the write direction arrives with the mutation tools, so scheduling that work also schedules the second half of the coercion layer.
-
-The flow across the two areas looks like this:
+The class docstring at `type_coerce.gd:9` states that the read direction (Godot → JSON) is the only direction for now, and that `from_json()` lands with the mutation tools (#6) [2][5]. This is a deliberate scope boundary, not an oversight. The read direction is implemented and usable; the write direction is deferred and tied to a specific downstream work item.
 
 ```mermaid
 flowchart LR
-    A[Task-1 live spike] -->|concluded| B[Undo-trigger path]
-    B -->|shipped| C[Contract tests]
-    D[type_coerce.gd] -->|read direction, supported| E[Godot to JSON]
-    F[from_json] -.->|pending, lands with mutation tools #6| G[JSON to Godot]
+    G[Godot object] -->|to_json| J[JSON]
+    J -.->|from_json deferred: mutation tools #6| G
 ```
 
-The solid path is what exists now; the dashed path is what is explicitly deferred.
+The solid edge is the supported path today. The dashed edge is the deferred path, gated on the mutation tools tracked as #6 [2][5]. Code that assumes round-tripping through `type_coerce.gd` will not work until that item lands.
 
-## Verification baseline
+## Verification status
 
-Contract and unit suites reported 781 passed with zero skips, and ruff plus mypy were clean [3][6]. Three details matter more than the headline number. The suites are both contract and unit, so the boundary-level and function-level checks were run together. Zero skips means no test was silently disabled or conditionally bypassed — the 781 figure reflects tests that actually executed. And clean ruff plus mypy runs mean the static checks, lint and type checking respectively, raised no findings, so the type annotations in the codebase were consistent at that point.
+The contract and unit suites reported 781 passed with zero skips, and both ruff and mypy were clean [3][6]. Two things are worth noting about that result. First, zero skips means the suite is not silently passing over unexercised cases — the 781 figure reflects tests that actually ran. Second, clean ruff and mypy runs mean the static checks were not waived or suppressed for this work. Together these give a reasonably strong signal that the shipped undo-trigger path and the read-direction serialization code are in a consistent, checked state.
 
-Taken together, the spike's conclusion, the shipped undo-trigger path, the documented one-way coercion boundary, and the clean verification run describe a stable checkpoint. The open item is the write direction of `type_coerce.gd`, which is gated on the mutation tools (#6) rather than on any unresolved question from the spike itself.
+## What this means in practice
+
+- The spike is closed; do not reopen it as an investigation [1][4].
+- The undo-trigger path is shipped and contract-tested, so changes to it should go through the contract suite [1][4].
+- `type_coerce.gd` supports Godot → JSON only; `from_json()` is deferred to the mutation tools (#6) [2][5].
+- The current baseline is 781 passing tests with zero skips, clean ruff, and clean mypy [3][6].
 
 ## See also
 
 - Undo-trigger path
-- Contract testing
-- `type_coerce.gd` and the type coercion layer
+- `type_coerce.gd` serialization boundary
 - Mutation tools (#6)
-- `from_json()` and the JSON → Godot direction
-- Static analysis: ruff and mypy
+- Contract testing
+- Static analysis gates (ruff, mypy)
 
 ---
 

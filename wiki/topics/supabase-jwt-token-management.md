@@ -5,52 +5,55 @@ domain: [agent-systems, godot-systems]
 review_after: 2027-01-19
 ---
 
-Supabase JWT token management covers how a Supabase-backed application obtains authentication tokens, carries them to a server, and has them validated — and how authorization is enforced once a token is accepted. It matters because token handling sits on the boundary between an anonymous request and an authorized one. Get it wrong in one direction and legitimate users are locked out; get it wrong in the other and data is exposed. Supabase Auth is built so that the token mechanics themselves — PKCE and JWT token management — are provided by the platform rather than implemented by hand [2][5].
+Supabase JWT token management covers how authentication credentials are issued, carried, and enforced across a Supabase-backed system. It matters because the token is the boundary between an anonymous peer and an authorized user: everything downstream — API access, database reads, and writes — depends on whether that boundary holds. Supabase Auth handles the issuance side, while the server listener and Row Level Security (RLS) policies handle enforcement at two separate layers.
 
-## What Supabase Auth provides
+## Token issuance: PKCE and JWT handled by Supabase Auth
 
-Supabase Auth provides PKCE and JWT token management without manual implementation [2][5]. The practical consequence is that an application does not need to build its own authorization-code exchange or its own token lifecycle code; the auth service owns that path. For engineering teams this reduces the surface area where auth bugs can be introduced, because the flow is not reimplemented per project and does not drift between clients.
+Supabase Auth provides PKCE and JWT token management without requiring manual implementation [2][5]. In practice this means the authorization-code exchange and the resulting token lifecycle are delegated to the auth service rather than hand-rolled in application code. The engineering consequence is that the client does not need to construct, sign, or negotiate tokens itself; it completes the PKCE flow and receives a JWT that it then presents on subsequent requests [2][5].
 
-## Validating peers at the server listener
+Because this is provided rather than implemented, the correctness of the token format and the exchange protocol is not something the application team maintains. That reduces the surface area where a custom implementation could diverge from the expected contract.
 
-On the server side, the listener is the first enforcement point. The server listener refuses non-authenticated peers with a VALIDATION_ERROR-family envelope and drops them [1][4]. Two properties are worth noting. First, the rejection is explicit: the peer receives a structured error envelope in the VALIDATION_ERROR family rather than an ambiguous failure or a silent hang. Second, the connection is dropped rather than left open in an unauthenticated state. A peer that cannot authenticate does not proceed into application logic.
+## Enforcement at the server listener
 
-## Authorization at the data layer
+The server listener is the first enforcement point. It refuses non-authenticated peers with a VALIDATION_ERROR-family envelope and drops them [1][4]. Two properties are worth noting here:
 
-Passing the listener is not the end of the check. RLS policies ensure that users can only access data they're authorized to see, preventing unauthorized data exposure even if application-level security is bypassed [3][6]. This is a defense-in-depth property: even if a request reaches the database through a path where application-level checks were skipped, misconfigured, or wrong, row-level security still constrains which rows are visible or writable for that identity.
+- **Rejection is explicit.** The peer receives a structured error in the VALIDATION_ERROR family rather than a silent failure or an ambiguous response [1][4].
+- **Rejection is terminal.** The connection is dropped, not merely downgraded to a lower-privilege session [1][4].
 
-## Flow
+This means an unauthenticated request never reaches application logic. The listener acts as a gate: either a peer presents credentials that satisfy the listener, or it is removed from the connection set entirely [1][4].
+
+## Row Level Security as the data-layer backstop
+
+Listener-level rejection protects the entry point, but it does not by itself constrain what an authenticated user can read or write. That is the role of RLS policies. RLS policies ensure that users can only access data they're authorized to see, preventing unauthorized data exposure even if application-level security is bypassed [3][6].
+
+The phrase "even if application-level security is bypassed" is the important part. RLS is a defense-in-depth control: it assumes that a bug, a misrouted request, or a logic error above the database layer could let a request through with the wrong identity, and it constrains the result at the point where data is actually returned [3][6]. Authorization is therefore enforced twice — once at the listener, once at the row.
+
+## Request flow
 
 ```mermaid
-sequenceDiagram
-    participant C as Client
-    participant A as Supabase Auth
-    participant L as Server Listener
-    participant D as Database (RLS)
-
-    C->>A: Authenticate (PKCE flow)
-    A-->>C: JWT token management handled by Supabase Auth
-    C->>L: Peer connects
-    alt Peer not authenticated
-        L-->>C: VALIDATION_ERROR-family envelope, connection dropped
-    else Peer authenticated
-        L->>D: Request proceeds
-        D->>D: RLS policies constrain rows by authorization
-        D-->>C: Authorized data only
-    end
+flowchart LR
+    C[Client] -->|PKCE flow| A[Supabase Auth]
+    A -->|JWT issued| C
+    C -->|request + JWT| L[Server listener]
+    L -->|not authenticated| R[VALIDATION_ERROR envelope<br/>peer dropped]
+    L -->|authenticated| D[(Database)]
+    D -->|RLS policy check| P[Authorized rows only]
 ```
 
-## Why the split matters
+The diagram reflects the two independent checks: the listener decides whether the peer stays connected [1][4], and RLS decides which rows that peer can touch [3][6]. Supabase Auth supplies the credential that both checks depend on [2][5].
 
-The two enforcement points cover different failure modes, and neither substitutes for the other. The listener answers the coarse question — is this peer authenticated at all — and terminates the connection when the answer is no [1][4]. RLS answers the fine question — which rows may this identity touch — and continues to hold even when application-level security is bypassed [3][6]. Because Supabase Auth supplies PKCE and JWT token management out of the box [2][5], the team's own code is not responsible for the token mechanics that feed both checks. That leaves the application responsible for the parts it can actually reason about: which policies exist, and what each identity is meant to reach.
+## Operational implications
+
+Because token management is provided rather than built [2][5], the operational work shifts from implementing the flow to verifying that both enforcement layers are actually active. A listener that accepts unauthenticated peers, or a table without RLS policies, would each independently undermine the model — the first by admitting the wrong peer [1][4], the second by exposing rows to an authenticated peer who should not see them [3][6].
 
 ## See also
 
 - Supabase Auth
-- Row Level Security (RLS) policies
-- PKCE authorization flow
-- JWT validation at service boundaries
-- Defense in depth
+- PKCE Authorization Flow
+- JWT Validation at the Server Listener
+- VALIDATION_ERROR Envelope
+- Row Level Security (RLS) Policies
+- Defense in Depth for API Authorization
 
 ---
 

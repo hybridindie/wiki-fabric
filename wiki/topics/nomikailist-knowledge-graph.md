@@ -5,52 +5,49 @@ domain: [agent-systems]
 review_after: 2027-01-19
 ---
 
-The NomikaiList knowledge graph is a codebase-derived graph that models symbols, their relationships, and the community structure that emerges from them. It matters because it is the substrate for automated maintenance operations: filtering low-confidence edges and pruning isolated nodes are the two cleanup passes described in the available evidence. This article covers the graph's scale, its edge-confidence policy, and the singleton-pruning pass, along with the numbers observed on the 2026-05-04 snapshot.
+The NomikaiList knowledge graph is a codebase-derived graph that models symbols, relationships, and community structure across the NomikaiList project. It matters because it is the substrate for structural queries — dependency tracing, community detection, and cleanup of noisy or isolated nodes — and because its maintenance scripts operate on real, measured graph snapshots rather than on assumptions. This article covers the graph's scale, the edge-confidence filtering step, and the singleton pruning step, along with the order in which those operations apply.
 
-## Graph Scale and Structure
+## Graph scale and structure
 
-The NomikaiList codebase graph is approximately 13K nodes and 20K edges, partitioned into 2,228 communities [1][4]. The node count and the community count are the two figures that recur across the source material, and they define the working size of the graph: roughly six edges per node on average, spread over a few thousand detected communities.
+The NomikaiList codebase graph is approximately 13K nodes and 20K edges, distributed across 2,228 communities [1][4]. The node count and the community count are the two figures that anchor most downstream reasoning: nodes represent code entities, edges represent relationships between them, and communities represent clusters of tightly connected entities. A graph of this size is large enough that manual inspection is impractical, which is why the tooling described below operates in bulk and reports counts rather than individual items.
 
-A dated snapshot refines the node figure. On the 2026-05-04 graph, the node count was 12,984, with the same 2,228 communities [3][6]. The consistency of the community count between the approximate figure and the dated snapshot suggests the community structure is stable relative to node-level churn, though the evidence does not state this directly.
+A concrete snapshot illustrates the scale. On the 2026-05-04 graph, the measured totals were 12,984 nodes and 2,228 communities [3][6]. The community count in that snapshot matches the approximate figure reported for the graph overall, while the node count sits just under the 13K approximation [1][4]. This is consistent with a graph that grows incrementally as code is added, with the community structure remaining comparatively stable across the period covered by the evidence.
 
-## Edge Confidence Filtering
+## Edge confidence filtering
 
-Edges in the graph carry a provenance type, and at least one type — `INFERRED` — carries a confidence score. The `clean-low-confidence-edges` script drops `INFERRED` edges whose confidence falls below a threshold, and that threshold defaults to 0.5 [2][5].
+Not every edge in the graph carries the same weight of evidence. The `clean-low-confidence-edges` script drops INFERRED edges that fall below a confidence threshold, and that threshold defaults to 0.5 [2][5]. Two properties of this behavior are worth noting.
 
-Two properties of this pass are worth noting for anyone running it. First, it is scoped to `INFERRED` edges, so edges of other provenance types are not affected by the threshold. Second, the threshold is a parameter with a default rather than a hard-coded constant, which means the aggressiveness of the cleanup can be tuned per run. Lowering the threshold retains more inferred edges; raising it removes more.
+First, the filter is scoped to INFERRED edges. Edges derived from other, presumably more direct, sources are not described as being subject to this threshold, so the script's effect is to remove low-confidence inferences rather than to prune the graph indiscriminately [2][5].
 
-## Singleton Pruning
+Second, the threshold is a parameter with a default rather than a hard-coded constant. The default of 0.5 defines the boundary between retained and dropped INFERRED edges when no override is supplied [2][5]. Raising or lowering it changes how aggressively inferred relationships are removed, which in turn changes the connectivity that later steps observe.
 
-The second maintenance pass targets singletons — nodes that end up isolated in the graph. A dry-run of the singleton pruner against the 2026-05-04 graph (12,984 nodes, 2,228 communities) identified 1,524 symbol singletons [3][6].
+## Singleton pruning
 
-That figure is a dry-run result, meaning it reports what the pruner *would* remove rather than what it did remove. As a proportion of the graph, 1,524 of 12,984 nodes is roughly 12% of all nodes, which is a large enough fraction that the pass is not a marginal cleanup step. The evidence does not specify whether these singletons are artifacts of edge filtering, genuinely unconnected symbols, or a mix of both.
+After low-confidence edges are removed, some nodes may be left with no remaining connections. The singleton pruner addresses these. On the 2026-05-04 graph — 12,984 nodes and 2,228 communities — a dry-run of the singleton pruner identified 1,524 symbol singletons [3][6].
 
-## Maintenance Flow
+The dry-run framing matters: the reported figure of 1,524 is the output of an inspection pass, not the result of an applied deletion [3][6]. That makes the number useful as a measurement of how much isolated symbol material exists in the graph at that point in time, and it makes the pruner's effect reviewable before any change is committed. The count is also substantial relative to the 12,984-node total, which indicates that singleton symbols are a non-trivial fraction of the graph rather than an edge case.
 
-The two passes operate on the same graph and can be read as a sequence: build the graph, then clean edges, then prune what the edge cleaning left isolated.
+## Pipeline flow
+
+The two cleanup operations are ordered: confidence filtering runs first, and singleton detection runs against the resulting graph.
 
 ```mermaid
 flowchart LR
-    A[Codebase graph<br/>~13K nodes, ~20K edges<br/>2,228 communities] --> B[clean-low-confidence-edges<br/>drop INFERRED edges<br/>below threshold, default 0.5]
-    B --> C[Singleton pruner<br/>dry-run on 2026-05-04:<br/>1,524 symbol singletons]
-    C --> D[Pruned graph]
+    A[Graph snapshot<br/>~13K nodes, ~20K edges,<br/>2,228 communities] --> B[clean-low-confidence-edges<br/>drop INFERRED edges<br/>below threshold 0.5]
+    B --> C[Singleton pruner<br/>dry-run identifies<br/>symbol singletons]
+    C --> D[Downstream analysis<br/>and review]
 ```
 
-The ordering is a reasonable reading of the components rather than an explicitly documented pipeline; the evidence establishes the operations and their parameters, not a mandated execution order.
-
-## Operational Notes
-
-- The default confidence threshold of 0.5 is the only tuning value named in the evidence [2][5]. Any change to it changes the edge set, which in turn changes which nodes become singletons.
-- Singleton counts should be measured against a specific graph snapshot. The 1,524 figure is tied to the 2026-05-04 graph and should not be assumed to hold for other snapshots [3][6].
-- Because the singleton pruner was run in dry-run mode, the reported count is a projection, not a record of applied deletions [3][6].
+The ordering is what makes the singleton count meaningful. Because low-confidence INFERRED edges are dropped before singletons are counted, a node reported as a singleton is one that has no surviving connections under the configured threshold, not merely one whose only connections were weak inferences [2][5][3][6].
 
 ## See also
 
 - Codebase graph construction
 - Community detection
-- Edge provenance and confidence scoring
-- Graph pruning and node isolation
-- Dry-run validation of destructive operations
+- Edge confidence thresholds
+- INFERRED edge semantics
+- Singleton and orphan node pruning
+- Graph snapshot metrics
 
 ---
 

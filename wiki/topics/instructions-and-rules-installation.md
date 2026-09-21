@@ -5,46 +5,57 @@ domain: [agent-systems]
 review_after: 2027-01-19
 ---
 
-Installation of the harness is governed by a small set of instructions and rules that decide what gets rendered into a working directory. There are two entry points — a one-command install and an interactive single prompt — and a defined post-bootstrap sequence that follows either one. The choice of entry point matters because the two paths differ in how much they infer versus how much they ask, and the post-bootstrap steps are what turn a generic render into a stack-fit, domain-tailored harness.
+# Instructions and Rules Installation
+
+This article covers how the harness installation instructions and rules are installed, and the three entry paths the instructions define: the one-command install, the interactive single prompt, and the post-bootstrap flow. The choice matters because each path decides how much of the harness is inferred automatically from the working directory and how much is specified by the operator. Picking the wrong path either leaves gaps that auto-detection cannot fill, or adds a review step you did not need.
 
 ## One-command install
 
-The one-command install renders a harness tailored to the current directory via auto-detection [1][4]. No plan review is presented and no questions are asked; the tailoring is derived entirely from what auto-detection can infer about the directory. This is the path to use when the contents of the directory are sufficient to determine the shape of the harness.
+The one-command install renders a harness tailored to the current directory via auto-detection [1][4]. The operator supplies no additional input; the tailoring is derived from the directory itself. This is the shortest path, and it is the appropriate one when the directory already carries enough signal for auto-detection to produce a usable result.
 
 ## Interactive single prompt
 
-The interactive single prompt is used when you want a plan review and to be asked about things auto-detect can't infer — domain, compliance, and coverage tiers [2][5]. The difference from the one-command install is therefore not the output format but the input: the interactive path surfaces the decisions that auto-detection cannot make on its own, and it gives you a chance to review the plan before it is applied.
+The interactive single prompt is used when you want a plan review and to be asked about things auto-detect can't infer — domain, compliance, and coverage tiers [2][5]. Two properties distinguish it from the one-command install: the plan is presented for review before it is applied, and the operator is prompted for the inputs that auto-detection cannot derive. Domain, compliance, and coverage tiers are the specific gaps this path closes.
 
 ## Post-bootstrap flow
 
-After bootstrap, the flow runs three steps in order [3][6]:
+The post-bootstrap flow is a three-stage sequence. It runs `bootstrap.sh` to render deterministically, then `/harness-eval` to evaluate stack-fit and trim rules, then `/customize-harness` to tailor domain examples and workflows [3][6].
 
-1. `bootstrap.sh` — renders deterministically.
-2. `/harness-eval` — evaluates stack-fit and trims rules.
-3. `/customize-harness` — tailors domain examples and workflows.
+The stages are ordered deliberately:
+
+- **`bootstrap.sh`** performs a deterministic render. The output follows from the inputs rather than from inference, so the same inputs produce the same harness.
+- **`/harness-eval`** evaluates stack-fit and trims rules. Rules that do not fit the detected stack are removed at this point, before any domain tailoring is applied.
+- **`/customize-harness`** tailors domain examples and workflows, adapting the rendered harness to the specific domain it will operate in.
+
+Because evaluation and trimming happen before customization, the tailoring stage operates on a rule set that has already been reduced to what fits the stack.
+
+## Flow overview
 
 ```mermaid
-flowchart LR
-    A[bootstrap.sh] -->|renders deterministically| B[/harness-eval/]
-    B -->|evaluates stack-fit, trims rules| C[/customize-harness/]
-    C -->|tailors domain examples and workflows| D[Tailored harness]
+flowchart TD
+    A[Install request] --> B{Which path?}
+    B -->|One-command| C[Auto-detect current directory]
+    C --> D[Render tailored harness]
+    B -->|Interactive single prompt| E["Plan review + questions:<br/>domain, compliance, coverage tiers"]
+    E --> D
+    B -->|Post-bootstrap| F["bootstrap.sh<br/>deterministic render"]
+    F --> G["/harness-eval<br/>evaluate stack-fit, trim rules"]
+    G --> H["/customize-harness<br/>tailor domain examples and workflows"]
 ```
-
-The ordering is load-bearing. Rendering happens first and is deterministic, so the same inputs produce the same output. Evaluation then checks how well the rendered result fits the actual stack and removes rules that do not apply. Customization runs last, adding domain-specific examples and workflows on top of the already-trimmed rule set. Running customization before evaluation would mean tailoring against rules that may subsequently be trimmed away.
 
 ## Choosing a path
 
-If auto-detection covers the decisions you need, the one-command install is sufficient on its own [1][4]. If domain, compliance, or coverage-tier decisions require input that auto-detection cannot supply, use the interactive single prompt instead [2][5]. Either way, both paths converge on the same post-bootstrap flow: deterministic render, stack-fit evaluation and rule trimming, then domain customization [3][6].
+The three paths differ along one axis: how much is inferred versus specified. The one-command install infers everything from the current directory [1][4]. The interactive single prompt infers what it can and asks about the rest, with a plan review before applying [2][5]. The post-bootstrap flow renders deterministically first, then evaluates and trims, then customizes [3][6] — it is the path that separates rendering, evaluation, and tailoring into distinct, inspectable stages.
 
 ## See also
 
-- Auto-detection
-- Plan review
-- `bootstrap.sh`
-- `/harness-eval`
-- `/customize-harness`
+- Harness auto-detection
+- Plan review and operator prompts
 - Coverage tiers
-- Compliance
+- Compliance configuration
+- `bootstrap.sh` deterministic rendering
+- `/harness-eval` stack-fit evaluation and rule trimming
+- `/customize-harness` domain tailoring
 
 ---
 

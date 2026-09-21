@@ -5,47 +5,47 @@ domain: [agent-systems, godot-systems]
 review_after: 2027-01-19
 ---
 
-Versioning in this knowledge fabric is not a single mechanism but a set of constraints that apply at three different layers: the header metadata on epic-scoping files, the traceability rules that govern merges, and the storage layer that holds the resulting state. The topic matters because each layer answers a different question — *what revision is this artifact?*, *what change authorized it?*, and *what does the system persist?* — and a pipeline that answers only one of them cannot reconstruct its own history.
+# Versioning
 
-## Version fields on epic-scoping files
+Versioning in this knowledge fabric covers two distinct surfaces: the explicit version field carried by epic-scoping files, and the traceability rules that make every change in the issue-driven pipeline attributable to a GitHub issue. It matters because these are the mechanisms described for identifying what a given artifact or merge corresponds to. Without them, there is no way to distinguish one revision of an epic scope from another, and no way to reconstruct why a change landed.
 
-Epic-scoping files under `.agents/` carry a `version: x.y.z` field in their header comment [2][5]. This is the most literal form of versioning in the system: the artifact declares its own revision inline, in the same place a reader would look for any other file metadata. Because the field lives in the header comment rather than in a separate manifest, the version travels with the file itself — a copy of the file is a copy of its version, with no side lookup required.
+## Version fields in epic-scoping files
 
-The `x.y.z` shape implies the usual three-part reading: a major component for incompatible restructuring of the epic scope, a minor component for additive change, and a patch component for corrections that do not alter the scope's meaning. The evidence establishes the field and its format; it does not prescribe who bumps it or when, so any bump policy is a local convention layered on top of the field rather than something the field itself enforces.
+Epic-scoping files under `.agents/` carry a `version: x.y.z` field in their header comment [2][5]. The field is part of the file header rather than a separate manifest, so the version travels with the file itself. The `x.y.z` form is a three-component identifier, which lets a reader distinguish revisions at three levels of granularity without consulting an external registry. Because the field lives in the header comment, it is visible both to someone reading the file directly and to any tooling that parses the header.
 
 ## Merge traceability
 
-Every merge in the issue-driven pipeline must trace to a GitHub issue [1][4]. This is versioning expressed as provenance rather than as a number. A version field tells you *which* revision you are looking at; issue traceability tells you *why* that revision exists and what discussion produced it. The two are complementary: the `version: x.y.z` header identifies the artifact state, and the linked issue identifies the intent behind the transition into that state.
+Every merge in the issue-driven pipeline must trace to a GitHub issue [1][4]. This is a hard requirement rather than a convention: a merge without a corresponding issue is not a valid merge in this pipeline. Traceability functions as versioning at the change level — the issue is the anchor that identifies what a merge is for, and the merge history plus issue references together form the record of how the repository arrived at its current state. Combined with the file-level `version: x.y.z` field [2][5], the system carries two independent identifiers: one for the scope of an epic, one for the change that lands it.
 
-The practical consequence is that a merge with no issue behind it is not merely untidy — it is unversionable in this pipeline's sense, because there is no anchor to attach the change to. Reviewers, auditors, and future maintainers all resolve a merge by walking back to its issue, and that walk is only possible if the link is mandatory rather than optional.
+## Infrastructure constraints
+
+Versioned state in this system is stored on PostgreSQL only — either Supabase or raw postgres — with no Redis and no external caches [3][6]. Caching is handled instead via PG NOLOG tables, per Article X [3][6]. This constrains how version metadata can be cached or replicated: there is no separate cache tier to keep in sync, and no external cache whose contents could drift from the database. Any caching of version-related reads therefore happens inside PostgreSQL itself, using NOLOG tables, which keeps the cache and the source of truth in the same system.
+
+## Flow
 
 ```mermaid
-flowchart LR
-    A[GitHub issue] --> B["Epic-scoping file<br/>.agents/ · version: x.y.z"]
-    B --> C[Change work]
-    C --> D[Merge]
-    D -->|must trace to| A
-    D --> E[(PostgreSQL)]
-    E --> F[PG NOLOG cache tables]
+flowchart TD
+    A[GitHub issue] -->|required reference| B[Merge in issue-driven pipeline]
+    B --> C[Change-level provenance]
+    D[Epic-scoping file under .agents/] --> E[Header comment: version x.y.z]
+    E --> F[Scope-level version]
+    G[PostgreSQL only: Supabase or raw postgres] --> H[No Redis, no external caches]
+    H --> I[Caching via PG NOLOG tables per Article X]
 ```
 
-## Storage-layer constraints
+The diagram shows the three tracks separately because the evidence describes them separately: the issue-to-merge requirement, the header version field, and the storage constraint. The first two are the versioning surfaces; the third is the environment in which any version-related state has to live.
 
-The database support is PostgreSQL only — Supabase or raw postgres — with no Redis and no external caches; caching instead happens via PG NOLOG tables per Article X [3][6]. For versioning, this constraint is significant because it removes a class of divergence. When cache state lives outside the database, the cache and the durable store can drift, and a reader has to reason about which of the two is authoritative for a given revision. Keeping caching inside PostgreSQL via NOLOG tables means the cached representation and the persisted representation share one engine, one transaction boundary, and one backup story.
+## Practical implications
 
-The constraint also narrows the operational surface: there is no second datastore to version, migrate, or reconcile. Whatever versioning discipline the pipeline applies to its data applies in exactly one place.
-
-## How the layers fit together
-
-Read together, the three constraints describe a pipeline where an issue authorizes a change [1][4], the change lands in an epic-scoping file that declares its own `version: x.y.z` [2][5], and the resulting state is persisted in PostgreSQL with in-database caching rather than an external tier [3][6]. Version identity, change provenance, and storage are handled by separate mechanisms, each with a single obvious place to look.
+Two consequences follow from the evidence. First, version identity is distributed rather than centralized — a scope revision is identified by the header field in its `.agents/` file [2][5], while a change is identified by the issue its merge traces to [1][4]. Neither identifier substitutes for the other. Second, because there is no Redis and no external cache [3][6], any tooling that reads version metadata cannot rely on a fast external cache layer; it reads from PostgreSQL, with PG NOLOG tables providing the caching path per Article X [3][6]. That keeps the number of places where a version value can be stale to one.
 
 ## See also
 
-- Issue-driven pipeline
-- Epic-scoping files under `.agents/`
-- Merge traceability and provenance
-- PostgreSQL-only storage policy
-- PG NOLOG cache tables (Article X)
+- [Issue-driven pipeline](issue-driven-pipeline)
+- [Epic scoping](epic-scoping)
+- [Change provenance](change-provenance)
+- [PostgreSQL storage](postgresql-storage)
+- [Caching with PG NOLOG tables](pg-nolog-tables)
 
 ---
 
