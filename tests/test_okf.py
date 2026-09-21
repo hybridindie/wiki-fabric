@@ -208,8 +208,9 @@ title: Log
         # copy harness, strip evidence + registry runtime state
         shutil.copytree(repo, tmp_path, dirs_exist_ok=True, ignore=shutil.ignore_patterns(
             ".git", ".venv", "__pycache__", ".okflint", ".pytest_cache",
-            ".obsidian", ".opencode", "node_modules", "evidence",
-            "registry/catalog.json"))
+            ".obsidian", ".opencode", "node_modules", "evidence", "projects",
+            "patterns", "concepts", "anti-patterns", "syntheses", "domains",
+            "graphify-out", "registry"))
         (tmp_path / "registry").mkdir(exist_ok=True)
         (tmp_path / "registry" / "log.md").write_text(
             "---\ntype: log\ntitle: Log\n---\n\n# Log\n")

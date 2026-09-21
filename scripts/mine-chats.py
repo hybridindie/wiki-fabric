@@ -121,7 +121,7 @@ def llm_takeaways(transcript_path):
     return parse_json_array(resp.choices[0].message.content or "") or []
 
 
-def write_insight_page(transcript_path, takeaways, dry_run=False):
+def write_insight_page(transcript_path, takeaways, dry_run=False, project=None):
     """One chat-insights page per transcript, grouped by classification."""
     out_dir = FABRIC_ROOT / "evidence" / "insights"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -136,6 +136,7 @@ def write_insight_page(transcript_path, takeaways, dry_run=False):
              f"title: \"Chat insights: {transcript_path.stem.replace('chat-', '', 1)}\"",
              f"description: \"Session-level durable takeaways (transients filtered)\"",
              f"source: {transcript_path}",
+             f"project: {project}",
              f"created: 2026-09-20",
              f"---",
              f"",
@@ -187,7 +188,7 @@ def main():
             raw = llm_takeaways(tp)
         else:
             raw = heuristic_takeaways(tp)
-        out, nd, nm, nt = write_insight_page(tp, raw, dry_run=args.dry_run)
+        out, nd, nm, nt = write_insight_page(tp, raw, dry_run=args.dry_run, project=args.project)
         total_durable += nd
         print(f"  {tp.name}: {nd} durable, {nm} maybe, {nt} transient-filtered"
               + ("  [DRY]" if args.dry_run else ""))

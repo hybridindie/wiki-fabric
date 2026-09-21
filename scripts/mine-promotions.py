@@ -307,7 +307,8 @@ anti_pattern_ref: "[[anti-pattern-{cluster_key}]]"
     for ev in events:
         project = ev.get("project", "unknown")
         outcome = "positive" if "positive" in str(ev.get("outcomes", {})).lower() else "negative" if "negative" in str(ev.get("outcomes", {})).lower() else "neutral"
-        ref = f"[[ee-{ev.get('project', 'unknown')}-{hash(str(ev)) % 10000}]]"
+        stem = ev.get("_file")
+        ref = f"[[{Path(stem).stem if stem else 'ee-unknown'}]]"
         outcome = "success" if "positive" in str(ev.get("outcomes", {})).lower() else "failure" if "negative" in str(ev.get("outcomes", {})).lower() else "neutral"
         dossier += f"- {ref} — the **{outcome}** mode ({ev.get('observed_problem', '')[:100]}...)\n"
     
@@ -418,7 +419,8 @@ def generate_pattern_file(cluster_key, events):
         kind = "success-pattern" if "positive" in str(ev.get("outcomes", {})).lower() else "failure-mode"
         lines.append(f"  - project: {project}")
         lines.append(f"    kind: {kind}")
-        ref = f"[[ee-{ev.get('project', 'unknown')}-{hash(str(ev)) % 10000}]]"
+        stem = ev.get("_file")
+        ref = f"[[{Path(stem).stem if stem else 'ee-unknown'}]]"
         lines.append(f"    ref: {escape_yaml(ref)}")
     
     lines.append("applicability:")

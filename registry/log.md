@@ -776,3 +776,31 @@ Append-only timeline. One `## YYYY-MM-DD` heading per day with `* **<op> | <subj
 
 ## 2026-09-21
 * **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
+
+## 2026-09-21
+* **eval-stability | PASS**
+- G1 context determinism: PASS — 1 unique output(s) in 20 runs
+- G2 rebuild determinism: PASS — catalog.json identical across rebuilds
+- manifest_compile_ms: 41.8
+- rebuild_index_ms: 40.5
+
+## 2026-09-21
+* **eval | formal golden corpus**
+- Total extracted: 27, golden: 9, covered: 8
+- Recall: 0.89, Locator rate: 1.00, Quote rate: 1.00
+- Overall: PASS
+
+## 2026-09-21
+* **eval | deepseek-v4.1-flash:cloud**
+- Formal golden corpus (9 fixtures): PASS
+- Recall: PASS (>= 0.8) | Locator: 1.00 | Quote rate: 1.00
+- Command: python3 scripts/eval.py --model deepseek-v4.1-flash:cloud
+
+## 2026-09-21
+* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
+
+## 2026-09-21
+* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
+
+## 2026-09-21
+* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
