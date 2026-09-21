@@ -109,6 +109,7 @@ backend.
 wf bootstrap /path/to/my-project      # connect a project (auto-discovered; --extract local for privacy)
                                        # (hook installed automatically by bootstrap; --no-hook skips)
 wf capture my-project                 # pull docs from upstream repos → evidence/raw/
+wf capture chat my-project            # capture agent chat sessions → evidence/raw/my-project/chats/
 wf ingest evidence/raw/my-project/docs/readme.md --extract-claims
 wf query "Why does my code batch writes?"
 wf log --project my-project --problem "..." --intervention "..." --outcomes "..."   # log an experience event: problem → what you did → measured outcome

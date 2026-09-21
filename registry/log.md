@@ -509,3 +509,24 @@ Append-only timeline. One `## YYYY-MM-DD` heading per day with `* **<op> | <subj
 
 ## 2026-09-20
 * **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
+
+## 2026-09-20
+* **ingest | godot-mcp-chats-2026-09-16-chat-graphify-has-hooks-for-harnesses-like-claude-let**
+- Ingested 2026-09-16-chat-graphify-has-hooks-for-harnesses-like-claude-let-s-recreate-.md (sha256 fb2f1d90f4b9...)
+- Extracted 12 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-20-godot-mcp-chats-2026-09-16-chat-graphify-has-hooks-for-harnesses-like-claude-let
+
+## 2026-09-20
+* **ingest | godot-mcp-chats-2026-09-08-chat-let-s-address-the-open-prs-on-this-repo-there-is**
+- Ingested 2026-09-08-chat-let-s-address-the-open-prs-on-this-repo-there-is-ci-failures.md (sha256 5559bcbf3e89...)
+- Extracted 12 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-20-godot-mcp-chats-2026-09-08-chat-let-s-address-the-open-prs-on-this-repo-there-is
+
+## 2026-09-20
+* **ingest | godot-mcp-chats-2026-09-08-chat-read-the-file-users-johnd-local-share-opencode-t**
+- Ingested 2026-09-08-chat-read-the-file-users-johnd-local-share-opencode-tool-output-t.md (sha256 c393dc2502f8...)
+- Extracted 12 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-20-godot-mcp-chats-2026-09-08-chat-read-the-file-users-johnd-local-share-opencode-t
+
+## 2026-09-20
+* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}

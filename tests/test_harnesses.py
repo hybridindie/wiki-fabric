@@ -123,3 +123,25 @@ class TestInstalledModeScriptResolution(unittest.TestCase):
                 [sys.executable, str(script), str(fab)],
                 capture_output=True, text=True, cwd=str(fab))
             assert "error(s)" in r.stdout or "Lint" in r.stdout
+
+
+class TestCaptureChat(unittest.TestCase):
+    def test_module_loads_and_parses(self):
+        import importlib.util as ilu
+        spec = ilu.spec_from_file_location("cc", REPO / "scripts" / "capture-chat.py")
+        cc = ilu.module_from_spec(spec)
+        spec.loader.exec_module(cc)
+        assert cc._parse_since("30d") is not None
+        try:
+            cc._parse_since("bogus")
+            assert False
+        except SystemExit:
+            pass
+
+    def test_slug_and_escape(self):
+        import importlib.util as ilu
+        spec = ilu.spec_from_file_location("cc", REPO / "scripts" / "capture-chat.py")
+        cc = ilu.module_from_spec(spec)
+        spec.loader.exec_module(cc)
+        assert cc._slug("Let's address the open PRs!") == "let-s-address-the-open-prs"
+        assert "~~~" in cc._md_escape("code ```fence``` here")

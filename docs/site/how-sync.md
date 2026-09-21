@@ -14,6 +14,13 @@ machines that keep the fabric current without anyone remembering to:
 
 ## The hook loop: drift → capture → compile
 
+(Also new: `wf capture chat <slug>` captures agent-harness chat sessions —
+opencode's SQLite, Claude Code's JSONL transcripts — as `kind: chat-transcript`
+evidence. PRs/issues capture the why for shipped work; chats capture the why
+for everything else: debugging dead ends, rejected approaches, environment
+quirks. sha256 anti-loop means re-running is free.)
+
+
 A project's docs change through normal development — a commit renames a
 feature, updates a README, deletes a doc that had claims pointing at it. The
 opt-in post-commit hook turns that drift into fabric updates without a

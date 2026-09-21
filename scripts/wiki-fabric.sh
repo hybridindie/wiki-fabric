@@ -776,6 +776,13 @@ case "${1:-help}" in
         ;;
     capture)
         shift
+        if [[ "${1:-}" == "chat" ]]; then
+            shift
+            fdir=$(find_fabric)
+            [[ -z "${1:-}" ]] && { err "Usage: wf capture chat <project-slug> [--since 30d] [--limit 20] [--harness opencode|claude|all] [--dry-run]"; exit 1; }
+            run_script "${fdir}" "scripts/capture-chat.py" "$@"
+            exit 0
+        fi
         if [[ -z "${1:-}" ]]; then
             err "Usage: wf capture <project-slug> [--repo <path>] [--git <owner/name|path>] [--since 6m] [--limit 30]"
             exit 1
@@ -939,6 +946,8 @@ case "${1:-help}" in
         echo "  bootstrap <project-path>          Connect a project to the fabric"
         echo "  capture <project-slug>            Capture upstream repo docs → evidence/raw/"
         echo "                                    (--git owner/name or /path captures PR/issue history)"
+        echo "  capture chat <project-slug>       Capture agent chat sessions → evidence/raw/<slug>/chats/"
+        echo "                                    (--since 30d --limit 20 --harness opencode|claude|all)"
         echo "  ingest <source-path>              Ingest a source (--extract-claims for LLM)"
         echo "  query \"<question>\"                 Ask the fabric a question"
         echo "  context --task \"<task>\"             Compile a task context manifest (0 tokens)"
