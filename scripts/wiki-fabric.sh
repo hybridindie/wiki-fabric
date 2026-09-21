@@ -19,6 +19,7 @@ set -euo pipefail
 FABRIC_REPO="${WIKI_FABRIC_REPO:-https://github.com/hybridindie/wiki-fabric.git}"
 DEFAULT_DIR="$(pwd)/wiki-fabric"   # harness clone default: CWD (override with --dir)
 SCRIPT_NAME="wf"
+WF_VERSION="0.2.0"
 
 # Colors
 RED='\033[0;31m'
@@ -113,6 +114,25 @@ find_harness() {
         return 0
     fi
     return 1
+}
+
+# === Helper: CLI sync check (installed ~/.local/bin/wf vs harness script) ===
+cli_sync_state() {
+    # Returns: "current" | "stale" | "missing" | "none"
+    local harness_dir script_src dest
+    harness_dir="$(find_harness)" || { echo "none"; return 0; }
+    script_src="${harness_dir}/scripts/wiki-fabric.sh"
+    local found=""
+    for dest in "${HOME}/.local/bin/wf" "${HOME}/.local/bin/wiki-fabric"; do
+        if [[ -f "${dest}" ]]; then found="${dest}"; break; fi
+    done
+    if [[ -z "${found}" ]]; then
+        echo "none"
+    elif ! cmp -s "${script_src}" "${dest}" 2>/dev/null; then
+        echo "stale"
+    else
+        echo "current"
+    fi
 }
 
 # === Helper: run a harness script with the fabric as cwd ===
@@ -643,6 +663,15 @@ cmd_status() {
         warn "Vault:  not set up (run: ${SCRIPT_NAME} vault)"
     fi
 
+    # CLI sync (installed ~/.local/bin/wf vs this harness script)
+    local cli_state; cli_state="$(cli_sync_state)"
+    case "${cli_state}" in
+        current) ok "CLI:     current (v${WF_VERSION})" ;;
+        stale)   warn "CLI:   STALE - installed wf differs from harness; run: wf update" ;;
+        missing) warn "CLI:   not installed - run: wf install (or copy scripts/wiki-fabric.sh to ~/.local/bin/wf)" ;;
+        *)       info "CLI:   dev mode (running from harness)" ;;
+    esac
+
     # LLM
     if [[ -f "${fabric_dir}/fabric.yaml" ]]; then
         local llm_model=$(grep "^  model:" "${fabric_dir}/fabric.yaml" 2>/dev/null | head -1 | awk '{print $2}')
@@ -944,6 +973,10 @@ case "${1:-help}" in
         fi
         echo ""
         ;;
+    version)
+        echo "wf ${WF_VERSION} (harness: $(find_harness 2>/dev/null || echo unknown))"
+        echo "installed CLI: $(cli_sync_state)"
+        ;;
     help|--help|-h)
         echo ""
         echo "════════════════════════════════════════════"
@@ -957,6 +990,7 @@ case "${1:-help}" in
         echo "          [--corpus GIT-URL] [--interactive]  Wire team corpus + force config walkthrough"
         echo "  update                            Pull latest + rebuild entity index"
         echo "  status                            Show fabric health + inventory"
+        echo "  version                           Show wf version + CLI sync state"
         echo "  vault [PATH]                      Create Obsidian vault (symlinks)"
         echo "  bootstrap <project-path>          Connect a project to the fabric"
         echo "  capture <project-slug>            Capture upstream repo docs → evidence/raw/"

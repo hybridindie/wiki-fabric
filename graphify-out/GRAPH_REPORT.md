@@ -1,9 +1,7 @@
-# Graph Report - wiki-fabric  (2026-09-20)
+# Graph Report - wiki-fabric  (2026-09-21)
 
 ## Corpus Check
-- 132 files · ~91,930 words
-- Verdict: corpus is large enough that graph structure adds value.
-- Unclassified: 4 file(s) not represented in the graph (top: (none) 2, .example 1, .template 1)
+- cluster-only mode — file stats not available
 
 ## Summary
 - 1498 nodes · 2289 edges · 125 communities (103 shown, 20 thin omitted)
@@ -149,20 +147,20 @@
 6. `ensure_local_model()` - 21 edges
 7. `Frontmatter Contracts` - 20 edges
 8. `get_stage_route()` - 18 edges
-9. `get_all_repo_names()` - 16 edges
-10. `get_local_model()` - 16 edges
+9. `get_local_model()` - 16 edges
+10. `get_all_repo_names()` - 16 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `_mlx_available()` --calls--> `find_local_model_path()`  [INFERRED]
   tests/test_local_model.py → scripts/fabric_config.py
 - `_gguf_available()` --calls--> `_resolve_gguf_path()`  [INFERRED]
   tests/test_local_model.py → scripts/local_llm.py
-- `get_config_safe()` --calls--> `get_config()`  [EXTRACTED]
-  scripts/capture.py → scripts/fabric_config.py
 - `main()` --calls--> `extract_claims()`  [INFERRED]
   scripts/eval.py → scripts/extract_backends.py
-- `detect_available_domains()` --calls--> `get_config()`  [EXTRACTED]
-  scripts/bootstrap-project.py → scripts/fabric_config.py
+- `get_config_safe()` --calls--> `get_config()`  [EXTRACTED]
+  scripts/capture.py → scripts/fabric_config.py
+- `extract_claims()` --calls--> `looks_like_local_model()`  [EXTRACTED]
+  scripts/extract_backends.py → scripts/fabric_config.py
 
 ## Import Cycles
 - None detected.
@@ -582,7 +580,7 @@ Cohesion: 0.67
 Nodes (4): cluster_by_concept(), find(), union(), Cluster claims by concept-overlap (extracted for testability).
 
 ## Knowledge Gaps
-- **376 isolated node(s):** `name`, `private`, `dev`, `build`, `preview` (+371 more)
+- **376 isolated node(s):** ``registry/catalog.json` — what knowledge exists`, ``registry/log.md` — the append-only timeline`, `Conflict policy: review queue, never silent overwrite`, `How bootstrap meets the corpus`, `Why a separate remote from this public repo` (+371 more)
   These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 753 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **20 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -590,16 +588,16 @@ Nodes (4): cluster_by_concept(), find(), union(), Cluster claims by concept-over
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `get_config()` connect `get_config` to `ingest.py`, `resolve_repo_path`, `parse_frontmatter`, `synthesize.py`, `hooks.py`, `mine-promotions.py`, `actor`, `bootstrap-project.py`, `graphify-bridge.py`, `lint.py`, `context.py`, `repos-migrate.py`, `rebuild-index.py`, `fabric_config.py`, `propose-domains.py`?**
-  _High betweenness centrality (0.083) - this node is a cross-community bridge._
+  _High betweenness centrality (0.080) - this node is a cross-community bridge._
 - **Why does `get_local_model()` connect `ingest.py` to `mine-promotions.py`, `synthesize.py`, `TestSiblingDiscovery`, `get_config`, `fabric_config.py`?**
-  _High betweenness centrality (0.027) - this node is a cross-community bridge._
+  _High betweenness centrality (0.036) - this node is a cross-community bridge._
 - **Are the 3 inferred relationships involving `get_config()` (e.g. with `.test_cache_invalidation_on_env_change()` and `.test_defaults_not_mutated_by_get_config()`) actually correct?**
   _`get_config()` has 3 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 11 inferred relationships involving `get_ignores()` (e.g. with `.test_glob_starstar()` and `.test_no_section_noop()`) actually correct?**
   _`get_ignores()` has 11 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 11 inferred relationships involving `is_ignored()` (e.g. with `.test_glob_starstar()` and `.test_no_section_noop()`) actually correct?**
   _`is_ignored()` has 11 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `name`, `private`, `dev` to the rest of the system?**
+- **What connects ``registry/catalog.json` — what knowledge exists`, ``registry/log.md` — the append-only timeline`, `Conflict policy: review queue, never silent overwrite` to the rest of the system?**
   _376 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `ingest.py` be split into smaller, more focused modules?**
   _Cohesion score 0.05547785547785548 - nodes in this community are weakly interconnected._

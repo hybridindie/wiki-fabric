@@ -17,6 +17,11 @@ connect projects.
 
 - **web-systems** — web systems (example proposed domain; confirm with your own evidence).
 
+- **devops** — devops (auto-proposed 2026-09-21, signal score: 9).
+   - Status: proposed — review and add examples before confirming.
+- **mcp-systems** — mcp systems (auto-proposed 2026-09-21, signal score: 4).
+   - Status: proposed — review and add examples before confirming.
+
 ## Shared tag set (lowercase)
 
 - Cross-cutting: `agent`, `mcp`, `threading`, `safety`, `benchmark`, `git`, `evaluation`, `retrieval`
