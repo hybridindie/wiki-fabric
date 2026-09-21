@@ -904,6 +904,11 @@ case "${1:-help}" in
         fdir=$(find_fabric)
         run_script "${fdir}" "scripts/skill.py" "$@"
         ;;
+    review)
+        shift
+        fdir=$(find_fabric)
+        run_script "${fdir}" "scripts/review.py" "$@"
+        ;;
     mine)
         shift
         fdir=$(find_fabric)
@@ -1007,6 +1012,8 @@ case "${1:-help}" in
         echo "                                    (--extract-claims: LLM runs on drift)"
         echo "  skill [--list] [<name>]           Print the procedure for a workflow (ingest, promote, ..."
         echo "                                    refresh) — universal across agent harnesses"
+        echo "  review --check [--project <slug>] Staleness report: what's due, overdue, stale"
+        echo "  review --verify <claim>           Re-verify a claim (rolls review_after forward)"
         echo "  mine chats <project>              Distill captured chats into durable takeaways"
         echo "                                    (patterns, anti-patterns, workflows; transients filtered)"
         echo "  harness {install|status}          Install always-on + procedures into detected agent"
