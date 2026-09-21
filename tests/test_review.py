@@ -16,9 +16,12 @@ class TestScan(unittest.TestCase):
         import importlib.util as ilu
         spec = ilu.spec_from_file_location("rv", REPO / "scripts" / "review.py")
         rv = ilu.module_from_spec(spec); spec.loader.exec_module(rv)
-        # scan returns dict with due/overdue/stale/current
         report = rv.scan()
         assert "due" in report and "overdue" in report and "stale" in report
+        # CI has no claims (evidence/ gitignored); skip if empty
+        claim_dir = REPO / "evidence" / "claims"
+        if not claim_dir.exists() or not list(claim_dir.glob("claim-*.md")):
+            raise unittest.SkipTest("no claims in fabric (CI)")
         assert report["current"] + len(report["due"]) + len(report["overdue"]) + len(report["stale"]) > 0
 
     def test_parse_date(self):
