@@ -422,6 +422,9 @@ def extract_claims_opencode(source_text, source_path, model):
     return []
 
 
+_EXTRACTION_MODEL = [None]  # model that actually ran (actor trail; read by ingest)
+
+
 def extract_claims(source_text, source_path, model=None):
     """Extract claims routing: explicit model > WIKI_LLM_BACKEND > compiler chain.
 
@@ -434,11 +437,15 @@ def extract_claims(source_text, source_path, model=None):
     from fabric_config import looks_like_local_model
     if not model:
         model = os.environ.get("WIKI_LLM_MODEL")
+    # record the model that runs extraction — the claim actor trail must name
+    # the model that actually did the work (local vs cloud)
     if os.environ.get("WIKI_LLM_BACKEND", "").lower() == "mlx" or looks_like_local_model(model):
+        _EXTRACTION_MODEL[0] = model or get_local_model()
         claims = extract_claims_mlx(source_text, source_path, model)
         if claims:
             return verify_and_fix_locators(claims, source_text)
         print("local backend returned nothing; falling back to OpenAI-compatible...", file=sys.stderr)
+    _EXTRACTION_MODEL[0] = model or llm_config(compiler=True).get("model")
     claims = extract_claims_openai_compatible(source_text, source_path, model)
     if not claims:
         print("Falling back to Anthropic...", file=sys.stderr)

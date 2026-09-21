@@ -30,6 +30,8 @@ from extract_backends import (
     extract_claims_mlx, extract_claims_openai_compatible,
     extract_claims_anthropic, extract_claims_opencode, extract_claims,
 )
+import extract_backends as _eb
+_EXTRACTION_MODEL = _eb._EXTRACTION_MODEL
 
 # Alias: ingest_source() has a bool parameter named extract_claims that shadows
 # the function inside its scope — reference the function via this alias.
@@ -100,7 +102,7 @@ id: claim-{source_slug}-{idx:03d}
 statement: {_yaml_scalar(statement)}
 description: {_yaml_scalar(statement[:140])}
 resource: "[[src-{source_slug}]]"
-generated: {{ by: "{actor(get_config(), 'agent')}", at: "{_dt_iso()}" }}
+generated: {{ by: "{actor(get_config(), 'agent', model=_EXTRACTION_MODEL[0])}", at: "{_dt_iso()}" }}
 verified:
   - by: "{actor(get_config(), 'process', model='locator-verification')}"
     at: "{_dt_iso()}"
