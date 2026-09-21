@@ -28,7 +28,6 @@ cd "${VAULT_PATH}"
 LINKS=(
     "AGENTS.md"
     "README.md"
-    "concepts"
     "patterns"
     "anti-patterns"
     "skills"

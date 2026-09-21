@@ -23,7 +23,6 @@ from fabric_config import FABRIC_ROOT, CORPUS_ROOT, get_config, get_all_repo_nam
 FIXED_LINKS = [
     "AGENTS.md",
     "README.md",
-    "concepts",
     "patterns",
     "anti-patterns",
     "skills",
