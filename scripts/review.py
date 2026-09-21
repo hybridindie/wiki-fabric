@@ -99,6 +99,8 @@ def main():
     parser.add_argument("--project", help="Limit to a project slug")
     parser.add_argument("--verify", metavar="CLAIM", help="Re-verify a claim (path or id)")
     parser.add_argument("--verify-all", action="store_true", help="Re-verify all overdue claims")
+    parser.add_argument("--auto-reverify", action="store_true",
+                        help="Mechanically re-verify claims whose source hasn't drifted (sha256 + quote check, 0 tokens)")
     args = parser.parse_args()
 
     if args.verify:
@@ -117,6 +119,12 @@ def main():
         print(f"  review_after:  {new_review} ({tier}d tier)")
         return 0
 
+    if args.auto_reverify:
+        verified, skipped, _ = auto_reverify(dry_run=False, project=args.project)
+        print(f"Auto-reverified: {verified} (source unchanged, quote verified)")
+        print(f"Skipped: {skipped} (source drifted, no source, or quote not found — needs human review)")
+        return 0
+
     if args.verify_all:
         report = scan()
         n = 0
@@ -131,6 +139,71 @@ def main():
     report = scan()
     print_report(report, args.project)
     return 0
+
+
+
+def auto_reverify(dry_run=False, project=None):
+    """Mechanically re-verify claims whose source hasn't drifted:
+    1. source sha256 matches recorded value → source is unchanged
+    2. claim's quote still appears in the source text → claim holds
+    Stamps last_verified + review_after. 0 tokens. Returns (verified, skipped, failed)."""
+    import hashlib
+    from wf_common import parse_frontmatter
+    report = scan()
+    candidates = report["overdue"] + report["stale"]
+    # also due-soon if they're doc-sourced (sha256-verified, mechanical)
+    if not dry_run and not project:
+        pass
+    verified, skipped, failed = 0, 0, 0
+    for item in candidates:
+        if item["type"] != "claim":
+            continue
+        f = Path(item["file"])
+        if project and project not in f.name:
+            continue
+        # parse frontmatter for source_ref
+        fm_text = f.read_text(encoding="utf-8", errors="replace")
+        src_match = re.search(r'source: "\[\[(src-[^\]]+)\]\]"', fm_text)
+        quote_match = re.search(r'quote: "?(.*?)"?\s*$', fm_text, re.MULTILINE)
+        locator_match = re.search(r'locator: "?([^\n]+?)"?\s*$', fm_text, re.MULTILINE)
+        if not src_match or not quote_match:
+            skipped += 1
+            continue
+        # find the source record
+        src_stem = src_match.group(1).strip("[]")
+        src_file = FABRIC_ROOT / "evidence" / "sources" / f"{src_stem}.md"
+        if not src_file.exists():
+            skipped += 1
+            continue
+        src_fm, src_body = parse_frontmatter(src_file)
+        src_path = FABRIC_ROOT / (src_fm.get("source_path") or "")
+        if not src_path.exists():
+            skipped += 1
+            continue
+        # check sha256 drift
+        from wf_common import sha256_file
+        recorded = str(src_fm.get("sha256", ""))
+        actual = sha256_file(src_path)
+        if recorded[:12] != actual[:12]:
+            skipped += 1  # source drifted — needs human review, can't auto-verify
+            continue
+        # check quote still in source
+        quote = quote_match.group(1).strip()
+        quote_clean = re.sub(r"L\d+:", "", quote).strip()
+        src_text = src_path.read_text(encoding="utf-8", errors="replace")
+        if quote_clean and quote_clean not in src_text:
+            # fuzzy: try normalized
+            from extract_backends import _normalize_for_match
+            norm_src = _normalize_for_match(src_text)
+            norm_q = _normalize_for_match(quote_clean)
+            if norm_q and norm_q not in norm_src and norm_q[:int(len(norm_q)*0.6)] not in norm_src:
+                skipped += 1
+                continue
+        # verified: source unchanged, quote present
+        if not dry_run:
+            verify_claim(f)
+        verified += 1
+    return verified, skipped, failed
 
 
 if __name__ == "__main__":

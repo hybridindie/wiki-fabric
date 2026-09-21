@@ -1014,6 +1014,7 @@ case "${1:-help}" in
         echo "                                    refresh) — universal across agent harnesses"
         echo "  review --check [--project <slug>] Staleness report: what's due, overdue, stale"
         echo "  review --verify <claim>           Re-verify a claim (rolls review_after forward)"
+        echo "  review --auto-reverify            Mechanically re-verify all overdue (sha256-gated, 0 tokens)"
         echo "  mine chats <project>              Distill captured chats into durable takeaways"
         echo "                                    (patterns, anti-patterns, workflows; transients filtered)"
         echo "  harness {install|status}          Install always-on + procedures into detected agent"
