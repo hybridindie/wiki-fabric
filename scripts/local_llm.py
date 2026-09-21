@@ -26,10 +26,12 @@ _LOADED = [None]  # (model_id, backend, handle)
 
 
 def backend_for(model_id):
-    """Return "mlx" | "gguf" for a model id/path, or None when unresolvable."""
+    """Return "mlx" | "gguf" | "prism" for a model id/path, or None."""
     low = str(model_id).lower()
     if low.endswith(".gguf") or "gguf" in low:
         return "gguf"
+    if "prism" in low or "ternary" in low or "bonsai" in low:
+        return "prism"
     if "mlx" in low:
         return "mlx"
     p = Path(model_id).expanduser()
@@ -64,11 +66,26 @@ def _resolve_gguf_path(model_id):
     return None
 
 
+def _load_prism(model_id):
+    """Load a prism/ternary VLM model via mlx_vlm."""
+    try:
+        from mlx_vlm import load
+        from mlx_vlm.prompt_utils import apply_chat_template
+    except ImportError:
+        raise RuntimeError("mlx-vlm not installed (pip install mlx-vlm)")
+    model, processor = load(model_id)
+    return model, processor
+
+
 def _load(model_id):
     """Load the model. Returns (backend, handle). Raises RuntimeError."""
     backend = backend_for(model_id)
     if backend is None:
         raise RuntimeError(f"cannot determine local backend for '{model_id}'")
+    if backend == "prism":
+        if sys.platform != "darwin":
+            raise RuntimeError(f"prism backend requires macOS (Apple Silicon); got {sys.platform}")
+        return "prism", _load_prism(model_id)
     if backend == "mlx":
         if sys.platform != "darwin":
             raise RuntimeError(f"mlx backend requires macOS (Apple Silicon); got {sys.platform}")
@@ -133,7 +150,15 @@ def generate(prompt, model_id, max_tokens=4096):
             print(f"local[{backend}]: loaded {model_id} in {time.time()-t0:.0f}s",
                   file=sys.stderr)
         _, backend, handle = _LOADED[0]
-        if backend == "mlx":
+        if backend == "prism":
+            from mlx_vlm.prompt_utils import apply_chat_template
+            model, processor = handle
+            formatted = apply_chat_template(processor, model.config, prompt)
+            from mlx_vlm import generate as vlm_generate
+            result = vlm_generate(model, processor, prompt=formatted,
+                                  max_tokens=max_tokens, verbose=False)
+            out = result.text if hasattr(result, "text") else str(result)
+        elif backend == "mlx":
             from mlx_lm import generate as mlx_generate
             mlx_model, tok = handle
             out = mlx_generate(mlx_model, tok, prompt=_apply_template(prompt, tok),

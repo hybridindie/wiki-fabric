@@ -4,41 +4,62 @@ title: "instructions-and-rules: What We Learned"
 review_after: 2027-03-20
 ---
 
-# Instructions and Rules: A Retrospective
+# instructions-and-rules — Project Retrospective
 
-This repository is the genesis repository that generates AI assistant harnesses for `.claude/`, `.github/`, and `.opencode/` from a single set of shared constitutional articles [1]. It also hosts the Epic Scoping Skills as its own installed harness [2]. Those are two systems, but they share one architecture: the same single-source/thin-wrapper pattern [3]. The point of the project is that a rule should be written once and rendered everywhere, so that three platform harnesses cannot silently diverge from each other or from the intent behind them.
+`instructions-and-rules` is the genesis repository that generates AI assistant harnesses for `.claude/`, `.github/`, and `.opencode/` from a single set of shared constitutional articles [1]. It is not a consumer of harnesses; it is the thing that produces them. It also hosts the Epic Scoping Skills as its own installed harness [2], which means the repository is simultaneously a generator and a live example of what it generates. That dual role is why it matters: the same single-source/thin-wrapper pattern governs both systems [3], so any drift in the pattern shows up twice.
 
 ## What was built
 
-The genesis harness keeps its source in `templates/_shared/`, which `bootstrap.sh` renders into target projects [4]. The Epic Scoping Skills keep their source in `.agents/`, which renders into thin wrappers in `.claude/`, `.opencode/`, and `.github/` [5]. The golden rule follows directly: edit content in `.agents/` for epic skills, or in `templates/_shared/` for genesis [6], and never duplicate content into a wrapper [7].
+Two rendering pipelines share one architecture.
 
-Shared rules that multiple files depend on live in a `doctrine/` layer and are referenced rather than restated [8]. Wrappers stay thin: each skill wrapper is a pointer, and the model reads the `.agents/` body on demand when the skill is invoked [11]. Doctrine files in `.agents/doctrine/` are read on demand when a skill references them [12].
+The genesis harness keeps its source in `templates/_shared/`, which `bootstrap.sh` renders into target projects [4]. The Epic Scoping Skills keep their source in `.agents/`, which renders into thin wrappers in `.claude/`, `.opencode/`, and `.github/` [5]. The golden rule for both is the same: edit content in `.agents/` for epic skills or `templates/_shared/` for genesis [6], and never duplicate content into a wrapper [7].
 
-Project context is split by audience. The shared, tool-agnostic description — what the repo is, how the genesis bootstrap works, the source structure, the Epic Scoping Skills — lives in `AGENTS.md` [13]. Only Claude-Code-specific notes belong in the Claude file [14]. Claude-specific harness assets (skills, hooks, scripts) live under `templates/claude-code/.claude/` [15], and those assets are generated output wherever they are mirrored from `templates/_shared/` [16].
+Around that core sit several supporting mechanisms:
 
-The post-bootstrap flow is `bootstrap.sh` (render) → `/harness-eval` (trim and suggest) → `/customize-harness` (domain tailoring) [10]. Drift is policed by a Claude Code hook invoked as `bash templates/claude-code/.claude/hooks/check-primitive-drift.sh` [18], run from the repo root with a bootstrapped harness in scope [19][24]; the policy itself lives in `AGENTS.md` [17].
-
-Extension is deliberately mechanical. A new article means a `.md` file in `templates/_shared/articles/`, an entry in `mirror-pairs.json`, and a bootstrap run to test [20]. A new agent means a `.md` file in `templates/_shared/agents/` plus an `agent_entries` entry [21]. A new command means a `.md` file in `templates/_shared/commands/` plus a `command_entries` entry [22]. Shared doctrine needs a `doctrine_entries` entry with `source_file` and `render_dir` set to `.claude/rules/doctrine`, and is referenced by articles and agents rather than mirrored to Copilot [23].
+- A `doctrine/` layer for shared rules referenced by multiple files, which are referenced rather than restated [8].
+- On-demand reference sections that are deliberately not auto-loaded [9].
+- A post-bootstrap flow: `bootstrap.sh` (render) → `/harness-eval` (trim + suggest) → `/customize-harness` (domain tailoring) [10].
+- Thin skill wrappers that act as pointers, with the model reading the `.agents/` body only when the skill is invoked [11]. Doctrine files in `.agents/doctrine/` are read on demand when a skill references them [12].
+- `AGENTS.md` as the home for shared, tool-agnostic project context — what the repo is, how the genesis bootstrap works, the source structure, and the Epic Scoping Skills [13]. Only Claude-Code-specific notes belong in the Claude file [14].
+- Claude-specific harness assets (skills, hooks, scripts) under `templates/claude-code/.claude/` [15], which are generated output wherever they are mirrored from `templates/_shared/` [16].
+- A drift policy documented in `AGENTS.md` [17], enforced by a Claude Code hook invoked as `bash templates/claude-code/.claude/hooks/check-primitive-drift.sh` [18].
+- Extension recipes for each primitive type: articles [20], agents [21], commands [22], and shared doctrine [23].
 
 ## Constraints discovered
 
-The on-demand reference sections are not auto-loaded [9]. That is the load-bearing limit behind the thin-wrapper design: content that is not in the wrapper is not in context unless something asks for it, so the wrapper has to point precisely.
+The hard limits are mostly about where content is allowed to live.
 
-Generated output is off-limits for direct edits. The platform-specific files under `templates/claude-code/.claude/agents/`, `templates/claude-code/.claude/commands/`, `templates/github-copilot/.github/agents/`, and `templates/github-copilot/.github/prompts/` are generated and must not be edited directly [30]. Doctrine is not mirrored to Copilot at all; it is referenced [23]. The drift check only means something when run from the repo root with a bootstrapped harness in scope [19][24]. And adding any primitive is inherently a multi-step change — file, registry entry, bootstrap run [20][21][22].
+Wrappers are output. `templates/_shared/` is the single source, and the platform-specific files under `templates/claude-code/.claude/agents/`, `templates/claude-code/.claude/commands/`, `templates/github-copilot/.github/agents/`, and `templates/github-copilot/.github/prompts/` are generated output that must not be edited directly [30]. The same applies to mirrored Claude assets [16].
+
+On-demand sections are not auto-loaded [9]. That is a real constraint on authoring: if a rule is not referenced from a file the model actually reads, it will not be seen. This is why doctrine is referenced by articles and agents rather than restated [8], and why doctrine is not mirrored to Copilot at all [23].
+
+The drift check has an execution precondition: it must be run from the repo root with a bootstrapped harness in scope [19][24]. It is not a check that works from an arbitrary working directory.
+
+Versioning is scoped rather than global. Epic-scoping files under `.agents/` carry a `version: x.y.z` field in their header comment [25]. A patch bump covers typo, wording, or formatting fixes that do not change behavior [26]. A minor bump covers content additions or behavioral changes — a new phase, new rule, new response state, or a doctrine reference added or removed [27]. A major bump covers a workflow restructure that breaks existing handoffs or response-state contracts [28]. Each file versions independently, with `doctrine/` and `skills/` versioned separately so bumping a skill does not require bumping the doctrine it references, and vice versa [29].
 
 ## Patterns that emerged
 
-The dominant pattern is single source with thin wrappers, applied twice [3][4][5] — see [[single-source-thin-wrapper]] and [[harness-bootstrap]]. The second is reference-don't-restate, which is what the doctrine layer exists to enforce [8] — see [[doctrine-layer]]. The third is on-demand loading as a context-budget mechanism rather than an accident [9][11][12] — see [[on-demand-loading]]. The fourth is the registry as the thing that makes drift detectable: `mirror-pairs.json` is what the drift hook checks against [20][21][22][23] — see [[mirror-pairs-registry]] and [[drift-detection]]. Versioning is the fifth: epic-scoping files under `.agents/` carry a `version: x.y.z` field in their header comment [25], with patch for typo/wording/formatting fixes that do not change behavior [26], minor for content additions or behavioral changes such as a new phase, rule, response state, or doctrine reference added or removed [27], and major for workflow restructures that break existing handoffs or response-state contracts [28]. Each file versions independently, with `doctrine/` and `skills/` versioned separately so bumping a skill does not force a bump of the doctrine it references, or vice versa [29] — see [[primitive-versioning]].
+The load-bearing pattern is single source plus thin wrapper, applied identically to two systems [3][4][5]. Everything else follows from it: reference over restate [8], on-demand loading instead of eager loading [11][12], and a registry file (`mirror-pairs.json`) that records what mirrors where [20][21][22][23].
 
-These contributed to the promoted patterns [[pattern-cluster_1c9cac89]], [[pattern-cluster_6cb87c7c]], [[pattern-cluster_a0bba1b7]], and [[pattern-cluster_cf12208f]].
+The registry is the coordination point. Adding an article means adding a `.md` file to `templates/_shared/articles/`, adding an entry in `mirror-pairs.json`, and running bootstrap to test [20]. Adding an agent means a file in `templates/_shared/agents/` plus an `agent_entries` entry [21]. Adding a command means a file in `templates/_shared/commands/` plus a `command_entries` entry [22]. Shared doctrine requires a `doctrine_entries` entry with `source_file` and `render_dir` set to `.claude/rules/doctrine` [23].
+
+This project's evidence contributed to four promoted patterns: [[pattern-cluster_1c9cac89]], [[pattern-cluster_6cb87c7c]], [[pattern-cluster_a0bba1b7]], and [[pattern-cluster_cf12208f]].
 
 ## Decisions made
 
-The genesis repo was chosen as the origin for all three platform harnesses rather than letting each platform own its own rules [1]. The Epic Scoping Skills were hosted in the same repository as its own installed harness rather than split out [2]. The golden rule — edit the source, never the wrapper [6][7] — was made explicit because the failure mode is silent. A doctrine layer was introduced instead of restating shared rules per file [8]. `AGENTS.md` was designated the home for tool-agnostic context, with the Claude file restricted to Claude-specific notes [13][14]. Drift policy was placed in `AGENTS.md` and enforced by a hook rather than left to review discipline [17][18]. Doctrine was chosen to be referenced by articles and agents rather than mirrored to Copilot [23]. Version bumps were given explicit semantics so that a change's blast radius is legible from the header alone [26][27][28][29].
+Three decisions shape the repository.
+
+First, `AGENTS.md` is the tool-agnostic home for project context, and Claude-specific notes are kept out of it [13][14]. This keeps the shared description usable by any assistant harness rather than tied to one vendor.
+
+Second, doctrine is referenced, not mirrored to Copilot [23]. The alternative — duplicating doctrine into every platform — would have violated the no-duplication rule [7] and created a second place to drift.
+
+Third, the post-bootstrap flow is staged rather than one-shot: render, then evaluate and trim, then customize for the domain [10]. Rendering and tailoring are separate concerns with separate commands.
 
 ## Current state
 
-The architecture is settled: two systems, one pattern, one registry, one drift check. What remains open is inherent to the design rather than unfinished. On-demand reference sections still are not auto-loaded [9], so correctness depends on wrappers pointing at the right source. The drift check still requires a bootstrapped harness in scope and a repo-root working directory [19][24]. Adding any primitive still requires touching `mirror-pairs.json` alongside the source file [20][21][22][23]. Doctrine still is not mirrored to Copilot [23]. The evidence assembled here does not carry a claims count or a graph-status snapshot, so no such numbers are asserted; the durable state is the set of rules above and the registry that keeps them honest.
+The evidence base for this retrospective does not record claim counts or graph metrics, so no numbers are asserted here. What is documented is the operational state: two rendering pipelines, a registry-driven mirror map, a drift hook with a documented invocation, and per-file versioning with explicit bump semantics.
+
+What remains open is the ongoing cost of the golden rule. Every new primitive requires a source file plus a registry entry plus a bootstrap test run [20][21][22][23], and every drift check requires a bootstrapped harness in scope [19][24]. The architecture is stable; the discipline it demands is continuous.
 
 ---
 
