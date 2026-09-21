@@ -91,7 +91,8 @@ content; fresh clones carry `.gitkeep`ed skeletons of the content dirs).
 - **Evaluations**: `evaluations/` (golden corpus, behavior fixtures)
 - **Attested computations**: `global/computations/` (contracts)
 - **Attesters + executor skills**: `references/attesters/`, `references/skills/`
-- **Agent-facing assets**: `system/skills/` (6), `system/always-on/`,
+- **Agent-facing assets**: `system/skills/` (ingest, promote — loaded via
+  `wf skill <name>` on any harness), `system/always-on/`,
   `system/opencode/plugins/`
 - **Templates + examples**: `templates/` (page scaffolds), `templates/examples/`
 - **Project overlay**: `.wiki-overlay.md` in each connected project root

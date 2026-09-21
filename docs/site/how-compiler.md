@@ -62,6 +62,10 @@ model asserted* from *what was verified*.
 
 ## The human gate
 
+The full procedure — anti-loop checks, extraction verification, effect
+classification — is on demand: `wf skill ingest` prints it. The CLI enforces
+the mechanical parts (sha256 skip, verification) itself.
+
 The result is a change-set: a manifest of new claims + a diff, sitting in
 `evidence/traces/change-sets/`. Lint runs (0 errors gate). A human reviews.
 Only then does it merge into the corpus, append to `registry/log.md`, and

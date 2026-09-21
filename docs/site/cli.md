@@ -91,10 +91,12 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 | `wf query "<question>"` | Ask the fabric a question |
 | `wf log --project <slug> ...` | Log an experience event |
 | `wf hook {install\|uninstall\|status}` | Git post-commit auto-capture+ingest (`--extract-claims` for LLM on drift) |
-| `wf claude {install\|uninstall\|status}` | Managed always-on block in `AGENTS.md`/`CLAUDE.md` (`--user` for `~/.claude/CLAUDE.md`) |
+| `wf claude legacy` | Pre-harness always-on installer (`always_on.py`; superseded by `wf harness install`) |
 | `wf okf export --out DIR [--scope S]` | Export the fabric as a deterministic portable OKF v0.2 bundle |
 | `wf okf import <bundle> [--scope S]` | Ingest an external OKF bundle as immutable evidence (trust recorded, not inherited) |
 | `wf sync {init\|status\|push\|pull}` | Share the corpus with a team via a git remote |
+| `wf skill [--list] [<name>]` | Print the procedure for a workflow (`ingest`, `promote`, `refresh`) — universal across all agent harnesses |
+| `wf harness {install\|status} [--all\|--only k1,k2] [--force]` | Install always-on + skills into detected agent harnesses (11 supported; `wf claude` is the legacy alias) |
 | `wf models ensure [--model ID] [--yes]` | Check `llm.local_model` is cached; offer human-gated download (`--check` exits 0/1 without prompting) |
 | `wf lint [--okf] [--format json]` | Deterministic linter (full profile; `--okf` = OKF conformance floor; JSON for CI) |
 

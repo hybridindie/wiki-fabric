@@ -111,7 +111,7 @@ wf log --project my-project --problem "..." --intervention "..." --outcomes "...
 
 # Automate the refresh loop (opt-in, per project):
 wf hook install --extract-claims       # doc-drift commits auto-capture + auto-ingest
-wf claude install                      # always-on instructions in AGENTS.md/CLAUDE.md
+wf harness install                     # configure every detected agent harness (Claude Code, Codex, Copilot, ...)
 ```
 
 The one-liner installs **uv** if missing, creates a `.venv` inside the fabric,
@@ -147,7 +147,7 @@ Two kinds of tree live here: the **harness** (tooling, shipped in this repo) and
 | `scripts/` | harness | the pipeline: ingest, query, context, lint, promote, sync, hooks |
 | `tests/` | harness | 220+ unit tests (`-m "not live"` for fast suite) |
 | `docs/site/` | harness | this documentation (VitePress, deployed to Pages) |
-| `system/` | harness | agent-facing assets: `skills/` (6 SKILL.md), `always-on/`, `opencode/plugins/` |
+| `system/` | harness | agent-facing assets: `skills/` (ingest, promote), `always-on/`, `opencode/plugins/` |
 | `schemas/` | harness | frontmatter contracts (`frontmatter.md`) + domain ontology |
 | `templates/` | harness | page scaffolds (`pattern.md`, `decision.md`, ...) + `examples/` |
 | `references/` | harness | attesters (deterministic receipt checks) + executor skills |
@@ -173,7 +173,7 @@ live in the **fabric dir** — `~/.local/share/wiki-fabric/` by default
 | `scripts/` | harness | the pipeline: ingest, query, context, lint, promote, sync, hooks |
 | `tests/` | harness | 220+ unit tests (`-m "not live"` for fast suite) |
 | `docs/site/` | harness | this documentation (VitePress, deployed to Pages) |
-| `system/` | harness | agent-facing assets: `skills/` (6 SKILL.md), `always-on/`, `opencode/plugins/` |
+| `system/` | harness | agent-facing assets: `skills/` (ingest, promote), `always-on/`, `opencode/plugins/` |
 | `schemas/` | harness | frontmatter contracts (`frontmatter.md`) + domain ontology |
 | `templates/` | harness | page scaffolds (`pattern.md`, `decision.md`, ...) + `examples/` |
 | `references/` | harness | attesters (deterministic receipt checks) + executor skills |

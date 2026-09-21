@@ -348,10 +348,13 @@ Enhancements over the graphify design, adapted to a *content* pipeline:
 Always-on agent instructions (like `graphify claude install`):
 
 ```bash
-wf claude install          # managed "## wiki-fabric" block in AGENTS.md/CLAUDE.md
-wf claude install --user   # ~/.claude/CLAUDE.md
-wf claude uninstall        # marker-based removal
+wf harness install         # always-on block + procedures in every detected harness
+                           # (Claude Code, Codex, Copilot, Gemini CLI, Cursor, Pi, ...)
+wf harness status          # per-harness state: detected / installed / —
 ```
+
+Bootstrap runs this automatically; `wf harness install --all` covers every
+harness even if not yet detected.
 
 Bootstrap also installs `.opencode/plugins/wiki-fabric.js` — a session-start
 nudge (modeled on graphify's plugin) reminding the agent to prefer

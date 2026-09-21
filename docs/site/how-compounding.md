@@ -36,6 +36,8 @@ projects**, it stops being one team's anecdote and becomes a candidate rule.
 
 ## Step 3: The dossier
 
+The full mining procedure is on demand: `wf skill promote`.
+
 Each cluster becomes a **promotion dossier**: the evidence, the conditions
 where it held, the boundary where it stopped applying, and the counterexamples.
 This is the document a human reviews — it must answer seven questions
