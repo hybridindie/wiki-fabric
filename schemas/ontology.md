@@ -15,7 +15,10 @@ connect projects.
 - **agent-systems** — agent harnesses, MCP tool surfaces, retrieval/evaluation, prompt/skill design.
 - **godot-systems** — Godot editor/runtime systems, game engine tooling, concurrency.
 
-- **web-systems** — web systems (example proposed domain; confirm with your own evidence).
+- **web-systems** — web backends, RLS, dashboards (nomokailist evidence).
+- **trading-systems** — trading backends, backtests, portfolio tooling (alpaca-agents evidence).
+- **mcp-systems** — MCP server protocol, tool-schema design, stdio transports (godot-mcp, comfyui-mcp evidence).
+- **devops** — CI, runners, publishing pipelines (auto-proposed 2026-09-21, signal score: 9).
 
 - **devops** — devops (auto-proposed 2026-09-21, signal score: 9).
    - Status: proposed — review and add examples before confirming.
