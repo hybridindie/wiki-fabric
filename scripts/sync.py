@@ -26,8 +26,10 @@ import subprocess
 import argparse
 from pathlib import Path
 from datetime import date, datetime
+sys.path.insert(0, str(Path(__file__).parent))
+from fabric_config import FABRIC_ROOT
 
-VAULT_ROOT = Path(__file__).parent.parent
+VAULT_ROOT = FABRIC_ROOT
 CONTENT_REMOTE_NAME = "corpus"
 SYNC_BRANCH = "main"
 

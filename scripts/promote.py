@@ -7,9 +7,12 @@ import sys
 import re
 from pathlib import Path
 from datetime import date, datetime
-from wf_common import parse_frontmatter
 
-VAULT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(Path(__file__).parent))
+from wf_common import parse_frontmatter
+from fabric_config import FABRIC_ROOT
+
+VAULT_ROOT = FABRIC_ROOT
 PROMOTION_QUEUE = VAULT_ROOT / "registry" / "promotion-queue.md"
 PROMOTIONS_DIR = VAULT_ROOT / "registry" / "promotions"
 
@@ -84,8 +87,6 @@ def promote_dossier(dossier_path, dry_run=False):
     anti_path = VAULT_ROOT / "anti-patterns" / f"anti-pattern-{pattern_slug}.md"
     
     if not dry_run:
-        import sys as _sys
-        _sys.path.insert(0, str(Path(__file__).parent))
         from fabric_config import get_config, actor
         _cfg = get_config()
         _human = actor(_cfg, "human")

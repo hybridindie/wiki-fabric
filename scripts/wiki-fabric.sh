@@ -115,6 +115,17 @@ find_harness() {
     return 1
 }
 
+# === Helper: run a harness script with the fabric as cwd ===
+# Scripts live in the harness (code); content lives in the fabric dir.
+run_script() {
+    local fabric_dir="$1"
+    local script_rel="$2"     # e.g. scripts/lint.py
+    shift 2
+    local harness_dir
+    harness_dir="$(find_harness || echo "${fabric_dir}")"
+    run_python "${fabric_dir}" "${harness_dir}/${script_rel}" "$@"
+}
+
 # === Helper: find fabric root ===
 find_fabric() {
     # 1. Env override
@@ -451,7 +462,7 @@ cmd_install() {
         local vault_path="$(dirname "${fabric_dir}")/vault"
         info "Setting up Obsidian vault at ${vault_path}..."
         bash "${install_dir}/scripts/setup-vault.sh" "${vault_path}" 2>/dev/null || true
-        run_python "${fabric_dir}" "${install_dir}/scripts/vault-refresh.py" "${vault_path}" 2>/dev/null || true
+        run_script "${fabric_dir}" "scripts/vault-refresh.py" "${vault_path}" 2>/dev/null || true
         echo ""
     fi
 
@@ -558,11 +569,11 @@ EOF
     if [[ -f "fabric.yaml" ]]; then
         echo ""
         info "Updating entity index..."
-        run_python "${fabric_dir}" scripts/build-entity-index.py --skip-enrich 2>/dev/null || true
+        run_script "${fabric_dir}" "scripts/build-entity-index.py" --skip-enrich 2>/dev/null || true
 
         # Refresh wiki-fabric hooks in connected repos (version-stamped blocks)
         if command -v python3 >/dev/null 2>&1; then
-            python3 "${fabric_dir}/scripts/hooks.py" reinstall --repos-from-config 2>/dev/null || true
+            run_script "${fabric_dir}" "scripts/hooks.py" reinstall --repos-from-config 2>/dev/null || true
         fi
 
         # Self-update: refresh the installed CLI (it's a copy of this script)
@@ -577,12 +588,12 @@ EOF
     # Rebuild index
     echo ""
     info "Rebuilding catalog..."
-    run_python "${fabric_dir}" scripts/rebuild-index.py 2>/dev/null || true
+    run_script "${fabric_dir}" "scripts/rebuild-index.py" 2>/dev/null || true
 
     # Run lint
     echo ""
     info "Verifying health..."
-    if run_python "${fabric_dir}" scripts/lint.py . 2>/dev/null; then
+    if run_script "${fabric_dir}" "scripts/lint.py" . 2>/dev/null; then
         ok "Lint clean"
     else
         warn "Lint has errors — run: wf lint"
@@ -594,7 +605,7 @@ EOF
         echo ""
         info "Refreshing vault..."
         bash "scripts/setup-vault.sh" "${vault_path}" 2>/dev/null || true
-        run_python "${fabric_dir}" "${fabric_dir}/scripts/vault-refresh.py" "${vault_path}" || true
+        run_script "${fabric_dir}" "scripts/vault-refresh.py" "${vault_path}" || true
     fi
 
     echo ""
@@ -622,7 +633,7 @@ cmd_status() {
     local vault_path="$(dirname "${fabric_dir}")/vault"
     if [[ -d "${vault_path}" ]]; then
         local vault_state
-        vault_state=$(run_python "${fabric_dir}" "${fabric_dir}/scripts/vault-refresh.py" "${vault_path}" --check --quiet 2>/dev/null; echo "exit=$?")
+        vault_state=$(run_script "${fabric_dir}" "scripts/vault-refresh.py" "${vault_path}" --check --quiet 2>/dev/null; echo "exit=$?")
         if [[ "$vault_state" == *"exit=0"* ]]; then
             ok "Vault:  ${vault_path} (fresh)"
         else
@@ -681,7 +692,7 @@ print(len(get_discovered_repos(get_config())))" 2>/dev/null || echo 0)
 
     # Lint health
     echo ""
-    if run_python "${fabric_dir}" scripts/lint.py . 2>/dev/null; then
+    if run_script "${fabric_dir}" "scripts/lint.py" . 2>/dev/null; then
         ok "Lint: clean"
     else
         warn "Lint: has errors"
@@ -718,11 +729,11 @@ cmd_vault() {
     echo ""
     if [[ "$check" == true ]]; then
         info "Checking Obsidian vault at ${vault_path}..."
-        run_python "${fabric_dir}" "${fabric_dir}/scripts/vault-refresh.py" "${vault_path}" --check
+        run_script "${fabric_dir}" "scripts/vault-refresh.py" "${vault_path}" --check
     else
         info "Setting up / refreshing Obsidian vault at ${vault_path}..."
         bash "${fabric_dir}/scripts/setup-vault.sh" "${vault_path}" 2>/dev/null || true
-        run_python "${fabric_dir}" "${fabric_dir}/scripts/vault-refresh.py" "${vault_path}"
+        run_script "${fabric_dir}" "scripts/vault-refresh.py" "${vault_path}"
     fi
 }
 
@@ -740,7 +751,7 @@ cmd_bootstrap() {
     fi
 
     echo ""
-    run_python "${fabric_dir}" "${fabric_dir}/scripts/bootstrap-project.py" "$@"
+    run_script "${fabric_dir}" "scripts/bootstrap-project.py" "$@"
 }
 
 # === Main dispatcher ===
@@ -774,9 +785,9 @@ case "${1:-help}" in
             [[ -z "$grepo" ]] && { err "Usage: wf capture <project-slug> --git <owner/name-or-path>"; exit 1; }
             project="$1"
             shift 3
-            run_python "$(find_fabric)" "$(find_fabric)/scripts/capture-git.py" "$project" --repo "$grepo" "$@"
+            run_script "$(find_fabric)" "scripts/capture-git.py" "$project" --repo "$grepo" "$@"
         else
-            run_python "$(find_fabric)" "$(find_fabric)/scripts/capture.py" "$@"
+            run_script "$(find_fabric)" "scripts/capture.py" "$@"
         fi
         ;;
     ingest)
@@ -786,11 +797,11 @@ case "${1:-help}" in
             err "Usage: wf ingest <source-path> [--extract-claims]"
             exit 1
         fi
-        run_python "${fdir}" "${fdir}/scripts/ingest.py" "$@"
+        run_script "${fdir}" "scripts/ingest.py" "$@"
         ;;
     query)
         shift
-        run_python "$(find_fabric)" "$(find_fabric)/scripts/query.py" "$@"
+        run_script "$(find_fabric)" "scripts/query.py" "$@"
         ;;
     context)
         shift
@@ -799,10 +810,10 @@ case "${1:-help}" in
             err "Usage: wf context --task \"<task>\" [--paths <code/path>] [--project <slug>] [--format json] [--max N]"
             exit 1
         fi
-        run_python "${fdir}" "${fdir}/scripts/context.py" "$@"
+        run_script "${fdir}" "scripts/context.py" "$@"
         ;;
     lint)
-        run_python "$(find_fabric)" "$(find_fabric)/scripts/lint.py" .
+        run_script "$(find_fabric)" "scripts/lint.py" .
         ;;
     hook)
         shift
@@ -810,7 +821,7 @@ case "${1:-help}" in
         subcmd="${1:-status}"
         shift 2>/dev/null
         export WIKI_FABRIC_DIR="${fdir}"
-        run_python "${fdir}" "${fdir}/scripts/hooks.py" "${subcmd}" "$@"
+        run_script "${fdir}" "scripts/hooks.py" "${subcmd}" "$@"
         ;;
     claude|harness)
         shift
@@ -819,10 +830,10 @@ case "${1:-help}" in
         shift 2>/dev/null || true
         case "${subcmd}" in
             install|status)
-                run_python "${fdir}" "${fdir}/scripts/harnesses.py" "${subcmd}" "$@"
+                run_script "${fdir}" "scripts/harnesses.py" "${subcmd}" "$@"
                 ;;
             legacy)
-                run_python "${fdir}" "${fdir}/scripts/always_on.py" "$@"
+                run_script "${fdir}" "scripts/always_on.py" "$@"
                 ;;
             *)
                 err "Usage: ${SCRIPT_NAME} harness {install|status} [--all|--only k1,k2] [--force]"
@@ -837,10 +848,10 @@ case "${1:-help}" in
         shift 2>/dev/null
         case "${subcmd}" in
             export)
-                run_python "${fdir}" "${fdir}/scripts/okf_export.py" "$@"
+                run_script "${fdir}" "scripts/okf_export.py" "$@"
                 ;;
             import)
-                run_python "${fdir}" "${fdir}/scripts/okf_import.py" "$@"
+                run_script "${fdir}" "scripts/okf_import.py" "$@"
                 ;;
             *)
                 err "Usage: ${SCRIPT_NAME} okf {export|import} [options]"
@@ -850,12 +861,12 @@ case "${1:-help}" in
         ;;
     log)
         shift
-        run_python "$(find_fabric)" "$(find_fabric)/scripts/log-experience.py" "$@"
+        run_script "$(find_fabric)" "scripts/log-experience.py" "$@"
         ;;
     skill)
         shift
         fdir=$(find_fabric)
-        run_python "${fdir}" "${fdir}/scripts/skill.py" "$@"
+        run_script "${fdir}" "scripts/skill.py" "$@"
         ;;
     models)
         shift
@@ -864,7 +875,7 @@ case "${1:-help}" in
         shift 2>/dev/null || true
         case "${subcmd}" in
             ensure)
-                run_python "${fdir}" "${fdir}/scripts/ensure-local-model.py" "$@"
+                run_script "${fdir}" "scripts/ensure-local-model.py" "$@"
                 ;;
             *)
                 err "Usage: ${SCRIPT_NAME} models {ensure} [--model <hf-id>] [--yes]"
@@ -879,7 +890,7 @@ case "${1:-help}" in
         shift 2>/dev/null || true
         case "${subcmd}" in
             migrate)
-                run_python "${fdir}" "${fdir}/scripts/repos-migrate.py" "$@"
+                run_script "${fdir}" "scripts/repos-migrate.py" "$@"
                 ;;
             *)
                 err "Usage: ${SCRIPT_NAME} repos migrate [--dry-run|--apply]"
@@ -894,7 +905,7 @@ case "${1:-help}" in
             err "Usage: wf sync {init <git-url> | status | push [-m msg] | pull}"
             exit 1
         fi
-        run_python "${fdir}" "${fdir}/scripts/sync.py" "$@"
+        run_script "${fdir}" "scripts/sync.py" "$@"
         ;;
     integrations)
         fdir=$(find_fabric)

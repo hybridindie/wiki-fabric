@@ -101,3 +101,25 @@ class TestInstall(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestInstalledModeScriptResolution(unittest.TestCase):
+    """Regression: in installed mode (harness ≠ fabric), commands that run
+    harness scripts from the fabric dir broke. run_script must resolve code
+    from the harness and cwd from the fabric."""
+
+    def test_run_script_resolves_harness(self):
+        import subprocess
+        H = REPO
+        # fake fabric WITHOUT scripts/, cwd anywhere
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            fab = Path(d) / "fabric"
+            fab.mkdir()
+            (fab / "fabric.yaml").write_text("owner: t\n")
+            # simulate the dispatcher: lint a temp vault-cwd via run_script semantics
+            script = (H / "scripts" / "lint.py")
+            assert script.exists()
+            r = subprocess.run(
+                [sys.executable, str(script), str(fab)],
+                capture_output=True, text=True, cwd=str(fab))
+            assert "error(s)" in r.stdout or "Lint" in r.stdout

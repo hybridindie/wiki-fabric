@@ -31,8 +31,10 @@ import subprocess
 import argparse
 from pathlib import Path
 from datetime import date, datetime, timedelta
+sys.path.insert(0, str(Path(__file__).parent))
+from fabric_config import FABRIC_ROOT
 
-VAULT_ROOT = Path(__file__).parent.parent
+VAULT_ROOT = FABRIC_ROOT
 EVIDENCE_RAW = VAULT_ROOT / "evidence" / "raw"
 
 SKIP_PREFIXES = ("chore", "docs", "style", "test", "ci", "build", "release")

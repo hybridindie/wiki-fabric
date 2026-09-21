@@ -30,8 +30,23 @@ def slugify(text):
 
 
 def find_fabric_root():
-    script_dir = Path(__file__).parent.resolve()
-    return script_dir.parent
+    # Content root: honors WIKI_FABRIC_DIR via fabric_config; falls back to the
+    # harness parent in dev mode.
+    try:
+        from fabric_config import FABRIC_ROOT
+        return FABRIC_ROOT
+    except Exception:
+        return Path(__file__).parent.resolve().parent
+
+
+def find_harness_root():
+    # Code root: where the scripts live (may differ from the fabric in
+    # installed mode).
+    try:
+        from fabric_config import HARNESS_ROOT
+        return HARNESS_ROOT
+    except Exception:
+        return Path(__file__).parent.resolve().parent
 
 
 def run_cmd(cmd, cwd=None, check=True):
@@ -409,8 +424,8 @@ config; the fabric discovers it (see fabric.yaml repos.auto_discover).
     # 2. Create/Update opencode config (additive merge)
     # Resolve harness/fabric locations at bootstrap time (never hard-code
     # home-relative guesses — the harness may live anywhere).
+    harness_root = find_harness_root()
     fabric_root = find_fabric_root()
-    harness_root = fabric_root if (fabric_root / "scripts").exists() else fabric_root.parent
     WIKI_FABRIC_BLOCK = {
         "references": {
             "wiki-fabric": {
@@ -465,7 +480,7 @@ config; the fabric discovers it (see fabric.yaml repos.auto_discover).
         print("Created opencode.json")
 
     # 2b. Install the wiki-fabric opencode plugin (session-start nudge)
-    plugin_src = find_fabric_root() / "system" / "opencode" / "plugins" / "wiki-fabric.js"
+    plugin_src = find_harness_root() / "system" / "opencode" / "plugins" / "wiki-fabric.js"
     plugin_dst = Path(".opencode") / "plugins" / "wiki-fabric.js"
     if plugin_src.exists() and not plugin_dst.exists():
         plugin_dst.parent.mkdir(parents=True, exist_ok=True)
@@ -475,7 +490,7 @@ config; the fabric discovers it (see fabric.yaml repos.auto_discover).
     # 2c. Multi-harness support: install always-on + skills into every detected
     # agent harness (Claude Code, Codex, Copilot, Cursor, Gemini CLI, ...).
     try:
-        harnesses_py = find_fabric_root() / "scripts" / "harnesses.py"
+        harnesses_py = find_harness_root() / "scripts" / "harnesses.py"
         if harnesses_py.exists():
             import importlib.util as _hlu
             hspec = _hlu.spec_from_file_location("harnesses", str(harnesses_py))
@@ -483,11 +498,11 @@ config; the fabric discovers it (see fabric.yaml repos.auto_discover).
             hspec.loader.exec_module(hmod)
             targets = hmod.detect_installed(Path.cwd())
             if targets:
-                block = hmod.body_from(fabric_root / "system" / "always-on" / "wiki-fabric-block.md")
+                block = hmod.body_from(harness_root / "system" / "always-on" / "wiki-fabric-block.md")
                 n = 0
                 for spec in targets:
                     written = hmod.install_instructions(spec, Path.cwd(), block)
-                    written += hmod.install_skills(spec, Path.cwd(), fabric_root)
+                    written += hmod.install_skills(spec, Path.cwd(), harness_root)
                     for w in written:
                         print(f"  harness [{spec['name']}]: {w.relative_to(Path.cwd())}")
                     n += len(written)
@@ -521,7 +536,7 @@ config; the fabric discovers it (see fabric.yaml repos.auto_discover).
 
     # 5b. Vault freshness: write the fabric-side overlay view + refresh links
     try:
-        fabric_root = find_fabric_root()
+        harness_root = find_harness_root()
         vr = fabric_root / "scripts" / "vault-refresh.py"
         if vr.exists():
             import importlib.util as _ilu

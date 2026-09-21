@@ -21,8 +21,10 @@ from datetime import date
 
 from fabric_config import get_config, get_ignores, is_ignored
 from wf_common import parse_frontmatter
+sys.path.insert(0, str(Path(__file__).parent))
+from fabric_config import FABRIC_ROOT
 
-VAULT_ROOT = Path(__file__).parent.parent
+VAULT_ROOT = FABRIC_ROOT
 PROJECTS_DIR = VAULT_ROOT / "projects"
 EVIDENCE_RAW = VAULT_ROOT / "evidence" / "raw"
 

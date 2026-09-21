@@ -28,6 +28,8 @@ from pathlib import Path
 from datetime import date
 from collections import Counter
 from wf_common import parse_frontmatter, norm
+sys.path.insert(0, str(Path(__file__).parent))
+from fabric_config import FABRIC_ROOT
 
 try:
     import yaml
@@ -35,7 +37,7 @@ try:
 except ImportError:
     HAVE_YAML = False
 
-VAULT_ROOT = Path(__file__).parent.parent
+VAULT_ROOT = FABRIC_ROOT
 
 
 def concept_match(query_norm, text_norm):
