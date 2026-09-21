@@ -1,0 +1,72 @@
+# pr-agent.toml — Wiki Fabric repository configuration
+# Scope: review only the actual scripts (Python harness). Skip docs, generated
+# content, graphify artifacts, and the human wiki layer.
+#
+# Only overrides from the pr-agent defaults — see:
+# https://github.com/Codium-ai/pr-agent/blob/main/pr_agent/settings/configuration.toml
+
+[config]
+
+# Focus on the Python harness scripts and shell scripts — skip everything else
+ignore_language_framework = []
+
+# Skip non-code files from review (docs, wiki, generated content, config)
+patch_extension_skip_types = [".md", ".txt", ".toml", ".yaml", ".yml", ".json", ".svg", ".html", ".css"]
+
+# Ignore bot PRs (renovate, dependabot, etc.)
+ignore_pr_labels = []
+ignore_pr_authors = ["renovate", "dependabot"]
+
+# Reasoning effort — this project is complex (routing, hooks, staleness)
+reasoning_effort = "high"
+
+[pr_reviewer]
+# Enable the checks that matter for this project
+require_score_review = true
+require_tests_review = true
+require_estimate_effort_to_review = true
+require_security_review = true
+require_todo_scan = true
+require_risk_assessment = true
+require_merge_recommendation = true
+require_priority_files = true
+
+# Number of findings to surface (default 3 is too few for a multi-script project)
+num_max_findings = 5
+
+# Focus on real issues, not style
+extra_instructions = """
+This is wiki-fabric: a knowledge governance harness with a compile pipeline
+(capture → ingest → claims), a context compiler, a promotion pipeline
+(experience events → patterns), a deterministic linter, and multi-harness
+agent support. The scripts are Python (stdlib + openai + mlx-lm).
+
+Focus on:
+- Correctness of the anti-loop guards (sha256 gating, self-skip logic)
+- Path resolution safety (harness vs fabric vs corpus — never mix them)
+- Actor convention compliance (agent/<owner>/<model>, human:<id>, process:<id>)
+- Staleness enforcement (review_after, stale_after — these are governance gates)
+- Local model routing (GGUF vs MLX backend dispatch, WIKI_MLX_MODEL handling)
+- Race conditions in multi-threaded ingest workers
+- Import shape: shared modules (fabric_config, extract_backends, wf_common,
+  eval_core, local_llm) must be imported, never re-implemented
+
+Skip:
+- Style/formatting (ruff handles it)
+- Docstring completeness (the skill docs cover procedures)
+- Test coverage in the diff (check test coverage separately)
+"""
+
+[pr_description]
+# Generate diagrams for architecture changes
+enable_pr_diagram = true
+pr_diagram_direction = "TD"
+
+# Semantic file types so the walkthrough is clear
+enable_semantic_files_types = true
+
+[pr_code_suggestions]
+# Focus on problems, not style improvements
+focus_only_on_problems = true
+num_code_suggestions_per_chunk = 3
+suggestions_score_threshold = 5
