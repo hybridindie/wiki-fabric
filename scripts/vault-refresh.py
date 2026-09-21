@@ -31,6 +31,8 @@ FIXED_LINKS = [
     "syntheses",
     "registry",
     "domains",
+    "evidence/claims",
+    "evidence/source-summaries",
 ]
 
 OVERLAY_VIEW_NAME = "overlay.yml"
@@ -98,6 +100,7 @@ def refresh(vault_path, check_only=False, quiet=False):
                 problems.append(f"missing link: {lp}")
                 continue
             vault.mkdir(parents=True, exist_ok=True)
+            lp.parent.mkdir(parents=True, exist_ok=True)  # nested targets (evidence/claims)
             os.symlink(target, lp)
             _say(f"  linked: {link}")
             created += 1

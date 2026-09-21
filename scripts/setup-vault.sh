@@ -33,6 +33,9 @@ LINKS=(
     "projects"
     "syntheses"
     "registry"
+    "evidence/claims"
+    "evidence/source-summaries"
+    "domains"
 )
 
 for link in "${LINKS[@]}"; do
