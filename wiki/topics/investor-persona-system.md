@@ -9,14 +9,14 @@ review_after: 2027-01-19
 
 6 current claim(s) support this topic.
 
-- The Investor Persona System (Proposal 012) ships 15+ investor personas including Warren Buffett, Charlie Munger, Ray Dalio, Peter Lynch, and [1]
-- Proposal 012 adds famous investor personas to the deliberation system, enabling an Investment Committee mode where Warren Buffett, Charlie M [2]
-- The persona configuration maps bullish personas to warren_buffett and peter_lynch, bearish personas to charlie_munger and ray_dalio, and the [3]
+- Market regime detection utilizes SPY as the market proxy and employs a 200-bar lookback period." [1]
+- The use of 23 persona agents resulted in a 13% accuracy improvement in edge cases." [2]
+- The system checks the configuration to determine if the Investment Committee mode should run using personas." [3]
 
 ---
 
-[1] claim-alpaca-agents-alpaca-agents-docs-changelog-md-001 — The Investor Persona System (Proposal 012) ships 15+ investor personas including
-[2] claim-alpaca-agents-alpaca-agents-docs-proposals-completed-012-investor-persona-system-000 — Proposal 012 adds famous investor personas to the deliberation system, enabling
-[3] claim-alpaca-agents-alpaca-agents-docs-proposals-completed-012-investor-persona-system-005 — The persona configuration maps bullish personas to warren_buffett and peter_lync
+[1] claim-alpaca-agents-alpaca-agents-docs-changelog-md-001 — Market regime detection utilizes SPY as the market proxy and employs a 200-bar l
+[2] claim-alpaca-agents-alpaca-agents-docs-proposals-completed-012-investor-persona-system-000 — The use of 23 persona agents resulted in a 13% accuracy improvement in edge case
+[3] claim-alpaca-agents-alpaca-agents-docs-proposals-completed-012-investor-persona-system-005 — The system checks the configuration to determine if the Investment Committee mod
 
 _Generated from the evidence fabric on 2026-09-21. Citations link to claims in evidence/claims/._

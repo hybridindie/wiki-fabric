@@ -9,16 +9,16 @@ review_after: 2027-01-19
 
 8 current claim(s) support this topic.
 
-- JSON envelopes are versioned from day one: commands are { id, command, params }, responses are { id, ok, result, error }, and requests corre [1]
-- The command envelope is {id, command, params} to {id, ok, result, error, hint}, correlated by id with many requests in flight." [2]
-- Many requests may be in flight concurrently, with each response matched to its request by id and no shared mutable per-request state." [3]
-- In the response envelope, ok: true implies result is present and ok: false implies error and hint are present." [4]
+- Every tool is tagged with a safety class (read_only | mutating | destructive | runtime), where mutating/destructive tools take dry_run and d [1]
+- The command envelope is {id, command, params} → {id, ok, result, error, hint}, correlated by id with many in flight." [2]
+- A cmd_ping to {pong: true} exchange is the liveness health check." [3]
+- Many requests may be in flight and each response is matched to its request by id, with correlation being concurrency-safe and no shared muta [4]
 
 ---
 
-[1] claim-godot-mcp-godot-mcp-agents-md-008 — JSON envelopes are versioned from day one: commands are { id, command, params },
-[2] claim-godot-mcp-godot-mcp-docs-architecture-diagram-md-007 — The command envelope is {id, command, params} to {id, ok, result, error, hint},
-[3] claim-godot-mcp-godot-mcp-docs-architecture-md-005 — Many requests may be in flight concurrently, with each response matched to its r
-[4] claim-godot-mcp-godot-mcp-docs-architecture-md-006 — In the response envelope, ok: true implies result is present and ok: false impli
+[1] claim-godot-mcp-godot-mcp-agents-md-008 — Every tool is tagged with a safety class (read_only | mutating | destructive | r
+[2] claim-godot-mcp-godot-mcp-docs-architecture-diagram-md-007 — The command envelope is {id, command, params} → {id, ok, result, error, hint}, c
+[3] claim-godot-mcp-godot-mcp-docs-architecture-md-005 — A cmd_ping to {pong: true} exchange is the liveness health check."
+[4] claim-godot-mcp-godot-mcp-docs-architecture-md-006 — Many requests may be in flight and each response is matched to its request by id
 
 _Generated from the evidence fabric on 2026-09-21. Citations link to claims in evidence/claims/._

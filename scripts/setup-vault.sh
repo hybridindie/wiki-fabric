@@ -9,6 +9,8 @@
 set -euo pipefail
 
 FABRIC_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CORPUS_ROOT="${FABRIC_ROOT}/corpus"
+if [ ! -d "${CORPUS_ROOT}/evidence" ] && [ -d "${FABRIC_ROOT}/evidence" ]; then CORPUS_ROOT="${FABRIC_ROOT}"; fi
 # Default: vault sits beside the fabric (dirname of the fabric root) —
 # wherever the fabric lives, the vault is created next to it
 VAULT_PATH="${1:-$(dirname "${FABRIC_ROOT}")/vault}"
@@ -40,7 +42,7 @@ LINKS=(
 )
 
 for link in "${LINKS[@]}"; do
-    target="${FABRIC_ROOT}/${link}"
+    target="${CORPUS_ROOT}/${link}"
     if [[ -e "${link}" ]]; then
         if [[ -L "${link}" ]]; then
             echo "  Symlink exists: ${link} → $(readlink "${link}")"

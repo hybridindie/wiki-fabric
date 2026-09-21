@@ -8,23 +8,20 @@ generated: 2026-09-21
 
 ## Review Status
 
-- ✅ Current: 0
-- ⚠️ Due for review: 2470
-- ⚠️ Overdue: 1
+- ✅ Current: 2070
+- ⚠️ Due for review: 109
+- ⚠️ Overdue: 0
 - ❌ Archived: 0
 
 ## Topics
 
-- [[rlconfig]] — RLConfig (12 claims)
-- [[gate-thresholds-and-error-handling]] — Gate Thresholds and Error Handling (8 claims)
+- [[rlconfig]] — RLConfig (8 claims)
 - [[nomikailist-knowledge-graph]] — NomikaiList Knowledge Graph (6 claims)
-- [[task-1-live-spike]] — Task-1 Live Spike (8 claims)
+- [[task-1-live-spike]] — Task-1 Live Spike (6 claims)
 - [[voxel-engine-meshing]] — Voxel Engine Meshing (10 claims)
 - [[aperiodic-monotiles]] — Aperiodic Monotiles (6 claims)
-- [[securitymiddleware]] — SecurityMiddleware (6 claims)
 - [[accepted-adrs]] — Accepted ADRs (6 claims)
 - [[godot-undo-redo-history-api]] — Godot Undo/Redo History API (8 claims)
-- [[market-regime-driven-position-sizing]] — Market Regime-Driven Position Sizing (8 claims)
 - [[supabase-jwt-token-management]] — Supabase JWT Token Management (6 claims)
 - [[investor-persona-system]] — Investor Persona System (6 claims)
 - [[aperiodic-terrain-generator]] — Aperiodic Terrain Generator (8 claims)
@@ -35,22 +32,19 @@ generated: 2026-09-21
 - [[tree-roll-duplication]] — Tree Roll Duplication (6 claims)
 - [[transvoxel-lod]] — Transvoxel LOD (6 claims)
 - [[security-vulnerability-management]] — Security Vulnerability Management (6 claims)
-- [[data-retention-and-archival-policy]] — Data Retention and Archival Policy (6 claims)
-- [[headless-run-timeout-handling]] — Headless Run Timeout Handling (12 claims)
+- [[headless-run-timeout-handling]] — Headless Run Timeout Handling (10 claims)
 - [[game-output-capture]] — Game Output Capture (6 claims)
 - [[instructions-and-rules-installation]] — Instructions and Rules Installation (6 claims)
 - [[tool-name-prefixing]] — Tool-Name Prefixing (6 claims)
-- [[evaluation-metrics-and-leaderboard]] — Evaluation Metrics and Leaderboard (34 claims)
+- [[evaluation-metrics-and-leaderboard]] — Evaluation Metrics and Leaderboard (32 claims)
 - [[gle-task-set]] — GLE Task Set (6 claims)
-- [[godot-multi-platform-communication-protocol-mcp]] — Godot Multi-Platform Communication Protocol (MCP) (2644 claims)
+- [[godot-multi-platform-communication-protocol-mcp]] — Godot Multi-Platform Communication Protocol (MCP) (2248 claims)
 - [[godot-voxel-pipeline]] — Godot Voxel Pipeline (6 claims)
-- [[dry-principle-violation]] — DRY Principle Violation (8 claims)
 - [[mkdocs-material-installation-issue]] — MkDocs Material Installation Issue (6 claims)
 - [[synchronous-main-thread-execution]] — Synchronous Main Thread Execution (6 claims)
-- [[embedding-models-and-data-models]] — Embedding Models and Data Models (12 claims)
-- [[node-persistence-in-godot]] — Node Persistence in Godot (48 claims)
+- [[embedding-models-and-data-models]] — Embedding Models and Data Models (10 claims)
+- [[node-persistence-in-godot]] — Node Persistence in Godot (46 claims)
 - [[json-envelope-protocol]] — JSON Envelope Protocol (8 claims)
-- [[outcome-tracking]] — Outcome Tracking (6 claims)
 - [[price-prediction-outcome-tracking]] — Price Prediction Outcome Tracking (10 claims)
 - [[godot-inspection-tools]] — Godot Inspection Tools (6 claims)
 - [[graph-critical-rls-contract]] — Graph Critical RLS Contract (12 claims)

@@ -11,8 +11,10 @@ from datetime import date, datetime
 sys.path.insert(0, str(Path(__file__).parent))
 from wf_common import parse_frontmatter
 from fabric_config import FABRIC_ROOT
+from fabric_config import CORPUS_ROOT
+from fabric_config import CORPUS_ROOT
 
-VAULT_ROOT = FABRIC_ROOT
+VAULT_ROOT = CORPUS_ROOT
 PROMOTION_QUEUE = VAULT_ROOT / "registry" / "promotion-queue.md"
 PROMOTIONS_DIR = VAULT_ROOT / "registry" / "promotions"
 

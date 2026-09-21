@@ -8,23 +8,23 @@ review_after: 2027-03-20
 
 ## Current state
 
-137 verified claim(s) from 137 analyzed sources.
+150 verified claim(s) from 150 analyzed sources.
 
 ## Key findings
 
-- The repository generates AI assistant harnesses for `.claude/`, `.github/`, and `.opencode/` from a single set of shared constitutional arti [1]
-- The repository hosts the Epic Scoping Skills as its own installed harness." [2]
-- Two systems in the repository share the same single-source/thin-wrapper pattern." [3]
-- The Genesis harness renders `templates/_shared/` into target projects via `bootstrap.sh` and contains constitutional articles, agents, comma [4]
-- The Epic Scoping Skills system uses `.agents/` as its source directory with thin wrappers in `.claude/`, `.opencode/`, and `.github/`, conta [5]
-- The golden rule prohibits duplicating content into a wrapper; content must be edited in `.agents/` or `templates/_shared/`, and only frontma [6]
-- Shared rules referenced by multiple files live in a `doctrine/` layer and must be referenced rather than restated." [7]
-- On-demand reference sections in the repository are not auto-loaded and must be read explicitly when needed." [8]
-- The post-bootstrap flow proceeds as `bootstrap.sh` (render) → `/harness-eval` (trim + suggest) → `/customize-harness` (domain tailoring)." [9]
-- Each skill wrapper is a thin pointer; the model reads the `.agents/` body on-demand only when the skill is invoked." [10]
-- Doctrine files located at `.agents/doctrine/` are read on-demand when a skill references them." [11]
-- The shared, tool-agnostic project context (repo description, genesis bootstrap, source structure, Epic Scoping Skills) is defined in AGENTS. [12]
-- Only Claude-Code-specific notes belong in CLAUDE.md; all other shared context is delegated to AGENTS.md." [13]
-- Claude-specific harness assets (skills, hooks, scripts) are stored under the path templates/claude-code/.claude/." [14]
-- The Claude-specific harness assets are generated output mirrored from templates/_shared/, not authored independently." [15]
+- This repository is the genesis repository that generates AI assistant harnesses for .claude/, .github/, and .opencode/ from a single set of  [1]
+- The repository also hosts the Epic Scoping Skills as its own installed harness." [2]
+- Two systems share the same single-source/thin-wrapper pattern." [3]
+- The genesis harness uses templates/_shared/ rendered into target projects by bootstrap.sh." [4]
+- Epic Scoping Skills use .agents/ as the source rendered into thin wrappers in .claude/, .opencode/, and .github/." [5]
+- The golden rule is to edit content in .agents/ for epic skills or templates/_shared/ for genesis." [6]
+- Content must never be duplicated into a wrapper." [7]
+- Shared rules referenced by multiple files live in a doctrine/ layer and should be referenced rather than restated." [8]
+- The on-demand reference sections are not auto-loaded." [9]
+- The post-bootstrap flow is bootstrap.sh (render) → /harness-eval (trim + suggest) → /customize-harness (domain tailoring)." [10]
+- Each skill wrapper is a thin pointer, and the model reads the .agents/ body on-demand when the skill is invoked." [11]
+- Doctrine files in .agents/doctrine/ are read on-demand when a skill references them." [12]
+- The shared, tool-agnostic project context — covering what this repo is, how the genesis bootstrap works, the source structure, and the Epic  [13]
+- Only Claude-Code-specific notes belong in this file." [14]
+- Claude-specific harness assets (skills, hooks, scripts) live under `templates/claude-code/.claude/`." [15]
 

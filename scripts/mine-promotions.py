@@ -19,6 +19,8 @@ from datetime import timedelta
 from wf_common import parse_frontmatter
 sys.path.insert(0, str(Path(__file__).parent))
 from fabric_config import FABRIC_ROOT
+from fabric_config import CORPUS_ROOT
+from fabric_config import CORPUS_ROOT
 
 try:
     from sentence_transformers import SentenceTransformer
@@ -33,7 +35,7 @@ except ImportError:
     np = None
     HAS_NUMPY = False
 
-VAULT_ROOT = FABRIC_ROOT
+VAULT_ROOT = CORPUS_ROOT
 
 EXPERIENCE_DIR = VAULT_ROOT / "projects"
 PROMOTIONS_DIR = VAULT_ROOT / "registry" / "promotions"

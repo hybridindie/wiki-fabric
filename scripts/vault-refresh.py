@@ -18,7 +18,7 @@ import os
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from fabric_config import FABRIC_ROOT, get_config, get_all_repo_names
+from fabric_config import FABRIC_ROOT, CORPUS_ROOT, get_config, get_all_repo_names
 
 FIXED_LINKS = [
     "AGENTS.md",
@@ -81,7 +81,7 @@ def refresh(vault_path, check_only=False, quiet=False):
 
     # 1. fixed top-level links
     for link in FIXED_LINKS:
-        target = FABRIC_ROOT / link
+        target = CORPUS_ROOT / link
         lp = vault / link
         if lp.is_symlink() and not lp.exists():
             # dangling link: target missing (empty content dirs get created)
@@ -124,7 +124,7 @@ def refresh(vault_path, check_only=False, quiet=False):
         view = overlay_view_content(slug)
         if view is None:
             continue
-        ns = FABRIC_ROOT / "projects" / slug
+        ns = CORPUS_ROOT / "projects" / slug
         ns.mkdir(parents=True, exist_ok=True)
         view_path = ns / OVERLAY_VIEW_NAME
         if not view_path.exists() or view_path.read_text() != view:

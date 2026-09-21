@@ -7,22 +7,20 @@ review_after: 2027-01-19
 
 # Headless Run Timeout Handling
 
-12 current claim(s) support this topic.
+10 current claim(s) support this topic.
 
-- Issue #489 is a bug report titled \"[Bug] AnimationPlayer path resolution fails for instanced scenes\"." [1]
-- Issue #490 is a bug report titled \"[Bug] Headless run timeout produces false NON-ZERO EXIT finding\" and is in CLOSED state." [2]
-- On timeout the tool outputs \"RUN TIMED OUT: The game did not exit within the timeout.\" and \"NON-ZERO EXIT: headless run exited with code  [3]
-- In mcp_server/debug_workflow.py:140-143, on timeout exit_code is None, and None != 0 is True, so every timeout unconditionally emits a NON-Z [4]
-- The proposed fix guards the exit code check with `if run_result.exit_code is not None and run_result.exit_code != 0`." [5]
-- The proposed fix includes freeing the textures in _exit_tree." [6]
+- Issue #489 is a closed bug report titled \"[Bug] AnimationPlayer path resolution fails for instanced scenes\"." [1]
+- The godot_debug_workflow tool runs the game headless with a timeout." [2]
+- The timeout findings are false positives because the game is working correctly and simply does not quit on its own." [3]
+- The suggestion text incorrectly blames the game for infinite loops when the game is functioning correctly." [4]
+- A proposed enhancement adds an expected_timeout boolean parameter for games meant to run indefinitely so the timeout finding is suppressed o [5]
 
 ---
 
-[1] claim-godot-mcp-git-issue-489-md-000 — Issue #489 is a bug report titled \"[Bug] AnimationPlayer path resolution fails
-[2] claim-godot-mcp-git-issue-490-md-000 — Issue #490 is a bug report titled \"[Bug] Headless run timeout produces false NO
-[3] claim-godot-mcp-git-issue-490-md-003 — On timeout the tool outputs \"RUN TIMED OUT: The game did not exit within the ti
-[4] claim-godot-mcp-git-issue-490-md-005 — In mcp_server/debug_workflow.py:140-143, on timeout exit_code is None, and None
-[5] claim-godot-mcp-git-issue-490-md-007 — The proposed fix guards the exit code check with `if run_result.exit_code is not
-[6] claim-godot-mcp-git-issue-539-md-008 — The proposed fix includes freeing the textures in _exit_tree."
+[1] claim-godot-mcp-git-issue-489-md-000 — Issue #489 is a closed bug report titled \"[Bug] AnimationPlayer path resolution
+[2] claim-godot-mcp-git-issue-490-md-000 — The godot_debug_workflow tool runs the game headless with a timeout."
+[3] claim-godot-mcp-git-issue-490-md-003 — The timeout findings are false positives because the game is working correctly a
+[4] claim-godot-mcp-git-issue-490-md-005 — The suggestion text incorrectly blames the game for infinite loops when the game
+[5] claim-godot-mcp-git-issue-490-md-007 — A proposed enhancement adds an expected_timeout boolean parameter for games mean
 
 _Generated from the evidence fabric on 2026-09-21. Citations link to claims in evidence/claims/._

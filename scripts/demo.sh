@@ -46,18 +46,18 @@ step "Initialize a fabric"
 cp -R "${REPO_ROOT}/." "${FABRIC}/"
 # Strip user content + caches: the demo seeds its own artifacts and must not
 # pick up claims/entities from a populated fabric checkout.
-rm -rf "${FABRIC}/.git" "${FABRIC}/.venv" "${FABRIC}/fabric.yaml" \
-       "${FABRIC}/evidence" "${FABRIC}/global/entities" "${FABRIC}/.okflint" \
+rm -rf "${FABRIC}/.git" "${FABRIC}/.venv" "${FABRIC}/corpus/fabric.yaml" \
+       "${FABRIC}/corpus/evidence" "${FABRIC}/corpus/global/entities" "${FABRIC}/.okflint" \
        "${FABRIC}/.obsidian" "${FABRIC}/.pytest_cache" "${FABRIC}/index.md" \
-       "${FABRIC}/registry/catalog.md" "${FABRIC}/registry/catalog.json" "${FABRIC}/registry/log.md"
+       "${FABRIC}/corpus/registry/catalog.md" "${FABRIC}/corpus/registry/catalog.json" "${FABRIC}/corpus/registry/log.md"
 pass "fabric at ${FABRIC}"
 
-mkdir -p "${FABRIC}/patterns" "${FABRIC}/anti-patterns" "${FABRIC}/projects/auth-service/decisions" "${FABRIC}/projects/auth-service/experience-events" "${FABRIC}/domains/oauth/concepts"
+mkdir -p "${FABRIC}/corpus/patterns" "${FABRIC}/corpus/anti-patterns" "${FABRIC}/corpus/projects/auth-service/decisions" "${FABRIC}/corpus/projects/auth-service/experience-events" "${FABRIC}/corpus/domains/oauth/concepts"
 
 # ── 2. Seed knowledge (this is what a team accumulates in week 1) ────────────
 step "Seed 4 artifacts: 1 global policy, 1 domain pattern, 1 anti-pattern, 1 project decision"
 
-cat > "${FABRIC}/patterns/pattern-token-rotation.md" <<'MD'
+cat > "${FABRIC}/corpus/patterns/pattern-token-rotation.md" <<'MD'
 ---
 type: pattern
 id: pattern-token-rotation
@@ -82,7 +82,7 @@ When a refresh flow issues new tokens, the previous token must be **rotated**
 is an auth-failure signal: revoke the family.
 MD
 
-cat > "${FABRIC}/anti-patterns/anti-pattern-shared-token-cache.md" <<'MD'
+cat > "${FABRIC}/corpus/anti-patterns/anti-pattern-shared-token-cache.md" <<'MD'
 ---
 type: anti-pattern
 id: anti-pattern-shared-token-cache
@@ -104,7 +104,7 @@ cross-session reuse; it only delays it.
 **Instead:** per-session token storage + rotation with reuse detection.
 MD
 
-cat > "${FABRIC}/projects/auth-service/decisions/decision-rotation-over-sessions.md" <<'MD'
+cat > "${FABRIC}/corpus/projects/auth-service/decisions/decision-rotation-over-sessions.md" <<'MD'
 ---
 type: decision
 id: decision-rotation-over-sessions
@@ -119,7 +119,7 @@ extension. Rationale: stateless horizontal scaling; reuse detection gives
 free compromise signaling. Session-extension proposals should be redirected.
 MD
 
-cat > "${FABRIC}/projects/auth-service/experience-events/ee-shared-cache-bleed.md" <<'MD'
+cat > "${FABRIC}/corpus/projects/auth-service/experience-events/ee-shared-cache-bleed.md" <<'MD'
 ---
 type: experience-event
 id: ee-shared-cache-bleed

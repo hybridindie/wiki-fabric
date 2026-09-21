@@ -33,10 +33,12 @@ except ImportError:
 
 sys.path.insert(0, str(Path(__file__).parent))
 from fabric_config import FABRIC_ROOT
+from fabric_config import CORPUS_ROOT
+from fabric_config import CORPUS_ROOT
 from fabric_config import get_config, get_ignores, is_ignored
 from wf_common import parse_frontmatter
 
-VAULT_ROOT = FABRIC_ROOT
+VAULT_ROOT = CORPUS_ROOT
 
 SKIP_PARTS = {".git", ".obsidian", ".opencode", "__pycache__", ".venv", "venv",
               "templates", "schemas", "evaluations", "raw", "traces", "system", "tests", "examples"}

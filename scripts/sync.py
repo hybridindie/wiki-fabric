@@ -28,8 +28,10 @@ from pathlib import Path
 from datetime import date, datetime
 sys.path.insert(0, str(Path(__file__).parent))
 from fabric_config import FABRIC_ROOT
+from fabric_config import CORPUS_ROOT
+from fabric_config import CORPUS_ROOT
 
-VAULT_ROOT = FABRIC_ROOT
+VAULT_ROOT = CORPUS_ROOT
 CONTENT_REMOTE_NAME = "corpus"
 SYNC_BRANCH = "main"
 

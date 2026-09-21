@@ -9,18 +9,18 @@ review_after: 2027-01-19
 
 10 current claim(s) support this topic.
 
-- A prediction is marked correct if price moved more than 2% in the predicted direction within 7 days." [1]
-- For each discovered opportunity the system tracks price at discovery, 1 hour, 24 hours, and 7 days later, plus the minimum and maximum price [2]
-- One-hour tracking updates are triggered 1-2 hours after discovery and update the price_1h_later field." [3]
-- Twenty-four-hour tracking updates are triggered 24-30 hours after discovery and update price_24h_later, min_price_24h, and max_price_24h." [4]
-- Seven-day tracking updates are triggered 7-8 days after discovery and update price_7d_later and was_correct." [5]
+- A prediction is deemed correct if the price moved more than 2% in the predicted direction within 7 days." [1]
+- Trade matching relies on both the symbol and a timestamp." [2]
+- The linking process between trades and analyses occurs only once to prevent duplicates." [3]
+- The OutcomeScheduler runs updates at configurable intervals, including every N hours." [4]
+- The system tracks key price metrics at specific intervals: discovery, 1 hour later, 24 hours later, and 7 days later." [5]
 
 ---
 
-[1] claim-alpaca-agents-alpaca-agents-docs-features-outcome-tracking-guide-md-000 — A prediction is marked correct if price moved more than 2% in the predicted dire
-[2] claim-alpaca-agents-alpaca-agents-docs-features-outcome-tracking-guide-md-002 — For each discovered opportunity the system tracks price at discovery, 1 hour, 24
-[3] claim-alpaca-agents-alpaca-agents-docs-features-outcome-tracking-guide-md-003 — One-hour tracking updates are triggered 1-2 hours after discovery and update the
-[4] claim-alpaca-agents-alpaca-agents-docs-features-outcome-tracking-guide-md-004 — Twenty-four-hour tracking updates are triggered 24-30 hours after discovery and
-[5] claim-alpaca-agents-alpaca-agents-docs-features-outcome-tracking-guide-md-005 — Seven-day tracking updates are triggered 7-8 days after discovery and update pri
+[1] claim-alpaca-agents-alpaca-agents-docs-features-outcome-tracking-guide-md-000 — A prediction is deemed correct if the price moved more than 2% in the predicted
+[2] claim-alpaca-agents-alpaca-agents-docs-features-outcome-tracking-guide-md-002 — Trade matching relies on both the symbol and a timestamp."
+[3] claim-alpaca-agents-alpaca-agents-docs-features-outcome-tracking-guide-md-003 — The linking process between trades and analyses occurs only once to prevent dupl
+[4] claim-alpaca-agents-alpaca-agents-docs-features-outcome-tracking-guide-md-004 — The OutcomeScheduler runs updates at configurable intervals, including every N h
+[5] claim-alpaca-agents-alpaca-agents-docs-features-outcome-tracking-guide-md-005 — The system tracks key price metrics at specific intervals: discovery, 1 hour lat
 
 _Generated from the evidence fabric on 2026-09-21. Citations link to claims in evidence/claims/._

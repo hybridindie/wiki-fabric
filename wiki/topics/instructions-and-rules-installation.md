@@ -9,14 +9,14 @@ review_after: 2027-01-19
 
 6 current claim(s) support this topic.
 
-- The one-command install clones the genesis repo into `~/.cache/instructions-and-rules` and renders a harness tailored to the current directo [1]
-- The interactive method clones the genesis repo with `--depth 1` into `~/.cache/instructions-and-rules` or pulls with `--ff-only` if already  [2]
-- The recommended one-command install fetches the genesis repo via curl from a public GitHub raw URL and renders a harness tailored to the cur [3]
+- The one-command install renders a harness tailored to the current directory via auto-detection." [1]
+- The interactive single prompt is used when you want a plan review and to be asked about things auto-detect can't infer (domain, compliance,  [2]
+- The post-bootstrap flow runs bootstrap.sh to render deterministically, then /harness-eval to evaluate stack-fit and trim rules, then /custom [3]
 
 ---
 
-[1] claim-instructions-and-rules-instructions-and-rules-install-md-003 — The one-command install clones the genesis repo into `~/.cache/instructions-and-
-[2] claim-instructions-and-rules-instructions-and-rules-install-md-006 — The interactive method clones the genesis repo with `--depth 1` into `~/.cache/i
-[3] claim-instructions-and-rules-instructions-and-rules-readme-md-002 — The recommended one-command install fetches the genesis repo via curl from a pub
+[1] claim-instructions-and-rules-instructions-and-rules-install-md-003 — The one-command install renders a harness tailored to the current directory via
+[2] claim-instructions-and-rules-instructions-and-rules-install-md-006 — The interactive single prompt is used when you want a plan review and to be aske
+[3] claim-instructions-and-rules-instructions-and-rules-readme-md-002 — The post-bootstrap flow runs bootstrap.sh to render deterministically, then /har
 
 _Generated from the evidence fabric on 2026-09-21. Citations link to claims in evidence/claims/._

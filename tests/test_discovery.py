@@ -58,8 +58,9 @@ class TestSiblingDiscovery(unittest.TestCase):
 
     def _discovered(self, cfg):
         import fabric_config as fc
-        with mock.patch.object(fc, "FABRIC_ROOT", self.fabric), \
-             mock.patch.object(fc, "_OVERLAY_CACHE", None):
+        with (mock.patch.object(fc, "FABRIC_ROOT", self.fabric),
+             mock.patch.object(fc, "CORPUS_ROOT", self.fabric),
+             mock.patch.object(fc, "_OVERLAY_CACHE", None)):
             return fc.get_discovered_repos(cfg)
 
     def test_discovers_sibling_overlays(self):
@@ -78,8 +79,9 @@ class TestSiblingDiscovery(unittest.TestCase):
         # Discovery lists all overlays; get_repo_config layers explicit on top
         import fabric_config as fc
         cfg = self._cfg(repos={"proj-a": {"path": "../elsewhere"}})
-        with mock.patch.object(fc, "FABRIC_ROOT", self.fabric), \
-             mock.patch.object(fc, "_OVERLAY_CACHE", None):
+        with (mock.patch.object(fc, "FABRIC_ROOT", self.fabric),
+             mock.patch.object(fc, "CORPUS_ROOT", self.fabric),
+             mock.patch.object(fc, "_OVERLAY_CACHE", None)):
             disc = fc.get_discovered_repos(cfg)
             self.assertIn("proj-a", disc)
             rc = fc.get_repo_config(cfg, "proj-a")
@@ -91,8 +93,9 @@ class TestSiblingDiscovery(unittest.TestCase):
     def test_get_repo_config_merges_routing(self):
         import fabric_config as fc
         cfg = self._cfg()
-        with mock.patch.object(fc, "FABRIC_ROOT", self.fabric), \
-             mock.patch.object(fc, "_OVERLAY_CACHE", None):
+        with (mock.patch.object(fc, "FABRIC_ROOT", self.fabric),
+             mock.patch.object(fc, "CORPUS_ROOT", self.fabric),
+             mock.patch.object(fc, "_OVERLAY_CACHE", None)):
             rc = fc.get_repo_config(cfg, "proj-a")
         self.assertEqual(rc["routing"]["extract"], "local")
         self.assertEqual(rc.get("extract"), "local")  # promoted for consumers
@@ -101,14 +104,16 @@ class TestSiblingDiscovery(unittest.TestCase):
     def test_explicit_stage_key_beats_overlay_routing(self):
         import fabric_config as fc
         cfg = self._cfg(repos={"proj-a": {"extract": "cloud"}})
-        with mock.patch.object(fc, "FABRIC_ROOT", self.fabric), \
-             mock.patch.object(fc, "_OVERLAY_CACHE", None):
+        with (mock.patch.object(fc, "FABRIC_ROOT", self.fabric),
+             mock.patch.object(fc, "CORPUS_ROOT", self.fabric),
+             mock.patch.object(fc, "_OVERLAY_CACHE", None)):
             rc = fc.get_repo_config(cfg, "proj-a")
         self.assertEqual(rc["extract"], "cloud")  # explicit wins
         self.assertEqual(rc["routing"]["extract"], "local")  # routing dict records overlay
         # stage route resolves to cloud compiler
-        with mock.patch.object(fc, "FABRIC_ROOT", self.fabric), \
-             mock.patch.object(fc, "_OVERLAY_CACHE", None):
+        with (mock.patch.object(fc, "FABRIC_ROOT", self.fabric),
+             mock.patch.object(fc, "CORPUS_ROOT", self.fabric),
+             mock.patch.object(fc, "_OVERLAY_CACHE", None)):
             route = fc.get_stage_route(cfg, "proj-a", "extract")
         self.assertEqual(route, "cloud-model" if False else route)  # checked below
 
@@ -116,8 +121,9 @@ class TestSiblingDiscovery(unittest.TestCase):
         import fabric_config as fc
         cfg = self._cfg()
         cfg["llm"] = {"compiler_model": "deepseek-v4.1-flash:cloud"}
-        with mock.patch.object(fc, "FABRIC_ROOT", self.fabric), \
-             mock.patch.object(fc, "_OVERLAY_CACHE", None):
+        with (mock.patch.object(fc, "FABRIC_ROOT", self.fabric),
+             mock.patch.object(fc, "CORPUS_ROOT", self.fabric),
+             mock.patch.object(fc, "_OVERLAY_CACHE", None)):
             from fabric_config import get_local_model
             self.assertEqual(fc.get_stage_route(cfg, "proj-a", "extract"), get_local_model(cfg))
             self.assertTrue(fc.is_local_route(cfg, "proj-a", "extract"))
@@ -127,8 +133,9 @@ class TestSiblingDiscovery(unittest.TestCase):
     def test_get_all_repo_names_includes_discovered(self):
         import fabric_config as fc
         cfg = self._cfg()
-        with mock.patch.object(fc, "FABRIC_ROOT", self.fabric), \
-             mock.patch.object(fc, "_OVERLAY_CACHE", None):
+        with (mock.patch.object(fc, "FABRIC_ROOT", self.fabric),
+             mock.patch.object(fc, "CORPUS_ROOT", self.fabric),
+             mock.patch.object(fc, "_OVERLAY_CACHE", None)):
             names = fc.get_all_repo_names(cfg)
         self.assertIn("proj-a", names)
         self.assertIn("fabric-self", names)
@@ -136,7 +143,8 @@ class TestSiblingDiscovery(unittest.TestCase):
     def test_discovery_cache_invalidates_on_overlay_mtime(self):
         import fabric_config as fc
         cfg = self._cfg()
-        with mock.patch.object(fc, "FABRIC_ROOT", self.fabric):
+        with (mock.patch.object(fc, "FABRIC_ROOT", self.fabric),
+             mock.patch.object(fc, "CORPUS_ROOT", self.fabric)):
             fc._OVERLAY_CACHE = None
             d1 = fc.get_discovered_repos(cfg)
             # touch proj-b's overlay with a routing block
@@ -166,10 +174,12 @@ class TestVaultRefresh(unittest.TestCase):
         import fabric_config as fc
         spec = _ilu.spec_from_file_location('vault_refresh', str(Path(__file__).parent.parent / 'scripts' / 'vault-refresh.py'))
         vault_refresh = _ilu.module_from_spec(spec); spec.loader.exec_module(vault_refresh)
-        with mock.patch.object(vault_refresh, "FABRIC_ROOT", self.fabric), \
-             mock.patch.object(fc, "FABRIC_ROOT", self.fabric), \
-             mock.patch.object(fc, "_OVERLAY_CACHE", None), \
-             mock.patch.object(vault_refresh, "get_all_repo_names", return_value=["proj-a", "proj-b"]):
+        with (mock.patch.object(vault_refresh, "FABRIC_ROOT", self.fabric),
+             mock.patch.object(vault_refresh, "CORPUS_ROOT", self.fabric),
+             mock.patch.object(fc, "FABRIC_ROOT", self.fabric),
+             mock.patch.object(fc, "CORPUS_ROOT", self.fabric),
+             mock.patch.object(fc, "_OVERLAY_CACHE", None),
+             mock.patch.object(vault_refresh, "get_all_repo_names", return_value=["proj-a", "proj-b"])):
             return vault_refresh.refresh(self.vault, *args)
 
     def test_refresh_creates_links_and_overlay_views(self):
@@ -202,10 +212,12 @@ class TestVaultRefresh(unittest.TestCase):
         spec = _ilu.spec_from_file_location('vault_refresh', str(Path(__file__).parent.parent / 'scripts' / 'vault-refresh.py'))
         vault_refresh = _ilu.module_from_spec(spec); spec.loader.exec_module(vault_refresh)
         import fabric_config as fc
-        with mock.patch.object(vault_refresh, "FABRIC_ROOT", self.fabric), \
-             mock.patch.object(fc, "FABRIC_ROOT", self.fabric), \
-             mock.patch.object(fc, "_OVERLAY_CACHE", None), \
-             mock.patch.object(vault_refresh, "get_all_repo_names", return_value=["proj-a"]):
+        with (mock.patch.object(vault_refresh, "FABRIC_ROOT", self.fabric),
+             mock.patch.object(vault_refresh, "CORPUS_ROOT", self.fabric),
+             mock.patch.object(fc, "FABRIC_ROOT", self.fabric),
+             mock.patch.object(fc, "CORPUS_ROOT", self.fabric),
+             mock.patch.object(fc, "_OVERLAY_CACHE", None),
+             mock.patch.object(vault_refresh, "get_all_repo_names", return_value=["proj-a"])):
             vault_refresh.refresh(self.vault, False, quiet=True)
         self.assertNotEqual(view.read_text(), stale)
         self.assertIn("extract: cloud", view.read_text())

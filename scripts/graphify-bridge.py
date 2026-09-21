@@ -28,10 +28,10 @@ from datetime import date
 from collections import defaultdict, Counter
 
 sys.path.insert(0, str(Path(__file__).parent))
-from fabric_config import get_config, FABRIC_ROOT, resolve_repo_path, get_all_repo_names, get_repo_graph_dir
+from fabric_config import get_config, FABRIC_ROOT, CORPUS_ROOT, resolve_repo_path, get_all_repo_names, get_repo_graph_dir
 from wf_common import parse_frontmatter
 
-VAULT_ROOT = FABRIC_ROOT
+VAULT_ROOT = CORPUS_ROOT
 GRAPHS_DIR = VAULT_ROOT / "global" / "graphs"
 CLAIMS_DIR = VAULT_ROOT / "evidence" / "claims"
 

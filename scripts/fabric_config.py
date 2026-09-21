@@ -70,6 +70,26 @@ def _resolve_fabric_root():
 
 
 FABRIC_ROOT = _resolve_fabric_root()
+
+# CORPUS_ROOT: where the knowledge content lives (evidence/, projects/,
+# patterns/, etc). Inside the fabric dir, under corpus/ — keeps the fabric
+# root clean (fabric.yaml at the root, content nested).
+# Backwards compat: if content dirs exist directly at FABRIC_ROOT (pre-corpus
+# layout), use FABRIC_ROOT as the corpus root.
+_CORPUS_SUBDIR = "corpus"
+
+def _resolve_corpus_root():
+    corpus = FABRIC_ROOT / _CORPUS_SUBDIR
+    # already nested?
+    if (corpus / "evidence").exists() or (corpus / "fabric.yaml").exists():
+        return corpus
+    # legacy: content at fabric root?
+    if (FABRIC_ROOT / "evidence").exists() or (FABRIC_ROOT / "projects").exists():
+        return FABRIC_ROOT
+    # fresh install: use corpus/
+    return corpus
+
+CORPUS_ROOT = _resolve_corpus_root()
 CONFIG_FILENAME = "fabric.yaml"
 
 # Local-model defaults (platform-split): MLX on Apple Silicon, GGUF elsewhere.
@@ -133,6 +153,7 @@ def is_integration_active(config, name):
 def _find_config_file():
     """Find fabric.yaml in fabric root or home directory."""
     candidates = [
+        FABRIC_ROOT / _CORPUS_SUBDIR / CONFIG_FILENAME,
         FABRIC_ROOT / CONFIG_FILENAME,
         Path.home() / ".wiki-fabric" / CONFIG_FILENAME,
         Path.home() / CONFIG_FILENAME,

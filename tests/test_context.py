@@ -167,6 +167,8 @@ class TestOutputs:
         src = (REPO / "scripts" / "context.py").read_text()
         (tmp_path / "scripts").mkdir()
         (tmp_path / "scripts" / "context.py").write_text(src)
+        # create corpus/ for CORPUS_ROOT resolution
+        (tmp_path / "corpus").mkdir(exist_ok=True)
         # context.py imports fabric_config + wf_common from its own dir
         for dep in ("fabric_config.py", "wf_common.py"):
             (tmp_path / "scripts" / dep).write_text(

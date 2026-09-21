@@ -233,7 +233,8 @@ EOF
 # === Helper: create directory structure ===
 ensure_directories() {
     local fabric_dir="$1"
-    cd "${fabric_dir}"
+    local corpus_dir="${fabric_dir}/corpus"
+    cd "${corpus_dir}" 2>/dev/null || { mkdir -p "${corpus_dir}"; cd "${corpus_dir}"; }
 
     local dirs=(
         evidence/raw

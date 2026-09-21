@@ -7,20 +7,16 @@ review_after: 2027-01-19
 
 # Multi-Target Handling in Godot
 
-4 current claim(s) support this topic.
+6 current claim(s) support this topic.
 
-- Multi-target handlers report one aggregate `ok` even when individual targets do not persist." [1]
-- `_batch_targets` descends into instanced children, so one aggregate `ok` never hides a lost target." [2]
-
-## ⚠️ Due for review (2)
-- `_batch_targets` uses `root.find_children(\"*\", type, true, false)`, which descends into instanced children, so every match needs its own v ⚠️⚠️[3]
-- `_batch_targets` uses `root.find_children(\"*\", type, true, false)`, which descends into instanced children, so every match needs its own v ⚠️⚠️[4]
+- The engine visits children of a skipped node's subtree, so a create whose parent is inside a non-editable instance is never saved, while an  [1]
+- `_persistent_target` walks parents to the edited scene root, mutations apply live with a warning-with-effect and `ok: true`, and carry `pers [2]
+- cmd_node_persistence gains probe_parent (create/instance/move — parent rule) and probe_parent_of (duplicate — resolves the parent of the nam [3]
 
 ---
 
-[1] claim-godot-mcp-git-issue-477-md-003 — Multi-target handlers report one aggregate `ok` even when individual targets do
-[2] claim-godot-mcp-git-pr-503-md-008 — `_batch_targets` descends into instanced children, so one aggregate `ok` never h
-[3] godot mcp git issue 477 md 006 — `_batch_targets` uses `root.find_children(\"*\", type, true, false)`, which desc ⚠️ review overdue 11d
-[4] godot mcp git issue 477 md 006 — `_batch_targets` uses `root.find_children(\"*\", type, true, false)`, which desc ⚠️ review overdue 11d
+[1] claim-godot-mcp-git-issue-477-md-003 — The engine visits children of a skipped node's subtree, so a create whose parent
+[2] claim-godot-mcp-git-issue-477-md-006 — `_persistent_target` walks parents to the edited scene root, mutations apply liv
+[3] claim-godot-mcp-git-pr-503-md-008 — cmd_node_persistence gains probe_parent (create/instance/move — parent rule) and
 
 _Generated from the evidence fabric on 2026-09-21. Citations link to claims in evidence/claims/._

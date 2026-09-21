@@ -75,6 +75,7 @@ class TestGraphifyGate:
         (fab / "scripts").mkdir()
         for mod in ("graphify-bridge.py", "fabric_config.py", "wf_common.py"):
             shutil.copy(REPO / "scripts" / mod, fab / "scripts" / mod)
+        (fab / "corpus").mkdir(exist_ok=True)
         (fab / "fabric.yaml").write_text(
             f"owner: t\n"
             f"integrations:\n  graphify:\n    enabled: {str(enabled).lower()}\n"
@@ -135,7 +136,7 @@ class TestGraphifyBridgeCommands:
             capture_output=True, text=True, cwd=str(fab),
         )
         assert out.returncode == 0, out.stderr
-        graphs = fab / "global" / "graphs"
+        graphs = fab / "corpus" / "global" / "graphs"
         assert (graphs / "fake-repo-graph.json").exists()
         assert (graphs / "fake-repo-graph.hash").exists()
 

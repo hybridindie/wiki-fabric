@@ -21,11 +21,13 @@ from collections import defaultdict
 
 sys.path.insert(0, str(Path(__file__).parent))
 from fabric_config import FABRIC_ROOT
+from fabric_config import CORPUS_ROOT
+from fabric_config import CORPUS_ROOT
 from extract_backends import llm_config
 from fabric_config import get_local_model
 from wf_common import parse_frontmatter, norm
 
-VAULT_ROOT = FABRIC_ROOT
+VAULT_ROOT = CORPUS_ROOT
 CLAIMS_DIR = VAULT_ROOT / "evidence" / "claims"
 CONCEPTS_BASE = VAULT_ROOT
 

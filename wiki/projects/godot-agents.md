@@ -8,7 +8,7 @@ review_after: 2027-03-20
 
 ## Current state
 
-109 verified claim(s) from 109 analyzed sources.
+96 verified claim(s) from 96 analyzed sources.
 
 ## Key findings
 
@@ -22,9 +22,9 @@ review_after: 2027-03-20
 - Run durability can be configured using `sqlite` or `postgres` backends to survive restarts, though the default is a non-persistent in-proces [8]
 - The client implements retry logic for transport failures using exponential backoff and a circuit breaker, but tool-level errors are determin [9]
 - Upon first contact, the system performs a deterministic structural scan to populate the `project_map`, and subsequent runs skip this scan." [10]
-- The knowledge fabric is accessible by default at a specific local path, but this location can be overridden." [11]
-- Running `wf context --task` compiles a scoped manifest of relevant information and decisions before a task begins, and this operation incurs [12]
-- For codebase or architecture questions, `wf query` provides evidence-backed answers with locators and also operates with zero token cost." [13]
-- The CLI prevents the re-ingestion of a source if its SHA256 hash has already been recorded, and it notifies the user of this action." [14]
-- Promotion of work is a human-gated process where the `wf` system proposes dossiers, but the final promotion decision rests with the user." [15]
+- All configuration must be done via environment variables, as there is no configuration file." [11]
+- The default transport mechanism for MCP is `stdio`." [12]
+- The default port for HTTP transport is 9090." [13]
+- Web search is disabled by default, requiring explicit opt-in to enable the retrieval band." [14]
+- The experimental fluid executor is disabled by default, requiring explicit opt-in to activate the fluid loop." [15]
 

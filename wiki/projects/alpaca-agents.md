@@ -8,23 +8,23 @@ review_after: 2027-03-20
 
 ## Current state
 
-711 verified claim(s) from 711 analyzed sources.
+467 verified claim(s) from 467 analyzed sources.
 
 ## Key findings
 
-- Alpaca Agents is a multi-agent AI trading system for Alpaca Markets that operates in paper trading mode only." [1]
-- The required environment variables for the project are OPENROUTER_API_KEY, ALPACA_API_KEY, and ALPACA_SECRET_KEY." [2]
-- The configuration source of truth is data/config/settings.yaml, which must always be loaded via load_config() from src.config.settings." [3]
-- All agents must mutate fields on the shared TradingState object rather than reassigning the whole object, as reassignment is the most common [4]
-- The module dependency direction is src/models/ → src/agents/ / src/tools/ / src/services/ → src/orchestration/ → src/workers/, with no rever [5]
-- src/services/ must not import from agents or orchestration, a constraint enforced by tests/unit/architecture/test_import_boundaries.py." [6]
-- The project's test coverage target is approximately 58–59% for the overall project and 70% or higher for new code." [7]
-- The Black formatter line length is set to 100 characters, not the default 88." [8]
-- The minimum patched versions to prevent LangGraph Checkpoint RCE are langgraph>=0.4.8 and langgraph-checkpoint-postgres>=2.1.2, and these fl [9]
-- No pull request is merged without a pr-agent review, which is enforced as a hard gate requiring the review to be received, CI to be green, p [10]
-- src/api/ must not import src/orchestration/ directly, with the only allowlisted exception being bridge.py for the pre-existing workflow stre [11]
-- Alpaca Agents is a multi-agent AI trading system for Alpaca Markets built on LangGraph." [12]
-- The system's current status is Production-Ready for Paper Trading." [13]
-- The agent pipeline flows from Research → Market Data → Technical and Sentiment into Risk → Portfolio → Execution." [14]
-- All agents mutate a shared TradingState object defined in src/models/state.py rather than reassigning the whole object." [15]
+- The system is a multi-agent AI trading system designed for Alpaca Markets paper trading." [1]
+- Three specific API keys are required to configure the environment." [2]
+- All agents must operate on a shared `TradingState` object by mutating its fields rather than reassigning the entire object." [3]
+- The module dependencies must flow unidirectionally from `src/models/` to `src/workers/`, with `src/services/` being restricted from importin [4]
+- CI runs unit tests using the command `uv run pytest tests/unit/` with specific flags to exclude slow, integration, and performance tests." [5]
+- The project requires approximately 58–59% coverage, with new code requiring 70%+ coverage." [6]
+- To ensure compliance with Spec §11.3, `langgraph` and `langgraph-checkpoint-postgres` must be at least versions 0.4.8 and 2.1.2, respectivel [7]
+- Inside `src/agents/` and `src/orchestration/`, analysis time must be read from `state.as_of_date` or an injected `as_of` value, never from ` [8]
+- The `src/api/` module must not directly import `src/orchestration/`, with `bridge.py` being the only allowed exception." [9]
+- Merging a Pull Request requires a review from the pr-agent, which serves as a hard gate." [10]
+- All agents mutate a shared TradingState object, requiring field mutation rather than full object reassignment." [11]
+- The system supports four agent patterns: ReAct, Direct, Hybrid, and Pure LLM." [12]
+- The Synthesizer debate is triggered when the system reaches 60–95% confidence." [13]
+- The maximum token budget per workflow is 50,000." [14]
+- The system issues a warning when the token usage reaches 40,000." [15]
 
