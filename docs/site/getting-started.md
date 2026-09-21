@@ -107,6 +107,7 @@ backend.
 # (see Configuration — or run `wf install --interactive` to be prompted)
 
 wf bootstrap /path/to/my-project      # connect a project (auto-discovered; --extract local for privacy)
+                                       # (hook installed automatically by bootstrap; --no-hook skips)
 wf capture my-project                 # pull docs from upstream repos → evidence/raw/
 wf ingest evidence/raw/my-project/docs/readme.md --extract-claims
 wf query "Why does my code batch writes?"
@@ -135,6 +136,7 @@ wf hook install --extract-claims   # doc-drift commits auto-capture + auto-inges
 | git | any recent version |
 | LLM endpoint | anything OpenAI-compatible — Ollama (`curl -fsSL https://ollama.com/install.sh \| sh`) is the zero-config default; see [Configuration](./configuration) for OpenAI/OpenRouter/etc. |
 | On-device models (optional) | `pip install -e ".[local]"` — GGUF anywhere, MLX on Apple Silicon |
+| **Git hooks** | **required for the freshness guarantee** — `wf hook install` per project (drift-gated: unchanged docs cost 0 tokens; LLM only with `--extract-claims`) |
 | Platform | macOS / Linux (Windows untested; git hooks are POSIX-verified only) |
 
 ## Agent harness support

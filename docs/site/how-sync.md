@@ -71,7 +71,9 @@ Putting the layers together — what guarantees a teammate's fabric reflects
 reality:
 
 1. **A commit changes docs** → the hook captures and compiles the drift
-   (minutes, automatically)
+   (minutes, automatically). `wf bootstrap` installs this hook
+   automatically (that's what makes it a **requirement**, not a chore) — layer 1 of the guarantee depends on it;
+   without it, drift waits for a manual capture.
 2. **A dependency updates its docs** → `wf capture` recomputes hashes;
    `SOURCE-DRIFT` lint errors name exactly which claims are affected
 3. **A refactor renames code** → graphify's AST diff flags code-referencing

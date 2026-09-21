@@ -314,9 +314,14 @@ rename and flags the affected claims as stale. Refresh re-ingests only the
 changed source, and the claim either updates or is superseded — with the change
 recorded in the change-set manifest, never silently rewritten.
 
-## 6. Hooks: The Loop Runs Itself (opt-in)
+## 6. Hooks: The Loop Runs Itself
 
-Modeled on graphify's git-hook system (marker-delimited, append-safe, detached): a post-commit hook captures doc drift and ingests it automatically.
+**Hooks are a requirement, not a garnish** — the freshness guarantee in
+[Staying in Sync](./how-sync) rests on them. Without a hook, doc drift only
+becomes fabric knowledge when someone remembers to run `wf capture`. `wf bootstrap` installs it automatically (capture-only, 0 tokens;
+`--no-hook` skips; `--hook-extract-claims` adds LLM compilation; `wf hook
+install` freshens projects bootstrapped before this default). Marker-delimited,
+append-safe, detached; modeled on graphify's git-hook system:
 
 ```mermaid
 flowchart TD

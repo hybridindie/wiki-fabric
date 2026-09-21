@@ -215,7 +215,7 @@ def main():
     parser.add_argument("--dossier", default=None, help="Stage route: local | cloud | model id (experience events)")
     parser.add_argument("--graph-dir", default=None, help="Per-repo graphify graph dir (default: integrations.graphify.graph_dir)")
     parser.add_argument("--init-git", action="store_true", help="Initialize git repo")
-    parser.add_argument("--hook", action="store_true", help="Install git post-commit hook (auto-capture+ingest on doc drift)")
+    parser.add_argument("--no-hook", action="store_true", help="Skip the git post-commit hook (default: installed, capture-only)")
     parser.add_argument("--hook-extract-claims", action="store_true", help="Hook also runs LLM claim extraction on drift")
     parser.add_argument("--non-interactive", action="store_true", help="Skip prompts, use defaults")
     args = parser.parse_args()
@@ -585,8 +585,12 @@ WIKI_LLM_MODEL={config["llm"]["model"]}
             except Exception as e:
                 print(f"  (routing write failed: {e})")
 
-    # 9. Git hook (opt-in): auto-capture+ingest on doc drift after each commit
-    if args.hook or args.hook_extract_claims:
+    # 9. Git hook (default on — the freshness guarantee depends on it):
+    # post-commit captures doc drift (0 tokens); --no-hook skips;
+    # --hook-extract-claims additionally compiles drift with the LLM.
+    if args.no_hook:
+        print("Hook install skipped (--no-hook) — doc drift will wait for manual capture.")
+    else:
         import subprocess as _sp
         hooks_py = find_fabric_root() / "scripts" / "hooks.py"
         hook_cmd = [_sp.sys.executable, str(hooks_py), "install"]

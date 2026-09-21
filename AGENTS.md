@@ -97,6 +97,9 @@ content; fresh clones carry `.gitkeep`ed skeletons of the content dirs).
 - **Templates + examples**: `templates/` (page scaffolds), `templates/examples/`
 - **Project overlay**: `.wiki-overlay.md` in each connected project root
   (per-project config — routing, identity; discovered by the fabric)
+- **Git hooks (required per project)**: `wf hook install` — post-commit
+  captures doc drift (sha256-gated), post-merge re-syncs; the freshness
+  guarantee depends on them
 - **Shared modules**: `scripts/fabric_config.py`, `scripts/extract_backends.py`,
   `scripts/local_llm.py`, `scripts/wf_common.py`, `scripts/eval_core.py`
   (see README Scripts Reference for the map)
