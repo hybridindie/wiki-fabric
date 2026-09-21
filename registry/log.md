@@ -539,3 +539,231 @@ Append-only timeline. One `## YYYY-MM-DD` heading per day with `* **<op> | <subj
 
 ## 2026-09-20
 * **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
+
+## 2026-09-21
+* **ingest | godot-agents-godot-agents-readme-md**
+- Ingested README.md (sha256 818df628d4e6...)
+- Extracted 7 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-godot-agents-godot-agents-readme-md
+
+## 2026-09-21
+* **ingest | godot-agents-godot-agents-claude-md**
+- Ingested CLAUDE.md (sha256 03c7dc26eb1c...)
+- Extracted 7 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-godot-agents-godot-agents-claude-md
+
+## 2026-09-21
+* **ingest | godot-agents-godot-agents-agents-md**
+- Ingested AGENTS.md (sha256 f52db4ae05c2...)
+- Extracted 10 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-godot-agents-godot-agents-agents-md
+
+## 2026-09-21
+* **ingest | godot-agents-godot-agents-pi-md**
+- Ingested PI.md (sha256 af2fb0b852d3...)
+- Extracted 6 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-godot-agents-godot-agents-pi-md
+
+## 2026-09-21
+* **ingest | godot-agents-godot-agents-docs-prd-md**
+- Ingested PRD.md (sha256 a6d7ca8f2a2e...)
+- Extracted 8 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-godot-agents-godot-agents-docs-prd-md
+
+## 2026-09-21
+* **ingest | godot-agents-godot-agents-docs-configuration-md**
+- Ingested configuration.md (sha256 ff3e6a1f7d2f...)
+- Extracted 8 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-godot-agents-godot-agents-docs-configuration-md
+
+## 2026-09-21
+* **ingest | godot-agents-godot-agents-docs-eval-dashboard-md**
+- Ingested dashboard.md (sha256 cc0227a13d6b...)
+- Extracted 7 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-godot-agents-godot-agents-docs-eval-dashboard-md
+
+## 2026-09-21
+* **ingest | godot-agents-godot-agents-docs-eval-gle-md**
+- Ingested gle.md (sha256 d9a6d9ad1803...)
+- Extracted 10 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-godot-agents-godot-agents-docs-eval-gle-md
+
+## 2026-09-21
+* **ingest | godot-agents-godot-agents-docs-eval-metrics-md**
+- Ingested metrics.md (sha256 bb2065fa8ef7...)
+- Extracted 10 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-godot-agents-godot-agents-docs-eval-metrics-md
+
+## 2026-09-21
+* **ingest | godot-agents-godot-agents-docs-eval-fluid-ab-runbook-md**
+- Ingested eval-fluid-ab-runbook.md (sha256 94cf4fe86296...)
+- Extracted 6 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-godot-agents-godot-agents-docs-eval-fluid-ab-runbook-md
+
+## 2026-09-21
+* **ingest | godot-agents-godot-agents-docs-eval-live-md**
+- Ingested eval-live.md (sha256 2fc7f352d3a5...)
+- Extracted 10 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-godot-agents-godot-agents-docs-eval-live-md
+
+## 2026-09-21
+* **ingest | godot-agents-godot-agents-docs-gle-calibration-md**
+- Ingested gle-calibration.md (sha256 a65b56560b3c...)
+- Extracted 7 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-godot-agents-godot-agents-docs-gle-calibration-md
+
+## 2026-09-21
+* **ingest | godot-agents-godot-agents-docs-observability-md**
+- Ingested observability.md (sha256 1d35b352a407...)
+- Extracted 7 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-godot-agents-godot-agents-docs-observability-md
+
+## 2026-09-21
+* **ingest | godot-agents-godot-agents-docs-setup-md**
+- Ingested setup.md (sha256 c5832e8a5f38...)
+- Extracted 6 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-godot-agents-godot-agents-docs-setup-md
+
+## 2026-09-21
+* **ingest | godot-agents-godot-agents-docs-configuration-md**
+- Ingested configuration.md (sha256 ff3e6a1f7d2f...)
+- Extracted 8 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-godot-agents-godot-agents-docs-configuration-md
+
+## 2026-09-21
+* **ingest | godot-agents-godot-agents-docs-configuration-md**
+- Ingested configuration.md (sha256 ff3e6a1f7d2f...)
+- Extracted 8 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-godot-agents-godot-agents-docs-configuration-md
+
+## 2026-09-21
+* **ingest | godot-agents-godot-agents-docs-observability-md**
+- Ingested observability.md (sha256 1d35b352a407...)
+- Extracted 7 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-godot-agents-godot-agents-docs-observability-md
+
+## 2026-09-21
+* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
+
+## 2026-09-21
+* **ingest | aperiodic-chats-2026-09-07-chat-help-me-configure-lsps-for-this-project-and-add-**
+- Ingested 2026-09-07-chat-help-me-configure-lsps-for-this-project-and-add-the-context7.md (sha256 760b08459a38...)
+- Extracted 14 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-aperiodic-chats-2026-09-07-chat-help-me-configure-lsps-for-this-project-and-add-
+
+## 2026-09-21
+* **ingest | aperiodic-chats-2026-09-06-chat-error-res-godot-world-preview-3d-gd-102-parse-er**
+- Ingested 2026-09-06-chat-error-res-godot-world-preview-3d-gd-102-parse-error-could-no.md (sha256 26726597982a...)
+- Extracted 11 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-aperiodic-chats-2026-09-06-chat-error-res-godot-world-preview-3d-gd-102-parse-er
+
+## 2026-09-21
+* **ingest | aperiodic-chats-2026-09-07-chat-research-task-no-code-changes-the-project-is-a-g**
+- Ingested 2026-09-07-chat-research-task-no-code-changes-the-project-is-a-godot-4-7-vox.md (sha256 18908b1537df...)
+- Extracted 12 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-aperiodic-chats-2026-09-07-chat-research-task-no-code-changes-the-project-is-a-g
+
+## 2026-09-21
+* **ingest | aperiodic-chats-2026-09-08-chat-let-s-look-at-what-the-next-group-of-issues-shou**
+- Ingested 2026-09-08-chat-let-s-look-at-what-the-next-group-of-issues-should-be-from-o.md (sha256 55fcb5e404b9...)
+- Extracted 11 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-aperiodic-chats-2026-09-08-chat-let-s-look-at-what-the-next-group-of-issues-shou
+
+## 2026-09-21
+* **ingest | aperiodic-chats-2026-09-07-chat-research-task-no-code-changes-project-godot-4-7-**
+- Ingested 2026-09-07-chat-research-task-no-code-changes-project-godot-4-7-voxel-terrai.md (sha256 e137501d8353...)
+- Extracted 12 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-aperiodic-chats-2026-09-07-chat-research-task-no-code-changes-project-godot-4-7-
+
+## 2026-09-21
+* **ingest | aperiodic-chats-2026-09-10-chat-what-is-the-next-item-we-should-work-on-md**
+- Ingested 2026-09-10-chat-what-is-the-next-item-we-should-work-on.md (sha256 61240aea1f96...)
+- Extracted 12 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-aperiodic-chats-2026-09-10-chat-what-is-the-next-item-we-should-work-on-md
+
+## 2026-09-21
+* **ingest | aperiodic-chats-2026-09-08-chat-research-task-web-based-no-code-changes-i-m-audi**
+- Ingested 2026-09-08-chat-research-task-web-based-no-code-changes-i-m-auditing-a-godot.md (sha256 0290c06bcabf...)
+- Extracted 12 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-aperiodic-chats-2026-09-08-chat-research-task-web-based-no-code-changes-i-m-audi
+
+## 2026-09-21
+* **ingest | aperiodic-chats-2026-09-07-chat-explore-the-godot-project-at-users-johnd-develop**
+- Ingested 2026-09-07-chat-explore-the-godot-project-at-users-johnd-development-aperiod.md (sha256 d3a51d0b372c...)
+- Extracted 12 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-aperiodic-chats-2026-09-07-chat-explore-the-godot-project-at-users-johnd-develop
+
+## 2026-09-21
+* **ingest | aperiodic-chats-2026-09-07-chat-the-chuncks-are-rendering-seperated-from-one-ano**
+- Ingested 2026-09-07-chat-the-chuncks-are-rendering-seperated-from-one-another-lets-se.md (sha256 3fdb1507f979...)
+- Extracted 12 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-aperiodic-chats-2026-09-07-chat-the-chuncks-are-rendering-seperated-from-one-ano
+
+## 2026-09-21
+* **ingest | aperiodic-chats-2026-09-08-chat-let-s-look-at-the-github-issues-and-prioritize-w**
+- Ingested 2026-09-08-chat-let-s-look-at-the-github-issues-and-prioritize-what-is-next.md (sha256 459af232739a...)
+- Extracted 12 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-aperiodic-chats-2026-09-08-chat-let-s-look-at-the-github-issues-and-prioritize-w
+
+## 2026-09-21
+* **ingest | aperiodic-chats-2026-09-10-chat-we-are-addressing-the-issues-with-spawning-insid**
+- Ingested 2026-09-10-chat-we-are-addressing-the-issues-with-spawning-inside-of-geometr.md (sha256 2389f9ff08c2...)
+- Extracted 12 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-aperiodic-chats-2026-09-10-chat-we-are-addressing-the-issues-with-spawning-insid
+
+## 2026-09-21
+* **ingest | aperiodic-chats-2026-09-12-chat-research-only-task-no-code-writing-no-file-chang**
+- Ingested 2026-09-12-chat-research-only-task-no-code-writing-no-file-changes-just-repo.md (sha256 856cc5776379...)
+- Extracted 12 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-aperiodic-chats-2026-09-12-chat-research-only-task-no-code-writing-no-file-chang
+
+## 2026-09-21
+* **ingest | aperiodic-chats-2026-09-12-chat-research-task-web-research-no-code-changes-topic**
+- Ingested 2026-09-12-chat-research-task-web-research-no-code-changes-topic-supporting-.md (sha256 8119d42d2f81...)
+- Extracted 12 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-aperiodic-chats-2026-09-12-chat-research-task-web-research-no-code-changes-topic
+
+## 2026-09-21
+* **ingest | aperiodic-chats-2026-09-12-chat-let-s-look-at-the-open-issues-and-prioritize-the**
+- Ingested 2026-09-12-chat-let-s-look-at-the-open-issues-and-prioritize-them-to-figure-.md (sha256 d9b9c0be0c9b...)
+- Extracted 12 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-aperiodic-chats-2026-09-12-chat-let-s-look-at-the-open-issues-and-prioritize-the
+
+## 2026-09-21
+* **ingest | aperiodic-chats-2026-09-12-chat-research-task-read-only-no-code-changes-in-users**
+- Ingested 2026-09-12-chat-research-task-read-only-no-code-changes-in-users-johnd-devel.md (sha256 70656785e5e4...)
+- Extracted 12 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-aperiodic-chats-2026-09-12-chat-research-task-read-only-no-code-changes-in-users
+
+## 2026-09-21
+* **ingest | aperiodic-chats-2026-09-12-chat-let-s-start-looking-at-other-voxel-shapes-to-sup**
+- Ingested 2026-09-12-chat-let-s-start-looking-at-other-voxel-shapes-to-support-just-re.md (sha256 948fc6344895...)
+- Extracted 12 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-aperiodic-chats-2026-09-12-chat-let-s-start-looking-at-other-voxel-shapes-to-sup
+
+## 2026-09-21
+* **ingest | aperiodic-chats-2026-09-11-chat-research-only-task-no-code-writing-i-need-a-surv**
+- Ingested 2026-09-11-chat-research-only-task-no-code-writing-i-need-a-survey-of-how-hi.md (sha256 7590df6762ed...)
+- Extracted 12 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-aperiodic-chats-2026-09-11-chat-research-only-task-no-code-writing-i-need-a-surv
+
+## 2026-09-21
+* **ingest | aperiodic-chats-2026-09-12-chat-web-research-task-no-code-changes-context-a-godo**
+- Ingested 2026-09-12-chat-web-research-task-no-code-changes-context-a-godot-voxel-engi.md (sha256 d82b9c8a28d7...)
+- Extracted 12 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-aperiodic-chats-2026-09-12-chat-web-research-task-no-code-changes-context-a-godo
+
+## 2026-09-21
+* **ingest | aperiodic-chats-2026-09-12-chat-web-research-task-no-code-changes-research-only-**
+- Ingested 2026-09-12-chat-web-research-task-no-code-changes-research-only-you-must-ret.md (sha256 0f6009d439be...)
+- Extracted 12 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-aperiodic-chats-2026-09-12-chat-web-research-task-no-code-changes-research-only-
+
+## 2026-09-21
+* **ingest | aperiodic-chats-2026-09-11-chat-when-previewing-the-game-no-additional-chunks-ar**
+- Ingested 2026-09-11-chat-when-previewing-the-game-no-additional-chunks-are-loading-in.md (sha256 82ec5fa1a97e...)
+- Extracted 12 claims
+- Change-set: /Users/johnd/Development/wiki-fabric/evidence/traces/change-sets/2026-09-21-aperiodic-chats-2026-09-11-chat-when-previewing-the-game-no-additional-chunks-ar
+
+## 2026-09-21
+* **okf-import | t1** — bundle ext-bundle: 1 concepts (quarantine 0), tiers {'unverified': 0, 'machine-confirmed': 0, 'human-reviewed': 1}
