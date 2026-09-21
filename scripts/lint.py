@@ -34,10 +34,10 @@ VALID_TYPES = {
      "decision", "experience-event", "pattern", "anti-pattern", "experiment",
      "change-set", "change-set-diff", "promotion-dossier", "ontology", "registry", "index", "log",
      "skill", "daily-note", "literature-note", "quick-capture",
-     "attested-computation",
+     "attested-computation", "wiki-article",
 }
 PATTERN_STATUSES = {"candidate", "recommended", "standard", "deprecated"}
-EXCLUDE_DIRS = {".git", ".obsidian", ".opencode", "__pycache__", ".pytest_cache", ".venv", "venv", "node_modules", "graphify-out", "docs/site"}
+EXCLUDE_DIRS = {".git", ".obsidian", ".opencode", "__pycache__", ".pytest_cache", ".venv", "venv", "node_modules", "graphify-out", "docs/site", "wiki"}
 EXCLUDE_DIR_PREFIXES = ("evidence/traces", "system/always-on")
 TEMPLATE_DIRS = {"global/templates", "schemas", "templates"}
 HUB_KINDS = {"ontology", "registry", "index", "log"}

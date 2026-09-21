@@ -33,6 +33,7 @@ FIXED_LINKS = [
     "domains",
     "evidence/claims",
     "evidence/source-summaries",
+    "wiki",
 ]
 
 OVERLAY_VIEW_NAME = "overlay.yml"

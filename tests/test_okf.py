@@ -210,7 +210,7 @@ title: Log
             ".git", ".venv", "__pycache__", ".okflint", ".pytest_cache",
             ".obsidian", ".opencode", "node_modules", "evidence", "projects",
             "patterns", "concepts", "anti-patterns", "syntheses", "domains",
-            "graphify-out", "registry"))
+            "graphify-out", "wiki", "registry"))
         (tmp_path / "registry").mkdir(exist_ok=True)
         (tmp_path / "registry" / "log.md").write_text(
             "---\ntype: log\ntitle: Log\n---\n\n# Log\n")

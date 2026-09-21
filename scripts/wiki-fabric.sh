@@ -904,6 +904,21 @@ case "${1:-help}" in
         fdir=$(find_fabric)
         run_script "${fdir}" "scripts/skill.py" "$@"
         ;;
+    export)
+        shift
+        fdir=$(find_fabric)
+        subcmd="${1:-wiki}"
+        shift 2>/dev/null || true
+        case "${subcmd}" in
+            wiki)
+                run_script "${fdir}" "scripts/export-wiki.py" "$@"
+                ;;
+            *)
+                err "Usage: ${SCRIPT_NAME} export wiki [--project <slug>] [--mode mechanical|llm|hybrid] [--dry-run]"
+                exit 1
+                ;;
+        esac
+        ;;
     review)
         shift
         fdir=$(find_fabric)
@@ -1012,6 +1027,7 @@ case "${1:-help}" in
         echo "                                    (--extract-claims: LLM runs on drift)"
         echo "  skill [--list] [<name>]           Print the procedure for a workflow (ingest, promote, ..."
         echo "                                    refresh) — universal across agent harnesses"
+        echo "  export wiki [--mode m|l|hybrid]   Generate the human-layer wiki (topics, projects, staleness)"
         echo "  review --check [--project <slug>] Staleness report: what's due, overdue, stale"
         echo "  review --verify <claim>           Re-verify a claim (rolls review_after forward)"
         echo "  review --auto-reverify            Mechanically re-verify all overdue (sha256-gated, 0 tokens)"
