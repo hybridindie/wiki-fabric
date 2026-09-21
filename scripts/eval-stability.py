@@ -150,7 +150,7 @@ def gate_rebuild_determinism(tmp, runs=3):
         # debug aid: first differing line
         import difflib
         for line in list(difflib.unified_diff(strip(idx1).split("\n"), strip(idx2).split("\n"), lineterm=""))[:12]:
-            print(f"    {line if (line := line) else ''}", file=sys.stderr)
+            print(f"    {line if (line := line) else ''}")
     return {"gate": "G2", "name": "rebuild determinism",
             "detail": "catalog.json identical across rebuilds",
             "passed": strip(idx1) == strip(idx2) and js1 == js2}
