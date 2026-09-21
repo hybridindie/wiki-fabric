@@ -42,6 +42,15 @@ def backend_for(model_id):
     return None
 
 
+def _resolve_gguf_dir(model_id):
+    """Find the directory containing .gguf files for a model id."""
+    p = Path(model_id).expanduser()
+    if p.is_dir(): return p
+    snap = find_local_model_path(model_id)
+    if snap is not None and snap.is_dir(): return snap
+    return None
+
+
 def _resolve_gguf_path(model_id):
     """Find a concrete .gguf file: local file, dir, or HF cache snapshot.
     Quantization preference is case-insensitive (Q4_K_M preferred)."""
@@ -94,16 +103,42 @@ def _load(model_id):
         except ImportError:
             raise RuntimeError("mlx-lm not installed (pip install mlx-lm)")
         return "mlx", load(model_id)
-    path = _resolve_gguf_path(model_id)
-    if path is None:
+    root = _resolve_gguf_dir(model_id)
+    if root is None:
+        raise RuntimeError(f"no .gguf files found for '{model_id}'")
+    import re as _re
+    from fabric_config import GGUF_QUANT_PREFERENCE
+    # try each root-level .gguf in quantization-preference order
+    candidates = sorted(root.glob("*.gguf")) if root.is_dir() else [root]
+    ordered = []
+    for rx in GGUF_QUANT_PREFERENCE:
+        hits = [f for f in candidates if _re.search(rx, f.name.lower())]
+        for h in hits:
+            if h not in ordered: ordered.append(h)
+    for f in candidates:
+        if f not in ordered: ordered.append(f)
+    if not ordered:
         raise RuntimeError(f"no .gguf file found for '{model_id}'")
+
     try:
         from llama_cpp import Llama
     except ImportError:
         raise RuntimeError("llama-cpp-python not installed (pip install llama-cpp-python)")
+
     n_ctx = int(os.environ.get("WIKI_LOCAL_N_CTX", "16384"))
-    llm = Llama(model_path=str(path), n_ctx=n_ctx, n_gpu_layers=-1, verbose=False)
-    return "gguf", llm
+    last_error = None
+    for path in ordered:
+        try:
+            llm = Llama(model_path=str(path), n_ctx=n_ctx, n_gpu_layers=-1, verbose=False)
+            print(f"  gguf: loaded {path.name}", file=sys.stderr)
+            return "gguf", llm
+        except (ValueError, RuntimeError) as e:
+            last_error = e
+            print(f"  gguf: {path.name} failed ({e}) — trying next", file=sys.stderr)
+    raise RuntimeError(
+        f"No GGUF variant of '{model_id}' could be loaded. Last error: {last_error}. "
+        f"Prism ternary models may require a llama.cpp build with prism quantization support, "
+        f"or use the MLX variant on macOS.")
 
 
 def _apply_template(prompt, tokenizer):

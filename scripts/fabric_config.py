@@ -442,7 +442,7 @@ def find_local_model_path(model_id):
 
 # Quantization preference when a GGUF repo ships multiple splits. Regexes
 # matched (case-insensitive) against root-level filenames, in order.
-GGUF_QUANT_PREFERENCE = [r"q4_k_m", r"q4_k_s", r"q4[^_]*_", r"q4"]
+GGUF_QUANT_PREFERENCE = [r"q4_k_m", r"q4_k_s", r"pq2_0", r"q4[^_]*_", r"q4", r"ptq1_0"]
 
 
 def gguf_preferred_file(model_id):
