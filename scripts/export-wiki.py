@@ -140,21 +140,32 @@ You have the following evidence:
 
 {evidence}
 
+Promoted patterns (load-bearing rules this project or its evidence contributed to):
+{patterns}
+
+Insight takeaways from the project's chat sessions:
+{insights}
+
 Related wiki articles (topics this project contributed to):
 {topic_refs}
 
-Write a 400-700 word project retrospective that:
-1. Opens with what the project is and its role in the ecosystem
-2. Groups findings into thematic ## sections (constraints discovered, patterns that emerged, decisions made)
-3. References the related topic articles by wikilink: [[<topic-slug>]] for mechanics
-4. Notes the current state (claims count, graph status)
-5. Excludes transient details (CI states, PR counts, review queue states)
-6. Uses plain engineering language
+Write a 500-900 word project retrospective that:
+1. Opens with what the project is, its role, and why it matters
+2. ## What was built — the mechanisms, the architecture, the tools
+3. ## Constraints discovered — the hard limits, API gaps, platform behaviors
+4. ## Patterns that emerged — how problems were solved, what worked
+5. ## Decisions made — the choices and their rationale
+6. ## Current state — claims count, graph status, what's still open
+7. Reference related topic articles by wikilink: [[<topic-slug>]] for mechanics
+8. Reference promoted patterns by wikilink: [[<pattern-slug>]] for load-bearing rules
+9. Every factual statement must trace to the evidence — never invent
+10. Excludes transient details (CI states, PR counts, review queue states)
+11. Uses plain engineering language
 
 Return ONLY the markdown article body (no YAML frontmatter).
 """
 
-def _llm_project_article(project, claims, topic_links, dry_run=False):
+def _llm_project_article(project, claims, topic_links, insight_takeaways, patterns, dry_run=False):
     """Generate a project retrospective using the compiler model."""
     from extract_backends import llm_config
     import openai, os
@@ -171,8 +182,11 @@ def _llm_project_article(project, claims, topic_links, dry_run=False):
     evidence_text = "\n".join(evidence_parts[:30])  # cap at 30 for context
 
     topic_refs = "\n".join(f"- [[{slug}]] {title}" for slug, title in topic_links)
+    insights_text = "\n".join(f"- {it[:120]}" for it in insight_takeaways) if insight_takeaways else "_(none)_"
     prompt = PROJECT_ARTICLE_PROMPT.format(
-        project=project, evidence=evidence_text, topic_refs=topic_refs)
+        project=project, evidence=evidence_text, topic_refs=topic_refs,
+        patterns="\n".join(f"- [[{ps}] {pt}" for ps, pt in patterns) if patterns else "_(none yet)_",
+        insights=insights_text)
     resp = client.chat.completions.create(
         model=cfg["model"], temperature=0.1, max_tokens=4096,
         messages=[{"role": "system", "content": "You write project retrospectives. Return ONLY valid markdown."},
@@ -348,7 +362,21 @@ def _generate_project_article(project, config, dry_run=False, mode=None):
                         title_m = re.search(r"^title: (.+)$", tf_text, re.MULTILINE)
                         topic_links.append((tf.stem, title_m.group(1) if title_m else tf.stem))
 
-            body = _llm_project_article(project, [cp for cp, st in current[:30]], topic_links, dry_run=dry_run)
+            # gather insight takeaways for this project
+            insight_takeaways = []
+            for ins_file in sorted((FABRIC_ROOT / "evidence" / "insights").glob("*.md")):
+                ins_text = ins_file.read_text(encoding="utf-8", errors="replace")
+                if project in ins_text:
+                    for line in ins_text.splitlines():
+                        if line.startswith("- **[") and "— " in line:
+                            insight_takeaways.append(line.strip("- ").strip("*").strip())
+            # gather promoted patterns
+            promoted = []
+            for pf in sorted(Path("patterns").glob("pattern-*.md")):
+                pt = re.search(r"^title: (.+)$", pf.read_text(), re.MULTILINE)
+                promoted.append((pf.stem, pt.group(1).strip() if pt else pf.stem))
+            body = _llm_project_article(project, [cp for cp, st in current[:30]], topic_links,
+                                        insight_takeaways[:15], promoted, dry_run=dry_run)
             if body:
                 lines = [
                     "---",
