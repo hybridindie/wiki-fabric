@@ -875,6 +875,21 @@ case "${1:-help}" in
         fdir=$(find_fabric)
         run_script "${fdir}" "scripts/skill.py" "$@"
         ;;
+    mine)
+        shift
+        fdir=$(find_fabric)
+        subcmd="${1:-chats}"
+        shift 2>/dev/null || true
+        case "${subcmd}" in
+            chats)
+                run_script "${fdir}" "scripts/mine-chats.py" "$@"
+                ;;
+            *)
+                err "Usage: ${SCRIPT_NAME} mine chats <project> [--since 90d] [--llm] [--dry-run]"
+                exit 1
+                ;;
+        esac
+        ;;
     models)
         shift
         fdir=$(find_fabric)
@@ -958,6 +973,8 @@ case "${1:-help}" in
         echo "                                    (--extract-claims: LLM runs on drift)"
         echo "  skill [--list] [<name>]           Print the procedure for a workflow (ingest, promote, ..."
         echo "                                    refresh) — universal across agent harnesses"
+        echo "  mine chats <project>              Distill captured chats into durable takeaways"
+        echo "                                    (patterns, anti-patterns, workflows; transients filtered)"
         echo "  harness {install|status}          Install always-on + procedures into detected agent"
         echo "                                    harnesses (--all|--only claude,copilot| --force)"
         echo "                                    (alias: claude — legacy always_on.py via 'claude legacy')"

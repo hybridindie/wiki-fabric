@@ -20,6 +20,14 @@ evidence. PRs/issues capture the why for shipped work; chats capture the why
 for everything else: debugging dead ends, rejected approaches, environment
 quirks. sha256 anti-loop means re-running is free.)
 
+Then `wf mine chats <slug> [--llm]` distills transcripts into **durable
+takeaways** — patterns (e.g. "red-check every regression test by confirming it
+fails against the pre-fix code"), anti-patterns, workflows, constraints —
+with explicit transient filtering (CI states, PR counts, "as of today"
+snapshots are excluded as low-value). Output lands in
+`evidence/insights/<project>/` for human review before anything enters the
+promotion pipeline.
+
 
 A project's docs change through normal development — a commit renames a
 feature, updates a README, deletes a doc that had claims pointing at it. The
