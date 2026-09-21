@@ -76,7 +76,14 @@ scripts/
 ├── query.py              0-token retrieval (lexical + graph expansion)
 ├── context.py            0-token task-manifest compiler
 ├── lint.py               deterministic contract enforcement (+ --okf floor)
-└── ...                   capture, hooks, sync, okf export/import, evals
+├── review.py              staleness scan + re-verify (the governance loop)
+├── export-wiki.py         human-layer wiki renderer (topics, projects, staleness)
+├── mine-chats.py          chat transcript distillation (durable takeaways)
+├── harnesses.py           multi-harness registry + installer (11 agent tools)
+├── capture-chat.py        agent chat session capture (opencode/claude)
+├── skill.py               universal skill loader (all harnesses)
+├── repos-migrate.py       config-per-project migration
+└── ...                    capture, hooks, sync, okf export/import, evals
 ```
 
 **Design rule:** every script runs standalone (`python3 scripts/x.py --help`);

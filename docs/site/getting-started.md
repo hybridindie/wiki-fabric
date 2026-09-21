@@ -94,6 +94,10 @@ wf status                            # fabric health + inventory
 python3 -m pytest tests/ -m "not live" -q   # fast test suite
 bash scripts/smoke-test.sh           # end-to-end CLI checks in a throwaway fabric
 wf lint                              # fabric self-lint (0-error gate)
+
+## PR review agent
+
+The repo carries a `pr-agent.toml` that configures [PR-Agent](https://github.com/Codium-ai/pr-agent) to review only Python and shell scripts. Once the app is installed on the repo, every PR gets a scored review targeting anti-loop guards, path resolution safety, actor conventions, staleness gates, and local model routing — the things that matter in this codebase.
 ```
 
 Tests marked `live` (run with plain `pytest tests/ -q`) exercise real on-device
@@ -113,6 +117,10 @@ wf capture chat my-project            # capture agent chat sessions → evidence
 wf ingest evidence/raw/my-project/docs/readme.md --extract-claims
 wf query "Why does my code batch writes?"
 wf log --project my-project --problem "..." --intervention "..." --outcomes "..."   # log an experience event: problem → what you did → measured outcome
+
+wf review --auto-reverify            # clear the mechanical review debt (0 tokens)
+wf export wiki                       # generate the human wiki (topics, projects, staleness)
+wf mine chats my-project             # distill chat transcripts into patterns/anti-patterns
 ```
 
 `wf bootstrap` writes `.wiki-overlay.md` into the project, creates its

@@ -98,6 +98,13 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 | `wf skill [--list] [<name>]` | Print the procedure for a workflow (`ingest`, `promote`, `refresh`) — universal across all agent harnesses |
 | `wf harness {install\|status} [--all\|--only k1,k2] [--force]` | Install always-on + skills into detected agent harnesses (11 supported; `wf claude` is the legacy alias) |
 | `wf models ensure [--model ID] [--yes]` | Check `llm.local_model` is cached; offer human-gated download (`--check` exits 0/1 without prompting) |
+| `wf review --check [--project <slug>]` | Staleness report: current, due for review, overdue, stale |
+| `wf review --verify <claim-id>` | Re-verify a claim (stamps last_verified, rolls review_after forward by tier) |
+| `wf review --auto-reverify` | Mechanically re-verify all overdue claims (sha256 + quote check, 0 tokens) |
+| `wf export wiki [--mode m\|llm\|hybrid] [--project <slug>]` | Generate the human-layer wiki: topic articles, project retrospectives, staleness dashboard |
+| `wf mine chats <project> [--llm] [--dry-run]` | Distill captured chat transcripts into durable takeaways (patterns, anti-patterns, workflows; transients filtered) |
+| `wf version` | Show wf version + CLI sync state (installed `~/.local/bin/wf` vs harness script) |
+| `wf repos migrate [--dry-run\|--apply\|--prune]` | Move per-repo routing from fabric.yaml into project overlays |
 | `wf lint [--okf] [--format json]` | Deterministic linter (full profile; `--okf` = OKF conformance floor; JSON for CI) |
 
 Environment: `WIKI_FABRIC_REPO` overrides the source repo URL.
@@ -125,6 +132,13 @@ Pipeline scripts (each runs standalone: `python3 scripts/<script>.py --help`):
 | `graphify-bridge.py` | Optional graphify integration (update/import/enrich/diff) | 0 tokens |
 | `bootstrap-project.py` | Connect new project to fabric | 0 tokens |
 | `ensure-local-model.py` | Check/download `llm.local_model` (`wf models ensure`) | 0 tokens |
+| `review.py` | Staleness scan + re-verify loop (`wf review`) | 0 tokens |
+| `export-wiki.py` | Human-layer wiki renderer (topics, projects, staleness dashboard) | 0–1 call per topic (llm mode) |
+| `mine-chats.py` | Distill chat transcripts into durable takeaways | 0 tokens (heuristic) or 1 call/session (llm) |
+| `harnesses.py` | Multi-harness registry + installer (11 agent tools) | 0 tokens |
+| `skill.py` | Universal skill loader (prints procedures, works on all harnesses) | 0 tokens |
+| `capture-chat.py` | Capture agent-harness chat sessions as chat-transcript evidence | 0 tokens |
+| `repos-migrate.py` | Move per-repo routing from fabric.yaml into project overlays | 0 tokens |
 | `bootstrap-fabric.sh` | One-time global install | 0 tokens |
 | `apply-changeset.sh` | Apply a change-set (the change-set apply script) | 0 tokens |
 

@@ -113,6 +113,9 @@ wf log --project my-project --problem "..." --intervention "..." --outcomes "...
 # Automate the refresh loop (opt-in, per project):
 wf hook install --extract-claims       # doc-drift commits auto-capture + auto-ingest
 wf harness install                     # configure every detected agent harness (Claude Code, Codex, Copilot, ...)
+wf review --auto-reverify              # clear the mechanical review debt (0 tokens)
+wf export wiki                         # generate the human wiki (topics, projects, staleness)
+wf mine chats my-project               # distill chat transcripts into patterns/anti-patterns
 ```
 
 The one-liner installs **uv** if missing, creates a `.venv` inside the fabric,
