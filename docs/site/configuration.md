@@ -340,8 +340,11 @@ integrations:
 ## Domains
 
 Domain taxonomy drives classification and context scoping. Start with the
-defaults, grow with `python3 scripts/cmd/propose-domains.py` (suggests new domains
-from evidence signals):
+defaults. `python3 scripts/cmd/propose-domains.py` discovers new domains from
+evidence signals and writes them as **pending-review proposal dossiers**
+(`registry/domain-proposals/`); merge an approved one into the ontology with
+`python3 scripts/cmd/promote-domains.py --apply <dossier>`. `wf gate` surfaces
+pending proposals at session start:
 
 ```yaml
 domains:

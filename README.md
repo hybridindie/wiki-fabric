@@ -148,7 +148,7 @@ Two kinds of tree live here: the **harness** (tooling, shipped in this repo) and
 |------|------|-----------|
 | `README.md` `AGENTS.md` `CONTRIBUTING.md` `LICENSE` `index.md` | harness | entry points (index.md is the OKF root index) |
 | `pyproject.toml` `requirements.txt` `okf-base.yaml` | harness | Python packaging, deps, okflint profile |
-| `scripts/` | harness | the pipeline: ingest, query, context, lint, promote, sync, hooks |
+| `scripts/` | harness | the pipeline — `cmd/` (ingest, query, context, lint, promote, gate), `lib/` (shared), `eval/`, `harness/` |
 | `tests/` | harness | 220+ unit tests (`-m "not live"` for fast suite) |
 | `docs/site/` | harness | this documentation (VitePress, deployed to Pages) |
 | `system/` | harness | agent-facing assets: `skills/` (ingest, promote), `always-on/`, `opencode/plugins/` |
@@ -174,7 +174,7 @@ live in the **fabric dir** — `~/.local/share/wiki-fabric/` by default
 |------|------|-----------|
 | `README.md` `AGENTS.md` `CONTRIBUTING.md` `LICENSE` `index.md` | harness | entry points (index.md is the OKF root index) |
 | `pyproject.toml` `requirements.txt` `okf-base.yaml` | harness | Python packaging, deps, okflint profile |
-| `scripts/` | harness | the pipeline: ingest, query, context, lint, promote, sync, hooks |
+| `scripts/` | harness | the pipeline — `cmd/` (ingest, query, context, lint, promote, gate), `lib/` (shared), `eval/`, `harness/` |
 | `tests/` | harness | 220+ unit tests (`-m "not live"` for fast suite) |
 | `docs/site/` | harness | this documentation (VitePress, deployed to Pages) |
 | `system/` | harness | agent-facing assets: `skills/` (ingest, promote), `always-on/`, `opencode/plugins/` |

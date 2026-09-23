@@ -101,6 +101,8 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 | `wf review --check [--project <slug>]` | Staleness report: current, due for review, overdue, stale |
 | `wf review --verify <claim-id>` | Re-verify a claim (stamps last_verified, rolls review_after forward by tier) |
 | `wf review --auto-reverify` | Mechanically re-verify all overdue claims (sha256 + quote check, 0 tokens) |
+| `wf gate [--quiet\|--json\|--write-manifest]` | Aggregate every pending human decision (overdue/stale claims, promotion dossiers, domain proposals) into one report. Exit 1 when anything is actionable. `--write-manifest` persists `registry/pending-gate.md` for the AI harness to read at session start. |
+| `wf promote-domains {list\|--apply <dossier>}` | Human-gated merge of an approved domain proposal into `domains/ontology.md` |
 | `wf export wiki [--mode m\|llm\|hybrid] [--project <slug>]` | Generate the human-layer wiki: topic articles, project retrospectives, staleness dashboard. Writes OpenWiki-style pages (SUMMARY lead, Key Takeaways, Sources backtrace, provenance stamp), validates/repairs Mermaid diagrams, and emits the citation graph (`registry/wiki-graph.json`). Browse the [[wikilinks]] in Obsidian's native Graph view. |
 | `wf mine chats <project> [--llm] [--dry-run]` | Distill captured chat transcripts into durable takeaways (patterns, anti-patterns, workflows; transients filtered) |
 | `wf version` | Show wf version + CLI sync state (installed `~/.local/bin/wf` vs harness script) |
@@ -113,44 +115,62 @@ Environment: `WIKI_FABRIC_REPO` overrides the source repo URL.
 
 ## Scripts Reference
 
-Pipeline scripts (each runs standalone: `python3 scripts/<script>.py --help`):
+Scripts live in four subdirectories of `scripts/` — `cmd/` (entrypoints), `eval/`,
+`harness/`, and shared `lib/`. Each runs standalone: `python3 scripts/cmd/<name>.py --help`.
+
+### `cmd/` — CLI commands
 
 | Script | Purpose | LLM Cost |
 |--------|---------|----------|
+| `capture.py` | Capture upstream repo docs → `evidence/raw/` | 0 |
+| `capture-git.py` | Capture git history (PR/issue threads, commits) | 0 |
+| `capture-chat.py` | Capture agent-harness chat sessions as chat-transcript evidence | 0 |
 | `ingest.py` | Source → source record → claims (LLM extraction) | 1 call per source |
 | `query.py` | Question → evidence-backed answer | 0 tokens (lexical + graph) |
-| `context.py` | Task → scoped context manifest with reasons | 0 tokens (deterministic) |
-| `lint.py` | Deterministic checks (incl. `--okf` floor, `llm.local_model` validation) | 0 tokens |
-| `eval.py` | Golden-corpus evaluation | 1 call per fixture |
-| `synthesize.py` | Claims → concept pages (cloud or on-device route) | 1 call per concept |
-| `log-experience.py` | Capture experience event | 0 tokens |
-| `mine-promotions.py` | Cluster experience events → dossiers (honors `dossier` route) | 0 tokens |
-| `promote.py` | Manage promotion dossiers | 0 tokens |
-| `rebuild-index.py` | Rebuild registry index from files | 0 tokens |
-| `propose-domains.py` | Discover new domains from evidence | 0 tokens |
-| `build-entity-index.py` | AST entity index from source repos | 0 tokens |
-| `graphify-bridge.py` | Optional graphify integration (update/import/enrich/diff) | 0 tokens |
-| `bootstrap-project.py` | Connect new project to fabric | 0 tokens |
-| `ensure-local-model.py` | Check/download `llm.local_model` (`wf models ensure`) | 0 tokens |
-| `review.py` | Staleness scan + re-verify loop (`wf review`) | 0 tokens |
-| `export-wiki.py` | Human-layer wiki renderer (topics, projects, staleness dashboard) | 0–1 call per topic (llm mode) |
-| `mine-chats.py` | Distill chat transcripts into durable takeaways | 0 tokens (heuristic) or 1 call/session (llm) |
-| `harnesses.py` | Multi-harness registry + installer (11 agent tools) | 0 tokens |
-| `skill.py` | Universal skill loader (prints procedures, works on all harnesses) | 0 tokens |
-| `capture-chat.py` | Capture agent-harness chat sessions as chat-transcript evidence | 0 tokens |
-| `repos-migrate.py` | Move per-repo routing from fabric.yaml into project overlays | 0 tokens |
-| `bootstrap-fabric.sh` | One-time global install | 0 tokens |
-| `apply-changeset.sh` | Apply a change-set (the change-set apply script) | 0 tokens |
+| `context.py` | Task → scoped context manifest with reasons | 0 tokens |
+| `lint.py` | Deterministic checks (incl. `--okf` floor, `llm.local_model`) | 0 |
+| `synthesize.py` | Claims → concept pages (cloud or on-device route) | 1 per concept |
+| `log-experience.py` | Capture experience event | 0 |
+| `mine-promotions.py` | Cluster experience events → dossiers | 0 |
+| `promote.py` | Manage pattern promotion dossiers | 0 |
+| `propose-domains.py` | Discover + propose new domains (pending-review dossiers) | 0 |
+| `promote-domains.py` | Human-gated merge of a proposed domain into the ontology | 0 |
+| `gate.py` | Aggregate pending HITL decisions (`wf gate`) | 0 |
+| `rebuild-index.py` | Rebuild `registry/catalog.json` from files | 0 |
+| `build-entity-index.py` | AST entity index from source repos | 0 |
+| `bootstrap-project.py` | Connect a new project to the fabric | 0 |
+| `ensure-local-model.py` | Check/download `llm.local_model` (`wf models ensure`) | 0 |
+| `review.py` | Staleness scan + re-verify loop (`wf review`) | 0 |
+| `export-wiki.py` | Human-layer wiki renderer (topics, projects, staleness) | 0–1 per topic |
+| `mine-chats.py` | Distill chat transcripts into durable takeaways | 0 or 1/session |
+| `repos-migrate.py` | Move per-repo routing from fabric.yaml into overlays | 0 |
+| `okf_export.py` / `okf_import.py` | OKF bundle export / import (`wf okf`) | 0 |
 
-Shared modules (imported by the scripts above; not entry points):
+### `harness/` — agent-integration
+
+| Script | Purpose | LLM Cost |
+|--------|---------|----------|
+| `harnesses.py` | Multi-harness registry + installer (11 agent tools) | 0 |
+| `skill.py` | Universal skill loader (prints procedures) | 0 |
+| `hooks.py` | Git post-commit/post-merge capture+ingest hooks | 0 |
+| `always_on.py` | Legacy always-on installer (superseded by `wf harness install`) | 0 |
+| `graphify-bridge.py` | Optional graphify integration (update/import/enrich/diff) | 0 |
+
+### `eval/` — evaluation family
+
+`eval.py`, `eval-behavior.py`, `eval-stability.py`, `eval-pr-replay.py`, `eval-real-repo.py` — golden corpus, behavior, stability, PR-replay, and real-repo evaluations.
+
+### `lib/` — shared modules (imported, not entrypoints)
 
 | Module | Purpose |
 |--------|---------|
-| `fabric_config.py` | fabric.yaml loading (memoized), stage routing, actor conventions, local-model resolution/download |
-| `extract_backends.py` | Claim-extraction layer: prompt building, 4 LLM backends (OpenAI-compatible/Anthropic/opencode/on-device), JSON repair, locator verification |
-| `local_llm.py` | On-device generation: backend dispatch (GGUF via llama-cpp, MLX via mlx-lm), serialized model cache |
-| `wf_common.py` | Shared helpers: `parse_frontmatter`, `norm`, `slugify`, hashing, timestamps |
-| `eval_core.py` | Eval scoring primitives: `concept_match`, `jaccard`, `fuzzy_coverage`, `tokens` |
+| `fabric_config.py` | fabric.yaml loading, stage routing, actor conventions, local model |
+| `extract_backends.py` | Claim-extraction layer: prompt building, 4 LLM backends, JSON repair |
+| `local_llm.py` | On-device generation (GGUF/MLX), serialized model cache |
+| `wf_common.py` | Shared helpers: `parse_frontmatter`, `norm`, `slugify`, hashing |
+| `eval_core.py` | Eval scoring primitives: `concept_match`, `jaccard`, `fuzzy_coverage` |
+
+Shell scripts stay at `scripts/` root: `wiki-fabric.sh`, `demo.sh`, `smoke-test.sh`, `setup-vault.sh`, `apply-changeset.sh`.
 
 ---
 
