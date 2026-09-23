@@ -73,7 +73,7 @@ done
 pass "all $(ls "${FABRIC}"/scripts/*.sh | wc -l | tr -d ' ') shell scripts parse"
 
 # 4. Lint is clean on the harness itself
-"${PY}" "${FABRIC}/scripts/lint.py" . 2>&1 | head -5 || fail "lint (expected 0 errors)"
+"${PY}" "${FABRIC}/scripts/cmd/lint.py" . 2>&1 | head -5 || fail "lint (expected 0 errors)"
 pass "lint clean"
 
 # 5. Capture fixture source (dry run reports, no writes)
@@ -86,33 +86,33 @@ MD
 pass "fixture created"
 
 # 6. ingest --changed (dry run) reports the fixture
-out="$("${PY}" "${FABRIC}/scripts/ingest.py" --changed smoke-project --dry-run 2>&1)"
+out="$("${PY}" "${FABRIC}/scripts/cmd/ingest.py" --changed smoke-project --dry-run 2>&1)"
 echo "${out}" | grep -q "sample.md" || fail "ingest --changed (dry run) did not see fixture"
 pass "ingest --changed detects fixture"
 
 # 7. ingest --changed ingests, and is idempotent on second run
-"${PY}" "${FABRIC}/scripts/ingest.py" --changed smoke-project >/dev/null 2>&1 || fail "ingest --changed run"
+"${PY}" "${FABRIC}/scripts/cmd/ingest.py" --changed smoke-project >/dev/null 2>&1 || fail "ingest --changed run"
 [[ -f "evidence/sources/src-smoke-project-sample-md.md" ]] || fail "source record not created"
 [[ -f "evidence/source-summaries/sum-smoke-project-sample-md.md" ]] || fail "source summary not created"
 pass "ingest creates source record + summary"
 
-out="$("${PY}" "${FABRIC}/scripts/ingest.py" --changed smoke-project 2>&1)"
+out="$("${PY}" "${FABRIC}/scripts/cmd/ingest.py" --changed smoke-project 2>&1)"
 echo "${out}" | grep -q "nothing to ingest" || fail "ingest --changed not idempotent: ${out}"
 pass "ingest --changed idempotent (anti-loop)"
 
 # 8. rebuild-index runs and index is stable (idempotent)
-"${PY}" "${FABRIC}/scripts/rebuild-index.py" >/dev/null 2>&1 || fail "rebuild-index"
+"${PY}" "${FABRIC}/scripts/cmd/rebuild-index.py" >/dev/null 2>&1 || fail "rebuild-index"
 cp "${FABRIC}/registry/catalog.json" /tmp/wf-idx-1.json
-"${PY}" "${FABRIC}/scripts/rebuild-index.py" >/dev/null 2>&1
+"${PY}" "${FABRIC}/scripts/cmd/rebuild-index.py" >/dev/null 2>&1
 diff <(grep -v 'generated' /tmp/wf-idx-1.json) <(grep -v 'generated' "${FABRIC}/registry/catalog.json") >/dev/null || fail "rebuild-index not idempotent"
 pass "rebuild-index idempotent"
 
 # 9. Lint still clean after ingest artifacts
-"${PY}" "${FABRIC}/scripts/lint.py" . >/dev/null 2>&1 || fail "lint after ingest"
+"${PY}" "${FABRIC}/scripts/cmd/lint.py" . >/dev/null 2>&1 || fail "lint after ingest"
 pass "lint clean after ingest"
 
 # 9b. Lint JSON report is valid + registry/catalog.json is machine-readable
-"${PY}" "${FABRIC}/scripts/lint.py" . --format json | "${PY}" -m json.tool >/dev/null 2>&1 || fail "lint --format json invalid"
+"${PY}" "${FABRIC}/scripts/cmd/lint.py" . --format json | "${PY}" -m json.tool >/dev/null 2>&1 || fail "lint --format json invalid"
 pass "lint --format json valid"
 "${PY}" -c "import json; d=json.load(open('registry/catalog.json')); assert 'pages' in d and 'counts' in d" 2>/dev/null || fail "registry/catalog.json invalid"
 pass "registry/catalog.json valid"
@@ -122,29 +122,29 @@ grep -q "ingest | smoke-project" registry/log.md || fail "registry/log.md not ap
 pass "registry/log.md appended"
 
 # 11. capture-git local repo path (uses this repo's own git history as source)
-out="$("${PY}" "${FABRIC}/scripts/capture-git.py" smoke-project --repo "${FABRIC}" --since 1y --limit 5 --dry-run 2>&1)"
+out="$("${PY}" "${FABRIC}/scripts/cmd/capture-git.py" smoke-project --repo "${FABRIC}" --since 1y --limit 5 --dry-run 2>&1)"
 echo "${out}" | grep -qE "captured|Capture summary" || fail "capture-git local dry-run: ${out}"
 pass "capture-git local repo path"
 
 # 12. query runs without crashing (0-token retrieval path)
-"${PY}" "${FABRIC}/scripts/query.py" "smoke test question" >/dev/null 2>&1 || fail "query run"
+"${PY}" "${FABRIC}/scripts/cmd/query.py" "smoke test question" >/dev/null 2>&1 || fail "query run"
 pass "query executes"
 
 # 13. mine-promotions dry-run (0 tokens)
-"${PY}" "${FABRIC}/scripts/mine-promotions.py" --dry-run >/dev/null 2>&1 || fail "mine-promotions --dry-run"
+"${PY}" "${FABRIC}/scripts/cmd/mine-promotions.py" --dry-run >/dev/null 2>&1 || fail "mine-promotions --dry-run"
 pass "mine-promotions dry-run"
 
 # 14. context manifest compiles (markdown) and valid JSON output
-"${PY}" "${FABRIC}/scripts/context.py" --task "smoke test task" | grep -q "## Precedence" || fail "context markdown manifest"
-"${PY}" "${FABRIC}/scripts/context.py" --task "smoke test task" --format json | "${PY}" -m json.tool >/dev/null 2>&1 || fail "context --format json"
+"${PY}" "${FABRIC}/scripts/cmd/context.py" --task "smoke test task" | grep -q "## Precedence" || fail "context markdown manifest"
+"${PY}" "${FABRIC}/scripts/cmd/context.py" --task "smoke test task" --format json | "${PY}" -m json.tool >/dev/null 2>&1 || fail "context --format json"
 pass "context manifest compiles (md + json)"
 
 # 15. behavior evaluation passes (0 tokens, manifest compliance)
-"${PY}" "${FABRIC}/scripts/eval-behavior.py" >/dev/null 2>&1 || fail "behavior eval"
+"${PY}" "${FABRIC}/scripts/eval/eval-behavior.py" >/dev/null 2>&1 || fail "behavior eval"
 pass "behavior eval (4 fixtures)"
 
 # 16. stability eval (deterministic gates only)
-"${PY}" "${FABRIC}/scripts/eval-stability.py" --skip-llm >/dev/null 2>&1 || fail "stability eval"
+"${PY}" "${FABRIC}/scripts/eval/eval-stability.py" --skip-llm >/dev/null 2>&1 || fail "stability eval"
 pass "stability gates (G1/G2 determinism)"
 
 echo ""

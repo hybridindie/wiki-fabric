@@ -23,14 +23,14 @@ requires the human gate.
 
 ```bash
 # Dry-run the clustering (0 tokens — shows candidate clusters)
-python3 scripts/mine-promotions.py --dry-run
+python3 scripts/cmd/mine-promotions.py --dry-run
 
 # Generate dossiers for confirmed clusters
-python3 scripts/mine-promotions.py
+python3 scripts/cmd/mine-promotions.py
 
 # List dossiers, then promote after human review
-python3 scripts/promote.py --list
-python3 scripts/promote.py --promote <dossier-file>.md
+python3 scripts/cmd/promote.py --list
+python3 scripts/cmd/promote.py --promote <dossier-file>.md
 ```
 
 ## Procedure
@@ -72,7 +72,7 @@ Only the user (or an explicitly governed agent) sets `status: recommended`/`stan
 ### 5. Promote
 On approval:
 ```bash
-python3 scripts/promote.py --promote <dossier-file>.md
+python3 scripts/cmd/promote.py --promote <dossier-file>.md
 wf lint
 ```
 This writes `patterns/pattern-<slug>.md` (or `anti-patterns/`, `skills/`) with

@@ -20,13 +20,13 @@ def _load_module(name, path):
     return mod
 
 
-eb = _load_module("eval_behavior", REPO / "scripts" / "eval-behavior.py")
+eb = _load_module("eval_behavior", REPO / "scripts" / "eval/eval-behavior.py")
 
 
 class TestRunner:
     def test_all_fixtures_pass_zero_llm(self):
         out = subprocess.run(
-            [sys.executable, str(REPO / "scripts" / "eval-behavior.py")],
+            [sys.executable, str(REPO / "scripts" / "eval/eval-behavior.py")],
             capture_output=True, text=True, timeout=180,
         )
         assert out.returncode == 0, f"eval failed:\n{out.stdout}\n{out.stderr}"
@@ -35,7 +35,7 @@ class TestRunner:
     def test_json_report_metrics(self):
         import json
         out = subprocess.run(
-            [sys.executable, str(REPO / "scripts" / "eval-behavior.py"), "--json"],
+            [sys.executable, str(REPO / "scripts" / "eval/eval-behavior.py"), "--json"],
             capture_output=True, text=True, timeout=180,
         )
         data = json.loads(out.stdout)
@@ -47,7 +47,7 @@ class TestRunner:
 
     def test_be1_delivers_banned_knowledge(self):
         out = subprocess.run(
-            [sys.executable, str(REPO / "scripts" / "eval-behavior.py"), "--json"],
+            [sys.executable, str(REPO / "scripts" / "eval/eval-behavior.py"), "--json"],
             capture_output=True, text=True, timeout=180,
         )
         data = json.loads(out.stdout)
@@ -58,7 +58,7 @@ class TestRunner:
 
     def test_be3_stale_pattern_excluded(self):
         out = subprocess.run(
-            [sys.executable, str(REPO / "scripts" / "eval-behavior.py"), "--json"],
+            [sys.executable, str(REPO / "scripts" / "eval/eval-behavior.py"), "--json"],
             capture_output=True, text=True, timeout=180,
         )
         data = json.loads(out.stdout)

@@ -62,9 +62,10 @@ Explicit `repos:` entries in fabric.yaml still exist for exceptions (a repo
 that isn't a sibling, or routing that must override the overlay) and always
 win over discovered values.
 
-The vault mirrors the relationship: symlinks to the fabric's content plus a
-generated `projects/<slug>/overlay.yml` view per project, refreshed on every
-bootstrap and auditable with `wf vault --check`.
+The vault is the utility's standalone **output**, not a mirror: generated wiki
+content lands there (`wf export wiki`), and it never copies or symlinks the
+corpus in. A machine can have multiple vaults by pointing `vault.path` at
+different targets, and the vault's freshness is auditable with `wf vault --check`.
 
 ## The corpus: the fabric's shareable half
 

@@ -16,9 +16,9 @@ verbatim quotes) before it's trusted to write canonical evidence.
 receives the context manifest, does it make a better decision?
 
 ```bash
-python3 scripts/eval-behavior.py          # zero-LLM: manifest-level compliance (CI)
-python3 scripts/eval-behavior.py --llm    # probe a real model + score its answer
-python3 scripts/eval-behavior.py --record # append metrics to registry/log.md
+python3 scripts/eval/eval-behavior.py          # zero-LLM: manifest-level compliance (CI)
+python3 scripts/eval/eval-behavior.py --llm    # probe a real model + score its answer
+python3 scripts/eval/eval-behavior.py --record # append metrics to registry/log.md
 ```
 
 Fixtures in `evaluations/behavior/` encode scenarios with two layers:
@@ -57,10 +57,10 @@ For a heavyweight end-to-end check, run the whole pipeline against a real,
 popular repo (default: FastAPI — large, active, well-documented Python):
 
 ```bash
-python3 scripts/eval-real-repo.py                      # clone + full pipeline + LLM ingest
-python3 scripts/eval-real-repo.py --skip-llm           # corpus + context metrics, no LLM
-python3 scripts/eval-real-repo.py --repo /path/to/clone
-python3 scripts/eval-real-repo.py --json
+python3 scripts/eval/eval-real-repo.py                      # clone + full pipeline + LLM ingest
+python3 scripts/eval/eval-real-repo.py --skip-llm           # corpus + context metrics, no LLM
+python3 scripts/eval/eval-real-repo.py --repo /path/to/clone
+python3 scripts/eval/eval-real-repo.py --json
 ```
 
 It seeds a throwaway fabric with both integrations enabled, captures a scoped
@@ -86,9 +86,9 @@ have helped when the PR was written — a knowledge-recall eval on real-world
 vocabulary:
 
 ```bash
-python3 scripts/eval-pr-replay.py --repo tiangolo/fastapi --prs 16192 --llm
-python3 scripts/eval-pr-replay.py --repo tiangolo/fastapi --auto 3            # pick recent merged PRs (deps-bumps skipped)
-python3 scripts/eval-pr-replay.py ... --json
+python3 scripts/eval/eval-pr-replay.py --repo tiangolo/fastapi --prs 16192 --llm
+python3 scripts/eval/eval-pr-replay.py --repo tiangolo/fastapi --auto 3            # pick recent merged PRs (deps-bumps skipped)
+python3 scripts/eval/eval-pr-replay.py ... --json
 ```
 
 Per replayed PR (fetched live via `gh` — title, body, review comments, touched files):
@@ -111,9 +111,9 @@ coverage delta isolates the value of the ingest step itself.
 Closes the reproducibility requirements with hard, machine-checkable gates:
 
 ```bash
-python3 scripts/eval-stability.py --skip-llm          # deterministic gates (CI)
-python3 scripts/eval-stability.py --models qwen2.5-coder:7b,qwen3.8:27b-mlx
-python3 scripts/eval-stability.py --record            # append metrics to registry/log.md
+python3 scripts/eval/eval-stability.py --skip-llm          # deterministic gates (CI)
+python3 scripts/eval/eval-stability.py --models qwen2.5-coder:7b,qwen3.8:27b-mlx
+python3 scripts/eval/eval-stability.py --record            # append metrics to registry/log.md
 ```
 
 | Gate | What it proves | Threshold |

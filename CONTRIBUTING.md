@@ -158,7 +158,7 @@ Before changing the compiler (agent prompts, ingest logic, skills):
 - **Package version** (`pyproject.toml`): `0.x.y` — bumped on notable changes, resets allowed while alpha.
 - **Fabric structure**: changes freely; no version contract until 1.0.
 - **Skills/patterns**: `x.y.z` in frontmatter `version:` if you want per-page tracking (optional).
-- **Releases**: none yet. When a first tagged release lands, it will be `0.1.0`, not 1.0 — 1.0 is reserved for a stable, documented, tested public contract.
+- **Releases**: none tagged yet. The package version is `0.2.0` (matches the CLI `WF_VERSION`); 1.0 is reserved for a stable, documented, tested public contract.
 
 ---
 

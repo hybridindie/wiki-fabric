@@ -8,7 +8,10 @@ import shutil
 from pathlib import Path
 from unittest import mock
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+import sys, pathlib as _p
+_SCRIPTS = (_p.Path(__file__).resolve().parent.parent / "scripts").resolve()
+for _rel in ("", "cmd", "lib", "eval", "harness"):
+    sys.path.insert(0, str(_SCRIPTS / _rel))
 
 OVERLAY_TMPL = """---
 project: {slug}
@@ -161,6 +164,10 @@ import time  # noqa: E402
 
 
 class TestVaultRefresh(unittest.TestCase):
+    """The vault is standalone OUTPUT: it holds only generated wiki content, never
+    copies/symlinks of the corpus. vault-refresh scaffolds + audits; the actual
+    wiki is written by export-wiki.py (`wf export wiki`)."""
+
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         self.fabric, _ = _make_world(self.tmp)
@@ -172,61 +179,62 @@ class TestVaultRefresh(unittest.TestCase):
     def _run(self, *args):
         import importlib.util as _ilu
         import fabric_config as fc
-        spec = _ilu.spec_from_file_location('vault_refresh', str(Path(__file__).parent.parent / 'scripts' / 'vault-refresh.py'))
+        spec = _ilu.spec_from_file_location('vault_refresh', str(Path(__file__).parent.parent / 'scripts' / 'cmd/vault-refresh.py'))
         vault_refresh = _ilu.module_from_spec(spec); spec.loader.exec_module(vault_refresh)
         with (mock.patch.object(vault_refresh, "FABRIC_ROOT", self.fabric),
-             mock.patch.object(vault_refresh, "CORPUS_ROOT", self.fabric),
              mock.patch.object(fc, "FABRIC_ROOT", self.fabric),
              mock.patch.object(fc, "CORPUS_ROOT", self.fabric),
-             mock.patch.object(fc, "_OVERLAY_CACHE", None),
-             mock.patch.object(vault_refresh, "get_all_repo_names", return_value=["proj-a", "proj-b"])):
+             mock.patch.object(fc, "_OVERLAY_CACHE", None)):
             return vault_refresh.refresh(self.vault, *args)
 
-    def test_refresh_creates_links_and_overlay_views(self):
+    def _populate_output(self):
+        """A vault with the generated wiki present looks like a fresh OUTPUT dir."""
+        (self.vault / "wiki" / "index.md").parent.mkdir(parents=True, exist_ok=True)
+        (self.vault / "wiki" / "index.md").write_text("---\ntype: index\n---\n\n# Wiki\n")
+        (self.vault / ".obsidian").mkdir(parents=True, exist_ok=True)
+
+    def test_refresh_scaffolds_output_dir(self):
         rc = self._run(False)
-        self.assertEqual(rc, 0)
-        for link in ("AGENTS.md", "projects"):
-            self.assertTrue((self.vault / link).is_symlink(), link)
-        view = self.fabric / "projects" / "proj-a" / "overlay.yml"
-        self.assertTrue(view.exists())
-        self.assertIn("extract: local", view.read_text())
+        # scaffolding an empty dir is not yet "fresh" (no generated wiki) -> rc 1
+        self.assertEqual(rc, 1)
+        # vault + Obsidian workspace created
+        self.assertTrue(self.vault.is_dir())
+        self.assertTrue((self.vault / ".obsidian").is_dir())
+        # corpus content is NOT copied/symlinked in
+        for rel in ("AGENTS.md", "README.md", "patterns", "projects", "registry", "evidence"):
+            self.assertFalse((self.vault / rel).exists(), f"corpus content leaked into vault: {rel}")
+            self.assertFalse((self.vault / rel).is_symlink(), rel)
 
-    def test_check_reports_drift_before_refresh(self):
+    def test_output_present_but_corpus_leaked_is_stale(self):
+        # a mirror leftover (a symlink to the corpus) marks the vault stale
+        (self.vault / "wiki" / "index.md").parent.mkdir(parents=True, exist_ok=True)
+        (self.vault / "wiki" / "index.md").write_text("---\ntype: index\n---\n\n# Wiki\n")
+        (self.vault / ".obsidian").mkdir(parents=True, exist_ok=True)
+        (self.vault / "patterns").symlink_to(self.fabric / "patterns", target_is_directory=False)
         rc = self._run(True)
-        self.assertEqual(rc, 1)  # missing links = drift
+        self.assertEqual(rc, 1)  # stale mirror leftover present
 
-    def test_check_fresh_after_refresh(self):
-        self._run(False)
+    def test_fresh_output_dir_passes(self):
+        self._populate_output()
         rc = self._run(True)
         self.assertEqual(rc, 0)
 
-    def test_overlay_view_updates_when_content_changes(self):
-        self._run(False)
-        view = self.fabric / "projects" / "proj-a" / "overlay.yml"
-        stale = view.read_text()
-        # source overlay changes -> next refresh rewrites the view
-        time.sleep(0.05)  # mtime resolution: ensure fingerprint changes
-        (self.tmp / "proj-a" / ".wiki-overlay.md").write_text(
-            OVERLAY_TMPL.format(slug="proj-a", routing_block="routing:\n  extract: cloud\n"))
-        import importlib.util as _ilu
-        spec = _ilu.spec_from_file_location('vault_refresh', str(Path(__file__).parent.parent / 'scripts' / 'vault-refresh.py'))
-        vault_refresh = _ilu.module_from_spec(spec); spec.loader.exec_module(vault_refresh)
-        import fabric_config as fc
-        with (mock.patch.object(vault_refresh, "FABRIC_ROOT", self.fabric),
-             mock.patch.object(vault_refresh, "CORPUS_ROOT", self.fabric),
-             mock.patch.object(fc, "FABRIC_ROOT", self.fabric),
-             mock.patch.object(fc, "CORPUS_ROOT", self.fabric),
-             mock.patch.object(fc, "_OVERLAY_CACHE", None),
-             mock.patch.object(vault_refresh, "get_all_repo_names", return_value=["proj-a"])):
-            vault_refresh.refresh(self.vault, False, quiet=True)
-        self.assertNotEqual(view.read_text(), stale)
-        self.assertIn("extract: cloud", view.read_text())
+    def test_missing_generated_output_is_drift(self):
+        # vault exists but generated wiki is absent -> not a fresh output dir
+        (self.vault).mkdir()
+        (self.vault / ".obsidian").mkdir()
+        rc = self._run(True)
+        self.assertEqual(rc, 1)
+
+    def test_empty_vault_check_is_drift_before_scaffold(self):
+        rc = self._run(True)  # --check without a run first
+        self.assertEqual(rc, 1)  # no output generated yet
 
 
 class TestReposMigrate(unittest.TestCase):
     def test_plan_finds_migratable_keys(self):
         import importlib.util as _ilu2
-        _spec = _ilu2.spec_from_file_location('repos_migrate', str(Path(__file__).parent.parent / 'scripts' / 'repos-migrate.py'))
+        _spec = _ilu2.spec_from_file_location('repos_migrate', str(Path(__file__).parent.parent / 'scripts' / 'cmd/repos-migrate.py'))
         rm = _ilu2.module_from_spec(_spec); _spec.loader.exec_module(rm)
         cfg = {"repos": {
             "a": {"path": "../a", "extract": "local", "graph_dir": "g"},
@@ -243,30 +251,58 @@ if __name__ == "__main__":
     unittest.main()
 
 class TestFabricRootResolution(unittest.TestCase):
-    """FABRIC_ROOT chain: WIKI_FABRIC_DIR > XDG default > harness (dev)."""
+    """FABRIC_ROOT chain: WIKI_FABRIC_DIR > sibling vault > XDG default > bare.
+
+    The vault is the full content root; the harness holds only tool code."""
 
     def test_env_override_wins(self):
         import fabric_config as fc
         with mock.patch.dict(os.environ, {"WIKI_FABRIC_DIR": str(self.fabric)}):
-            # re-import resolution? FABRIC_ROOT is computed at import; test the fn
             self.assertEqual(fc._resolve_fabric_root(), self.fabric.resolve())
 
-    def test_xdg_default_when_content_present(self):
+    def test_sibling_vault_is_content_root(self):
+        # A sibling vault/ (corpus or evidence) makes it the content root,
+        # ahead of any XDG default.
         import fabric_config as fc
+        base = self.tmp / "harness"
+        (base).mkdir()
+        (base / "scripts").mkdir()
+        vault = self.tmp / "vault"
+        (vault / "corpus").mkdir(parents=True)
+        xdg = self.tmp / "xdg"
+        (xdg / "wiki-fabric").mkdir(parents=True)
+        # monkeypatch so the sibling of HARNESS_ROOT is the temp vault
+        with mock.patch.object(fc, "HARNESS_ROOT", base):
+            with mock.patch.dict(os.environ, {"XDG_DATA_HOME": str(xdg)}, clear=False):
+                os.environ.pop("WIKI_FABRIC_DIR", None)
+                self.assertEqual(fc._resolve_fabric_root(), vault)
+
+    def test_xdg_default_when_no_sibling_vault(self):
+        # With no repo-sibling vault, resolve to the XDG default.
+        import fabric_config as fc
+        base = self.tmp / "harness"
+        (base / "scripts").mkdir(parents=True)
         xdg = self.tmp / "xdg"
         fabric = xdg / "wiki-fabric"
         fabric.mkdir(parents=True)
         (fabric / "fabric.yaml").write_text("owner: t\n")
-        with mock.patch.dict(os.environ, {"XDG_DATA_HOME": str(xdg)}, clear=False):
-            os.environ.pop("WIKI_FABRIC_DIR", None)
-            self.assertEqual(fc._resolve_fabric_root(), fabric)
+        with mock.patch.object(fc, "HARNESS_ROOT", base):
+            with mock.patch.dict(os.environ, {"XDG_DATA_HOME": str(xdg)}, clear=False):
+                os.environ.pop("WIKI_FABRIC_DIR", None)
+                self.assertEqual(fc._resolve_fabric_root(), fabric)
 
-    def test_dev_fallback_to_harness(self):
+    def test_dev_fallback_is_sibling_vault_not_harness(self):
         import fabric_config as fc
-        env = {k: v for k, v in os.environ.items()
-               if k not in ("WIKI_FABRIC_DIR", "XDG_DATA_HOME")}
-        with mock.patch.dict(os.environ, env, clear=True):
-            self.assertEqual(fc._resolve_fabric_root(), fc.HARNESS_ROOT)
+        base = self.tmp / "harness"
+        (base / "scripts").mkdir(parents=True)
+        # A bare harness clone with neither sibling vault nor XDG fabric resolves
+        # to the sibling `vault` path (never the harness repo), so commands that
+        # need content fail cleanly instead of writing into the tool tree.
+        with mock.patch.object(fc, "HARNESS_ROOT", base):
+            env = {k: v for k, v in os.environ.items()
+                   if k not in ("WIKI_FABRIC_DIR", "XDG_DATA_HOME")}
+            with mock.patch.dict(os.environ, env, clear=True):
+                self.assertEqual(fc._resolve_fabric_root(), self.tmp / "vault")
 
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())

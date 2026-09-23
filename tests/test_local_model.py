@@ -8,7 +8,10 @@ from unittest import mock
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+import sys, pathlib as _p
+_SCRIPTS = (_p.Path(__file__).resolve().parent.parent / "scripts").resolve()
+for _rel in ("", "cmd", "lib", "eval", "harness"):
+    sys.path.insert(0, str(_SCRIPTS / _rel))
 
 
 class TestGetLocalModel(unittest.TestCase):

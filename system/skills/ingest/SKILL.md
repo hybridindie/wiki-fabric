@@ -7,7 +7,7 @@ description: Ingest a raw source into the evidence fabric via `wf ingest` — cr
 # Ingest Skill
 
 Runs the ingest pipeline from AGENTS.md. CLI-first: use `wf ingest` (or
-`python3 scripts/ingest.py`) — the script handles source records, hashes, and
+`python3 scripts/cmd/ingest.py`) — the script handles source records, hashes, and
 claim extraction; the skill adds judgment for classification and change-sets.
 
 ## When to Use
@@ -57,7 +57,7 @@ Add `relations` entries (`supports`/`contradicts`/`supersedes`/`depends_on`) whe
 
 ### 4a. If graphify is ACTIVE: enrich claims with code provenance
 When `fabric.yaml` has `integrations.graphify.enabled: true`, run
-`python3 scripts/graphify-bridge.py --enrich` after writing claims — this
+`python3 scripts/harness/graphify-bridge.py --enrich` after writing claims — this
 attaches `code_symbols` and `graph_edges` (calls/imports/rationale_for) to
 claims, linking documentation to the implementing code. When graphify is
 inactive, skip this step: claims carry only source_refs (locator + quote).

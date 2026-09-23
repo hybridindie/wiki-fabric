@@ -46,7 +46,7 @@ Install flags:
 | `--dir <path>` | Harness clone location (default `./wiki-fabric` — the current directory) |
 | `--repo <url>` | Install from a fork |
 | `--interactive` | Walk through provider/model/routing config (prompts for everything — see [Configuration](./configuration)) |
-| `--no-vault` | Skip the Obsidian vault symlink |
+| `--no-vault` | Skip creating the Obsidian output vault |
 
 **What the one-liner actually does:** checks for **uv** (Astral's Python
 package manager) and installs it if missing, clones the **harness** (the code —

@@ -19,6 +19,6 @@ updated: 2026-09-18
 
 # Computation
 
-    python3 scripts/lint.py <vault>
+    python3 scripts/cmd/lint.py <vault>
 
 Exit 1 on any error. The `--okf` sibling is the interop floor; this is the ceiling.

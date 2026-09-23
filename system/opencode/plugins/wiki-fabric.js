@@ -21,7 +21,7 @@ export const WikiFabricPlugin = async ({ directory }) => {
         // ';' not '&&' — Windows PowerShell 5.1 rejects '&&' as a statement
         // separator, breaking the first bash command of the session.
         output.args.command =
-          'echo "[wiki-fabric] knowledge fabric connected (.wiki-overlay.md). Before answering codebase/architecture questions run: wf context --task <task> (0 tokens) or wf query <question> (0 tokens). After solving a hard problem: wf log --project <slug>. Doc drift auto-captures on commit if the wf hook is installed." ; ' +
+          'echo "[wiki-fabric] knowledge fabric connected (.wiki-overlay.md). Before answering codebase/architecture questions run: wf context --task <task> (0 tokens) or wf query <question> (0 tokens). After solving a hard problem: wf log --project <slug>. If the fabric is pending human decisions (regenerated on commit): wf gate (0 tokens) shows promotion dossiers / domain proposals / stale claims, or read registry/pending-gate.md. Doc drift auto-captures on commit if the wf hook is installed." ; ' +
           output.args.command;
         reminded = true;
       }

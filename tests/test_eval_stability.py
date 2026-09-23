@@ -15,7 +15,7 @@ def _load_module(name, path):
     return mod
 
 
-es = _load_module("eval_stability", REPO / "scripts" / "eval-stability.py")
+es = _load_module("eval_stability", REPO / "scripts" / "eval/eval-stability.py")
 
 
 class TestMetrics:
@@ -48,7 +48,7 @@ class TestCIGate:
     def test_skip_llm_mode_passes(self):
         import subprocess
         out = subprocess.run(
-            [sys.executable, str(REPO / "scripts" / "eval-stability.py"), "--skip-llm"],
+            [sys.executable, str(REPO / "scripts" / "eval/eval-stability.py"), "--skip-llm"],
             capture_output=True, text=True, timeout=300,
         )
         assert out.returncode == 0, out.stdout + out.stderr

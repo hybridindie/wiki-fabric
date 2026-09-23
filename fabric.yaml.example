@@ -2,6 +2,16 @@
 # Copy this file to fabric.yaml and edit for your setup.
 # fabric.yaml is gitignored — it contains personal repo paths and settings.
 
+# Optional Obsidian vault — the utility's standalone OUTPUT directory.
+# wiki-fabric writes generated content (the rendered wiki via `wf export wiki`)
+# into it; it never copies or symlinks the corpus in. Because it is standalone
+# output, you can point at several targets to get multiple vaults on one
+# machine (e.g. work vs personal). Relative paths resolve against the fabric
+# root. Set to "" to disable; unset defaults to a sibling `vault/`. The
+# WIKI_FABRIC_VAULT env var overrides.
+# vault:
+#   path: ../vault
+
 owner: your-name
 
 llm:

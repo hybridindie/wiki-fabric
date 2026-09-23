@@ -150,8 +150,8 @@ TASK="Add token refresh to the auth service"
 echo ""
 step "Agent asks for task context: \"${TASK}\""
 
-MANIFEST_MD="$(python3 "${FABRIC}/scripts/context.py" --task "${TASK}" --paths services/auth --project auth-service)"
-MANIFEST_JSON="$(python3 "${FABRIC}/scripts/context.py" --task "${TASK}" --paths services/auth --project auth-service --format json)"
+MANIFEST_MD="$(WIKI_FABRIC_DIR="${FABRIC}" python3 "${FABRIC}/scripts/cmd/context.py" --task "${TASK}" --paths services/auth --project auth-service)"
+MANIFEST_JSON="$(WIKI_FABRIC_DIR="${FABRIC}" python3 "${FABRIC}/scripts/cmd/context.py" --task "${TASK}" --paths services/auth --project auth-service --format json)"
 
 if $JSON_OUT; then
     echo "${MANIFEST_JSON}"
@@ -162,13 +162,14 @@ echo -e "${BOLD}${MANIFEST_MD}${NC}"
 
 # ── 4. Build the agent prompt from the manifest (what an agent harness does) ─
 PROMPT="$(python3 - "$FABRIC" "$TASK" <<'PYEOF'
-import sys, json, subprocess
+import sys, json, subprocess, os
 from pathlib import Path
 fabric, task = Path(sys.argv[1]), sys.argv[2]
+env = {**os.environ, "WIKI_FABRIC_DIR": str(fabric)}
 manifest = json.loads(subprocess.run(
-    ["python3", str(fabric / "scripts" / "context.py"), "--task", task,
+    ["python3", str(fabric / "scripts" / "cmd/context.py"), "--task", task,
      "--paths", "services/auth", "--project", "auth-service", "--format", "json"],
-    capture_output=True, text=True).stdout)
+    capture_output=True, text=True, env=env).stdout)
 parts = [f"# Task\n{task}\n", "# Knowledge you must follow (from wiki-fabric)\n"]
 for s in manifest["selected"]:
     text = (fabric / "corpus" / s["path"]).read_text()

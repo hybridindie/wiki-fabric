@@ -7,14 +7,17 @@ from unittest import mock
 
 REPO = Path(__file__).parent.parent
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+import sys, pathlib as _p
+_SCRIPTS = (_p.Path(__file__).resolve().parent.parent / "scripts").resolve()
+for _rel in ("", "cmd", "lib", "eval", "harness"):
+    sys.path.insert(0, str(_SCRIPTS / _rel))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 class TestScan(unittest.TestCase):
     def test_scan_finds_stamps(self):
         import importlib.util as ilu
-        spec = ilu.spec_from_file_location("rv", REPO / "scripts" / "review.py")
+        spec = ilu.spec_from_file_location("rv", REPO / "scripts" / "cmd/review.py")
         rv = ilu.module_from_spec(spec); spec.loader.exec_module(rv)
         report = rv.scan()
         assert "due" in report and "overdue" in report and "stale" in report
@@ -26,7 +29,7 @@ class TestScan(unittest.TestCase):
 
     def test_parse_date(self):
         import importlib.util as ilu
-        spec = ilu.spec_from_file_location("rv", REPO / "scripts" / "review.py")
+        spec = ilu.spec_from_file_location("rv", REPO / "scripts" / "cmd/review.py")
         rv = ilu.module_from_spec(spec); spec.loader.exec_module(rv)
         import datetime
         d = rv._parse_date("2026-09-21")
@@ -37,7 +40,7 @@ class TestScan(unittest.TestCase):
 class TestAutoReverify(unittest.TestCase):
     def test_auto_reverify_mechanism(self):
         import importlib.util as ilu
-        spec = ilu.spec_from_file_location("rv", REPO / "scripts" / "review.py")
+        spec = ilu.spec_from_file_location("rv", REPO / "scripts" / "cmd/review.py")
         rv = ilu.module_from_spec(spec); spec.loader.exec_module(rv)
         # the function exists and is callable
         assert callable(rv.auto_reverify)

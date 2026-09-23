@@ -31,16 +31,16 @@ jobs:
         run: bash scripts/smoke-test.sh
 
       - name: Behavior evaluation (P4, zero-LLM)
-        run: uv run python scripts/eval-behavior.py
+        run: uv run python scripts/eval/eval-behavior.py
 
       - name: Stability evaluation (deterministic gates)
-        run: uv run python scripts/eval-stability.py --skip-llm
+        run: uv run python scripts/eval/eval-stability.py --skip-llm
 
       - name: Fabric lint (0 errors gate)
-        run: uv run python scripts/lint.py .
+        run: uv run python scripts/cmd/lint.py .
 
       - name: OKF v0.2 conformance (floor gate)
-        run: uv run python scripts/lint.py . --okf
+        run: uv run python scripts/cmd/lint.py . --okf
 
       - name: OKF cross-check (okflint, external validator)
         run: |

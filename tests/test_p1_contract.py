@@ -11,7 +11,10 @@ import subprocess
 from pathlib import Path
 
 REPO = Path(__file__).parent.parent
-sys.path.insert(0, str(REPO / "scripts"))
+import sys, pathlib as _p
+_SCRIPTS = (_p.Path(__file__).resolve().parent.parent / "scripts").resolve()
+for _rel in ("", "cmd", "lib", "eval", "harness"):
+    sys.path.insert(0, str(_SCRIPTS / _rel))
 
 
 def _load_module(name, path):
@@ -22,7 +25,7 @@ def _load_module(name, path):
     return mod
 
 
-lint = _load_module("lint", REPO / "scripts" / "lint.py")
+lint = _load_module("lint", REPO / "scripts" / "cmd/lint.py")
 
 
 class TestScopeValidation:
@@ -92,7 +95,7 @@ class TestJsonOutput:
     def test_json_report_shape(self, tmp_path):
         (tmp_path / "note.md").write_text("no frontmatter\n")
         out = subprocess.run(
-            [sys.executable, str(REPO / "scripts" / "lint.py"), str(tmp_path), "--format", "json"],
+            [sys.executable, str(REPO / "scripts" / "cmd/lint.py"), str(tmp_path), "--format", "json"],
             capture_output=True, text=True,
         )
         report = json.loads(out.stdout)
@@ -104,7 +107,7 @@ class TestJsonOutput:
     def test_json_clean_report(self, tmp_path):
         (tmp_path / "ok.md").write_text("---\ntype: registry\n---\n\n# Hub\n")
         out = subprocess.run(
-            [sys.executable, str(REPO / "scripts" / "lint.py"), str(tmp_path), "--format", "json"],
+            [sys.executable, str(REPO / "scripts" / "cmd/lint.py"), str(tmp_path), "--format", "json"],
             capture_output=True, text=True,
         )
         report = json.loads(out.stdout)
@@ -114,7 +117,7 @@ class TestJsonOutput:
     def test_json_exit_code_reflects_errors(self, tmp_path):
         (tmp_path / "bad.md").write_text("no frontmatter\n")
         out = subprocess.run(
-            [sys.executable, str(REPO / "scripts" / "lint.py"), str(tmp_path), "--format", "json"],
+            [sys.executable, str(REPO / "scripts" / "cmd/lint.py"), str(tmp_path), "--format", "json"],
             capture_output=True, text=True,
         )
         assert out.returncode == 1
@@ -129,7 +132,7 @@ class TestRegistryJson:
             "statement: \"Demo\"\nlast_verified: 2026-01-01\n---\n\n# claim-demo\nDemo body\n"
         )
         out = subprocess.run(
-            [sys.executable, str(REPO / "scripts" / "rebuild-index.py"), "--root", str(tmp_path)],
+            [sys.executable, str(REPO / "scripts" / "cmd/rebuild-index.py"), "--root", str(tmp_path)],
             capture_output=True, text=True,
         )
         reg = tmp_path / "registry" / "catalog.json"
@@ -149,7 +152,7 @@ class TestRegistryJson:
         f = tmp_path / "projects" / "proj-a" / "experience-events" / "ee-demo.md"
         f.write_text("---\ntype: experience-event\nproject: proj-a\ntitle: T\n---\n\n# x\n")
         subprocess.run(
-            [sys.executable, str(REPO / "scripts" / "rebuild-index.py"), "--root", str(tmp_path)],
+            [sys.executable, str(REPO / "scripts" / "cmd/rebuild-index.py"), "--root", str(tmp_path)],
             capture_output=True, text=True,
         )
         reg = tmp_path / "registry" / "catalog.json"

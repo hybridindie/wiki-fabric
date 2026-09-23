@@ -23,7 +23,7 @@ updated: 2026-09-18
 
 # Computation
 
-`verify_and_fix_locators()` inside `scripts/ingest.py` — re-finds each quote in
+`verify_and_fix_locators()` inside `scripts/cmd/ingest.py` — re-finds each quote in
 the source text and rewrites the locator when the model drifted. Claims carrying
 a verified block with `process:locator-verification` are machine-confirmed
 trusting this computation.

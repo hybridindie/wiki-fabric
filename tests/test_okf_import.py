@@ -6,8 +6,8 @@ import re
 from pathlib import Path
 
 REPO = Path(__file__).parent.parent
-EXPORTER = REPO / "scripts" / "okf_export.py"
-IMPORTER = REPO / "scripts" / "okf_import.py"
+EXPORTER = REPO / "scripts" / "cmd/okf_export.py"
+IMPORTER = REPO / "scripts" / "cmd/okf_import.py"
 
 
 def _make_bundle(tmp_path):
@@ -23,10 +23,17 @@ def _make_bundle(tmp_path):
 
 class TestImport:
     def test_import_captures_as_external_source(self, tmp_path):
+        # In-process + mocked VAULT_ROOT so we never write to the real corpus.
+        import importlib.util
+        import unittest.mock as mock
+        spec = importlib.util.spec_from_file_location("okf_import", IMPORTER)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
         b = _make_bundle(tmp_path)
-        r = subprocess.run([sys.executable, str(IMPORTER), str(b),
-                            "--scope", "t1"], capture_output=True, text=True)
-        assert r.returncode == 0, r.stdout + r.stderr
+        with mock.patch.object(mod, "VAULT_ROOT", tmp_path):
+            rc = mod.import_bundle(b, "t1")
+        assert rc == 0
+        assert list((tmp_path / "evidence" / "sources").glob("src-*.md"))
 
     def test_trust_recorded_not_inherited(self, tmp_path):
         import importlib.util

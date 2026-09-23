@@ -3,11 +3,13 @@
 Run: python3 -m pytest tests/test_context.py -v
 """
 
+import os
 import sys
 import importlib.util
 import json
 import subprocess
 from pathlib import Path
+from unittest import mock
 
 REPO = Path(__file__).parent.parent
 
@@ -20,7 +22,7 @@ def _load_module(name, path):
     return mod
 
 
-ctx = _load_module("context", REPO / "scripts" / "context.py")
+ctx = _load_module("context", REPO / "scripts" / "cmd/context.py")
 
 
 class _FakePage:
@@ -163,20 +165,19 @@ class TestOutputs:
             "---\ntype: pattern\nid: pattern-x\nstatus: recommended\n---\n\nRotate tokens on refresh.\n"
         )
         env_root = tmp_path
-        # context.py derives VAULT_ROOT from its own parent; run with cwd trick via subprocess env
-        src = (REPO / "scripts" / "context.py").read_text()
-        (tmp_path / "scripts").mkdir()
-        (tmp_path / "scripts" / "context.py").write_text(src)
+        # context.py derives VAULT_ROOT from fabric_config; run isolated via
+        # WIKI_FABRIC_DIR pointing at the temp fabric (which has corpus/).
+        # Mirror the real scripts/ subdir layout so context.py's bootstrap
+        # (which prepends scripts/, cmd/, lib/, ... to sys.path) resolves deps.
+        import shutil as _sh
+        _sh.copytree(REPO / "scripts", tmp_path / "scripts", dirs_exist_ok=True)
         # create corpus/ for CORPUS_ROOT resolution
         (tmp_path / "corpus").mkdir(exist_ok=True)
-        # context.py imports fabric_config + wf_common from its own dir
-        for dep in ("fabric_config.py", "wf_common.py"):
-            (tmp_path / "scripts" / dep).write_text(
-                (REPO / "scripts" / dep).read_text())
         out = subprocess.run(
-            [sys.executable, str(tmp_path / "scripts" / "context.py"),
+            [sys.executable, str(tmp_path / "scripts" / "cmd/context.py"),
              "--task", "token rotation", "--format", "json"],
             capture_output=True, text=True,
+            env={**os.environ, "WIKI_FABRIC_DIR": str(tmp_path)},
         )
         data = json.loads(out.stdout)
         assert set(data) >= {"task", "selected", "excluded", "precedence", "compiled"}
@@ -185,7 +186,7 @@ class TestOutputs:
 
     def test_markdown_has_precedence_section(self, tmp_path):
         out = subprocess.run(
-            [sys.executable, str(REPO / "scripts" / "context.py"),
+            [sys.executable, str(REPO / "scripts" / "cmd/context.py"),
              "--task", "token rotation"],
             capture_output=True, text=True,
         )
@@ -194,5 +195,445 @@ class TestOutputs:
 
     def test_zero_tokens_no_llm_call(self):
         # The script must not import any LLM client
-        src = (REPO / "scripts" / "context.py").read_text()
+        src = (REPO / "scripts" / "cmd/context.py").read_text()
         assert "openai" not in src and "anthropic" not in src
+
+
+class TestHumanLayerExcluded:
+    """The generated wiki/syntheses prose is the human layer; the machine must
+    consume only atoms (claims/patterns/decisions/concepts/...), never the
+    paraphrased prose — otherwise the manifest re-feeds paraphrase + bloat."""
+
+    def test_corpus_skips_wiki_and_syntheses(self, tmp_path):
+        corpus = tmp_path / "corpus"
+        (corpus / "patterns").mkdir(parents=True)
+        (corpus / "patterns" / "pattern-x.md").write_text(
+            "---\ntype: pattern\nstatus: recommended\n---\n\nrotate tokens on refresh\n")
+        (corpus / "wiki" / "topics").mkdir(parents=True)
+        (corpus / "wiki" / "topics" / "token-rotation.md").write_text(
+            "---\ntype: wiki-article\n---\n\nToken rotation is a paraphrase of many claims.\n")
+        (corpus / "syntheses").mkdir()
+        (corpus / "syntheses" / "syn-1.md").write_text(
+            "---\ntype: synthesis\n---\n\nA synthesis restates findings.\n")
+
+        import fabric_config as fc
+        with mock.patch.object(fc, "CORPUS_ROOT", corpus), \
+             mock.patch.object(fc, "FABRIC_ROOT", corpus), \
+             mock.patch.object(ctx, "CORPUS_ROOT", corpus), \
+             mock.patch.object(ctx, "VAULT_ROOT", corpus):
+            pages = ctx.load_corpus()
+        posixs = [p["posix"] for p in pages]
+        assert any("pattern-x" in p for p in posixs)
+        assert not any("wiki" in p for p in posixs), "wiki prose leaked into machine corpus"
+        assert not any("syntheses" in p for p in posixs), "synthesis prose leaked into machine corpus"
+
+
+class TestQueryExcludesHumanLayer:
+    """query.py's retrieval is another machine surface; it must also skip the
+    generated wiki/syntheses prose so answers quote atoms, not paraphrase."""
+
+    def test_load_pages_skips_wiki_and_syntheses(self, tmp_path):
+        corpus = tmp_path / "corpus"
+        (corpus / "evidence" / "claims").mkdir(parents=True)
+        (corpus / "evidence" / "claims" / "claim-auth.md").write_text(
+            "---\ntype: claim\nstatement: \"tokens rotate on refresh\"\n---\n\nbody\n")
+        (corpus / "wiki" / "topics").mkdir(parents=True)
+        (corpus / "wiki" / "topics" / "t.md").write_text(
+            "---\ntype: wiki-article\n---\n\nparaphrase prose\n")
+        (corpus / "syntheses").mkdir()
+        (corpus / "syntheses" / "s.md").write_text("---\ntype: synthesis\n---\n\nparaphrase\n")
+
+        import fabric_config as fc
+        import importlib.util as _ilu
+        qspec = _ilu.spec_from_file_location('query_mod', str(REPO / "scripts" / "cmd/query.py"))
+        qmod = _ilu.module_from_spec(qspec); qspec.loader.exec_module(qmod)
+        with mock.patch.object(fc, "CORPUS_ROOT", corpus), \
+             mock.patch.object(fc, "FABRIC_ROOT", corpus), \
+             mock.patch.object(qmod, "VAULT_ROOT", corpus):
+            pages = qmod.load_pages()
+        # query.py returns bodies loaded; filter by relative path
+        rels = [str(p["rel"]) for p in pages]
+        assert any("claim-auth" in r for r in rels)
+        assert not any("wiki/" in r for r in rels), "wiki prose leaked into query retrieval"
+        assert not any("syntheses/" in r for r in rels), "synthesis prose leaked into query retrieval"
+
+
+class TestCitationGraph:
+    """export-wiki emits the wiki's MACHINE value as registry/wiki-graph.json:
+    topic/project -> claim edges + staleness tiers + claim provenance. Models
+    consume these edges instead of re-reading the prose."""
+
+    def test_emits_topic_claim_edges_and_provenance(self, tmp_path):
+        import importlib.util as _ilu
+        spec = _ilu.spec_from_file_location('export_wiki', str(REPO / "scripts" / "cmd/export-wiki.py"))
+        ew = _ilu.module_from_spec(spec); spec.loader.exec_module(ew)
+        claims_dir = tmp_path / "evidence" / "claims"
+        claims_dir.mkdir(parents=True)
+        (claims_dir / "claim-tok.md").write_text(
+            "---\ntype: claim\nid: claim-tok\nstatement: \"t\"\n"
+            "resource: \"[[src-auth]]\"\nreview_after: 2027-01-01\n---\n\nx\n")
+
+        import fabric_config as fc
+        with mock.patch.object(fc, "CORPUS_ROOT", tmp_path), \
+             mock.patch.object(fc, "FABRIC_ROOT", tmp_path), \
+             mock.patch.object(ew, "CORPUS_ROOT", tmp_path), \
+             mock.patch.object(ew, "FABRIC_ROOT", tmp_path):
+            topics = [{"slug": "token-rotation", "title": "Token Rotation",
+                       "domain": "auth", "claims": ["claim-tok"]}]
+            out = ew.emit_citation_graph(topics, ["proj-a"], dry_run=False)
+
+        data = json.loads(Path(out).read_text())
+        assert data["type"] == "wiki-graph"
+        assert data["topics"][0]["claims"][0]["tier"] == "current"
+        assert data["claim_sources"]["claim-tok"] == "src-auth"
+
+    def test_dry_run_does_not_write(self, tmp_path):
+        import importlib.util as _ilu
+        spec = _ilu.spec_from_file_location('export_wiki', str(REPO / "scripts" / "cmd/export-wiki.py"))
+        ew = _ilu.module_from_spec(spec); spec.loader.exec_module(ew)
+        (tmp_path / "evidence" / "claims").mkdir(parents=True)
+        import fabric_config as fc
+        with mock.patch.object(fc, "CORPUS_ROOT", tmp_path), \
+             mock.patch.object(fc, "FABRIC_ROOT", tmp_path), \
+             mock.patch.object(ew, "CORPUS_ROOT", tmp_path), \
+             mock.patch.object(ew, "FABRIC_ROOT", tmp_path):
+            out = ew.emit_citation_graph([], [], dry_run=True)
+        assert out == tmp_path / "registry" / "wiki-graph.json"
+        assert not (tmp_path / "registry" / "wiki-graph.json").exists()
+
+
+class TestMermaidRepair:
+    """LangChain-OpenWiki-style diagram guarantee: a broken mermaid fence degrades
+    to a text fence with a repair comment instead of shipping broken."""
+
+    def _mod(self):
+        import importlib.util as _ilu
+        spec = _ilu.spec_from_file_location('export_wiki_repair', str(REPO / "scripts" / "cmd/export-wiki.py"))
+        m = _ilu.module_from_spec(spec); spec.loader.exec_module(m)
+        return m
+
+    def test_valid_flowchart_and_sequence(self):
+        m = self._mod()
+        assert m._mermaid_valid("flowchart TD\n  A --> B\n  B --> C")
+        assert m._mermaid_valid("sequenceDiagram\n  A->>B: hi\n  B-->>A: ok")
+
+    def test_unbalanced_braces_invalid(self):
+        m = self._mod()
+        assert not m._mermaid_valid("flowchart TD\n  A --> B{\"x\"\n  B --> C")
+
+    def test_repair_degrades_broken_fence(self):
+        m = self._mod()
+        art = "# X\n\n```mermaid\nflowchart TD\n  A --> B{\"oops\"\n```\n\nTail.\n"
+        fixed, n = m._validate_and_repair_diagrams(art)
+        assert n == 1
+        assert "```text" in fixed
+        assert m.MERMAID_REPAIR_COMMENT in fixed
+        assert "```mermaid" not in fixed
+
+
+class TestEnrichPage:
+    """Every generated wiki page gets the same OpenWiki-style anatomy: provenance
+    stamp, SUMMARY lead, Key Takeaways, and Sources backtrace."""
+
+    def test_enrich_adds_anatomy(self, tmp_path):
+        import importlib.util as _ilu
+        spec = _ilu.spec_from_file_location('export_wiki_enrich', str(REPO / "scripts" / "cmd/export-wiki.py"))
+        ew = _ilu.module_from_spec(spec); spec.loader.exec_module(ew)
+        claims = tmp_path / "evidence" / "claims"
+        claims.mkdir(parents=True)
+        (claims / "claim-tok-rotation.md").write_text(
+            "---\ntype: claim\nid: claim-tok-rotation\nstatement: \"tokens rotate on refresh\"\n"
+            "resource: \"[[src-auth]]\"\nreview_after: 2027-01-01\n---\n\nx\n")
+        page = tmp_path / "wiki" / "topics" / "token-rotation.md"
+        page.parent.mkdir(parents=True)
+        page.write_text(
+            "---\ntype: wiki-article\ntitle: \"Token Rotation\"\n---\n\n"
+            "# Token Rotation\n\nThe tokens rotate on refresh.\n\n"
+            "## Evidence\n\n- [1] claim-tok-rotation — tokens rotate\n"
+            "---\n[1] claim-tok-rotation\n")
+
+        import fabric_config as fc
+        with mock.patch.object(fc, "CORPUS_ROOT", tmp_path), \
+             mock.patch.object(fc, "FABRIC_ROOT", tmp_path), \
+             mock.patch.object(ew, "CORPUS_ROOT", tmp_path), \
+             mock.patch.object(ew, "FABRIC_ROOT", tmp_path):
+            ew._enrich_page(page, fc.get_config(), "mechanical")
+
+        txt = page.read_text()
+        assert "generated: { by:" in txt
+        assert txt.count("SUMMARY:") == 1
+        assert "## Key Takeaways" in txt
+        assert "## Sources" in txt
+        assert "[[src-auth]]" in txt  # source backtrace resolves
+
+
+class TestVisualizer:
+    """The human exploration surface for the generated wiki is Obsidian's native
+    Graph view, which renders the [[wikilinks]] between pages. no separate HTML
+    viewer is shipped."""
+
+    def test_no_html_visualizer_emitted(self, tmp_path):
+        import importlib.util as _ilu
+        spec = _ilu.spec_from_file_location('export_wiki_viz', str(REPO / "scripts" / "cmd/export-wiki.py"))
+        ew = _ilu.module_from_spec(spec); spec.loader.exec_module(ew)
+        # the module must not ship a browser visualizer anymore
+        src = Path(spec.origin).read_text()
+        assert "view.html" not in src
+        assert "_visualizer" not in src
+
+class TestWikiRepair:
+    """export-wiki repairs the human layer: reconcile stale output, synthesize
+    concepts only when missing, rebuild the machine catalog."""
+
+    def _mod(self):
+        import importlib.util as _ilu
+        spec = _ilu.spec_from_file_location('export_wiki_repair', str(REPO / "scripts" / "cmd/export-wiki.py"))
+        m = _ilu.module_from_spec(spec); spec.loader.exec_module(m)
+        return m
+
+    def test_reconcile_counts_stale_without_deleting_on_dry_run(self, tmp_path):
+        m = self._mod()
+        (tmp_path / "vault" / "wiki" / "topics").mkdir(parents=True)
+        (tmp_path / "vault" / "wiki" / "topics" / "stale-one.md").write_text("x")
+        (tmp_path / "vault" / "wiki" / "topics" / "stale-two.md").write_text("x")
+        import fabric_config as fc
+        with mock.patch.object(fc, "get_vault_path", return_value=(tmp_path / "vault")), \
+             mock.patch.object(m, "get_vault_path", return_value=(tmp_path / "vault")), \
+             mock.patch.object(m, "_wiki_root", return_value=(tmp_path / "vault" / "wiki")):
+            n = m._reconcile_wiki_dir("topics", dry_run=True)
+        assert n == 2
+        assert (tmp_path / "vault" / "wiki" / "topics" / "stale-one.md").exists()
+
+    def test_reconcile_deletes_on_real_run(self, tmp_path):
+        m = self._mod()
+        (tmp_path / "vault" / "wiki" / "topics").mkdir(parents=True)
+        (tmp_path / "vault" / "wiki" / "topics" / "stale.md").write_text("x")
+        import fabric_config as fc
+        with mock.patch.object(fc, "get_vault_path", return_value=(tmp_path / "vault")), \
+             mock.patch.object(m, "get_vault_path", return_value=(tmp_path / "vault")), \
+             mock.patch.object(m, "_wiki_root", return_value=(tmp_path / "vault" / "wiki")):
+            n = m._reconcile_wiki_dir("topics", dry_run=False)
+        assert n == 1
+        assert not (tmp_path / "vault" / "wiki" / "topics" / "stale.md").exists()
+
+    def test_concepts_exist_when_populated(self, tmp_path):
+        m = self._mod()
+        import fabric_config as fc
+        # missing -> False
+        with mock.patch.object(fc, "CORPUS_ROOT", tmp_path), \
+             mock.patch.object(m, "CORPUS_ROOT", tmp_path):
+            assert not m._concepts_exist()
+        # populated -> True
+        (tmp_path / "concepts").mkdir()
+        (tmp_path / "concepts" / "concept-a.md").write_text("---\ntype: concept\n---\n")
+        with mock.patch.object(fc, "CORPUS_ROOT", tmp_path), \
+             mock.patch.object(m, "CORPUS_ROOT", tmp_path):
+            assert m._concepts_exist()
+
+    def test_rebuild_catalog_writes_reconciled(self, tmp_path):
+        m = self._mod()
+        (tmp_path / "registry").mkdir(parents=True)
+        (tmp_path / "evidence" / "claims").mkdir(parents=True)
+        (tmp_path / "evidence" / "claims" / "claim-a.md").write_text(
+            "---\ntype: claim\nstatus: supported\n---\n\nx\n")
+        import fabric_config as fc
+        with mock.patch.object(fc, "CORPUS_ROOT", tmp_path), \
+             mock.patch.object(fc, "FABRIC_ROOT", tmp_path), \
+             mock.patch.object(m, "CORPUS_ROOT", tmp_path):
+            ok = m._rebuild_catalog(dry_run=False)
+        assert ok
+        cat = json.loads((tmp_path / "registry" / "catalog.json").read_text())
+        assert cat["total"] == 1
+        assert cat["pages"][0]["type"] == "claim"
+
+
+class TestWikiNetwork:
+    """The wiki is a real network: pages carry Related wikilinks (human) and
+    wiki-graph.json emits nodes[] + edges[] (machine). Edges are grounded in
+    shared sources/claims — never invented."""
+
+    def _mod(self):
+        import importlib.util as _ilu
+        spec = _ilu.spec_from_file_location('export_wiki_net', str(REPO / "scripts" / "cmd/export-wiki.py"))
+        m = _ilu.module_from_spec(spec); spec.loader.exec_module(m)
+        return m
+
+    def test_compute_wiki_edges_topic_topic_via_shared_source(self, tmp_path):
+        m = self._mod()
+        claims = tmp_path / "evidence" / "claims"
+        claims.mkdir(parents=True)
+        # claims; t1 and t2 BOTH cite src-s1 and src-s2 => share 2 sources (>= min)
+        for stem, src in [("a", "s1"), ("b", "s1"), ("c", "s2"), ("d", "s2")]:
+            (claims / f"claim-{stem}.md").write_text(
+                f"---\ntype: claim\nid: claim-{stem}\nstatement: \"{stem}\"\n"
+                f"resource: \"[[src-{src}]]\"\n---\n\nx\n")
+        import fabric_config as fc
+        with mock.patch.object(fc, "CORPUS_ROOT", tmp_path), \
+             mock.patch.object(fc, "FABRIC_ROOT", tmp_path), \
+             mock.patch.object(m, "CORPUS_ROOT", tmp_path):
+            topics = [
+                {"slug": "t1", "title": "One", "domain": "d", "claims": ["claim-a", "claim-c"]},
+                {"slug": "t2", "title": "Two", "domain": "d", "claims": ["claim-b", "claim-d"]},
+            ]
+            # t1 cites s1+s2; t2 cites s1+s2 -> shared sources = {s1,s2} (2)
+            edges, index = m._compute_wiki_edges(topics, ["proj1"])
+        t1 = [e["target"] for e in edges["t1"]]
+        assert "t2" in t1
+        assert index["t1"]["type"] == "topic"
+        assert index["proj1"]["type"] == "project"
+
+    def test_graph_emits_nodes_and_cross_edges(self, tmp_path):
+        m = self._mod()
+        claims = tmp_path / "evidence" / "claims"
+        claims.mkdir(parents=True)
+        # claim stem must match project prefix for the project edge
+        (claims / "claim-proj-x-a.md").write_text(
+            "---\ntype: claim\nid: claim-proj-x-a\nstatement: \"x\"\n"
+            "resource: \"[[src-a]]\"\nreview_after: 2027-01-01\n---\n\nx\n")
+        import fabric_config as fc
+        with mock.patch.object(fc, "CORPUS_ROOT", tmp_path), \
+             mock.patch.object(fc, "FABRIC_ROOT", tmp_path), \
+             mock.patch.object(m, "CORPUS_ROOT", tmp_path):
+            out = m.emit_citation_graph(
+                [{"slug": "t", "title": "T", "domain": "d", "claims": ["claim-proj-x-a"]}],
+                ["proj-x"], dry_run=False)
+        data = json.loads(Path(out).read_text())
+        assert "nodes" in data and "edges" in data
+        types = {n["type"] for n in data["nodes"]}
+        assert types >= {"topic", "claim", "source", "project"}
+        # topic cites claim; claim traces to source; topic<->project via shared claim
+        rels = {(e["source"], e["relation"], e["target"]) for e in data["edges"]}
+        assert ("topic:t", "cites", "claim:claim-proj-x-a") in rels
+        assert ("topic:t", "claim", "project:proj-x") in rels
+
+
+class TestEnrichedAnatomy:
+    """OpenWiki-style page anatomy: SUMMARY from prose (not headings), aliases in
+    frontmatter, no duplicate Related, deterministic Definition fallback."""
+
+    def _mod(self):
+        import importlib.util as _ilu
+        spec = _ilu.spec_from_file_location('export_wiki_anat', str(REPO / "scripts" / "cmd/export-wiki.py"))
+        m = _ilu.module_from_spec(spec); spec.loader.exec_module(m)
+        return m
+
+    def test_summary_from_prose_not_heading(self, tmp_path):
+        m = self._mod()
+        page = tmp_path / "page.md"
+        page.write_text(
+            "---\ntype: wiki-article\ntitle: \"X\"\n---\n\n"
+            "# X\n\n## Definition\n\nThis is the real opening prose.\n\nMore text.\n")
+        import fabric_config as fc
+        with mock.patch.object(fc, "get_config", return_value={"owner": "o", "llm": {"model": "m", "compiler_model": "c"}}):
+            m._enrich_page(page, fc.get_config(), "mechanical")
+        txt = page.read_text()
+        assert "SUMMARY: This is the real opening prose." in txt
+        assert "SUMMARY: Definition" not in txt
+
+    def test_aliases_added_to_frontmatter(self, tmp_path):
+        m = self._mod()
+        page = tmp_path / "page.md"
+        page.write_text("---\ntype: wiki-article\ntitle: \"Some Topic\"\n---\n\nbody\n")
+        import fabric_config as fc
+        with mock.patch.object(fc, "get_config", return_value={"owner": "o", "llm": {"model": "m", "compiler_model": "c"}}):
+            m._enrich_page(page, fc.get_config(), "mechanical")
+        txt = page.read_text()
+        assert "aliases:" in txt
+        assert '"Some Topic"' in txt
+        assert '"some-topic"' in txt
+
+    def test_no_duplicate_related(self, tmp_path):
+        m = self._mod()
+        claims = tmp_path / "evidence" / "claims"
+        claims.mkdir(parents=True)
+        (claims / "claim-a.md").write_text(
+            "---\ntype: claim\nid: claim-a\nstatement: \"a\"\nresource: \"[[src-s1]]\"\n---\n\nx\n")
+        page = tmp_path / "page.md"
+        # LLM already emitted a Related section
+        page.write_text("---\ntype: wiki-article\ntitle: \"T\"\n---\n\nbody\n\n## Related\n- [[other]]\n")
+        import fabric_config as fc
+        with mock.patch.object(fc, "CORPUS_ROOT", tmp_path), \
+             mock.patch.object(fc, "FABRIC_ROOT", tmp_path), \
+             mock.patch.object(m, "CORPUS_ROOT", tmp_path), \
+             mock.patch.object(fc, "get_config", return_value={"owner": "o", "llm": {"model": "m", "compiler_model": "c"}}):
+            m._enrich_page(page, fc.get_config(), "mechanical", related_links=[{"target": "z", "kind": "claim", "weight": 1}])
+        txt = page.read_text()
+        assert txt.count("## Related") == 1
+
+    def test_aliases_resolve_in_wikilink(self, tmp_path):
+        # aliases allow [[some-topic]] to resolve to the Some Topic page
+        m = self._mod()
+        page = tmp_path / "Some-Topic.md"
+        page.write_text("---\ntype: wiki-article\ntitle: \"Some Topic\"\n---\n\nbody\n")
+        import fabric_config as fc
+        with mock.patch.object(fc, "get_config", return_value={"owner": "o", "llm": {"model": "m", "compiler_model": "c"}}):
+            m._enrich_page(page, tmp if False else fc.get_config(), "mechanical")
+        assert "some-topic" in page.read_text().lower()
+
+
+class TestDomainHubs:
+    """Domain hub pages: navigational grouping of topics by domain with a
+    mermaid cluster, written to vault/wiki/domains/."""
+
+    def _mod(self):
+        import importlib.util as _ilu
+        spec = _ilu.spec_from_file_location('export_wiki_hub', str(REPO / "scripts" / "cmd/export-wiki.py"))
+        m = _ilu.module_from_spec(spec); spec.loader.exec_module(m)
+        return m
+
+    def test_generates_domain_hubs_grouped(self, tmp_path):
+        m = self._mod()
+        # seed two topic pages so the hub can read SUMMARYs
+        wiki = tmp_path / "vault" / "wiki"
+        (wiki / "topics").mkdir(parents=True)
+        (wiki / "topics" / "tok.md").write_text(
+            "---\ntype: wiki-article\ntitle: \"Token\"\n---\n\nSUMMARY: Rotate tokens.\n\n# Token\n\nbody\n")
+        (wiki / "topics" / "mesh.md").write_text(
+            "---\ntype: wiki-article\ntitle: \"Mesh\"\n---\n\nSUMMARY: Build voxel mesh.\n\n# Mesh\n\nbody\n")
+        import fabric_config as fc
+        with mock.patch.object(fc, "CORPUS_ROOT", tmp_path), \
+             mock.patch.object(fc, "FABRIC_ROOT", tmp_path), \
+             mock.patch.object(fc, "get_vault_path", return_value=(tmp_path / "vault")), \
+             mock.patch.object(m, "CORPUS_ROOT", tmp_path), \
+             mock.patch.object(m, "get_vault_path", return_value=(tmp_path / "vault")), \
+             mock.patch.object(m, "_wiki_root", return_value=wiki):
+            topics = [
+                {"slug": "tok", "title": "Token", "domain": "agent-systems", "claims": ["c1"]},
+                {"slug": "mesh", "title": "Mesh", "domain": "godot-systems", "claims": ["c2"]},
+            ]
+            hubs = m._generate_domain_hubs(topics, dry_run=False)
+        assert len(hubs) == 2
+        agent = (wiki / "domains" / "agent-systems.md")
+        godot = (wiki / "domains" / "godot-systems.md")
+        assert agent.exists() and godot.exists()
+        agent_txt = agent.read_text()
+        assert "[[tok]]" in agent_txt
+        assert "Rotate tokens." in agent_txt  # SUMMARY pulled in
+        assert "mermaid" in agent_txt and "flowchart TD" in agent_txt
+        # godot hub must NOT contain the agent-systems topic
+        assert "[[tok]]" not in godot.read_text()
+
+
+class TestMermaidValidation:
+    """Mermaid validation must accept sequence/state arrows (->>, -->, =>) that a
+    protocol/lifecycle diagram genuinely uses, and still catch broken fences."""
+
+    def _mod(self):
+        import importlib.util as _ilu
+        spec = _ilu.spec_from_file_location('export_wiki_mermaid', str(REPO / "scripts" / "cmd/export-wiki.py"))
+        m = _ilu.module_from_spec(spec); spec.loader.exec_module(m)
+        return m
+
+    def test_sequence_diagram_valid(self):
+        m = self._mod()
+        assert m._mermaid_valid("sequenceDiagram\n    A->>B: hi\n    B-->>A: ok")
+        assert m._mermaid_valid("sequenceDiagram\n    E->>S: dial\n    Note over S: listens\n    S->>E: cmd")
+
+    def test_state_and_flow_valid(self):
+        m = self._mod()
+        assert m._mermaid_valid("stateDiagram-v2\n    [*] --> Pending\n    Pending --> Done")
+        assert m._mermaid_valid("flowchart TD\n    A --> B")
+
+    def test_unbalanced_still_caught(self):
+        m = self._mod()
+        assert not m._mermaid_valid("flowchart TD\n    A --> B{\"unbalanced")
