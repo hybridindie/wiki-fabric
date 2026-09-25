@@ -1,0 +1,24 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "references": {
+    "wiki-fabric": {
+      "path": "/Users/johnd/Development/vault",
+      "description": "Global knowledge fabric (evidence-first wiki + cross-project promotion)"
+    }
+  },
+  "instructions": [
+    "/Users/johnd/Development/vault/AGENTS.md",
+    ".wiki-overlay.md"
+  ],
+  "watcher": {
+    "ignore": [
+      "evidence/raw/**",
+      ".obsidian/**"
+    ]
+  },
+  "skills": {
+    "paths": [
+      "/Users/johnd/Development/wiki-fabric/system/opencode/skills"
+    ]
+  }
+}
