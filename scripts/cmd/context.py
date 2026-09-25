@@ -315,12 +315,62 @@ def trust_tier(fm):
     return "machine-confirmed"
 
 
+def code_navigation(task, project=None, max_files=5):
+    """Graphify-gated navigation: map task tokens → code symbols in the
+    connected repo's graphify graph → ranked file shortlist. 0 tokens (pure
+    graph lookups); the harness still opens the files itself. Empty when the
+    integration is off or no graph exists."""
+    try:
+        from fabric_config import (get_config, is_integration_active,
+                                   get_all_repo_names, get_repo_config,
+                                   resolve_repo_path)
+        cfg = get_config()
+        if not is_integration_active(cfg, "graphify"):
+            return None
+        toks = [t for t in re.findall(r"[a-z0-9]{3,}", (task or "").lower())]
+        if not toks:
+            return None
+        out = []
+        for repo in get_all_repo_names(cfg):
+            repo_cfg = get_repo_config(cfg, repo)
+            if not is_integration_active(cfg, "graphify"):
+                continue
+            path = resolve_repo_path(cfg, repo)
+            if not path:
+                continue
+            graph_dir = repo_cfg.get("graph_dir") or "graphify-out"
+            graph_path = path / graph_dir / "graph.json"
+            if not graph_path.exists():
+                continue
+            try:
+                g = json.loads(graph_path.read_text())
+            except Exception:
+                continue
+            hits = [n for n in g.get("nodes", [])
+                    if n.get("source_file") and n.get("_callable")
+                    and any(t in str(n.get("id", "")).lower() for t in toks)]
+            if not hits:
+                continue
+            files = {}
+            for n in hits:
+                f = n.get("source_file")
+                if f:
+                    files[f] = files.get(f, 0) + 1
+            ranked = sorted(files.items(), key=lambda x: -x[1])[:max_files]
+            out.append({"repo": repo,
+                        "symbols_matched": len(hits),
+                        "files": [{"path": f, "symbol_count": c} for f, c in ranked]})
+        return out or None
+    except Exception:
+        return None
+
+
 def body_tokens(page):
     import re
     return set(re.findall(r"[a-z0-9][a-z0-9_-]{2,}", page["body"][:2000].lower()))
 
 
-def render_markdown(task, paths, project, selected, excluded):
+def render_markdown(task, paths, project, selected, excluded, nav=None):
     lines = [
         "# Context Manifest",
         "",
@@ -331,6 +381,18 @@ def render_markdown(task, paths, project, selected, excluded):
     if project:
         lines.append(f"- **Project:** {project}")
     lines += ["- **Compiled:** deterministic selection (0 tokens) — every item carries a reason", ""]
+
+    if nav:
+        lines.append("## Code navigation (graphify)")
+        lines.append("")
+        lines.append("Symbols matching the task, ranked by file — open these first:")
+        lines.append("")
+        for r in nav:
+            lines.append(f"### {r['repo']} ({r['symbols_matched']} symbol matches)")
+            lines.append("")
+            for f in r["files"]:
+                lines.append(f"- `{f['path']}` — {f['symbol_count']} matching symbols")
+            lines.append("")
 
     if selected:
         lines.append("## Selected")
@@ -383,7 +445,9 @@ def integrations_state():
 
 def _manifest_payload(task, paths, project, selected, excluded, today):
     """Canonical dict the manifest and receipt are both built from."""
-    return {
+    # ---- Graphify-gated code navigation (0 tokens): task → symbols → files
+    nav = code_navigation(task, project)
+    manifest = {
         "task": task,
         "paths": paths,
         "project": project,
@@ -393,6 +457,9 @@ def _manifest_payload(task, paths, project, selected, excluded, today):
         "excluded": excluded,
         "precedence": ["project", "domain", "global"],
     }
+    if nav:
+        manifest["code_navigation"] = nav
+    return manifest
 
 
 def receipt_id(manifest):
@@ -468,6 +535,7 @@ def main():
     pages = load_corpus()
     selected, excluded = select_context(pages, args.task, args.paths, args.project, date.today(), args.max)
     manifest = _manifest_payload(args.task, args.paths, args.project, selected, excluded, date.today())
+    nav = manifest.get("code_navigation")
 
     if args.write_receipt:
         rpath, rid = write_receipt(manifest, args.project)
@@ -477,7 +545,7 @@ def main():
     if args.format == "json":
         print(json.dumps({"$schema": "wiki-fabric/context-manifest-v1", **manifest}, indent=2))
     else:
-        print(render_markdown(args.task, args.paths, args.project, selected, excluded))
+        print(render_markdown(args.task, args.paths, args.project, selected, excluded, nav))
     return 0
 
 
