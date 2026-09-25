@@ -1,12 +1,12 @@
 # okflint manifest — wiki-fabric profile
-# The OKF conformance floor is enforced by scripts/lint.py --okf; this manifest
+# The OKF conformance floor is enforced by scripts/cmd/lint.py --okf; this manifest
 # lets the external okflint cross-check the same bundle with our profile rules.
 #
 # Scope: fabric concepts only. evidence/raw/ holds immutable upstream captures
 # (AGENTS.md Raw layer: "capture by copy, immutable") and evaluations/fixtures/
 # are test scaffolds — neither are OKF concepts, so F001 does not apply there.
 # registry/index.md is our catalog hub named by convention; it carries type
-# frontmatter (non-root index exception documented in registry/epics/story-okf-01).
+# frontmatter (non-root index exception documented in registry/epics/okf-alignment.md).
 okf_version: "0.2"
 base:
   roots:
@@ -93,15 +93,6 @@ profile:
     skill:
       required: [type, name, description]
       optional: []
-    daily-note:
-      required: [type]
-      optional: [project, date, tags]
-    literature-note:
-      required: [type]
-      optional: [title]
-    quick-capture:
-      required: [type]
-      optional: [title]
     index-root:
       required: []
       optional: [okf_version]

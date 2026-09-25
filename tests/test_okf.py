@@ -5,7 +5,11 @@ Run: python3 -m pytest tests/test_okf.py -v
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+import sys, pathlib as _p
+_SCRIPTS = (_p.Path(__file__).resolve().parent.parent / "scripts").resolve()
+for _rel in ("cmd", "lib", "eval", "harness"):
+    if str(_SCRIPTS / _rel) not in sys.path:
+        sys.path.insert(0, str(_SCRIPTS / _rel))
 
 FIXTURES = Path(__file__).parent / "fixtures" / "okf"
 import lint
@@ -24,7 +28,7 @@ class TestConformantBundle:
     def test_main_okf_flag(self, tmp_path, capsys):
         import subprocess
         r = subprocess.run(
-            [sys.executable, str(Path(__file__).parent.parent / "scripts" / "lint.py"),
+            [sys.executable, str(Path(__file__).parent.parent / "scripts" / "cmd/lint.py"),
              "--okf", str(FIXTURES / "conformant")],
             capture_output=True, text=True)
         assert r.returncode == 0, r.stdout + r.stderr
@@ -55,7 +59,7 @@ class TestViolations:
     def test_json_output_has_okf_block(self):
         import subprocess, json
         r = subprocess.run(
-            [sys.executable, str(Path(__file__).parent.parent / "scripts" / "lint.py"),
+            [sys.executable, str(Path(__file__).parent.parent / "scripts" / "cmd/lint.py"),
              "--okf", "--format", "json", str(FIXTURES / "violations" / "no-type")],
             capture_output=True, text=True)
         d = json.loads(r.stdout)

@@ -6,7 +6,7 @@ updated: 2026-09-13
 
 # Domain Ontology
 
-The ontology is living — `python3 scripts/propose-domains.py` discovers new domains
+The ontology is living — `python3 scripts/cmd/propose-domains.py` discovers new domains
 from evidence signals. Domains below are a starting point; add yours as you
 connect projects.
 
@@ -18,12 +18,7 @@ connect projects.
 - **web-systems** — web backends, RLS, dashboards (nomokailist evidence).
 - **trading-systems** — trading backends, backtests, portfolio tooling (alpaca-agents evidence).
 - **mcp-systems** — MCP server protocol, tool-schema design, stdio transports (godot-mcp, comfyui-mcp evidence).
-- **devops** — CI, runners, publishing pipelines (auto-proposed 2026-09-21, signal score: 9).
-
-- **devops** — devops (auto-proposed 2026-09-21, signal score: 9).
-   - Status: proposed — review and add examples before confirming.
-- **mcp-systems** — mcp systems (auto-proposed 2026-09-21, signal score: 4).
-   - Status: proposed — review and add examples before confirming.
+- **devops** — CI, runners, publishing pipelines.
 
 ## Shared tag set (lowercase)
 

@@ -31,6 +31,18 @@ persistent memory layer.
 8. **No secrets in content.** `fabric.yaml` is gitignored; never commit
    API keys, tokens, or credentials.
 
+## Before you start
+
+- **Check for a dirty tree first.** `git status --porcelain` must be empty (or
+  intentionally staged) before branching/committing — a large uncommitted
+  restructure is easy to clobber. Surface dirtiness to the user, don't `git
+  clean`/`checkout` over it.
+- **Confirm the CLI is current.** `wf status` reports `CLI: STALE` when the
+  installed `wf` differs from the harness. Until synced (`wf update`), run the
+  harness script directly: `bash scripts/wiki-fabric.sh <cmd> ...`.
+- **Session start:** run `wf gate` — surfaces pending human decisions (claims,
+  promotion dossiers, domain proposals). See the always-on block.
+
 ## Common Tasks
 
 | Task | Command | LLM cost | Notes |
@@ -100,8 +112,8 @@ content; fresh clones carry `.gitkeep`ed skeletons of the content dirs).
 - **Git hooks (required per project)**: `wf hook install` — post-commit
   captures doc drift (sha256-gated), post-merge re-syncs; the freshness
   guarantee depends on them
-- **Shared modules**: `scripts/fabric_config.py`, `scripts/extract_backends.py`,
-  `scripts/local_llm.py`, `scripts/wf_common.py`, `scripts/eval_core.py`
+- **Shared modules**: `scripts/lib/fabric_config.py`, `scripts/lib/extract_backends.py`,
+  `scripts/lib/local_llm.py`, `scripts/lib/wf_common.py`, `scripts/lib/eval_core.py`
   (see README Scripts Reference for the map)
 
 ## Tests

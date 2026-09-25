@@ -40,7 +40,7 @@ class TestExport:
 
     def _export(self, tmp_path, scope="all", fabric_root=None):
         out = tmp_path / "bundle"
-        cmd = [sys.executable, str(REPO / "scripts" / "okf_export.py"),
+        cmd = [sys.executable, str(REPO / "scripts" / "cmd/okf_export.py"),
                "--out", str(out), "--scope", scope]
         if fabric_root:
             cmd += ["--root", str(fabric_root)]

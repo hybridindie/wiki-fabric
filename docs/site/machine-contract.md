@@ -15,7 +15,7 @@ agent harnesses can consume it without parsing prose:
 
 ```bash
 wf lint --format json            # errors/warnings with code + page + message, ok flag
-python3 scripts/rebuild-index.py # writes registry/catalog.json (catalog with ids, types, scopes, statuses)
+python3 scripts/cmd/rebuild-index.py # writes registry/catalog.json (catalog with ids, types, scopes, statuses)
 ```
 
 The lint report codes are stable: `FRONTMATTER`, `BROKEN-LINK`, `SCOPE`,
@@ -43,6 +43,15 @@ cataloged page with its `id`, `type`, `scope`, `status`, `maturity`,
 ## The registry
 
 Two files, two jobs — both machine-written, human-readable:
+
+### `registry/wiki-graph.json` — the wiki's edges (not its prose)
+
+Written by `wf export wiki`. The human wiki is OpenWiki-style paraphrase; its
+prose is for people, and `wf query`/`wf context` **skip it** so models never
+re-ingest generated narrative (context bloat + drift). The wiki's machine value
+is its derived citation graph: topic/project → claim edges with staleness
+tiers + claim provenance — emitted as deterministic JSON. A model consumes the
+edges and cites a claim for content.
 
 ### `registry/catalog.json` — what knowledge exists
 

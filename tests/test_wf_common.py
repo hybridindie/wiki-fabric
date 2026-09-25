@@ -1,10 +1,15 @@
 """Tests for wf_common shared helpers + adoption across scripts."""
 
 import sys
+import re
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+import sys, pathlib as _p
+_SCRIPTS = (_p.Path(__file__).resolve().parent.parent / "scripts").resolve()
+for _rel in ("cmd", "lib", "eval", "harness"):
+    if str(_SCRIPTS / _rel) not in sys.path:
+        sys.path.insert(0, str(_SCRIPTS / _rel))
 
 from wf_common import parse_frontmatter, slugify, norm, sha256_file
 
@@ -66,7 +71,7 @@ class TestScriptsUseSharedHelpers(unittest.TestCase):
     re-define their own copies."""
 
     def test_no_duplicate_parse_frontmatter_defs(self):
-        scripts = (Path(__file__).parent.parent / "scripts").glob("*.py")
+        scripts = (Path(__file__).parent.parent / "scripts").rglob("*.py")
         offenders = []
         for s in scripts:
             if s.name in ("wf_common.py", "lint.py"):  # lint has the 3-tuple variant
@@ -77,7 +82,7 @@ class TestScriptsUseSharedHelpers(unittest.TestCase):
         assert offenders == [], f"scripts redefining parse_frontmatter without wf_common: {offenders}"
 
     def test_no_duplicate_norm_slugify_defs(self):
-        scripts = (Path(__file__).parent.parent / "scripts").glob("*.py")
+        scripts = (Path(__file__).parent.parent / "scripts").rglob("*.py")
         offenders = []
         for s in scripts:
             if s.name in ("wf_common.py", "bootstrap-project.py"):  # bp has a variant
@@ -89,8 +94,44 @@ class TestScriptsUseSharedHelpers(unittest.TestCase):
 
     def test_bootstrap_keeps_variant(self):
         """bootstrap-project's slugify collapses double dashes — intentionally local."""
-        src = (Path(__file__).parent.parent / "scripts" / "bootstrap-project.py").read_text()
+        src = (Path(__file__).parent.parent / "scripts" / "cmd/bootstrap-project.py").read_text()
         assert "def slugify" in src
+
+
+class TestExplicitImportBootstrap(unittest.TestCase):
+    """Guard against the shotgun-path-injection anti-pattern: no script may
+    blanket-insert every scripts/ subdir into sys.path. Imports must be
+    explicit — own dir + scripts/lib (plus scripts/cmd for the eval entry
+    that imports cmd/ingest). A regression here silently re-couples every
+    module to every other and re-opens module-name shadowing."""
+
+    SHOTGUN = 'for _rel in ("", "cmd", "lib", "eval", "harness")'
+    ALLOWED_PATH_SETS = {
+        '_HERE, _HERE.parent / "lib"',                       # default
+        '_HERE, _HERE.parent / "lib", _HERE.parent / "cmd"', # eval.py (imports cmd/ingest)
+    }
+
+    def test_no_shotgun_path_injection(self):
+        offenders = []
+        for s in (Path(__file__).parent.parent / "scripts").rglob("*.py"):
+            text = s.read_text()
+            if self.SHOTGUN in text:
+                offenders.append(f"{s}: shotgun path injection")
+        assert offenders == [], offenders
+
+    def test_bootstrap_path_sets_are_explicit(self):
+        """Every bootstrap must enumerate exactly its allowed path tuple —
+        no dynamic building of path sets beyond the two sanctioned shapes."""
+        odd = []
+        for s in (Path(__file__).parent.parent / "scripts").rglob("*.py"):
+            text = s.read_text()
+            m = re.search(r"for _dir in \(([^)]*)\):", text)
+            if not m:
+                continue
+            paths = " ".join(m.group(1).split())  # normalize whitespace
+            if paths not in self.ALLOWED_PATH_SETS:
+                odd.append(f"{s.name}: {paths}")
+        assert odd == [], f"unsanctioned bootstrap path sets: {odd}"
 
 
 if __name__ == "__main__":

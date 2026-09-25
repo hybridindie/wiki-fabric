@@ -59,4 +59,25 @@ agents ask constantly, and every answer is auditable after the fact — the same
 input always produces the same manifest, which is exactly what a regression
 gate needs.
 
+## The human layer stays out of the machine context
+
+`wf query` and `wf context` retrieve only **atoms** — claims, patterns,
+decisions, concepts, experience events — never the generated human layer.
+`wiki/` topics and `syntheses/` are OpenWiki-style paraphrases of claims: their
+prose is for humans to read, not for a model to re-ingest (which would be
+context bloat plus drift risk). Both retrieval surfaces skip `wiki/` and
+`syntheses/`.
+
+The wiki still gives the machine real value, but through its **derived edges**,
+not its prose: `wf export wiki` writes `registry/wiki-graph.json` — the
+topic/project → claim citation edges with staleness tiers and claim provenance,
+as deterministic JSON alongside `catalog.json`. A model or agent that wants the
+wiki's aggregation reads the graph for edges and cites the claim for the
+content. Prose is read by people; edges are read by machines.
+
+## The human exploration surface
+
+For people, `wf export wiki` enriches every generated page with consistent,
+OpenWiki-style anatomy — a `SUMMARY:` lead, a deterministic `## Key Takeaways` (from the page's own top-tier claims, never hallucinated), a `## Sources` backtrace to the cited claims, a `generated: {by, at}` provenance stamp, and validated/auto-repaired Mermaid diagrams. Explore the resulting `[[wikilinks]]` in Obsidian's native Graph view — it renders the topic↔topic↔project network. No separate HTML viewer is shipped; Obsidian is the human graph surface.
+
 Next: [How It Works: The Compounding Loop](./how-compounding)

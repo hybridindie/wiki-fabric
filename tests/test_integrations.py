@@ -1,6 +1,7 @@
 """Unit tests for optional-integration gating (graphify, embeddings)."""
 
 import sys
+import os
 import json as _json
 import importlib.util
 import subprocess
@@ -17,7 +18,7 @@ def _load_module(name, path):
     return mod
 
 
-fc = _load_module("fabric_config", REPO / "scripts" / "fabric_config.py")
+fc = _load_module("fabric_config", REPO / "scripts" / "lib/fabric_config.py")
 
 
 class TestIntegrationConfig:
@@ -44,15 +45,20 @@ class TestIntegrationConfig:
 
 
 class TestGraphifyGate:
+    def _run(self, fab, *args):
+        import subprocess as _sp
+        return _sp.run(
+            [sys.executable, str(fab / "scripts" / "harness/graphify-bridge.py"), *args],
+            capture_output=True, text=True, cwd=str(fab),
+            env={**os.environ, "WIKI_FABRIC_DIR": str(fab)},
+        )
+
     def test_bridge_gate_respects_fabric_yaml(self):
         """graphify-bridge gate: runs against a temp fabric whose fabric.yaml
         enables graphify (independent of this repo's gitignored config, so it
         holds in CI)."""
         fab = self._make_fabric()
-        out = subprocess.run(
-            [sys.executable, str(fab / "scripts" / "graphify-bridge.py"), "--status"],
-            capture_output=True, text=True,
-        )
+        out = self._run(fab, "--status")
         assert out.returncode == 0
         assert "Graphify Integration Status" in out.stdout
 
@@ -60,21 +66,18 @@ class TestGraphifyGate:
         """The gate: a fabric with graphify disabled gets the enable message,
         not a crash."""
         fab = self._make_fabric(enabled=False)
-        out = subprocess.run(
-            [sys.executable, str(fab / "scripts" / "graphify-bridge.py"), "--status"],
-            capture_output=True, text=True,
-        )
+        out = self._run(fab, "--status")
         assert out.returncode == 0
-        assert "not enabled" in out.stdout
+        assert "Graphify integration is not enabled" in out.stdout
 
     def _make_fabric(self, enabled=True):
         import shutil
         import tempfile
         fab = Path(tempfile.mkdtemp()) / "_bridge_fixture_fabric"
         fab.mkdir(parents=True)
-        (fab / "scripts").mkdir()
-        for mod in ("graphify-bridge.py", "fabric_config.py", "wf_common.py"):
-            shutil.copy(REPO / "scripts" / mod, fab / "scripts" / mod)
+        # Mirror the real scripts/ subdir layout so the bridge bootstrap resolves
+        # its lib/cmd deps (prepends scripts/, cmd/, lib/, eval/, harness/).
+        shutil.copytree(REPO / "scripts", fab / "scripts", dirs_exist_ok=True)
         (fab / "corpus").mkdir(exist_ok=True)
         (fab / "fabric.yaml").write_text(
             f"owner: t\n"
@@ -83,13 +86,12 @@ class TestGraphifyGate:
         return fab
 
     def test_manifest_reports_integration_state(self, tmp_path):
-        src = (REPO / "scripts" / "context.py").read_text()
-        (tmp_path / "context.py").write_text(src)
-        # context.py imports fabric_config + wf_common from its own directory
-        for dep in ("fabric_config.py", "wf_common.py"):
-            (tmp_path / dep).write_text((REPO / "scripts" / dep).read_text())
+        # Mirror the real scripts/ subdir layout so context.py's bootstrap
+        # (prepends scripts/, cmd/, lib/, ... to sys.path) resolves deps.
+        import shutil as _sh
+        _sh.copytree(REPO / "scripts", tmp_path / "scripts", dirs_exist_ok=True)
         out = subprocess.run(
-            [sys.executable, str(tmp_path / "context.py"), "--task", "t", "--format", "json"],
+            [sys.executable, str(tmp_path / "scripts" / "cmd/context.py"), "--task", "t", "--format", "json"],
             capture_output=True, text=True,
         )
         data = _json.loads(out.stdout)
@@ -106,11 +108,10 @@ class TestGraphifyBridgeCommands:
 
     def _make_fabric(self, tmp_path):
         import json as _json
-        scripts = tmp_path / "scripts"
-        scripts.mkdir(exist_ok=True)
-        # copy the real modules so behavior is identical
-        for mod in ("graphify-bridge.py", "fabric_config.py", "wf_common.py"):
-            (scripts / mod).write_text((REPO / "scripts" / mod).read_text())
+        import shutil as _sh
+        # Mirror the real scripts/ subdir layout so the bridge bootstrap resolves
+        # its lib/cmd deps (prepends scripts/, cmd/, lib/, eval/, harness/).
+        _sh.copytree(REPO / "scripts", tmp_path / "scripts", dirs_exist_ok=True)
         # fabric.yaml with graphify enabled + one repo
         (tmp_path / "fabric.yaml").write_text(
             "owner: t\n"
@@ -126,15 +127,22 @@ class TestGraphifyBridgeCommands:
         (repo / "graphify-out" / "graph.json").write_text(_json.dumps(graph))
         return tmp_path
 
+    def _run(self, fab, *args):
+        """Run graphify-bridge against the sandbox, pinning it as the fabric
+        root (the harness is tool-only now; root comes from WIKI_FABRIC_DIR)."""
+        import subprocess
+        return subprocess.run(
+            [sys.executable, str(fab / "scripts" / "harness/graphify-bridge.py"), *args],
+            capture_output=True, text=True, cwd=str(fab),
+            env={**os.environ, "WIKI_FABRIC_DIR": str(fab)},
+        )
+
     def test_import_writes_graph_and_hash(self, tmp_path, monkeypatch):
         import subprocess
         fab = self._make_fabric(tmp_path)
         # resolve_repo_path resolves relative paths against FABRIC_ROOT — which is
         # derived from __file__ (the copied script), so paths line up.
-        out = subprocess.run(
-            [sys.executable, str(fab / "scripts" / "graphify-bridge.py"), "--import"],
-            capture_output=True, text=True, cwd=str(fab),
-        )
+        out = self._run(fab, "--import")
         assert out.returncode == 0, out.stderr
         graphs = fab / "corpus" / "global" / "graphs"
         assert (graphs / "fake-repo-graph.json").exists()
@@ -143,9 +151,7 @@ class TestGraphifyBridgeCommands:
     def test_diff_fresh_then_stale(self, tmp_path):
         import subprocess
         fab = self._make_fabric(tmp_path)
-        run = lambda *a: subprocess.run(
-            [sys.executable, str(fab / "scripts" / "graphify-bridge.py"), *a],
-            capture_output=True, text=True, cwd=str(fab))
+        run = lambda *a: self._run(fab, *a)
         # no import yet -> no stored hash
         out = run("--diff")
         assert "no stored hash" in out.stdout
@@ -164,9 +170,7 @@ class TestGraphifyBridgeCommands:
     def test_enrich_is_safe_with_no_claims(self, tmp_path):
         import subprocess
         fab = self._make_fabric(tmp_path)
-        run = lambda *a: subprocess.run(
-            [sys.executable, str(fab / "scripts" / "graphify-bridge.py"), *a],
-            capture_output=True, text=True, cwd=str(fab))
+        run = lambda *a: self._run(fab, *a)
         run("--import")
         out = run("--enrich")
         assert out.returncode == 0, out.stderr
@@ -175,8 +179,5 @@ class TestGraphifyBridgeCommands:
     def test_status_lists_graph(self, tmp_path):
         import subprocess
         fab = self._make_fabric(tmp_path)
-        out = subprocess.run(
-            [sys.executable, str(fab / "scripts" / "graphify-bridge.py"), "--status"],
-            capture_output=True, text=True, cwd=str(fab),
-        )
+        out = self._run(fab, "--status")
         assert "fake-repo" in out.stdout

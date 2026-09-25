@@ -1,6 +1,6 @@
 # Expected claim extraction — golden corpus
 # For each fixture, the list of claims a correct ingest must produce.
-# Scored by scripts/eval.py against rubric.md thresholds.
+# Scored by scripts/eval/eval.py against rubric.md thresholds.
 
 source-a:
   golden_keys:

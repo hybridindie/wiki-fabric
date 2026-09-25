@@ -6,7 +6,11 @@ Run: python3 -m pytest tests/test_lint_ingest.py -v
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+import sys, pathlib as _p
+_SCRIPTS = (_p.Path(__file__).resolve().parent.parent / "scripts").resolve()
+for _rel in ("cmd", "lib", "eval", "harness"):
+    if str(_SCRIPTS / _rel) not in sys.path:
+        sys.path.insert(0, str(_SCRIPTS / _rel))
 
 import lint as lint_mod
 import ingest as ingest_mod

@@ -25,7 +25,7 @@ updated: 2026-09-18
 
 # Computation
 
-    python3 scripts/eval.py   # uses WIKI_LLM_MODEL=<compiler model>
+    python3 scripts/eval/eval.py   # uses WIKI_LLM_MODEL=<compiler model>
 
 Recall threshold 0.8, locator rate 1.0, quote rate 1.0 (evaluations/rubric.md).
 A model swap is a compiler change: this computation must re-run and PASS before

@@ -1,6 +1,6 @@
 [project]
 name = "wiki-fabric"
-version = "0.1.0"
+version = "0.2.0"
 description = "Evidence-first knowledge base that compounds across projects — one fabric, many project namespaces"
 readme = "README.md"
 requires-python = ">=3.11"

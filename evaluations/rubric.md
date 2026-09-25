@@ -26,7 +26,7 @@ wiki-maintainer agent compiles source into wiki — not how fluent its prose is.
 ## Run protocol
 
 1. In a sandbox copy of the vault, run `ingest evaluations/fixtures/source-N.md`.
-2. Apply `scripts/lint.py` — must be ERRORS=0.
+2. Apply `scripts/cmd/lint.py` — must be ERRORS=0.
 3. For `source-c`, confirm exactly one `contested` claim with a `contradicts` relation.
 4. For `questions.yaml`, run each question; check `must_cite` + `format` + that
    the conflict surfaces (q2) instead of collapsing.
@@ -43,7 +43,7 @@ wiki-maintainer agent compiles source into wiki — not how fluent its prose is.
 
 ## What this is for
 
-A deterministic linter (`scripts/lint.py`) is layer 1. **This** is layer 2 —
+A deterministic linter (`scripts/cmd/lint.py`) is layer 1. **This** is layer 2 —
 measuring the *compiler*, not just the artifacts. When the linter reports clean
 but an expected claim is missing, the agent's extraction is wrong even though the
 output is structurally valid.

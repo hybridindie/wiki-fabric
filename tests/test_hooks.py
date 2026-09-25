@@ -8,7 +8,11 @@ import sys
 import importlib.util
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+import sys, pathlib as _p
+_SCRIPTS = (_p.Path(__file__).resolve().parent.parent / "scripts").resolve()
+for _rel in ("cmd", "lib", "eval", "harness"):
+    if str(_SCRIPTS / _rel) not in sys.path:
+        sys.path.insert(0, str(_SCRIPTS / _rel))
 
 
 def _load_module(name, path):
@@ -19,8 +23,8 @@ def _load_module(name, path):
     return mod
 
 
-hooks = _load_module("wf_hooks", Path(__file__).parent.parent / "scripts" / "hooks.py")
-always_on = _load_module("wf_always_on", Path(__file__).parent.parent / "scripts" / "always_on.py")
+hooks = _load_module("wf_hooks", Path(__file__).parent.parent / "scripts" / "harness/hooks.py")
+always_on = _load_module("wf_always_on", Path(__file__).parent.parent / "scripts" / "harness/always_on.py")
 
 _install_hook = hooks._install_hook
 _uninstall_hook = hooks._uninstall_hook

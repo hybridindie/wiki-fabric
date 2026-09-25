@@ -21,7 +21,7 @@ clone holding its own `fabric.yaml` doubles as the fabric.
 
 A full-featured example showing every key in context. Copy the sections you
 need — every field is optional except `owner`; defaults come from
-`fabric_config.py` ([the source of truth for defaults](https://github.com/hybridindie/wiki-fabric/blob/main/scripts/fabric_config.py)).
+`fabric_config.py` ([the source of truth for defaults](https://github.com/hybridindie/wiki-fabric/blob/main/scripts/lib/fabric_config.py)).
 
 ```yaml
 # ─── Identity ────────────────────────────────────────────────────────────────
@@ -275,9 +275,10 @@ disappear entirely. After pruning, a multi-project fabric.yaml is ~15 lines:
 owner, llm, integrations, domains, and `repos:` entries only for the fabric
 itself and non-sibling repos.
 
-The vault mirrors each project's effective config as a generated
-`projects/<slug>/overlay.yml` view (refreshed by `wf vault`/`wf bootstrap`;
-see [CLI Reference](./cli#vault-status-commands-the-human-views)).
+The vault is standalone output: generated wiki content lands there via
+`wf export wiki`, never copies/symlinks of corpus content. A machine can have
+multiple vaults by pointing `vault.path` at different targets
+(see [CLI Reference](./cli#vault-status-commands-the-human-views)).
 
 ## Ignoring files
 
@@ -339,8 +340,11 @@ integrations:
 ## Domains
 
 Domain taxonomy drives classification and context scoping. Start with the
-defaults, grow with `python3 scripts/propose-domains.py` (suggests new domains
-from evidence signals):
+defaults. `python3 scripts/cmd/propose-domains.py` discovers new domains from
+evidence signals and writes them as **pending-review proposal dossiers**
+(`registry/domain-proposals/`); merge an approved one into the ontology with
+`python3 scripts/cmd/promote-domains.py --apply <dossier>`. `wf gate` surfaces
+pending proposals at session start:
 
 ```yaml
 domains:

@@ -1,7 +1,8 @@
 # === User config (personal) ===
 fabric.yaml
 
-# === Content (user data — harness repo ships the tooling, not your fabric) ===
+# === Content (user data — harness ships only tooling, not your fabric) ===
+# All content lives in the vault (sibling by default) — never in the harness.
 evidence/
 global/entities/
 global/graphs/
@@ -18,13 +19,15 @@ projects/*/decisions/*.md
 projects/*/README.md
 registry/log.md
 registry/catalog.json
+registry/wiki-graph.json
 registry/promotions/
-registry/epics/
+registry/promotion-queue.md
+registry/conflicts/
 domains/**
 !domains/.gitkeep
 syntheses/**
 !syntheses/.gitkeep
-registry/conflicts/
+wiki/
 
 # === Obsidian workspace ===
 .obsidian/
@@ -51,15 +54,11 @@ venv/
 .DS_Store
 .okflint/
 
-# graphify self-graph artifacts (regenerated: graphify --update; graph.json tracked)
+# graphify self-graph artifacts (regenerated: graphify --update). Build output —
+# not tracked. A .gitkeep preserves the dir.
 graphify-out/*
-!graphify-out/graph.json
-!graphify-out/GRAPH_REPORT.md
-!graphify-out/.graphify_labels.json
-!graphify-out/cost.json
+!graphify-out/.gitkeep
 docs/site/node_modules/
 docs/site/dist/
-docs/site/node_modules
 projects/*/overlay.yml
 tests/_bridge_fixture_fabric/
-graphify-out/

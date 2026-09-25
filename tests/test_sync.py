@@ -7,7 +7,11 @@ import sys
 import importlib.util
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+import sys, pathlib as _p
+_SCRIPTS = (_p.Path(__file__).resolve().parent.parent / "scripts").resolve()
+for _rel in ("cmd", "lib", "eval", "harness"):
+    if str(_SCRIPTS / _rel) not in sys.path:
+        sys.path.insert(0, str(_SCRIPTS / _rel))
 
 
 def _load_module(name, path):
@@ -18,7 +22,7 @@ def _load_module(name, path):
     return mod
 
 
-sync = _load_module("sync", Path(__file__).parent.parent / "scripts" / "sync.py")
+sync = _load_module("sync", Path(__file__).parent.parent / "scripts" / "cmd/sync.py")
 
 
 class TestContentPathFilter:
@@ -34,7 +38,7 @@ class TestContentPathFilter:
         assert not sync.is_content_path("opencode.json")
         assert not sync.is_content_path(".obsidian/app.json")
         assert not sync.is_content_path("README.md")
-        assert not sync.is_content_path("scripts/ingest.py")
+        assert not sync.is_content_path("scripts/cmd/ingest.py")
         assert not sync.is_content_path(".venv/lib/python/site-packages/x.py")
 
     def test_prefix_not_substring(self):
@@ -45,7 +49,7 @@ class TestContentPathFilter:
 class TestContentChanges:
     def test_content_changes_filters_porcelain(self, tmp_path, monkeypatch):
         lines = [
-            " M scripts/ingest.py",
+            " M scripts/cmd/ingest.py",
             " M evidence/claims/claim-x.md",
             '?? "patterns/pattern y.md"',
             " M fabric.yaml",

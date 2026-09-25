@@ -5,7 +5,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+import sys, pathlib as _p
+_SCRIPTS = (_p.Path(__file__).resolve().parent.parent / "scripts").resolve()
+for _rel in ("cmd", "lib", "eval", "harness"):
+    if str(_SCRIPTS / _rel) not in sys.path:
+        sys.path.insert(0, str(_SCRIPTS / _rel))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from harnesses import (SPECS, body_from, detect_installed, install_instructions,
@@ -117,7 +121,7 @@ class TestInstalledModeScriptResolution(unittest.TestCase):
             fab.mkdir()
             (fab / "fabric.yaml").write_text("owner: t\n")
             # simulate the dispatcher: lint a temp vault-cwd via run_script semantics
-            script = (H / "scripts" / "lint.py")
+            script = (H / "scripts" / "cmd/lint.py")
             assert script.exists()
             r = subprocess.run(
                 [sys.executable, str(script), str(fab)],
@@ -128,7 +132,7 @@ class TestInstalledModeScriptResolution(unittest.TestCase):
 class TestCaptureChat(unittest.TestCase):
     def test_module_loads_and_parses(self):
         import importlib.util as ilu
-        spec = ilu.spec_from_file_location("cc", REPO / "scripts" / "capture-chat.py")
+        spec = ilu.spec_from_file_location("cc", REPO / "scripts" / "cmd/capture-chat.py")
         cc = ilu.module_from_spec(spec)
         spec.loader.exec_module(cc)
         assert cc._parse_since("30d") is not None
@@ -140,7 +144,7 @@ class TestCaptureChat(unittest.TestCase):
 
     def test_slug_and_escape(self):
         import importlib.util as ilu
-        spec = ilu.spec_from_file_location("cc", REPO / "scripts" / "capture-chat.py")
+        spec = ilu.spec_from_file_location("cc", REPO / "scripts" / "cmd/capture-chat.py")
         cc = ilu.module_from_spec(spec)
         spec.loader.exec_module(cc)
         assert cc._slug("Let's address the open PRs!") == "let-s-address-the-open-prs"

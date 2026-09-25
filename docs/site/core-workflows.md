@@ -192,12 +192,12 @@ wf log --project my-project \
 wf log --list
 
 # Mine for cross-project patterns
-python3 scripts/mine-promotions.py --dry-run
-python3 scripts/mine-promotions.py
+python3 scripts/cmd/mine-promotions.py --dry-run
+python3 scripts/cmd/mine-promotions.py
 
 # Review dossier, then promote
-python3 scripts/promote.py --list
-python3 scripts/promote.py --promote <dossier-file>.md
+python3 scripts/cmd/promote.py --list
+python3 scripts/cmd/promote.py --promote <dossier-file>.md
 ```
 
 **Scenario — the same bug bites twice.** Project A hits a deadlock from
@@ -278,8 +278,8 @@ flowchart TD
 
 ```bash
 # Rebuild index from actual files (writes registry/catalog.json)
-python3 scripts/rebuild-index.py
-python3 scripts/rebuild-index.py --json   # print machine-readable registry to stdout
+python3 scripts/cmd/rebuild-index.py
+python3 scripts/cmd/rebuild-index.py --json   # print machine-readable registry to stdout
 
 # Verify health (human-readable)
 wf lint
@@ -288,16 +288,16 @@ wf lint
 wf lint --format json
 
 # Run formal evaluation (golden corpus)
-WIKI_LLM_MODEL="qwen3.8:27b-mlx" python3 scripts/eval.py
+WIKI_LLM_MODEL="qwen3.8:27b-mlx" python3 scripts/eval/eval.py
 
 # Discover new domains from evidence
-python3 scripts/propose-domains.py
+python3 scripts/cmd/propose-domains.py
 
 # Graphify integration (optional, 0 token cost)
 graphify update                              # refresh each connected repo's graph (AST-only)
-python3 scripts/graphify-bridge.py --all     # update → import → enrich → diff
-python3 scripts/graphify-bridge.py --status  # dashboard
-python3 scripts/graphify-bridge.py --diff    # staleness check
+python3 scripts/harness/graphify-bridge.py --all     # update → import → enrich → diff
+python3 scripts/harness/graphify-bridge.py --status  # dashboard
+python3 scripts/harness/graphify-bridge.py --diff    # staleness check
 ```
 
 Run the graphify refresh **after code refactors** (it's AST-only — a few

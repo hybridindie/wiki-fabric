@@ -7,7 +7,11 @@ import sys
 import importlib.util
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+import sys, pathlib as _p
+_SCRIPTS = (_p.Path(__file__).resolve().parent.parent / "scripts").resolve()
+for _rel in ("cmd", "lib", "eval", "harness"):
+    if str(_SCRIPTS / _rel) not in sys.path:
+        sys.path.insert(0, str(_SCRIPTS / _rel))
 
 
 def _load_module(name, path):
@@ -18,7 +22,7 @@ def _load_module(name, path):
     return mod
 
 
-capture_git = _load_module("capture_git", Path(__file__).parent.parent / "scripts" / "capture-git.py")
+capture_git = _load_module("capture_git", Path(__file__).parent.parent / "scripts" / "cmd/capture-git.py")
 commit_is_interesting = capture_git.commit_is_interesting
 since_date = capture_git.since_date
 write_capture = capture_git.write_capture

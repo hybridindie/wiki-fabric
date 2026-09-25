@@ -8,7 +8,7 @@
 #   wf install [--repo URL] [--dir DIR]   # Clone + set up fabric
 #   wf update                              # Pull latest + update entity index
 #   wf status                              # Show fabric health
-#   wf vault [PATH]                        # Create Obsidian vault symlink
+#   wf vault [PATH]                        # Scaffold/audit Obsidian output vault
 #   wf bootstrap <project-path>            # Connect a project
 #
 # After install, the wiki-fabric CLI is available at ~/.local/bin/wiki-fabric
@@ -20,6 +20,10 @@ FABRIC_REPO="${WIKI_FABRIC_REPO:-https://github.com/hybridindie/wiki-fabric.git}
 DEFAULT_DIR="$(pwd)/wiki-fabric"   # harness clone default: CWD (override with --dir)
 SCRIPT_NAME="wf"
 WF_VERSION="0.2.0"
+# Harness root, resolved once at parse time to an ABSOLUTE path. BASH_SOURCE is
+# relative when invoked as 'bash scripts/wiki-fabric.sh', so computing this lazily
+# inside functions breaks after any `cd` (e.g. cmd_status cds into corpus/).
+_HARNESS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 
 # Colors
 RED='\033[0;31m'
@@ -98,11 +102,11 @@ fabric_home() {
 }
 
 find_harness() {
-    # The harness (code) — wherever this script lives, or the default clone
-    local script_dir
-    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
-    if [[ -d "${script_dir}/scripts" ]]; then
-        echo "${script_dir}"
+    # The harness (code) — wherever this script lives, or the default clone.
+    # Prefer _HARNESS_ROOT (resolved once at parse time to an absolute path);
+    # a lazy cd here breaks under set -euo after the caller has changed cwd.
+    if [[ -d "${_HARNESS_ROOT}/scripts" ]]; then
+        echo "${_HARNESS_ROOT}"
         return 0
     fi
     if [[ -d "${DEFAULT_DIR}/scripts" ]]; then
@@ -135,11 +139,37 @@ cli_sync_state() {
     fi
 }
 
+# === Helper: resolve the vault dir (the content root). The vault IS the fabric:
+# corpora under vault/corpus/, generated wiki under vault/wiki/. Config key /
+# env override, else the fabric dir itself. ===
+vault_dir() {
+    local fabric_dir="${1:-$(pwd)}"
+    # env override
+    if [[ -n "${WIKI_FABRIC_VAULT:-}" ]]; then
+        echo "${WIKI_FABRIC_VAULT}"
+        return 0
+    fi
+    # config key: `vault: { path: ... }` or bare `vault: <path>`
+    if [[ -f "${fabric_dir}/fabric.yaml" ]]; then
+        local vp
+        vp="$(awk '
+            /^vault:/ { on=1; rest=substr($0, index($0,":")+1); gsub(/^[[:space:]]+|\"|\047|[[:space:]]+$/, "", rest); if (rest != "") { print rest; exit } }
+            on && /^[[:space:]]+path:/ { p=substr($0, index($0,":")+1); gsub(/^[[:space:]]+|\"|\047|[[:space:]]+$/, "", p); print p; exit }
+        ' "${fabric_dir}/fabric.yaml")"
+        if [[ -n "${vp}" ]]; then
+            echo "${vp}"
+            return 0
+        fi
+    fi
+    # the vault IS the fabric root
+    echo "${fabric_dir}"
+}
+
 # === Helper: run a harness script with the fabric as cwd ===
 # Scripts live in the harness (code); content lives in the fabric dir.
 run_script() {
     local fabric_dir="$1"
-    local script_rel="$2"     # e.g. scripts/lint.py
+    local script_rel="$2"     # e.g. scripts/cmd/lint.py
     shift 2
     local harness_dir
     harness_dir="$(find_harness || echo "${fabric_dir}")"
@@ -153,28 +183,35 @@ find_fabric() {
         echo "${WIKI_FABRIC_DIR}"
         return 0
     fi
-    # 2. XDG default fabric (has fabric.yaml or content dirs)
+    # 2. Dev: the harness repo's sibling vault/ is the content root
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
+    local sibling_vault="$(dirname "${script_dir}")/vault"
+    if [[ -d "${sibling_vault}/corpus" ]] || [[ -d "${sibling_vault}/evidence" ]]; then
+        echo "${sibling_vault}"
+        return 0
+    fi
+    # 3. XDG default fabric (the vault)
     local fh; fh="$(fabric_home)"
     if [[ -f "${fh}/fabric.yaml" ]] || [[ -d "${fh}/evidence" ]] || [[ -d "${fh}/projects" ]]; then
         echo "${fh}"
         return 0
     fi
-    # 3. Dev fallback: harness clone doubles as fabric when configured
+    # 4. Dev fallback: a configured harness clone (fabric.yaml present)
     for cand in "${DEFAULT_DIR}" "${HOME}/wiki-fabric"; do
         if [[ -f "${cand}/fabric.yaml" ]]; then
             echo "${cand}"
             return 0
         fi
     done
-    # 4. Bare harness clone: scripts still runnable (lint/tests/help), commands
-    #    needing content will fail with a helpful message
+    # 5. Bare harness clone: scripts still runnable, commands needing content fail cleanly
     for cand in "${DEFAULT_DIR}" "${HOME}/wiki-fabric"; do
         if [[ -d "${cand}/scripts" ]]; then
             echo "${cand}"
             return 0
         fi
     done
-    # 5. Sibling of current directory (dev checkouts)
+    # 6. Sibling of current directory (dev checkouts)
     local parent="$(dirname "$(pwd)")"
     if [[ -d "${parent}/wiki-fabric/scripts" ]]; then
         echo "${parent}/wiki-fabric"
@@ -245,6 +282,7 @@ ensure_directories() {
         evidence/traces/change-sets
         evidence/_inbox
         registry/promotions
+        registry/domain-proposals
         registry/conflicts
         patterns
         anti-patterns
@@ -261,6 +299,54 @@ ensure_directories() {
     for dir in "${dirs[@]}"; do
         mkdir -p "${dir}"
     done
+    # templates/examples ship with the harness — don't recreate in the fabric
+
+    # Seed a per-fabric domain ontology if none exists yet (starter default).
+    local onto="${corpus_dir}/domains/ontology.md"
+    if [[ ! -f "${onto}" ]]; then
+        mkdir -p "${corpus_dir}/domains"
+        cat > "${onto}" <<'EOF'
+---
+type: ontology
+title: Domain Ontology
+updated: 2026-09-13
+---
+
+# Domain Ontology
+
+The ontology is living — `python3 scripts/cmd/propose-domains.py` discovers new
+domains from evidence signals. Per-fabric artifact (synced via `wf sync`).
+New domains are proposed as pending-review dossiers and merged only after human
+review with `python3 scripts/cmd/promote-domains.py --apply`.
+
+## Domains
+
+## Shared tag set (lowercase)
+
+- Cross-cutting: `agent`, `mcp`, `threading`, `safety`, `benchmark`, `git`, `evaluation`, `retrieval`
+- Tooling: `godot`, `fastmcp`, `opencode`
+- Knowledge-model: `provenance`, `pattern`, `experience-event`, `promotion`
+
+## Scope → home mapping
+
+- `global` → `global/*` (patterns, anti-patterns, skills, playbooks, decision-rules, entities, principles)
+- `domain` → `domains/<domain>/{concepts,questions,syntheses}`
+- `project` → `projects/<repo>/{experience-events,decisions}`
+
+## Independence rule
+
+Two evidence items sharing one lineage (same source captured into two repos, or two
+claims citing the same `source` with no independent corroboration) count as **one**
+evidence lineage. State lineage explicitly when clustering.
+
+## Retrieval signal types
+
+- `lexical` — index / grep / code-aware
+- `graph` — `relations` expansion through claims/entities
+- `recency` — last-verified / captured date weighting
+- `uncertainty` — open `questions/` + unresolved `contradicts` relations
+EOF
+    fi
 }
 
 # === Command: install ===
@@ -480,17 +566,17 @@ cmd_install() {
     # Set up vault (beside the fabric by default — relative to where the
     # fabric actually lives, never a hard-coded home path)
     if [[ "${skip_vault}" == false ]]; then
-        local vault_path="$(dirname "${fabric_dir}")/vault"
+        local vault_path="$(vault_dir "${fabric_dir}")"
         info "Setting up Obsidian vault at ${vault_path}..."
         bash "${install_dir}/scripts/setup-vault.sh" "${vault_path}" 2>/dev/null || true
-        run_script "${fabric_dir}" "scripts/vault-refresh.py" "${vault_path}" 2>/dev/null || true
+        run_script "${fabric_dir}" "scripts/cmd/vault-refresh.py" "${vault_path}" 2>/dev/null || true
         echo ""
     fi
 
     # Wire up team corpus sync if a remote was provided
     if [[ -n "${corpus_url}" ]]; then
         info "Configuring corpus sync → ${corpus_url}"
-        run_python "${install_dir}" "${install_dir}/scripts/sync.py" init "${corpus_url}"
+        run_python "${install_dir}" "${install_dir}/scripts/cmd/sync.py" init "${corpus_url}"
         echo ""
     else
         echo "────────────────────────────────────────────"
@@ -590,11 +676,11 @@ EOF
     if [[ -f "fabric.yaml" ]]; then
         echo ""
         info "Updating entity index..."
-        run_script "${fabric_dir}" "scripts/build-entity-index.py" --skip-enrich 2>/dev/null || true
+        run_script "${fabric_dir}" "scripts/cmd/build-entity-index.py" --skip-enrich 2>/dev/null || true
 
         # Refresh wiki-fabric hooks in connected repos (version-stamped blocks)
         if command -v python3 >/dev/null 2>&1; then
-            run_script "${fabric_dir}" "scripts/hooks.py" reinstall --repos-from-config 2>/dev/null || true
+            run_script "${fabric_dir}" "scripts/harness/hooks.py" reinstall --repos-from-config 2>/dev/null || true
         fi
 
         # Self-update: refresh the installed CLI (it's a copy of this script)
@@ -609,24 +695,24 @@ EOF
     # Rebuild index
     echo ""
     info "Rebuilding catalog..."
-    run_script "${fabric_dir}" "scripts/rebuild-index.py" 2>/dev/null || true
+    run_script "${fabric_dir}" "scripts/cmd/rebuild-index.py" 2>/dev/null || true
 
     # Run lint
     echo ""
     info "Verifying health..."
-    if run_script "${fabric_dir}" "scripts/lint.py" . 2>/dev/null; then
+    if run_script "${fabric_dir}" "scripts/cmd/lint.py" . 2>/dev/null; then
         ok "Lint clean"
     else
         warn "Lint has errors — run: wf lint"
     fi
 
-    # Update vault symlinks + structure if vault exists
-    local vault_path="$(dirname "${fabric_dir}")/vault"
+    # Update vault output dir if vault exists
+    local vault_path="$(vault_dir "${fabric_dir}")"
     if [[ -d "${vault_path}" ]]; then
         echo ""
         info "Refreshing vault..."
         bash "scripts/setup-vault.sh" "${vault_path}" 2>/dev/null || true
-        run_script "${fabric_dir}" "scripts/vault-refresh.py" "${vault_path}" || true
+        run_script "${fabric_dir}" "scripts/cmd/vault-refresh.py" "${vault_path}" || true
     fi
 
     echo ""
@@ -651,10 +737,10 @@ cmd_status() {
     ok "Fabric: ${fabric_dir}"
 
     # Vault
-    local vault_path="$(dirname "${fabric_dir}")/vault"
+    local vault_path="$(vault_dir "${fabric_dir}")"
     if [[ -d "${vault_path}" ]]; then
         local vault_state
-        vault_state=$(run_script "${fabric_dir}" "scripts/vault-refresh.py" "${vault_path}" --check --quiet 2>/dev/null; echo "exit=$?")
+        vault_state=$(run_script "${fabric_dir}" "scripts/cmd/vault-refresh.py" "${vault_path}" --check --quiet 2>/dev/null; echo "exit=$?")
         if [[ "$vault_state" == *"exit=0"* ]]; then
             ok "Vault:  ${vault_path} (fresh)"
         else
@@ -675,17 +761,22 @@ cmd_status() {
 
     # LLM
     if [[ -f "${fabric_dir}/fabric.yaml" ]]; then
+        local harness_scripts_dir
+        harness_scripts_dir="$(find_harness 2>/dev/null || echo "${fabric_dir}")/scripts"
         local llm_model=$(grep "^  model:" "${fabric_dir}/fabric.yaml" 2>/dev/null | head -1 | awk '{print $2}')
         local compiler_model=$(grep "^  compiler_model:" "${fabric_dir}/fabric.yaml" 2>/dev/null | head -1 | awk '{print $2}')
         ok "LLM:    ${llm_model:-not configured}"
         ok "Compiler: ${compiler_model:-${llm_model:-not configured}} (claim extraction, synthesis, promotion)"
+        # The inline checks import fabric_config (shipped with the HARNESS, not
+        # the fabric content tree) — resolve its path via find_harness, else the
+        # import fails and `set -euo pipefail` tears down cmd_status early.
         local local_model
         local_model=$(run_python "${fabric_dir}" -c "
-import sys; sys.path.insert(0, '${fabric_dir}/scripts')
-from fabric_config import get_local_model; print(get_local_model())" 2>/dev/null)
+import sys; sys.path.insert(0, '${harness_scripts_dir}')
+from fabric_config import get_local_model; print(get_local_model())" 2>/dev/null || true)
         if [[ -n "${local_model}" ]]; then
             if run_python "${fabric_dir}" -c "
-import sys, os; sys.path.insert(0, '${fabric_dir}/scripts')
+import sys, os; sys.path.insert(0, '${harness_scripts_dir}')
 from fabric_config import find_local_model_path
 mid = sys.argv[1]
 sys.exit(0 if find_local_model_path(mid) or os.path.isdir(os.path.expanduser(mid)) else 1)" "${local_model}" 2>/dev/null; then
@@ -696,8 +787,9 @@ sys.exit(0 if find_local_model_path(mid) or os.path.isdir(os.path.expanduser(mid
         fi
     fi
 
-    # Inventory counts
-    cd "${fabric_dir}"
+    # Inventory counts — content lives in the corpus (${fabric_dir}/corpus)
+    local corpus_dir="${fabric_dir}/corpus"
+    cd "${corpus_dir}"
     local claims=$(find evidence/claims -name "claim-*.md" 2>/dev/null | wc -l | tr -d ' ')
     local sources=$(find evidence/sources -name "src-*.md" 2>/dev/null | wc -l | tr -d ' ')
     local concepts=$(find concepts -name "concept-*.md" 2>/dev/null | wc -l | tr -d ' ')
@@ -706,7 +798,7 @@ sys.exit(0 if find_local_model_path(mid) or os.path.isdir(os.path.expanduser(mid
     local entities=$(find global/entities -name "entity-*.md" 2>/dev/null | wc -l | tr -d ' ')
     local discovered
     discovered=$(run_python "${fabric_dir}" -c "
-import sys; sys.path.insert(0, '${fabric_dir}/scripts')
+import sys; sys.path.insert(0, '${harness_scripts_dir}')
 from fabric_config import get_config, get_discovered_repos
 print(len(get_discovered_repos(get_config())))" 2>/dev/null || echo 0)
 
@@ -722,14 +814,14 @@ print(len(get_discovered_repos(get_config())))" 2>/dev/null || echo 0)
 
     # Lint health
     echo ""
-    if run_script "${fabric_dir}" "scripts/lint.py" . 2>/dev/null; then
+    if run_script "${fabric_dir}" "scripts/cmd/lint.py" "${corpus_dir}" 2>/dev/null; then
         ok "Lint: clean"
     else
         warn "Lint: has errors"
     fi
 
     # Graphify
-    if [[ -d "global/graphs" ]] && [[ -n "$(ls global/graphs/*.json 2>/dev/null)" ]]; then
+    if [[ -d "${corpus_dir}/global/graphs" ]] && [[ -n "$(ls "${corpus_dir}/global/graphs"/*.json 2>/dev/null)" ]]; then
         ok "Graphify: graphs imported"
     else
         info "Graphify: not configured (optional)"
@@ -746,8 +838,9 @@ cmd_vault() {
         exit 1
     fi
 
-    local vault_path="${1:-$(dirname "${fabric_dir}")/vault}"
-    # --check: report drift only; --quiet: no output (used by status/update)
+    # Explicit positional path wins; otherwise let vault-refresh resolve the
+    # output dir from fabric.yaml vault.path (defaulting to a sibling vault).
+    local vault_path=""
     local check=false quiet=false
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -758,12 +851,21 @@ cmd_vault() {
     done
     echo ""
     if [[ "$check" == true ]]; then
-        info "Checking Obsidian vault at ${vault_path}..."
-        run_script "${fabric_dir}" "scripts/vault-refresh.py" "${vault_path}" --check
+        info "Checking Obsidian vault..."
+        if [[ -n "$vault_path" ]]; then
+            run_script "${fabric_dir}" "scripts/cmd/vault-refresh.py" "${vault_path}" --check
+        else
+            run_script "${fabric_dir}" "scripts/cmd/vault-refresh.py" --check
+        fi
     else
-        info "Setting up / refreshing Obsidian vault at ${vault_path}..."
-        bash "${fabric_dir}/scripts/setup-vault.sh" "${vault_path}" 2>/dev/null || true
-        run_script "${fabric_dir}" "scripts/vault-refresh.py" "${vault_path}"
+        info "Setting up / refreshing Obsidian vault..."
+        if [[ -n "$vault_path" ]]; then
+            bash "${fabric_dir}/scripts/setup-vault.sh" "${vault_path}" 2>/dev/null || true
+            run_script "${fabric_dir}" "scripts/cmd/vault-refresh.py" "${vault_path}"
+        else
+            bash "${fabric_dir}/scripts/setup-vault.sh" 2>/dev/null || true
+            run_script "${fabric_dir}" "scripts/cmd/vault-refresh.py"
+        fi
     fi
 }
 
@@ -781,7 +883,7 @@ cmd_bootstrap() {
     fi
 
     echo ""
-    run_script "${fabric_dir}" "scripts/bootstrap-project.py" "$@"
+    run_script "${fabric_dir}" "scripts/cmd/bootstrap-project.py" "$@"
 }
 
 # === Main dispatcher ===
@@ -810,7 +912,7 @@ case "${1:-help}" in
             shift
             fdir=$(find_fabric)
             [[ -z "${1:-}" ]] && { err "Usage: wf capture chat <project-slug> [--since 30d] [--limit 20] [--harness opencode|claude|all] [--dry-run]"; exit 1; }
-            run_script "${fdir}" "scripts/capture-chat.py" "$@"
+            run_script "${fdir}" "scripts/cmd/capture-chat.py" "$@"
             exit 0
         fi
         if [[ -z "${1:-}" ]]; then
@@ -822,9 +924,9 @@ case "${1:-help}" in
             [[ -z "$grepo" ]] && { err "Usage: wf capture <project-slug> --git <owner/name-or-path>"; exit 1; }
             project="$1"
             shift 3
-            run_script "$(find_fabric)" "scripts/capture-git.py" "$project" --repo "$grepo" "$@"
+            run_script "$(find_fabric)" "scripts/cmd/capture-git.py" "$project" --repo "$grepo" "$@"
         else
-            run_script "$(find_fabric)" "scripts/capture.py" "$@"
+            run_script "$(find_fabric)" "scripts/cmd/capture.py" "$@"
         fi
         ;;
     ingest)
@@ -834,11 +936,11 @@ case "${1:-help}" in
             err "Usage: wf ingest <source-path> [--extract-claims]"
             exit 1
         fi
-        run_script "${fdir}" "scripts/ingest.py" "$@"
+        run_script "${fdir}" "scripts/cmd/ingest.py" "$@"
         ;;
     query)
         shift
-        run_script "$(find_fabric)" "scripts/query.py" "$@"
+        run_script "$(find_fabric)" "scripts/cmd/query.py" "$@"
         ;;
     context)
         shift
@@ -847,10 +949,11 @@ case "${1:-help}" in
             err "Usage: wf context --task \"<task>\" [--paths <code/path>] [--project <slug>] [--format json] [--max N]"
             exit 1
         fi
-        run_script "${fdir}" "scripts/context.py" "$@"
+        run_script "${fdir}" "scripts/cmd/context.py" "$@"
         ;;
     lint)
-        run_script "$(find_fabric)" "scripts/lint.py" .
+        fdir="$(find_fabric)"
+        run_script "${fdir}" "scripts/cmd/lint.py" "${fdir}/corpus"
         ;;
     hook)
         shift
@@ -858,7 +961,7 @@ case "${1:-help}" in
         subcmd="${1:-status}"
         shift 2>/dev/null
         export WIKI_FABRIC_DIR="${fdir}"
-        run_script "${fdir}" "scripts/hooks.py" "${subcmd}" "$@"
+        run_script "${fdir}" "scripts/harness/hooks.py" "${subcmd}" "$@"
         ;;
     claude|harness)
         shift
@@ -867,10 +970,10 @@ case "${1:-help}" in
         shift 2>/dev/null || true
         case "${subcmd}" in
             install|status)
-                run_script "${fdir}" "scripts/harnesses.py" "${subcmd}" "$@"
+                run_script "${fdir}" "scripts/harness/harnesses.py" "${subcmd}" "$@"
                 ;;
             legacy)
-                run_script "${fdir}" "scripts/always_on.py" "$@"
+                run_script "${fdir}" "scripts/harness/always_on.py" "$@"
                 ;;
             *)
                 err "Usage: ${SCRIPT_NAME} harness {install|status} [--all|--only k1,k2] [--force]"
@@ -885,10 +988,10 @@ case "${1:-help}" in
         shift 2>/dev/null
         case "${subcmd}" in
             export)
-                run_script "${fdir}" "scripts/okf_export.py" "$@"
+                run_script "${fdir}" "scripts/cmd/okf_export.py" "$@"
                 ;;
             import)
-                run_script "${fdir}" "scripts/okf_import.py" "$@"
+                run_script "${fdir}" "scripts/cmd/okf_import.py" "$@"
                 ;;
             *)
                 err "Usage: ${SCRIPT_NAME} okf {export|import} [options]"
@@ -898,12 +1001,12 @@ case "${1:-help}" in
         ;;
     log)
         shift
-        run_script "$(find_fabric)" "scripts/log-experience.py" "$@"
+        run_script "$(find_fabric)" "scripts/cmd/log-experience.py" "$@"
         ;;
     skill)
         shift
         fdir=$(find_fabric)
-        run_script "${fdir}" "scripts/skill.py" "$@"
+        run_script "${fdir}" "scripts/harness/skill.py" "$@"
         ;;
     export)
         shift
@@ -912,7 +1015,7 @@ case "${1:-help}" in
         shift 2>/dev/null || true
         case "${subcmd}" in
             wiki)
-                run_script "${fdir}" "scripts/export-wiki.py" "$@"
+                run_script "${fdir}" "scripts/cmd/export-wiki.py" "$@"
                 ;;
             *)
                 err "Usage: ${SCRIPT_NAME} export wiki [--project <slug>] [--mode mechanical|llm|hybrid] [--dry-run]"
@@ -923,7 +1026,17 @@ case "${1:-help}" in
     review)
         shift
         fdir=$(find_fabric)
-        run_script "${fdir}" "scripts/review.py" "$@"
+        run_script "${fdir}" "scripts/cmd/review.py" "$@"
+        ;;
+    gate)
+        shift
+        fdir=$(find_fabric)
+        run_script "${fdir}" "scripts/cmd/gate.py" "$@"
+        ;;
+    promote-domains)
+        shift
+        fdir=$(find_fabric)
+        run_script "${fdir}" "scripts/cmd/promote-domains.py" "$@"
         ;;
     mine)
         shift
@@ -932,7 +1045,7 @@ case "${1:-help}" in
         shift 2>/dev/null || true
         case "${subcmd}" in
             chats)
-                run_script "${fdir}" "scripts/mine-chats.py" "$@"
+                run_script "${fdir}" "scripts/cmd/mine-chats.py" "$@"
                 ;;
             *)
                 err "Usage: ${SCRIPT_NAME} mine chats <project> [--since 90d] [--llm] [--dry-run]"
@@ -947,7 +1060,7 @@ case "${1:-help}" in
         shift 2>/dev/null || true
         case "${subcmd}" in
             ensure)
-                run_script "${fdir}" "scripts/ensure-local-model.py" "$@"
+                run_script "${fdir}" "scripts/cmd/ensure-local-model.py" "$@"
                 ;;
             *)
                 err "Usage: ${SCRIPT_NAME} models {ensure} [--model <hf-id>] [--yes]"
@@ -962,7 +1075,7 @@ case "${1:-help}" in
         shift 2>/dev/null || true
         case "${subcmd}" in
             migrate)
-                run_script "${fdir}" "scripts/repos-migrate.py" "$@"
+                run_script "${fdir}" "scripts/cmd/repos-migrate.py" "$@"
                 ;;
             *)
                 err "Usage: ${SCRIPT_NAME} repos migrate [--dry-run|--apply]"
@@ -977,7 +1090,7 @@ case "${1:-help}" in
             err "Usage: wf sync {init <git-url> | status | push [-m msg] | pull}"
             exit 1
         fi
-        run_script "${fdir}" "scripts/sync.py" "$@"
+        run_script "${fdir}" "scripts/cmd/sync.py" "$@"
         ;;
     integrations)
         fdir=$(find_fabric)
@@ -1012,7 +1125,7 @@ case "${1:-help}" in
         echo "  update                            Pull latest + rebuild entity index"
         echo "  status                            Show fabric health + inventory"
         echo "  version                           Show wf version + CLI sync state"
-        echo "  vault [PATH]                      Create Obsidian vault (symlinks)"
+        echo "  vault [PATH]                      Scaffold/audit Obsidian output vault"
         echo "  bootstrap <project-path>          Connect a project to the fabric"
         echo "  capture <project-slug>            Capture upstream repo docs → evidence/raw/"
         echo "                                    (--git owner/name or /path captures PR/issue history)"
@@ -1032,6 +1145,8 @@ case "${1:-help}" in
         echo "  review --check [--project <slug>] Staleness report: what's due, overdue, stale"
         echo "  review --verify <claim>           Re-verify a claim (rolls review_after forward)"
         echo "  review --auto-reverify            Mechanically re-verify all overdue (sha256-gated, 0 tokens)"
+        echo "  gate [--quiet|--json]                Aggregate pending HITL: stale claims, promotion dossiers, domain proposals"
+        echo "  promote-domains {list|--apply <dossier>} Merge a human-approved domain proposal into the ontology"
         echo "  mine chats <project>              Distill captured chats into durable takeaways"
         echo "                                    (patterns, anti-patterns, workflows; transients filtered)"
         echo "  harness {install|status}          Install always-on + procedures into detected agent"
