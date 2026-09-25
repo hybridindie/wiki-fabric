@@ -13,6 +13,14 @@
 #   wf context --task "..." --project my-project          # pin a project namespace
 #   wf context --task "..." --paths a/b --paths c/d       # multiple code paths
 #   wf context --task "..." --format json                 # machine manifest
+#   wf context --task "..." --write-receipt               # persist delivery receipt
+#
+# Receipts (--write-receipt): persist the manifest as an auditable artifact —
+#   schema wiki-fabric/receipt-v1, id derived from the manifest payload (same
+#   corpus + task => same id; re-running overwrites in place, no dupes).
+#   Partitioned by namespace: projects/<p>/receipts/ when pinned, else
+#   registry/receipts/. The receipt path goes to stderr; stdout stays the
+#   manifest, byte-identical with or without the flag. 0 tokens.
 #
 # Priority order (highest first): project decisions/claims → domain patterns →
 # global patterns/policies → concepts. Superseded artifacts are excluded;
@@ -28,6 +36,7 @@ for _dir in (_HERE, _HERE.parent / "lib"):
         _s.path.insert(0, str(_dir))
 import re
 import json
+import hashlib
 import argparse
 from pathlib import Path
 from datetime import date
@@ -343,17 +352,61 @@ def integrations_state():
         return {"graphify": False, "embeddings": False}
 
 
-def render_json(task, paths, project, selected, excluded):
-    return json.dumps({
+def _manifest_payload(task, paths, project, selected, excluded, today):
+    """Canonical dict the manifest and receipt are both built from."""
+    return {
         "task": task,
         "paths": paths,
         "project": project,
-        "compiled": date.today().isoformat(),
+        "compiled": today.isoformat(),
         "integrations": integrations_state(),
         "selected": selected,
         "excluded": excluded,
         "precedence": ["project", "domain", "global"],
-    }, indent=2)
+    }
+
+
+def receipt_id(manifest):
+    """Content-derived receipt id: sha256 of the canonical manifest payload.
+
+    Same corpus + task + flags => same id => re-running --write-receipt
+    overwrites in place instead of accumulating dupes. Byte-stable: sorted
+    keys, fixed separators."""
+    payload = {k: v for k, v in manifest.items() if k != "$schema"}
+    digest = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return f"receipt-{digest[:12]}"
+
+
+def build_receipt(manifest, rid, fabric_root, project):
+    """receipt-v1 envelope: the manifest payload + provenance + location."""
+    receipt = dict(manifest)
+    receipt["$schema"] = "wiki-fabric/receipt-v1"
+    receipt["receipt_id"] = rid
+    receipt["manifest"] = "wiki-fabric/context-manifest-v1"
+    receipt["fabric_root"] = fabric_root.name
+    receipt["namespace"] = f"projects/{project}" if project else "registry"
+    return receipt
+
+
+def write_receipt(manifest, project):
+    """Persist the delivery receipt. Returns (path, id). Never throws —
+    a receipt failure must not fail the compile."""
+    try:
+        rid = receipt_id(manifest)
+        if project:
+            base = VAULT_ROOT / "projects" / project / "receipts"
+        else:
+            base = VAULT_ROOT / "registry" / "receipts"
+        base.mkdir(parents=True, exist_ok=True)
+        out = base / f"{rid}.json"
+        out.write_text(json.dumps(build_receipt(manifest, rid, VAULT_ROOT, project),
+                                  indent=2, sort_keys=True) + "\n")
+        return out, rid
+    except Exception as e:
+        print(f"warn: receipt not written: {e}", file=sys.stderr)
+        return None, None
 
 
 def main():
@@ -363,13 +416,21 @@ def main():
     parser.add_argument("--project", help="Pin a project namespace (projects/<slug>/)")
     parser.add_argument("--format", choices=("markdown", "json"), default="markdown")
     parser.add_argument("--max", type=int, default=20, help="Max selected artifacts (default 20)")
+    parser.add_argument("--write-receipt", action="store_true",
+                        help="Persist the manifest as a receipt (schema receipt-v1); path on stderr")
     args = parser.parse_args()
 
     pages = load_corpus()
     selected, excluded = select_context(pages, args.task, args.paths, args.project, date.today(), args.max)
+    manifest = _manifest_payload(args.task, args.paths, args.project, selected, excluded, date.today())
+
+    if args.write_receipt:
+        rpath, rid = write_receipt(manifest, args.project)
+        if rpath:
+            print(f"receipt: {rpath} ({rid})", file=sys.stderr)
 
     if args.format == "json":
-        print(render_json(args.task, args.paths, args.project, selected, excluded))
+        print(json.dumps({"$schema": "wiki-fabric/context-manifest-v1", **manifest}, indent=2))
     else:
         print(render_markdown(args.task, args.paths, args.project, selected, excluded))
     return 0

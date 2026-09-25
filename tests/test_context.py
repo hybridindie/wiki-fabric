@@ -184,6 +184,21 @@ class TestOutputs:
         assert data["precedence"] == ["project", "domain", "global"]
         assert any(s["stem"] == "pattern-x" and "match" in s["reason"] for s in data["selected"])
 
+    def test_json_manifest_carries_schema_version(self, tmp_path):
+        (tmp_path / "corpus" / "patterns").mkdir(parents=True)
+        (tmp_path / "corpus" / "patterns" / "pattern-x.md").write_text(
+            "---\ntype: pattern\nid: pattern-x\nstatus: recommended\n---\n\nRotate tokens on refresh.\n"
+        )
+        import shutil as _sh
+        _sh.copytree(REPO / "scripts", tmp_path / "scripts", dirs_exist_ok=True)
+        out = subprocess.run(
+            [sys.executable, str(tmp_path / "scripts" / "cmd/context.py"),
+             "--task", "token rotation", "--format", "json"],
+            capture_output=True, text=True,
+            env={**os.environ, "WIKI_FABRIC_DIR": str(tmp_path)},
+        )
+        assert json.loads(out.stdout)["$schema"] == "wiki-fabric/context-manifest-v1"
+
     def test_markdown_has_precedence_section(self, tmp_path):
         out = subprocess.run(
             [sys.executable, str(REPO / "scripts" / "cmd/context.py"),
@@ -197,6 +212,139 @@ class TestOutputs:
         # The script must not import any LLM client
         src = (REPO / "scripts" / "cmd/context.py").read_text()
         assert "openai" not in src and "anthropic" not in src
+
+
+class TestReceipts:
+    """--write-receipt persists the manifest as a receipt-v1 artifact:
+    content-derived id (idempotent), namespace-partitioned, byte-stable,
+    stdout untouched (path goes to stderr)."""
+
+    def _fabric(self, tmp_path):
+        import shutil as _sh
+        (tmp_path / "corpus" / "patterns").mkdir(parents=True)
+        (tmp_path / "corpus" / "patterns" / "pattern-x.md").write_text(
+            "---\ntype: pattern\nid: pattern-x\nstatus: recommended\n---\n\nRotate tokens on refresh.\n"
+        )
+        _sh.copytree(REPO / "scripts", tmp_path / "scripts", dirs_exist_ok=True)
+        return tmp_path
+
+    def _run(self, fabric, *extra):
+        return subprocess.run(
+            [sys.executable, str(fabric / "scripts" / "cmd/context.py"),
+             "--task", "token rotation", *extra],
+            capture_output=True, text=True,
+            env={**os.environ, "WIKI_FABRIC_DIR": str(fabric)},
+        )
+
+    def test_receipt_written_with_envelope(self, tmp_path):
+        fabric = self._fabric(tmp_path)
+        out = self._run(fabric, "--format", "json", "--write-receipt")
+        assert out.returncode == 0
+        receipts = list((fabric / "corpus" / "registry" / "receipts").glob("*.json"))
+        assert len(receipts) == 1
+        data = json.loads(receipts[0].read_text())
+        assert data["$schema"] == "wiki-fabric/receipt-v1"
+        assert data["receipt_id"] == receipts[0].stem
+        assert data["namespace"] == "registry"
+        assert data["manifest"] == "wiki-fabric/context-manifest-v1"
+        assert {s["stem"] for s in data["selected"]} == {"pattern-x"}
+
+    def test_receipt_path_on_stderr_stdout_untouched(self, tmp_path):
+        fabric = self._fabric(tmp_path)
+        plain = self._run(fabric, "--format", "json")
+        with_r = self._run(fabric, "--format", "json", "--write-receipt")
+        # stdout byte-identical with and without the flag
+        assert plain.stdout == with_r.stdout
+        assert "receipt" in with_r.stderr
+        assert "receipt" not in plain.stderr
+
+    def test_receipt_id_deterministic_idempotent(self, tmp_path):
+        fabric = self._fabric(tmp_path)
+        self._run(fabric, "--format", "json", "--write-receipt")
+        self._run(fabric, "--format", "json", "--write-receipt")
+        receipts = list((fabric / "corpus" / "registry" / "receipts").glob("*.json"))
+        assert len(receipts) == 1, "same corpus+task must overwrite in place, not accumulate"
+
+    def test_receipt_byte_identical_across_runs(self, tmp_path):
+        fabric = self._fabric(tmp_path)
+        self._run(fabric, "--format", "json", "--write-receipt")
+        first = list((fabric / "corpus" / "registry" / "receipts").glob("*.json"))[0].read_bytes()
+        self._run(fabric, "--format", "json", "--write-receipt")
+        second = list((fabric / "corpus" / "registry" / "receipts").glob("*.json"))[0].read_bytes()
+        assert first == second
+
+    def test_receipt_partitioned_by_project_namespace(self, tmp_path):
+        import shutil as _sh
+        fabric = self._fabric(tmp_path)
+        proj = fabric / "corpus" / "projects" / "auth"
+        proj.mkdir(parents=True)
+        (proj / "decisions").mkdir()
+        (proj / "decisions" / "decision-rotation.md").write_text(
+            "---\ntype: decision\nid: decision-rotation\nproject: auth\n---\n\nRotate tokens for oauth.\n"
+        )
+        out = subprocess.run(
+            [sys.executable, str(fabric / "scripts" / "cmd/context.py"),
+             "--task", "token rotation", "--project", "auth",
+             "--format", "json", "--write-receipt"],
+            capture_output=True, text=True,
+            env={**os.environ, "WIKI_FABRIC_DIR": str(fabric)},
+        )
+        assert out.returncode == 0
+        proj_receipts = list((proj / "receipts").glob("*.json"))
+        assert len(proj_receipts) == 1, "pinned project receipt must live under projects/<p>/receipts/"
+        assert not (fabric / "corpus" / "registry" / "receipts").exists()
+        data = json.loads(proj_receipts[0].read_text())
+        assert data["namespace"] == "projects/auth"
+
+    def test_receipt_id_changes_when_manifest_changes(self, tmp_path):
+        fabric = self._fabric(tmp_path)
+        self._run(fabric, "--format", "json", "--write-receipt")
+        first = list((fabric / "corpus" / "registry" / "receipts").glob("*.json"))[0].stem
+        # a different task changes the selection => different payload => different id
+        subprocess.run(
+            [sys.executable, str(fabric / "scripts" / "cmd/context.py"),
+             "--task", "unrelated billing webhook", "--format", "json", "--write-receipt"],
+            capture_output=True, text=True,
+            env={**os.environ, "WIKI_FABRIC_DIR": str(fabric)},
+        )
+        receipts = list((fabric / "corpus" / "registry" / "receipts").glob("*.json"))
+        assert len(receipts) == 2, "different manifest payload must yield a different receipt id"
+
+    def test_receipt_lint_rejects_bad_envelope(self, tmp_path):
+        import importlib.util as _ilu
+        fabric = self._fabric(tmp_path)
+        self._run(fabric, "--format", "json", "--write-receipt")
+        rpath = list((fabric / "corpus" / "registry" / "receipts").glob("*.json"))[0]
+        spec = _ilu.spec_from_file_location('lint_mod', str(REPO / "scripts" / "cmd/lint.py"))
+        lint = _ilu.module_from_spec(spec); spec.loader.exec_module(lint)
+
+        def lint_errors():
+            out = subprocess.run(
+                [sys.executable, str(REPO / "scripts" / "cmd/lint.py"),
+                 "--format", "json", str(fabric / "corpus")],
+                capture_output=True, text=True,
+            )
+            report = json.loads(out.stdout)
+            return [e["message"] for e in report["errors"] if e["code"] == "RECEIPT"]
+
+        # good receipt: clean
+        assert lint_errors() == []
+        # bad $schema: flagged
+        data = json.loads(rpath.read_text())
+        data["$schema"] = "nope"
+        rpath.write_text(json.dumps(data))
+        assert any("$schema" in e for e in lint_errors())
+        # missing required field: flagged
+        data["$schema"] = "wiki-fabric/receipt-v1"
+        del data["task"]
+        rpath.write_text(json.dumps(data))
+        assert any("'task'" in e for e in lint_errors())
+        # filename != receipt_id: flagged
+        data["task"] = "t"
+        rpath2 = rpath.with_name("wrong-name.json")
+        rpath2.write_text(json.dumps(data))
+        rpath.unlink()
+        assert any("receipt_id" in e for e in lint_errors())
 
 
 class TestHumanLayerExcluded:

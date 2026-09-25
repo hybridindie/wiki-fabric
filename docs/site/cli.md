@@ -127,7 +127,7 @@ Scripts live in four subdirectories of `scripts/` — `cmd/` (entrypoints), `eva
 | `capture-chat.py` | Capture agent-harness chat sessions as chat-transcript evidence | 0 |
 | `ingest.py` | Source → source record → claims (LLM extraction) | 1 call per source |
 | `query.py` | Question → evidence-backed answer | 0 tokens (lexical + graph) |
-| `context.py` | Task → scoped context manifest with reasons | 0 tokens |
+| `context.py` | Task → scoped context manifest with reasons (`--write-receipt` persists a receipt-v1 artifact) | 0 tokens |
 | `lint.py` | Deterministic checks (incl. `--okf` floor, `llm.local_model`) | 0 |
 | `synthesize.py` | Claims → concept pages (cloud or on-device route) | 1 per concept |
 | `log-experience.py` | Capture experience event | 0 |

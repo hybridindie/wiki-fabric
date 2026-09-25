@@ -137,6 +137,54 @@ def zero_llm_checks(fixture, manifest, fabric):
         for term in z["banned_terms_in_prompt"]:
             checks.append({"kind": "in_prompt", "detail": term,
                            "passed": term.lower() in prompt.lower()})
+
+    # receipt_check: delivery must be provable via the persisted receipt-v1
+    rc = fixture.get("receipt_check")
+    if rc:
+        rchecks = check_receipt(fabric, manifest, rc)
+        checks.extend(rchecks)
+    return checks
+
+
+def check_receipt(fabric, manifest, rc):
+    """Re-run the compile with --write-receipt in an isolated copy, then assert
+    the persisted receipt proves delivery. Receipts land under the fabric's
+    namespace dir (registry/receipts/ or projects/<p>/receipts/)."""
+    import copy
+    checks = []
+    project = rc.get("project") or manifest.get("project")
+    out = subprocess.run(
+        [sys.executable, str(fabric / "scripts" / "cmd/context.py"),
+         "--task", manifest["task"], "--format", "json", "--write-receipt"],
+        capture_output=True, text=True, cwd=str(fabric),
+        env={**os.environ, "WIKI_FABRIC_DIR": str(fabric)},
+    )
+    if out.returncode != 0:
+        return [{"kind": "receipt", "detail": "compile with --write-receipt failed", "passed": False}]
+    namespace = f"projects/{project}" if project else rc.get("namespace", "registry")
+    receipts_dir = fabric / "corpus" / namespace / "receipts"
+    receipts = sorted(receipts_dir.glob("*.json")) if receipts_dir.is_dir() else []
+    if not receipts:
+        return [{"kind": "receipt", "detail": f"no receipt persisted under {namespace}/receipts", "passed": False}]
+    if len(receipts) != 1:
+        return [{"kind": "receipt", "detail": f"expected 1 receipt, found {len(receipts)}", "passed": False}]
+    try:
+        receipt = json.loads(receipts[0].read_text())
+    except Exception as e:
+        return [{"kind": "receipt", "detail": f"unparseable receipt: {e}", "passed": False}]
+    checks.append({"kind": "receipt_schema",
+                   "detail": "$schema == wiki-fabric/receipt-v1",
+                   "passed": receipt.get("$schema") == "wiki-fabric/receipt-v1"})
+    checks.append({"kind": "receipt_id_filename",
+                   "detail": "filename matches receipt_id",
+                   "passed": receipts[0].stem == receipt.get("receipt_id")})
+    r_stems = {s.get("stem") for s in receipt.get("selected", [])}
+    m_stems = {s["stem"] for s in manifest["selected"]}
+    checks.append({"kind": "receipt_matches_manifest",
+                   "detail": "receipt selected == manifest selected",
+                   "passed": r_stems == m_stems})
+    for want in rc.get("must_include_stems", []):
+        checks.append({"kind": "receipt_delivered", "detail": want, "passed": want in r_stems})
     return checks
 
 

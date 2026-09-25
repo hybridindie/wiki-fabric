@@ -95,12 +95,36 @@ honest: **it must be deletable and rebuildable from canonical files**
 become a hidden source of truth.
 
 **Schema versions are the compatibility boundary.** Machine surfaces carry
-their schema in-band: `catalog.json` writes `$schema: wiki-fabric/registry-v1`.
-Future machine surfaces follow the same convention — persisted context
-receipts will carry `wiki-fabric/receipt-v1`, and `wf context --format json`
-will get a documented, versioned shape. Consumers bind to the version, not to
-incidental fields. The one-line rule: **Markdown explains, YAML classifies,
-JSON executes — and JSON carries its version.**
+their schema in-band: `catalog.json` writes `$schema: wiki-fabric/registry-v1`,
+the task manifest writes `wiki-fabric/context-manifest-v1`, and persisted
+context receipts write `wiki-fabric/receipt-v1`. Consumers bind to the
+version, not to incidental fields. The one-line rule: **Markdown explains,
+YAML classifies, JSON executes — and JSON carries its version.**
+
+### `--write-receipt`: delivery as an auditable artifact
+
+`wf context --write-receipt` persists the manifest as a **context receipt**
+(schema `wiki-fabric/receipt-v1`) — the per-run record of what the fabric
+delivered and why. "Provably delivered" stops being a demo claim and becomes
+a checkable artifact: eval fixtures, attesters, and CI can assert *after the
+fact* that a given task received the required knowledge.
+
+- **Envelope:** the full manifest payload plus `receipt_id`, `manifest`
+  (schema of the wrapped manifest), `fabric_root`, `namespace`.
+- **Id is content-derived:** `receipt-<sha256[:12]>` of the manifest payload.
+  Same corpus + task + flags ⇒ same id ⇒ re-running overwrites in place —
+  receipts never accumulate duplicates, and re-runs are byte-identical.
+- **Partitioned by namespace:** pinned project → `projects/<p>/receipts/`;
+  otherwise `registry/receipts/`. Receipts travel with their namespace in
+  team sync, and no consumer must load "everything" to read one receipt.
+- **stdout discipline:** the receipt path goes to **stderr**; stdout remains
+  the manifest, byte-identical with or without the flag.
+- **Lint (`RECEIPT`):** validates the envelope — `$schema` value, required
+  fields (`receipt_id`, `task`, `selected`, `excluded`, `precedence`,
+  `namespace`), and filename ↔ `receipt_id` match.
+- **Eval:** behavior fixture `be5` re-compiles with `--write-receipt` and
+  asserts the persisted receipt proves delivery (schema, id/filename match,
+  selected set equals the manifest's, required stems present).
 
 ## Keeping the catalog out of context (bloat guardrails)
 
@@ -123,9 +147,10 @@ Guardrails for external consumers:
 - **The manifest's excluded list is capped** (15 shown, remainder summarized),
   so a large corpus can't bloat task context either.
 
-Same principle, planned: per-run context receipts will live under the
-project namespace rather than one global file — machine artifacts stay
-partitioned so no consumer must load "everything" to see "anything".
+Same principle, enforced: per-run context receipts are partitioned under the
+namespace that produced them (`projects/<p>/receipts/` or
+`registry/receipts/`) — machine artifacts stay partitioned so no consumer
+must load "everything" to see "anything".
 
 ### `registry/log.md` — the append-only timeline
 
