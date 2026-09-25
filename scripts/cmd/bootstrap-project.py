@@ -541,11 +541,16 @@ config; the fabric discovers it (see fabric.yaml repos.auto_discover).
         run_cmd("git commit -q -m 'chore: initial commit from wiki-fabric bootstrap'")
         print("Initialized git repository with initial commit")
 
-    # 5. Create project namespace in the fabric
-    namespace_dir = find_fabric_root() / "projects" / project_slug
+    # 5. Create project namespace in the fabric (corpus content root —
+    # every consumer resolves projects/ under CORPUS_ROOT; FABRIC_ROOT
+    # is the vault shell, not the content root)
+    namespace_dir = find_fabric_root() / "corpus" / "projects" / project_slug
+    if not (find_fabric_root() / "corpus").exists():
+        # pre-corpus layout: content dirs live at the fabric root
+        namespace_dir = find_fabric_root() / "projects" / project_slug
     (namespace_dir / "experience-events").mkdir(parents=True, exist_ok=True)
     (namespace_dir / "decisions").mkdir(parents=True, exist_ok=True)
-    print(f"Created project namespace: {namespace_dir.relative_to(find_fabric_root())}")
+    print(f"Created project namespace: {namespace_dir}")
 
     # 5b. Vault freshness: write the fabric-side overlay view + refresh links
     try:
