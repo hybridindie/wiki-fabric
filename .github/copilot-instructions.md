@@ -1,3 +1,8 @@
+---
+title: Copilot instructions (wiki-fabric)
+type: index
+---
+
 ## wiki-fabric (copilot)
 ## wiki-fabric
 

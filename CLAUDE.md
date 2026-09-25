@@ -1,3 +1,8 @@
+---
+title: CLAUDE.md (wiki-fabric harness instructions)
+type: index
+---
+
 ## wiki-fabric (claude)
 ## wiki-fabric
 

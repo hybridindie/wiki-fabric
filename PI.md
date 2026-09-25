@@ -1,3 +1,8 @@
+---
+title: PI.md (wiki-fabric)
+type: index
+---
+
 ## wiki-fabric (pi)
 ## wiki-fabric
 
