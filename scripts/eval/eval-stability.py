@@ -103,11 +103,23 @@ def build_fabric(tmp, model=None):
     (tmp / "fabric.yaml").write_text(f"owner: eval\n{llm}repos: {{}}\n")
 
 
-def timed(*args, cwd=None, timeout=600):
+def timed(*args, cwd=None, timeout=600, env=None):
     t0 = time.monotonic()
     out = subprocess.run([str(a) for a in args], cwd=cwd and str(cwd),
-                         capture_output=True, text=True, timeout=timeout)
+                         capture_output=True, text=True, timeout=timeout,
+                         env=env or os.environ)
     return out, time.monotonic() - t0
+
+
+def _fabric_env(fabric_root):
+    """Env for subprocesses: the tmp fabric IS the fabric root. Without this,
+    a machine that has a real vault (dev mode) makes child scripts resolve the
+    real vault instead of the isolated tmp one (G1/G2 pass because they run
+    with cwd=tmp and relative paths, but ingest resolves FABRIC_ROOT via env —
+    /var vs /private/var symlink mismatch and WIKI_FABRIC_DIR inheritance)."""
+    e = dict(os.environ)
+    e["WIKI_FABRIC_DIR"] = str(fabric_root)
+    return e
 
 
 def claim_statements(claims_dir):
@@ -165,12 +177,13 @@ def gate_rebuild_determinism(tmp, runs=3):
 def gate_ingest_stability(tmp, model, runs=2):
     """G3: two LLM ingest runs on the same source → claim-set Jaccard >= 0.8."""
     scores, times, counts = [], [], []
+    env = _fabric_env(tmp)
     for i in range(runs):
         for d in ("evidence/claims", "evidence/sources", "evidence/source-summaries", "evidence/traces"):
             shutil.rmtree(tmp / d, ignore_errors=True)
         out, dt = timed(sys.executable, tmp / "scripts" / "cmd/ingest.py",
                         tmp / "evidence" / "raw" / "stab" / "fixture.md",
-                        "--extract-claims", cwd=tmp, timeout=900)
+                        "--extract-claims", cwd=tmp, timeout=900, env=env)
         times.append(dt)
         counts.append(len(list((tmp / "evidence" / "claims").glob("claim-*.md"))))
         scores.append(claim_statements(tmp / "evidence" / "claims"))
@@ -268,7 +281,7 @@ def main():
         print("G4 needs >=2 models (comma-separated --models)", file=sys.stderr)
         sys.exit(2)
 
-    tmp = Path(tempfile.mkdtemp(prefix="wf-stability."))
+    tmp = Path(tempfile.mkdtemp(prefix="wf-stability.")).resolve()
     gates = []
     timings = {}
     try:
@@ -301,7 +314,8 @@ def main():
                 try:
                     _out, t_model = timed(sys.executable, tmp / "scripts" / "cmd/ingest.py",
                                           tmp / "evidence" / "raw" / "stab" / "fixture.md",
-                                          "--extract-claims", cwd=tmp, timeout=600)
+                                          "--extract-claims", cwd=tmp, timeout=600,
+                                          env=_fabric_env(tmp))
                 except subprocess.TimeoutExpired:
                     gates.append({"gate": "G4", "name": "model sensitivity",
                                   "detail": f"{mb} did not respond within 600s — SKIPPED",
