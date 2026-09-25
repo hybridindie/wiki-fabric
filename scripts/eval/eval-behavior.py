@@ -295,7 +295,7 @@ def main():
         if not fixture:
             results.append({"id": fx_path.stem, "ok": False, "checks": [{"kind": "fixture", "detail": "unparseable", "passed": False}]})
             continue
-        tmp = Path(tempfile.mkdtemp(prefix="wf-eval."))
+        tmp = Path(tempfile.mkdtemp(prefix="wf-eval.")).resolve()
         try:
             seed_fabric(tmp, fixture.get("seeds", []))
             manifest = compile_manifest(tmp, fixture["task"])
