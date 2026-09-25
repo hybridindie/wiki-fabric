@@ -86,6 +86,15 @@ excluded — completed obligations don't bind future work. See
 [schemas/frontmatter.md](https://github.com/hybridindie/wiki-fabric/blob/main/schemas/frontmatter.md)
 for the contract.
 
+
+## Code navigation (graphify, optional)
+
+With `integrations.graphify.enabled` and a connected repo's graph, the
+manifest gains a **Code navigation** block: task tokens → graph symbols →
+files ranked by matching-symbol count ("open these first"). 0 tokens, pure
+graph lookups, deterministic. Without the integration the block is absent —
+never load-bearing.
+
 ## Receipts: make delivery auditable
 
 Add `--write-receipt` to persist the manifest as a **context receipt**
