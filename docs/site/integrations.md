@@ -1,9 +1,9 @@
 ---
 type: index
 title: "Optional Integrations"
-description: "Graphify call-graph intelligence and embeddings (off by default)"
+description: "Graphify call-graph intelligence, embeddings, and the judgment tier (off by default)"
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-25
 ---
 
 # Optional Integrations
@@ -21,6 +21,45 @@ Integrations add capabilities on top of the core loop. They are declared in `fab
 |-------------|-------------|------|
 | **graphify** | claims carry `code_symbols` + `graph_edges` (doc→code provenance); `graphify-bridge --diff` adds AST staleness detection after refactors; query expansion follows call/import edges; code-reachable claims surface first | 0 tokens (AST + community detection) |
 | **embeddings** | semantic re-ranking of retrieval results (planned — off by default) | local inference |
+| **judgment** | low-variance decision-model judging (System One models: [TypeSafe Jev](https://docs.typesafe.ai/introduction) cloud, [Laya-MLX](https://github.com/rbrus/laya-as-judge) local) for eval gates: `wf eval-behavior --judge` scores fixtures with calibrated probabilities instead of a generative LLM judge | ~$0.0004/call (cloud) or on-device (local) |
+
+## The judgment tier
+
+Between the fabric's deterministic string ops (0 tokens, always) and its
+generative LLM calls, the judgment tier is a third option: a decision model
+that evaluates typed questions (yes/no probability, rubric score, choice)
+against the assembled state and returns **typed answers with calibrated
+probabilities** — no text generation. LangChain's benchmark of Jev as a judge
+found 100% binary accuracy vs a human oracle with 92–913× lower variance than
+GPT-5.6/Claude LLM judges, at ~1/80th Claude's cost.
+
+**Where it may run (today):** `wf eval-behavior --judge` — the `--llm` probe
+of behavior evals becomes a `noul` judgment ("does the prompt deliver the
+binding decision?"), stable enough to gate CI. Planned: promotion-dossier
+refinement and borderline-context re-ranking (each judgment recorded).
+
+**Hard contract:**
+- **Never the 0-token core.** `wf context`, `wf query`, `lint` stay pure
+  string ops — guarded by a test that fails if they import the judgment module.
+- **Low-variance judgment, not determinism.** Every judgment records
+  backend + model + probability; near-threshold values surface as
+  `NEAR-THRESHOLD` and should escalate to the human gate, not auto-decide.
+- **Never authority.** A judge score supports a check; provenance, scope,
+  and human gates still decide.
+
+Config (see [Configuration](./configuration#judgment-tier)):
+
+```yaml
+integrations:
+  judgment:
+    enabled: true
+    route: cloud          # cloud (TypeSafe Jev) | local (Laya-MLX on-device)
+    cloud_model: jev-1
+```
+
+Cloud route reads `TYPESAFE_API_KEY` from the environment (never committed).
+Local route dispatches through the same on-device stack as `extract: local`
+(MLX on Apple Silicon, GGUF elsewhere).
 
 ## Agent harnesses
 

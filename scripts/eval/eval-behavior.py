@@ -219,9 +219,50 @@ def llm_probe(fixture, prompt, model=None):
     return {"answer": answer, "ok": ok, "failures": failures}
 
 
+def judge_probe(fixture, prompt, manifest, tmp):
+    """Judgment tier: a low-variance decision model (Jev cloud / Laya-MLX
+    local) scores the assembled prompt against the fixture's judge contract.
+
+    Fixture shape (optional, additive):
+      judge:
+        questions:
+          - kind: noul            # probability 0..1
+            question: "Does the prompt deliver the binding decision?"
+            threshold: 0.7        # pass bar; near-threshold values escalate
+    Every judgment records backend+model+probability in the entry so eval
+    consumers can distinguish judged checks from deterministic ones."""
+    checks = []
+    try:
+        from judgment import noul, JudgmentUnavailable, judgment_route
+        route = judgment_route()
+    except Exception as e:
+        return [{"kind": "judge", "detail": f"unavailable: {e}", "passed": False}]
+    spec = fixture.get("judge") or {}
+    questions = spec.get("questions") or []
+    if not questions:
+        # default: did the manifest deliver its required knowledge?
+        questions = [{"kind": "noul", "question": "Does this task context deliver the knowledge the agent must follow?",
+                      "threshold": 0.7}]
+    for q in questions:
+        try:
+            p = noul(q["question"], prompt)
+        except Exception as e:
+            checks.append({"kind": "judge", "detail": f"error: {e}", "passed": False})
+            continue
+        threshold = float(q.get("threshold", 0.5))
+        passed = p >= threshold
+        near = abs(p - threshold) <= 0.1
+        checks.append({"kind": "judge", "detail": f"{q['question'][:80]} p={p:.3f} "
+                       f"({'NEAR-THRESHOLD' if near else 'pass' if passed else 'fail'})",
+                       "passed": passed})
+    return checks
+
+
 def main():
     parser = argparse.ArgumentParser(description="Behavior evaluations: does the fabric change agent behavior?")
     parser.add_argument("--llm", action="store_true", help="Also probe a real model (requires openai pkg + endpoint)")
+    parser.add_argument("--judge", action="store_true",
+                        help="Also judge via the judgment tier (integrations.judgment; Jev cloud / Laya local)")
     parser.add_argument("--model", default=None, help="LLM model override")
     parser.add_argument("--record", action="store_true", help="Append metrics to registry/log.md")
     parser.add_argument("--json", action="store_true", help="JSON report")
@@ -256,6 +297,13 @@ def main():
                 "excluded": [f"{e['stem']} ({e['reason']})" for e in manifest["excluded"]],
                 "mode": "zero-llm",
             }
+            if args.judge:
+                prompt = assemble_prompt(tmp, manifest)
+                jchecks = judge_probe(fixture, prompt, manifest, tmp)
+                checks.extend(jchecks)
+                entry["judge_mode"] = True
+                entry["ok"] = entry["ok"] and all(c["passed"] for c in jchecks)
+                entry["mode"] = "judge"
             if args.llm:
                 prompt = assemble_prompt(tmp, manifest)
                 probe = llm_probe(fixture, prompt, args.model)
