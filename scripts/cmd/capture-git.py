@@ -24,9 +24,12 @@
 
 import sys
 import sys as _s, pathlib as _p
-_B = _p.Path(__file__).resolve().parent
-for _rel in ("", "cmd", "lib", "eval", "harness"):
-    _s.path.insert(0, str(_B.parent / _rel))
+_HERE = _p.Path(__file__).resolve().parent
+# Explicit import bootstrap: this script's own dir (same-dir siblings)
+# + scripts/lib (shared modules). No shotgun path injection.
+for _dir in (_HERE, _HERE.parent / "lib"):
+    if str(_dir) not in _s.path:
+        _s.path.insert(0, str(_dir))
 import re
 import json
 import hashlib

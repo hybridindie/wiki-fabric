@@ -11,9 +11,12 @@
 import re
 import sys
 import sys as _s, pathlib as _p
-_B = _p.Path(__file__).resolve().parent
-for _rel in ("", "cmd", "lib", "eval", "harness"):
-    _s.path.insert(0, str(_B.parent / _rel))
+_HERE = _p.Path(__file__).resolve().parent
+# Explicit import bootstrap: this script's own dir (same-dir siblings)
+# + scripts/lib (shared modules). No shotgun path injection.
+for _dir in (_HERE, _HERE.parent / "lib"):
+    if str(_dir) not in _s.path:
+        _s.path.insert(0, str(_dir))
 import argparse
 from pathlib import Path
 
@@ -21,7 +24,7 @@ BLOCK_START = "## wiki-fabric"
 MARKER_START = "<!-- wiki-fabric-always-on-start -->"
 MARKER_END = "<!-- wiki-fabric-always-on-end -->"
 
-_FABRIC_ROOT = _B.parent.parent  # scripts/harness → ../.. = repo root
+_FABRIC_ROOT = _HERE.parent.parent  # scripts/harness → ../.. = repo root
 _tpl = (_FABRIC_ROOT / "system" / "always-on" / "wiki-fabric-block.md").read_text(
     encoding="utf-8"
 ).strip()

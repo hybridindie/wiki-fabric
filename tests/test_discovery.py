@@ -10,8 +10,9 @@ from unittest import mock
 
 import sys, pathlib as _p
 _SCRIPTS = (_p.Path(__file__).resolve().parent.parent / "scripts").resolve()
-for _rel in ("", "cmd", "lib", "eval", "harness"):
-    sys.path.insert(0, str(_SCRIPTS / _rel))
+for _rel in ("cmd", "lib", "eval", "harness"):
+    if str(_SCRIPTS / _rel) not in sys.path:
+        sys.path.insert(0, str(_SCRIPTS / _rel))
 
 OVERLAY_TMPL = """---
 project: {slug}
