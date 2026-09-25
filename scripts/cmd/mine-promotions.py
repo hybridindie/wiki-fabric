@@ -382,12 +382,13 @@ anti_pattern_ref: "[[anti-pattern-{cluster_key}]]"
     
     for ev in events:
         project = ev.get("project", "unknown")
-        outcome = "positive" if "positive" in str(ev.get("outcomes", {})).lower() else "negative" if "negative" in str(ev.get("outcomes", {})).lower() else "neutral"
+        outcome = "success" if "positive" in str(ev.get("outcomes", {})).lower() else "failure" if "negative" in str(ev.get("outcomes", {})).lower() else "neutral"
         stem = ev.get("_file")
         ref = f"[[{Path(stem).stem if stem else 'ee-unknown'}]]"
-        outcome = "success" if "positive" in str(ev.get("outcomes", {})).lower() else "failure" if "negative" in str(ev.get("outcomes", {})).lower() else "neutral"
         dossier += f"- {ref} — the **{outcome}** mode ({ev.get('observed_problem', '')[:100]}...)\n"
     
+    from fabric_config import get_config as _gc
+    _owner = (_gc() or {}).get("owner", "you")
     dossier += f"""
 
 The {len(set(ev.get('project', '') for ev in events))} projects are independent (different domains/repos) but share the **same underlying invariant**: {{TODO: describe invariant}}.
@@ -408,34 +409,6 @@ The {len(set(ev.get('project', '') for ev in events))} projects are independent 
 **Exclude**:
 - {{TODO: list excludes}}
 
-## Confounding factors
-
-1. {{TODO: list confounding factors}}
-
-## Proposed boundary (applicability)
-
-**Include**:
-- {{TODO: list includes}}
-
-**Exclude**:
-- {{TODO: list excludes}}
-
-## Confounding factors
-
-1. {{TODO: list confounding factors}}
-
-## Proposed boundary (applicability)
-
-**Include**:
-- {{TODO: list includes}}
-
-**Exclude**:
-- {{TODO: list excludes}}
-
-## Confounding factors
-
-1. {{TODO: list confounding factors}}
-
 ## Proposed asset changes
 
 1. Create global pattern: `global/patterns/pattern-{cluster_key}.md`
@@ -445,7 +418,7 @@ The {len(set(ev.get('project', '') for ev in events))} projects are independent 
 
 ## Required review
 
-**Human owner: user.** Promote on next review. Checklist (from [[promotion-queue]]):
+**Human owner: {_owner}.** Promote on next review. Checklist (from [[promotion-queue]]):
 - [ ] Independence: do the supporting experience-events share a lineage? (No → OK.)
 - [ ] Evidence: are claims in `source_refs` actually entailed by cited locators?
 - [ ] Applicability: are `includes`/`excludes` conditions correct and non-vacuous?
