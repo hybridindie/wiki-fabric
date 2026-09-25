@@ -245,12 +245,13 @@ def cluster_events(events, min_projects=2, use_embeddings=True, model=None, thre
     return cluster_events_keyword(events, min_projects)
 
 
-def cluster_events_judged(events, min_projects=2, threshold=0.6):
+def cluster_events_judged(events, min_projects=2, threshold=None):
     """Judgment refinement over the keyword pass (#29 slice 3): pairs whose
     expanded-keyword Jaccard is a NEAR-MISS (0 < sim < keyword threshold) get
     a decision-model verdict — 'same recurring pattern?' — and judged-same
     pairs merge into one cluster. Judgment records probabilities; the
-    deterministic keyword result is the fallback when the tier is disabled."""
+    deterministic keyword result is the fallback when the tier is disabled.
+    threshold=None => judgment.MINING_THRESHOLD_DEFAULT (0.8, live-calibrated)."""
     from judgment import same_recurrence, judgment_route, JudgmentUnavailable
     try:
         route = judgment_route()
@@ -286,7 +287,7 @@ def cluster_events_judged(events, min_projects=2, threshold=0.6):
                 for ck, evs in base.items():
                     for ev in evs:
                         assigned[ev.get("_file")] = ck
-    print(f"Judgment route: {route}")
+    print(f"Judgment route: {route} | merge threshold: {threshold}")
     return base
 
 
