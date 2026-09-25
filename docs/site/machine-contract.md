@@ -101,6 +101,56 @@ context receipts write `wiki-fabric/receipt-v1`. Consumers bind to the
 version, not to incidental fields. The one-line rule: **Markdown explains,
 YAML classifies, JSON executes — and JSON carries its version.**
 
+## Machine surface shapes (v1 contracts)
+
+Harness adapters and CI bind to these field inventories. Each is guarded by a
+pytest asserting the shape matches this table, so an accidental removal or
+rename fails CI instead of silently breaking a consumer.
+
+### `wf context --format json` → `wiki-fabric/context-manifest-v1`
+
+| Field | Type | Meaning |
+|---|---|---|
+| `$schema` | string | Always `wiki-fabric/context-manifest-v1` |
+| `task` | string | The task text the manifest was compiled for |
+| `paths` | string[] | Code-path hints passed via `--paths` |
+| `project` | string \| null | Pinned project namespace, if any |
+| `compiled` | date | Compile date (YYYY-MM-DD) |
+| `integrations` | object | `{graphify: bool, embeddings: bool}` — optional-integration state |
+| `selected` | object[] | Delivered artifacts; see item shape below |
+| `excluded` | object[] | Withheld artifacts: `stem`, `path`, `reason` |
+| `precedence` | string[] | Resolution order: `["project", "domain", "global"]` |
+
+**Selected item shape:** `id`, `stem`, `path`, `type`, `scope`, `reason`,
+`priority` (`P1-project` \| `P2-domain` \| `P3-global`), `trust_tier`
+(`human-reviewed` \| `machine-confirmed` \| `unverified`) — plus optional
+`warning`, `stale_after`, `title`.
+
+### Context receipt → `wiki-fabric/receipt-v1`
+
+The manifest payload **plus**: `receipt_id` (filename must match),
+`manifest` (wrapped manifest schema), `fabric_root`, `namespace`
+(`projects/<p>` \| `registry`), `revision` (corpus git HEAD sha, `null`
+outside a repo). Enforced by lint's `RECEIPT` code.
+
+### `registry/catalog.json` → `wiki-fabric/registry-v1`
+
+`generated` (date-grain for byte-deterministic rebuilds), `total`, `counts`,
+`pages[]` (`id`, `stem`, `path`, `type`, `title`, `scope`, optional
+`description` + freshness/lifecycle fields). Rebuilt by `rebuild-index.py`;
+never hand-edited.
+
+### Compatibility policy
+
+- **Additive within a version:** new fields may appear; existing fields are
+  never removed, renamed, or retyped within a `-v1` surface. A pytest guards
+  the context-manifest shape against silent removal/rename.
+- **Version bump:** any removal, rename, or semantic change bumps the suffix
+  (`-v2`) — never mutates `-v1` in place. Consumers parse `$schema` and branch.
+- **Ephemeral vs. contractual:** optional fields documented above
+  (`warning`, `stale_after`, `title`) are contractual-when-present. Anything
+  not in these tables is incidental and may change without notice.
+
 ### `--write-receipt`: delivery as an auditable artifact
 
 `wf context --write-receipt` persists the manifest as a **context receipt**

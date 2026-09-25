@@ -199,6 +199,52 @@ class TestOutputs:
         )
         assert json.loads(out.stdout)["$schema"] == "wiki-fabric/context-manifest-v1"
 
+    def test_json_manifest_v1_shape_is_additive_only(self, tmp_path):
+        """#23 contract: v1 fields are never removed or renamed — only added.
+        This test pins the documented v1 field inventory (machine-contract.md).
+        A failure here means a breaking change: bump the schema to -v2 instead
+        of mutating v1."""
+        fabric = tmp_path
+        import shutil as _sh
+        (fabric / "corpus" / "patterns").mkdir(parents=True)
+        (fabric / "corpus" / "patterns" / "pattern-x.md").write_text(
+            "---\ntype: pattern\nid: pattern-x\nstatus: recommended\n---\n\nRotate tokens on refresh.\n"
+        )
+        (fabric / "corpus" / "patterns" / "pattern-stale.md").write_text(
+            "---\ntype: pattern\nid: pattern-stale\nstatus: superseded\n---\n\nold\n"
+        )
+        _sh.copytree(REPO / "scripts", fabric / "scripts", dirs_exist_ok=True)
+        out = subprocess.run(
+            [sys.executable, str(fabric / "scripts" / "cmd/context.py"),
+             "--task", "token rotation", "--format", "json"],
+            capture_output=True, text=True,
+            env={**os.environ, "WIKI_FABRIC_DIR": str(fabric)},
+        )
+        data = json.loads(out.stdout)
+        # documented v1 top-level inventory (machine-contract.md)
+        required_top = {"$schema", "task", "paths", "project", "compiled",
+                        "integrations", "selected", "excluded", "precedence"}
+        missing = required_top - set(data)
+        assert not missing, f"v1 breaking change — fields removed: {sorted(missing)}"
+        assert set(data["integrations"]) >= {"graphify", "embeddings"}
+        assert data["precedence"] == ["project", "domain", "global"]
+        # selected item v1 inventory
+        required_sel = {"id", "stem", "path", "type", "scope", "reason", "priority", "trust_tier"}
+        for s in data["selected"]:
+            miss = required_sel - set(s)
+            assert not miss, f"v1 breaking change in selected item: {sorted(miss)}"
+        # excluded item v1 inventory
+        required_exc = {"stem", "path", "reason"}
+        for e in data["excluded"]:
+            miss = required_exc - set(e)
+            assert not miss, f"v1 breaking change in excluded item: {sorted(miss)}"
+        # documented optional fields, contractual-when-present
+        optional_sel = {"warning", "stale_after", "title"}
+        for s in data["selected"]:
+            extra = set(s) - required_sel - optional_sel
+            # new fields are allowed (additive), but if you add one, document it
+            assert isinstance(extra, set)  # informational; additive is legal
+
     def test_markdown_has_precedence_section(self, tmp_path):
         out = subprocess.run(
             [sys.executable, str(REPO / "scripts" / "cmd/context.py"),
