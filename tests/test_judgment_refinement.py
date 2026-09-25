@@ -181,11 +181,29 @@ class TestMiningJudged:
         projects = {e["project"] for evs in clusters.values() for e in evs}
         assert projects == {"alpha", "beta"}
 
-    def test_judged_different_keeps_clusters_split(self):
+    def test_judged_different_splits_keyword_cluster(self):
+        # #41 symmetry: the split pass demotes members judged DIFFERENT from
+        # their cluster representative — a keyword cluster judged incoherent
+        # MUST split, not survive intact
         with judged(prob=0.05):
             clusters = mine.cluster_events_judged(self._events(), min_projects=2)
         kw = mine.cluster_events_keyword(self._events(), min_projects=2)
-        assert clusters == kw
+        kw_members = {e["_file"] for evs in kw.values() for e in evs}
+        judged_members = {e["_file"] for evs in clusters.values() for e in evs}
+        # at least one member of the keyword cluster was demoted
+        assert len(judged_members) < len(kw_members), \
+            "judged-DIFFERENT must demote incoherent members, not keep the keyword cluster intact"
+        # no cluster grew beyond its keyword membership
+        for evs in clusters.values():
+            assert all(e["_file"] in kw_members for e in evs)
+
+    def test_judged_same_survives_split_pass(self):
+        # judged-same pairs that MERGED must not be split back apart by the
+        # cohesion sweep (all verdicts same)
+        with judged(prob=0.95):
+            clusters = mine.cluster_events_judged(self._events(), min_projects=2)
+        all_events = [e for evs in clusters.values() for e in evs]
+        assert len(all_events) == 3, "judged-same everywhere: no member demoted"
 
 import pytest
 

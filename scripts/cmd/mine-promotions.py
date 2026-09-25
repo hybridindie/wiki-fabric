@@ -288,6 +288,64 @@ def cluster_events_judged(events, min_projects=2, threshold=None):
                     for ev in evs:
                         assigned[ev.get("_file")] = ck
     print(f"Judgment route: {route} | merge threshold: {threshold}")
+
+    # ---- Judged SPLIT pass (#41): keyword clusters can be over-merged (the
+    # 0.05 keyword threshold is deliberately loose for recall). For each
+    # cluster with >1 event, judge each member against the cluster
+    # representative (the event with the most keyword overlap to the rest);
+    # members judged DIFFERENT are demoted back to singletons. Merge-only
+    # asymmetry fixed: refinement is now symmetrical, both recorded.
+    base = _split_incoherent_clusters(base, _text, threshold, route)
+    return base
+
+
+def _cluster_representative(evs, keyword_sets=None):
+    """The member most similar to the rest of its cluster (highest mean
+    pairwise keyword Jaccard); falls back to the first event."""
+    if len(evs) <= 2:
+        return evs[0]
+    sets = [set(re.findall(r'\b[a-z]{3,}\b',
+                           (ev.get("observed_problem", "") + " " + ev.get("intervention", "")).lower()))
+            for ev in evs]
+    best, best_score = evs[0], -1.0
+    for i in range(len(evs)):
+        sims = []
+        for j in range(len(evs)):
+            if i == j:
+                continue
+            u = sets[i] | sets[j]
+            sims.append(len(sets[i] & sets[j]) / len(u) if len(u) else 0.0)
+        mean = sum(sims) / len(sims) if sims else 0.0
+        if mean > best_score:
+            best, best_score = evs[i], mean
+    return best
+
+
+def _split_incoherent_clusters(base, _text, threshold, route):
+    """Demote members judged DIFFERENT from their cluster's representative.
+    Singletons left behind are simply unassigned (available for later merges
+    but not part of any dossier)."""
+    from judgment import same_recurrence
+    for ck in list(base.keys()):
+        evs = base[ck]
+        if len(evs) <= 1:
+            continue
+        rep = _cluster_representative(evs)
+        keep, demote = [], []
+        for ev in evs:
+            if ev is rep:
+                keep.append(ev)
+                continue
+            same, p = same_recurrence(_text(rep), _text(ev), threshold=threshold)
+            (keep if same else demote).append(ev)
+            print(f"  judged split {ck[:18]}: rep+{ev.get('project','?')} p={p:.3f} -> "
+                  f"{'keep' if same else 'DEMOTE'}")
+        if demote:
+            if keep:
+                base[ck] = keep
+            else:
+                del base[ck]
+            print(f"  split {ck[:18]}: {len(keep)} kept, {len(demote)} demoted")
     return base
 
 

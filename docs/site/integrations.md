@@ -40,9 +40,11 @@ GPT-5.6/Claude LLM judges, at ~1/80th Claude's cost.
 - `eval-stability.py --judge` — **G4-J**: model pairs the fuzzy gate failed
   (near-miss, not empty) are re-asked "same factual content?"; judged-SAME
   downgrades wording drift to a warning, with the probability recorded.
-- `mine-promotions.py --judge` — near-miss keyword pairs get a pairwise
-  "same recurring pattern?" verdict; judged-same pairs merge (and judged-same
-  singletons can *form* clusters the keyword pass dropped).
+- `mine-promotions.py --judge` — judged refinement is now **symmetrical**:
+  near-miss keyword pairs get a pairwise "same recurring pattern?" verdict
+  (merge), **and** an incoherence sweep demotes members judged DIFFERENT from
+  their cluster's representative (split) — a keyword cluster that judgment
+  says is incoherent can no longer reach a dossier intact.
 - Planned: borderline-context re-ranking (each judgment recorded).
 
 **Hard contract:**
