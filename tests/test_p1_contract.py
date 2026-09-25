@@ -162,3 +162,49 @@ class TestRegistryJson:
         page = next((p for p in data["pages"] if p["stem"] == "ee-demo"), None)
         assert page and page["scope"] == "project"
         assert page["category"] == "experience_events"
+
+class TestCommitmentLint:
+    """Prospective memory (#22): the COMMITMENT code enforces the contract —
+    trigger + owner required, status vocabulary, due format, superseded chain."""
+
+    def _run_lint(self, tmp_path):
+        out = subprocess.run(
+            [sys.executable, str(REPO / "scripts" / "cmd/lint.py"),
+             "--format", "json", str(tmp_path)],
+            capture_output=True, text=True,
+        )
+        report = json.loads(out.stdout)
+        return [e["message"] for e in report["errors"] if e["code"] == "COMMITMENT"]
+
+    def _write(self, tmp_path, extra=""):
+        d = tmp_path / "projects" / "auth" / "commitments"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "commitment-contract-test.md").write_text(
+            "---\ntype: commitment\nproject: auth\n"
+            + extra
+            + "\n---\n\nUpdate the API contract test after migration.\n"
+        )
+
+    def test_valid_commitment_clean(self, tmp_path):
+        self._write(tmp_path, "trigger: after schema migration\nowner: human:hybridindie\nstatus: open\ndue: 2027-01-01")
+        assert self._run_lint(tmp_path) == []
+
+    def test_missing_trigger_is_error(self, tmp_path):
+        self._write(tmp_path, "owner: human:hybridindie\nstatus: open")
+        assert any("missing trigger" in e for e in self._run_lint(tmp_path))
+
+    def test_missing_owner_is_error(self, tmp_path):
+        self._write(tmp_path, "trigger: after schema migration\nstatus: open")
+        assert any("missing owner" in e for e in self._run_lint(tmp_path))
+
+    def test_bad_status_is_error(self, tmp_path):
+        self._write(tmp_path, "trigger: after schema migration\nowner: human:hybridindie\nstatus: maybe")
+        assert any("status" in e for e in self._run_lint(tmp_path))
+
+    def test_bad_due_is_error(self, tmp_path):
+        self._write(tmp_path, "trigger: after schema migration\nowner: human:hybridindie\nstatus: open\ndue: soon")
+        assert any("invalid due" in e for e in self._run_lint(tmp_path))
+
+    def test_superseded_requires_superseded_by(self, tmp_path):
+        self._write(tmp_path, "trigger: after schema migration\nowner: human:hybridindie\nstatus: superseded")
+        assert any("superseded requires superseded_by" in e for e in self._run_lint(tmp_path))

@@ -104,7 +104,8 @@ def assemble_prompt(fabric, manifest):
                               "confidence:", "created:", "review_after:", "evidence:")))
         kind = {"decision": "BINDING DECISION", "anti-pattern": "DO NOT",
                 "pattern": "PATTERN", "concept": "BACKGROUND",
-                "experience-event": "EVIDENCE"}.get(s["type"], s["type"].upper())
+                "experience-event": "EVIDENCE",
+                "commitment": "PENDING COMMITMENT"}.get(s["type"], s["type"].upper())
         warn = f" ⚠ {s['warning']}" if s.get("warning") else ""
         parts.append(f"## [{kind}] {s.get('title') or s['id']}{warn}\nReason: {s['reason']}\n\n{body}\n")
     parts.append("# Precedence\nProject decisions override domain patterns; domain patterns override global policies.\n")
@@ -132,6 +133,9 @@ def zero_llm_checks(fixture, manifest, fabric):
     if "pattern_in_prompt" in z:
         checks.append({"kind": "pattern_delivered", "detail": "a pattern/anti-pattern is in the manifest",
                        "passed": any(s["type"] in ("pattern", "anti-pattern") for s in manifest["selected"])})
+    if z.get("commitment_in_manifest"):
+        checks.append({"kind": "commitment_delivered", "detail": "an open commitment is in the manifest",
+                       "passed": any(s["type"] == "commitment" for s in manifest["selected"])})
     if z.get("banned_terms_in_prompt"):
         prompt = assemble_prompt(fabric, manifest)
         for term in z["banned_terms_in_prompt"]:

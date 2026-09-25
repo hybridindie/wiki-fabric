@@ -39,7 +39,7 @@ VALID_TYPES = {
      "source", "source-summary", "claim", "concept", "question", "synthesis",
      "decision", "experience-event", "pattern", "anti-pattern", "experiment",
      "change-set", "change-set-diff", "promotion-dossier", "ontology", "registry", "index", "log",
-     "skill",
+     "skill", "commitment",
      "attested-computation", "wiki-article",
 }
 PATTERN_STATUSES = {"candidate", "recommended", "standard", "deprecated"}
@@ -343,7 +343,7 @@ def check_stale_after(fm, rel, today):
 # Types whose native `status` field uses a NON-lifecycle vocabulary. The OKF
 # lifecycle status (draft|stable|deprecated) is omitted on these to avoid
 # collision (schemas/frontmatter.md — status mapping decision).
-_LIFECYCLE_STATUS_TYPES = {"pattern", "anti-pattern", "source", "source-summary", "log", "ontology"}
+_LIFECYCLE_STATUS_TYPES = {"pattern", "anti-pattern", "source", "source-summary", "log", "ontology", "commitment"}
 
 
 def check_status_collision(fm, rel):
@@ -596,6 +596,21 @@ def main():
                                      (rel, ref.get("source", "?")))
         if t == "concept" and not fm.get("claims"):
             errors.append("CONCEPT %s: must link >=1 claim to draw from" % rel)
+        if t == "commitment":
+            # prospective memory: a deferred obligation must be triggerable
+            # and owned, or it can never resurface (the whole point of the kind)
+            if not str(fm.get("trigger") or "").strip():
+                errors.append("COMMITMENT %s: missing trigger (condition/state that should surface it)" % rel)
+            if not fm.get("owner"):
+                errors.append("COMMITMENT %s: missing owner" % rel)
+            st = str(fm.get("status") or "").lower()
+            if fm.get("status") is not None and st not in ("open", "done", "cancelled", "superseded"):
+                errors.append("COMMITMENT %s: status %r not in open|done|cancelled|superseded" % (rel, st))
+            if fm.get("status") == "superseded" and not fm.get("superseded_by"):
+                errors.append("COMMITMENT %s: superseded requires superseded_by" % rel)
+            due = fm.get("due")
+            if due is not None and not re.match(r"^\d{4}-\d{2}-\d{2}$", str(due).strip()):
+                errors.append("COMMITMENT %s: invalid due %r (expected YYYY-MM-DD)" % (rel, due))
         if t in ("pattern", "anti-pattern"):
             mat, st = fm.get("maturity"), fm.get("status")
             if st in PATTERN_STATUSES:
