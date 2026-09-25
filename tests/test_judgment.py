@@ -104,12 +104,26 @@ class TestLocalRoute:
         with mock.patch.object(judgment, "judgment_route", return_value="local"), \
              mock.patch.object(judgment, "judgment_config",
                                return_value={"enabled": True, "route": "local",
+                                             "local_backend": "generic",
                                              "cloud_model": "jev-1",
-                                             "local_model": "laya-2-judge"}), \
+                                             "local_model": "generic-fallback-model"}), \
              mock.patch.dict(sys.modules, {"local_llm": _fake_module(generate=fake_generate)}):
             out = judgment._ask({"kind": "noul", "question": "q", "state": "s"})
-        assert seen["model"] == "laya-2-judge"
+        assert seen["model"] == "generic-fallback-model"
         assert out["value"] == 0.95
+
+    def test_local_route_primary_is_laya(self, monkeypatch):
+        # default local_backend=laya; when laya is installed it serves the verdict
+        monkeypatch.setenv("TYPESAFE_API_KEY", "")
+        with mock.patch.object(judgment, "judgment_route", return_value="local"), \
+             mock.patch.object(judgment, "judgment_config",
+                               return_value={"enabled": True, "route": "local",
+                                             "local_backend": "laya"}), \
+             mock.patch.object(judgment, "_ask_laya",
+                               return_value={"value": 0.91, "backend": "laya/MLXBackend"}):
+            out = judgment._ask_local({"kind": "noul", "question": "q", "state": "s"})
+        assert out["value"] == 0.91
+        assert out["backend"] == "laya/MLXBackend"
 
 
 class _fake_module:
