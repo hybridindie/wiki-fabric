@@ -62,3 +62,5 @@ docs/site/node_modules/
 docs/site/dist/
 projects/*/overlay.yml
 tests/_bridge_fixture_fabric/
+# Per-project LLM config (bootstrap-generated, never shipped)
+.env.wiki-*
