@@ -208,3 +208,12 @@ class TestCommitmentLint:
     def test_superseded_requires_superseded_by(self, tmp_path):
         self._write(tmp_path, "trigger: after schema migration\nowner: human:hybridindie\nstatus: superseded")
         assert any("superseded requires superseded_by" in e for e in self._run_lint(tmp_path))
+
+    def test_depends_on_must_be_wikilink_list(self, tmp_path):
+        self._write(tmp_path, "trigger: after schema migration\nowner: human:hybridindie\nstatus: open\ndepends_on: not-a-list")
+        assert any("depends_on" in e for e in self._run_lint(tmp_path))
+        # valid form: clean
+        import shutil as _sh
+        _sh.rmtree(tmp_path / "projects")
+        self._write(tmp_path, "trigger: after schema migration\nowner: human:hybridindie\nstatus: open\ndepends_on: ['[[decision-rotation]]']")
+        assert self._run_lint(tmp_path) == []

@@ -127,6 +127,7 @@ trigger condition plausibly matches a task (see [Task Context](../docs/site/cont
 | `owner` | actor convention (`human:<id>` \| `agent/<owner>/<model>`) — **required** |
 | `status` | `open \| done \| cancelled \| superseded` |
 | `due` | `YYYY-MM-DD` — overdue commitments warn at task time |
+| `depends_on` | list of `[[...]]` — obligation activates only when these resolve (alternative to `due`) |
 | `linked_episode` | `[[experience-event-...]]` the obligation arose from |
 | `source_refs` | evidence for why the obligation exists |
 | `superseded_by` | (if `status: superseded`) |

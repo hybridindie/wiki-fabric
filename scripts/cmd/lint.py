@@ -611,6 +611,9 @@ def main():
             due = fm.get("due")
             if due is not None and not re.match(r"^\d{4}-\d{2}-\d{2}$", str(due).strip()):
                 errors.append("COMMITMENT %s: invalid due %r (expected YYYY-MM-DD)" % (rel, due))
+            dep = fm.get("depends_on")
+            if dep is not None and not (isinstance(dep, list) and all(isinstance(x, str) and x.startswith("[[") for x in dep)):
+                errors.append("COMMITMENT %s: depends_on must be a list of [[wikilinks]]" % rel)
         if t in ("pattern", "anti-pattern"):
             mat, st = fm.get("maturity"), fm.get("status")
             if st in PATTERN_STATUSES:
