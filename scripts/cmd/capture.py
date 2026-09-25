@@ -100,11 +100,16 @@ def capture_project(project_slug, repo_filter=None, dry_run=False):
         if pp and pp.exists():
             candidate = pp / ".wiki-overlay.md"
             if candidate.exists():
-                overlay_path = candidate
-                break
+                fm, _ = parse_frontmatter(candidate)
+                # the overlay must declare the requested namespace — a cwd
+                # overlay for a DIFFERENT project must not capture under this
+                # slug (cwd bleed: harness root overlay vs requested project)
+                if str(fm.get("namespace") or "") == project_slug:
+                    overlay_path = candidate
+                    break
 
     # Fallback: check fabric.yaml for repo config
-    config_file = VAULT_ROOT / "fabric.yaml"
+    config_file = FABRIC_ROOT / "fabric.yaml"  # the vault shell, not corpus/
     if not overlay_path and config_file.exists():
         try:
             config = yaml.safe_load(config_file.read_text()) or {}
