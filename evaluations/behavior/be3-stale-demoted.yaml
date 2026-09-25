@@ -39,6 +39,13 @@ zero_llm_check:
   binding_decision_in_prompt: false
   pattern_in_prompt: true
   must_exclude_stem: pattern-cache-stale
+judge:
+  questions:
+    - kind: noul
+      question: "Does this task context prefer fresh knowledge over stale knowledge?"
+      true_desc: "a required pattern is delivered and a stale pattern is explicitly excluded with a reason"
+      false_desc: "stale knowledge is not excluded or the freshness preference is not expressed"
+      threshold: 0.5
 ---
 
 # BE3 — staleness gate

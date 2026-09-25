@@ -24,6 +24,13 @@ zero_llm_check:
 receipt_check:
   namespace: registry
   must_include_stems: [pattern-token-rotation]
+judge:
+  questions:
+    - kind: noul
+      question: "Does this task context deliver a required pattern for the token rotation task?"
+      true_desc: "a required pattern about token rotation is present in the prompt"
+      false_desc: "no pattern about token rotation is present"
+      threshold: 0.7
 ---
 
 # BE5 — receipts: delivery leaves an auditable artifact
@@ -31,4 +38,10 @@ receipt_check:
 The manifest's Selected/Excluded reasons are ephemeral stdout. With
 `--write-receipt`, the same compile persists a receipt-v1 artifact whose
 `selected` list must contain the delivered pattern — proof that "what the
-fabric delivered" is checkable after the fact, not just asserted.
+fabric delivered" is checkable after the fact, not just asserted.judge:
+  questions:
+    - kind: noul
+      question: "Does this task context deliver a required pattern for the token rotation task?"
+      true_desc: "a required pattern about token rotation is present in the prompt"
+      false_desc: "no pattern about token rotation is present"
+      threshold: 0.7

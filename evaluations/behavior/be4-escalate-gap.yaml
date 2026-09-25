@@ -32,10 +32,23 @@ zero_llm_check:
   banned_terms_in_prompt: []
   binding_decision_in_prompt: false
   pattern_in_prompt: false
+judge:
+  questions:
+    - kind: noul
+      question: "Is the task's domain deliberately uncovered by this task context, with only unrelated knowledge delivered?"
+      true_desc: "the prompt contains no knowledge for the task's domain, consistent with the fabric having no guidance for it"
+      false_desc: "the prompt delivers domain-relevant guidance for the task"
+      threshold: 0.5
 ---
 
 # BE4 — escalation over invention
 
 When the fabric has no relevant knowledge, the manifest selects nothing and a
 compliant agent states the gap instead of inventing policy. This is the
-"escalate uncertainty" behavior the critique named.
+"escalate uncertainty" behavior the critique named.judge:
+  questions:
+    - kind: noul
+      question: "Is the task's domain deliberately uncovered by this task context, with only unrelated knowledge delivered?"
+      true_desc: "the prompt contains no knowledge for the task's domain, consistent with the fabric having no guidance for it"
+      false_desc: "the prompt delivers domain-relevant guidance for the task"
+      threshold: 0.5

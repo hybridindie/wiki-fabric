@@ -60,13 +60,43 @@ Config (see [Configuration](./configuration#judgment-tier)):
 integrations:
   judgment:
     enabled: true
-    route: cloud          # cloud (TypeSafe Jev) | local (Laya-MLX on-device)
-    cloud_model: jev-1
+    route: local          # cloud (TypeSafe Jev) | local (Laya-MLX on-device)
+    local_backend: laya   # laya-as-judge[mlx] (typed heads, real inference)
 ```
 
+
 Cloud route reads `TYPESAFE_API_KEY` from the environment (never committed).
-Local route dispatches through the same on-device stack as `extract: local`
-(MLX on Apple Silicon, GGUF elsewhere).
+Local route dispatches through the on-device judgment stack (see below).
+
+
+## Setting up the local (Laya) backend
+
+```bash
+git clone https://github.com/rbrus/laya-as-judge.git
+cd laya-as-judge && uv venv --python 3.12 && uv pip install -e '.[mlx]' --python .venv/bin/python
+```
+
+Model weights auto-download on first call (~3.4 MB). Live-calibrated on an
+M4 Max: true-paraphrase pairs score p≈0.93–0.96, unrelated pairs p≈0.75,
+steady-state latency ~11–19 ms, 0 output tokens. The `judgment.local_backend:
+laya` backend **rejects laya's EmulatorBackend** (a keyword heuristic with no
+discriminative power — it returns identical probabilities for related and
+unrelated content); real inference requires the MLX runtime (Apple Silicon,
+Python 3.11+). Keep the install separate from the fabric venv (numpy version
+conflicts) and run eval commands with the laya venv's interpreter:
+
+```bash
+WIKI_FABRIC_DIR=~/path/to/vault /path/to/laya-as-judge/.venv/bin/python   scripts/eval/eval-behavior.py --judge
+```
+
+**Calibration findings (Laya, live):** criteria-phrased questions
+(`true_desc`/`false_desc`) are essential — abstract phrasing scores 0.3–0.6
+even when the knowledge is present; criteria wording separates 0.97 vs 0.19.
+Mining threshold defaults to 0.8 (unrelated pairs score ~0.75; 0.6 would
+wrongly merge them). One laya-mlx checkpoint emits an "uncalibrated
+temperatures" warning — treat sub-band confidences as advisory, which the
+NEAR-THRESHOLD escalation already encodes.
+
 
 ## Agent harnesses
 

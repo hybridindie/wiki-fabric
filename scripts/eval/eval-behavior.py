@@ -233,6 +233,7 @@ def judge_probe(fixture, prompt, manifest, tmp):
     consumers can distinguish judged checks from deterministic ones."""
     checks = []
     try:
+        import judgment as _judgment
         from judgment import noul, JudgmentUnavailable, judgment_route
         route = judgment_route()
     except Exception as e:
@@ -241,20 +242,31 @@ def judge_probe(fixture, prompt, manifest, tmp):
     questions = spec.get("questions") or []
     if not questions:
         # default: did the manifest deliver its required knowledge?
-        questions = [{"kind": "noul", "question": "Does this task context deliver the knowledge the agent must follow?",
+        # criteria-phrased (true_desc/false_desc) — live-calibrated on Laya:
+        # abstract phrasing scores ~0.3–0.6 even when the knowledge IS present;
+        # criteria wording separates 0.97 (decision present) vs 0.19 (absent).
+        questions = [{"kind": "noul",
+                      "question": "Does this agent task context deliver a binding decision or constraint before code is written?",
+                      "true_desc": "a binding decision, anti-pattern ban, or required pattern the agent must follow is present in the prompt",
+                      "false_desc": "no binding decision, ban, or required pattern is present",
                       "threshold": 0.7}]
     for q in questions:
         try:
-            p = noul(q["question"], prompt)
+            p = noul(q["question"], prompt,
+                     false_desc=q.get("false_desc"), true_desc=q.get("true_desc"))
         except Exception as e:
             checks.append({"kind": "judge", "detail": f"error: {e}", "passed": False})
             continue
         threshold = float(q.get("threshold", 0.5))
         passed = p >= threshold
-        near = abs(p - threshold) <= 0.1
-        checks.append({"kind": "judge", "detail": f"{q['question'][:80]} p={p:.3f} "
-                       f"({'NEAR-THRESHOLD' if near else 'pass' if passed else 'fail'})",
-                       "passed": passed})
+        near = abs(p - threshold) <= _judgment.NEAR_BAND
+        # near-threshold escalates: informational warning, not an auto-fail —
+        # the human gate decides (judgment is never authority)
+        status = ("NEAR-THRESHOLD (escalate)" if near else "pass" if passed else "fail")
+        checks.append({"kind": "judge",
+                       "detail": f"{q['question'][:80]} p={p:.3f} ({status})",
+                       "passed": passed,
+                       **({"escalate": True} if near and not passed else {})})
     return checks
 
 

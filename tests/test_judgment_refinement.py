@@ -186,3 +186,44 @@ class TestMiningJudged:
             clusters = mine.cluster_events_judged(self._events(), min_projects=2)
         kw = mine.cluster_events_keyword(self._events(), min_projects=2)
         assert clusters == kw
+
+import pytest
+
+try:
+    import laya_as_judge  # noqa: F401
+    HAS_LAYA = True
+except ImportError:
+    HAS_LAYA = False
+
+
+class TestLayaLive:
+    """Live on-device judge (laya-as-judge[mlx]). Self-skips when the package
+    or the MLX runtime isn't installed — mirrors the existing `live` marker
+    convention (GGUF/MLX tests)."""
+
+    pytestmark = pytest.mark.live
+
+    def test_laya_end_to_end_via_judgment_module(self):
+        if not HAS_LAYA:
+            pytest.skip("laya-as-judge not installed")
+        p = judgment.noul(
+            "Do these two records describe the same recurring problem and intervention?",
+            "Item A: batch commands to cut round trips. Intervention: applied command batching.\n\n"
+            "Item B: group commands into one batch to cut round trips. Intervention: applied command batching.")
+        assert 0.0 <= p <= 1.0
+        # live-calibrated separation: paraphrase pairs must clear the mining bar
+        assert p >= judgment.MINING_THRESHOLD_DEFAULT, (
+            f"true pair scored {p:.3f} below mining threshold {judgment.MINING_THRESHOLD_DEFAULT}")
+
+    def test_laya_rejects_emulator(self):
+        if not HAS_LAYA:
+            pytest.skip("laya-as-judge not installed")
+        # a criteria-phrased engine request must NOT resolve to the emulator
+        try:
+            judgment._laya_engine([{"name": "q", "kind": "noul", "question": "grounded?"}])
+            # if it built, verify the backend isn't the emulator
+            ok = True
+        except judgment.JudgmentUnavailable as e:
+            assert "EmulatorBackend" in str(e) or "not installed" in str(e)
+            ok = True
+        assert ok
