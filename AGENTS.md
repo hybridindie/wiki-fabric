@@ -58,6 +58,7 @@ persistent memory layer.
 | Ensure local model | `wf models ensure [--yes]` | 0 | Check `llm.local_model` is cached; offer human-gated download (`--check` for scripts) |
 | Import external bundle | `wf okf import <bundle>` | 0 or 1/doc | Trust recorded, not inherited |
 | Log an experience | `wf log --project <slug>` | 0 | Feeds cross-project mining |
+| Record a deferred obligation | `projects/<slug>/commitments/*.md` | 0 | `type: commitment` — resurfaces in `wf context` when its `trigger` matches the task; contract in `schemas/frontmatter.md` |
 | Health check | `wf lint` | **0** | 0-error gate before commit |
 
 ## When NOT to use the LLM

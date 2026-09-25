@@ -59,7 +59,7 @@ Mapping the fabric's asset types to the standard agent-memory taxonomy
 | Claims, concepts, decisions | semantic |
 | Patterns, skills, policies | procedural |
 | Experience events | episodic |
-| Prospective commitments (deferred obligations) | prospective (planned) |
+| Commitments (deferred obligations, `status: open`) | prospective |
 
 A wiki page, a claim, a skill are storage formats — not memory types. What
 matters is that each asset carries its own retrieval and trust policy, which

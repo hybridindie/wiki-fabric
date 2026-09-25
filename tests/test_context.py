@@ -158,6 +158,68 @@ class TestSelection:
         assert any(e["reason"].startswith("beyond --max") for e in excluded)
 
 
+class TestCommitments:
+    """Prospective memory (#22): open commitments surface when their trigger
+    plausibly matches the task — and only then."""
+
+    def _commitment(self, trigger="after the schema migration passes locally, update the API contract test",
+                    status="open", body="update the API contract test and deprecate endpoint v1", due="2027-01-01"):
+        import datetime
+        return _page("projects/auth/commitments/commitment-contract-test.md",
+                     {"type": "commitment", "project": "auth", "status": status,
+                      "trigger": trigger, "owner": "human:hybridindie", "due": due},
+                     body)
+
+    def test_triggered_commitment_selected(self):
+        import datetime
+        pages = [self._commitment()]
+        selected, _ = ctx.select_context(pages, "Run the schema migration for auth", [], None, datetime.date.today())
+        assert any(s["type"] == "commitment" and s["priority"] == "P1-project" for s in selected)
+
+    def test_unrelated_task_does_not_surface_commitment(self):
+        import datetime
+        pages = [self._commitment()]
+        selected, _ = ctx.select_context(pages, "Redesign the settings UI page", [], None, datetime.date.today())
+        assert not any(s["type"] == "commitment" for s in selected)
+
+    def test_done_commitment_excluded(self):
+        import datetime
+        pages = [self._commitment(status="done")]
+        selected, excluded = ctx.select_context(pages, "Run the schema migration", [], None, datetime.date.today())
+        assert not any(s["type"] == "commitment" for s in selected)
+        assert any(e["reason"] == "commitment done" for e in excluded)
+
+    def test_cancelled_commitment_excluded(self):
+        import datetime
+        pages = [self._commitment(status="cancelled")]
+        selected, _ = ctx.select_context(pages, "Run the schema migration for auth", [], None, datetime.date.today())
+        assert not any(s["type"] == "commitment" for s in selected)
+
+    def test_overdue_commitment_warns(self):
+        import datetime
+        # due in the past relative to any plausible "today"
+        pages = [self._commitment(due="2020-01-01")]
+        selected, _ = ctx.select_context(pages, "Run the schema migration for auth", [], None, datetime.date.today())
+        c = [s for s in selected if s["type"] == "commitment"]
+        assert c and any("overdue" in (s.get("warning") or "") for s in c)
+
+    def test_future_due_commitment_no_warning(self):
+        import datetime
+        pages = [self._commitment(due="2099-01-01")]
+        selected, _ = ctx.select_context(pages, "Run the schema migration for auth", [], None, datetime.date.today())
+        c = [s for s in selected if s["type"] == "commitment"]
+        assert c and not any("overdue" in (s.get("warning") or "") for s in c)
+
+    def test_commitment_carries_trigger_owner_due(self):
+        import datetime
+        pages = [self._commitment()]
+        selected, _ = ctx.select_context(pages, "Run the schema migration for auth", [], None, datetime.date.today())
+        c = [s for s in selected if s["type"] == "commitment"][0]
+        assert c["trigger"] == self._commitment()["fm"]["trigger"]
+        assert c["owner"] == "human:hybridindie"
+        assert c["due"] == "2027-01-01"
+
+
 class TestOutputs:
     def test_json_manifest_shape(self, tmp_path):
         (tmp_path / "corpus" / "patterns").mkdir(parents=True)

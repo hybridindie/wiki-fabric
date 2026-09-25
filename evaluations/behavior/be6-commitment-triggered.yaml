@@ -1,0 +1,40 @@
+---
+type: eval-fixture
+title: "Behavior: prospective memory — commitments surface when triggered, not otherwise"
+eval_id: be6-commitment-triggered
+task: "Run the schema migration for the auth service"
+scope_layers: [project]
+write_receipt: false
+seeds:
+  - path: projects/auth-service/commitments/commitment-contract-test-after-migration.md
+    type: commitment
+    status: open
+    owner: human:hybridindie
+    body: |
+      # Commitment: update contract test after schema migration
+
+      Trigger: after the schema migration passes locally, update the API
+      contract test and open a follow-up for deprecating endpoint v1.
+  - path: projects/auth-service/decisions/decision-rotation.md
+    type: decision
+    status: accepted
+    body: |
+      The auth service chose rotating refresh tokens over server-side session
+      extension. Rationale: stateless horizontal scaling.
+manifest_expectations:
+  must_include_stems: [commitment-contract-test-after-migration]
+  must_exclude_stems: []
+zero_llm_check:
+  banned_terms_in_prompt: []
+  binding_decision_in_prompt: true
+  commitment_in_manifest: true
+---
+
+# BE6 — prospective memory: deferred obligations resurface at the right task
+
+The commitment ("after the schema migration passes, update the contract test")
+must appear in the manifest for a migration task — the agent is reminded of
+its deferred obligation *before* it can forget it. This is the prospective
+half of the memory taxonomy: episodic records the past; commitments bind the
+future. (Negative case covered in tests/test_context.py: a UI task must not
+surface it.)

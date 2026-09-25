@@ -74,6 +74,18 @@ The manifest answers "what does the fabric know that the agent must be told
 before writing code?" Everything else — RAM, diffs, working state — is the
 runtime's half of the memory/context split.
 
+## Commitments: prospective memory at task time
+
+Open **commitments** (type `commitment`, `status: open` — a deferred
+obligation like "after the schema migration passes, update the contract
+test") surface in the manifest when their `trigger` plausibly matches the
+task, at **P1-project** precedence: a pending obligation binds the current
+task like a decision does. The reason reads `prospective match: <tokens>`,
+and an overdue `due` date adds a warning. `done`/`cancelled` commitments are
+excluded — completed obligations don't bind future work. See
+[schemas/frontmatter.md](https://github.com/hybridindie/wiki-fabric/blob/main/schemas/frontmatter.md)
+for the contract.
+
 ## Receipts: make delivery auditable
 
 Add `--write-receipt` to persist the manifest as a **context receipt**

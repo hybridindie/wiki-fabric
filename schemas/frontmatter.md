@@ -11,7 +11,7 @@ Per-type required fields. A page lacking required fields fails `scripts/cmd/lint
 
 | Field | Type | Notes |
 |---|---|---|
-| `type` | enum | one of: `source`, `source-summary`, `claim`, `concept`, `question`, `synthesis`, `decision`, `experience-event`, `pattern`, `anti-pattern`, `experiment`, `change-set`, `promotion-dossier`, `ontology`, `registry`, `index`, `log` |
+| `type` | enum | one of: `source`, `source-summary`, `claim`, `concept`, `question`, `synthesis`, `decision`, `experience-event`, `commitment`, `pattern`, `anti-pattern`, `experiment`, `change-set`, `promotion-dossier`, `ontology`, `registry`, `index`, `log` |
 | `title` | string | human-readable |
 | `description` | string | **OKF-recommended.** One-line summary for index entries, search snippets, previews. Present on ALL types. |
 | `tags` | list[string] | **OKF-recommended.** Cross-cutting categorization, lowercase kebab-case. |
@@ -113,6 +113,30 @@ Per-type required fields. A page lacking required fields fails `scripts/cmd/lint
 | `outcomes` | dict — happy_path, metrics, etc. |
 | `evidence` | list of `[[src-...]]` |
 | `lineage` | free text describing the source lineage (for the independence rule) |
+
+## `commitment`
+
+Prospective memory: a deferred obligation the fabric must resurface when its
+trigger condition plausibly matches a task (see [Task Context](../docs/site/context.md)).
+
+| Field | Notes |
+|---|---|
+| `id` | `commitment-<slug>` |
+| `project` | repo short-name (commitments are project-scoped) |
+| `trigger` | free-text condition/state that should surface it — **required** |
+| `owner` | actor convention (`human:<id>` \| `agent/<owner>/<model>`) — **required** |
+| `status` | `open \| done \| cancelled \| superseded` |
+| `due` | `YYYY-MM-DD` — overdue commitments warn at task time |
+| `depends_on` | list of `[[...]]` — obligation activates only when these resolve (alternative to `due`) |
+| `linked_episode` | `[[experience-event-...]]` the obligation arose from |
+| `source_refs` | evidence for why the obligation exists |
+| `superseded_by` | (if `status: superseded`) |
+
+**Invariants** (lint `COMMITMENT`):
+- `trigger` and `owner` are required — an unowned or untriggerable commitment
+  can never resurface, defeating the kind.
+- `status: superseded` ⇒ `superseded_by`.
+- `done`/`cancelled` commitments are excluded from context compilation.
 
 ## `pattern`
 

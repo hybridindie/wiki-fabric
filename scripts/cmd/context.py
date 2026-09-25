@@ -161,7 +161,7 @@ def select_context(pages, task, paths, project, today, max_items=20):
             # candidates (tier P1-project evidence).
             candidates.append((pg, 0))
             continue
-        if t not in ("pattern", "anti-pattern", "skill", "concept", "decision", "experience-event", "question"):
+        if t not in ("pattern", "anti-pattern", "skill", "concept", "decision", "experience-event", "question", "commitment"):
             excluded.append({"stem": pg["stem"], "path": pg["posix"],
                              "reason": f"not a context artifact (type: {t or 'unknown'})"})
             continue
@@ -170,6 +170,11 @@ def select_context(pages, task, paths, project, today, max_items=20):
             continue
         if status == "deprecated":
             excluded.append({"stem": pg["stem"], "path": pg["posix"], "reason": "deprecated"})
+            continue
+        if t == "commitment" and status in ("done", "cancelled"):
+            # completed/cancelled obligations no longer bind future work
+            excluded.append({"stem": pg["stem"], "path": pg["posix"],
+                             "reason": f"commitment {status}"})
             continue
 
         overdue = is_stale(fm, today)
@@ -194,7 +199,17 @@ def select_context(pages, task, paths, project, today, max_items=20):
         reason = None
         priority = None
 
-        if scope == "project":
+        if pg["type"] == "commitment":
+            # Prospective memory: an open obligation surfaces when its trigger
+            # plausibly matches the task (trigger + body tokens vs task tokens).
+            # Commitments are project-scoped by nature; a pending obligation
+            # binds the current task like a decision (P1).
+            trig_toks = tokens(str(fm.get("trigger") or ""))
+            toks = task_toks & (trig_toks | body_tokens(pg) | tokens(pg["stem"]))
+            if len(toks) >= 1 and any(len(t) >= 4 for t in toks):
+                reason = f"prospective match: {', '.join(sorted(toks)[:3])}"
+                priority = "P1-project"
+        elif scope == "project":
             # Match: project pinned, or task/body text overlap, or path overlap with namespace
             if project and project.lower() in pg["posix"]:
                 reason = f"project match: {project}"
@@ -250,6 +265,20 @@ def select_context(pages, task, paths, project, today, max_items=20):
         item["trust_tier"] = trust_tier(pg["fm"])
         if s["stale"]:
             item["warning"] = f"review_after overdue {s['stale']} day(s)"
+        if pg["type"] == "commitment":
+            item["trigger"] = str(pg["fm"].get("trigger") or "")
+            if pg["fm"].get("owner"):
+                item["owner"] = str(pg["fm"]["owner"])
+            due = pg["fm"].get("due")
+            if due:
+                item["due"] = str(due)
+                try:
+                    import datetime as _dt
+                    if _dt.date.today().isoformat() > str(due).strip()[:10]:
+                        _w = f"commitment overdue (due {due})"
+                        item["warning"] = (item["warning"] + "; " if item.get("warning") else "") + _w
+                except (ValueError, IndexError):
+                    pass
         sa = pg["fm"].get("stale_after")
         if sa:
             item["stale_after"] = str(sa)
