@@ -153,6 +153,44 @@ def promote_dossier(dossier_path, dry_run=False):
         return True
 
 
+def reject_dossier(dossier_path, reason, dry_run=False):
+    """Reject a pending-review dossier: lifecycle transition, not deletion.
+    Dossier + pattern artifacts remain (evidence is never erased); the
+    rejection reason and reviewer are recorded for future mining."""
+    from fabric_config import get_config, actor
+    from datetime import datetime
+    fm, body = parse_frontmatter(dossier_path)
+    if not fm:
+        print("Error: dossier has no parseable frontmatter", file=sys.stderr)
+        return False
+    if str(fm.get("status", "")) != "pending-review":
+        print(f"Not pending-review (status: {fm.get('status')!r}) — nothing to reject.", file=sys.stderr)
+        return False
+    if not reason or not reason.strip():
+        print("Error: --reject-reason is required (a rejection without a reason is unusable evidence).", file=sys.stderr)
+        return False
+    if dry_run:
+        print(f"[DRY RUN] Would reject {dossier_path.name}: reason: {reason[:80]}")
+        return True
+    _cfg = get_config()
+    _human = actor(_cfg, "human")
+    _at = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+    fm["status"] = "rejected"
+    fm["reviewed"] = _at
+    fm["reviewed_by"] = _human
+    fm["rejection_reason"] = reason.strip()
+    body_new = body.rstrip("\n") + f"\n\n## Rejection\n\n- **When:** {_at}\n- **By:** {_human}\n- **Reason:** {reason.strip()}\n"
+    write_frontmatter(dossier_path, fm, body_new)
+    # registry timeline: the corpus log records the decision
+    log = VAULT_ROOT / "registry" / "log.md"
+    with open(log, "a") as f:
+        f.write(f"\n## {_at[:10]}\n* **promotion-reject | {_human}**\n")
+        f.write(f"- {dossier_path.stem}: {reason.strip()[:140]}\n")
+    update_indexes()
+    print(f"Rejected: {dossier_path.name} (artifacts retained; reason recorded)")
+    print("The demoted events remain available for future mining — re-run mine-promotions to re-cluster.")
+    return True
+
 def update_promotion_queue(pattern_slug, new_status):
     """Update promotion-queue.md"""
     queue_path = PROMOTION_QUEUE
@@ -192,6 +230,8 @@ def main():
     parser.add_argument("--list", action="store_true", help="List all promotion dossiers")
     parser.add_argument("--promote", metavar="DOSSIER", help="Promote a specific dossier")
     parser.add_argument("--all", action="store_true", help="Promote all pending-review dossiers")
+    parser.add_argument("--reject", metavar="DOSSIER", help="Reject a pending-review dossier (artifacts retained)")
+    parser.add_argument("--reject-reason", default=None, help="Required with --reject — recorded in the dossier")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be done")
     args = parser.parse_args()
     
@@ -209,6 +249,16 @@ def main():
         promote_dossier(dossier_path, dry_run=args.dry_run)
         return
     
+    if args.reject:
+        dossier_path = PROMOTIONS_DIR / args.reject
+        if not dossier_path.exists():
+            dossier_path = VAULT_ROOT / "registry" / "promotions" / args.reject
+        if not dossier_path.exists():
+            print(f"Error: Dossier not found: {args.reject}", file=sys.stderr)
+            sys.exit(1)
+        reject_dossier(dossier_path, args.reject_reason, dry_run=args.dry_run)
+        return
+
     if args.all:
         dossiers = list_pending_promotions()
         for dossier_path, _ in dossiers:
