@@ -349,7 +349,11 @@ def main():
                 print("(tough gates: G3 Jaccard >=0.8 expected for a stable model, G4 >=0.6 hard floor, >=0.8 target)")
 
         if args.record:
-            log = REPO_ROOT / "registry" / "log.md"
+            # the registry timeline is corpus content (OKF §9; the
+            # compiler-eval gate reads CORPUS_ROOT/registry/log.md)
+            from fabric_config import CORPUS_ROOT
+            log = CORPUS_ROOT / "registry" / "log.md"
+            log.parent.mkdir(parents=True, exist_ok=True)
             with open(log, "a") as f:
                 f.write(f"\n## {date.today().isoformat()}\n* **eval-stability | {'PASS' if report['passed'] else 'FAIL'}**\n")
                 for g in gates:
