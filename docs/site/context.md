@@ -82,7 +82,9 @@ test") surface in the manifest when their `trigger` plausibly matches the
 task, at **P1-project** precedence: a pending obligation binds the current
 task like a decision does. The reason reads `prospective match: <tokens>`,
 and an overdue `due` date adds a warning. `done`/`cancelled` commitments are
-excluded — completed obligations don't bind future work. See
+excluded — completed obligations don't bind future work. Activation is
+time-based (`due`) or dependency-based (`depends_on`, list of wikilinks).
+See
 [schemas/frontmatter.md](https://github.com/hybridindie/wiki-fabric/blob/main/schemas/frontmatter.md)
 for the contract.
 
