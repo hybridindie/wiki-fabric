@@ -3,7 +3,7 @@ type: index
 title: "Machine-Readable Contract"
 description: "Lint codes, catalog.json, CI consumption"
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-25
 ---
 
 # Machine-Readable Contract
@@ -59,7 +59,7 @@ Rebuilt by `rebuild-index.py` from actual files (never hand-edited):
 
 ```json
 {
-  "okf_version": "0.2",
+  "$schema": "wiki-fabric/registry-v1",
   "generated": "2026-09-19",
   "total": 4506,
   "counts": { "claim": 3800, "pattern": 14, "...": 0 },
@@ -82,6 +82,50 @@ Rebuilt by `rebuild-index.py` from actual files (never hand-edited):
 
 Every entry answers "what knowledge exists and how fresh is it" — the field
 CI and dashboards consume. `--json` prints it to stdout for piping.
+
+## Design decisions: one catalog, versioned envelopes
+
+**One catalog, no per-asset sidecars.** The fabric deliberately does *not*
+write a JSON manifest next to every asset. `catalog.json` already carries
+every retrieval-relevant field a machine consumer needs; per-asset sidecars
+would triple Git-diff noise and create a second machine representation of
+each page — a second drift target. The invariant that keeps the registry
+honest: **it must be deletable and rebuildable from canonical files**
+(`rebuild-index.py`). The moment registry data can't be rebuilt, it has
+become a hidden source of truth.
+
+**Schema versions are the compatibility boundary.** Machine surfaces carry
+their schema in-band: `catalog.json` writes `$schema: wiki-fabric/registry-v1`.
+Future machine surfaces follow the same convention — persisted context
+receipts will carry `wiki-fabric/receipt-v1`, and `wf context --format json`
+will get a documented, versioned shape. Consumers bind to the version, not to
+incidental fields. The one-line rule: **Markdown explains, YAML classifies,
+JSON executes — and JSON carries its version.**
+
+## Keeping the catalog out of context (bloat guardrails)
+
+The catalog is an index over the whole corpus; the task manifest is a
+selected subset. Those two surfaces never swap roles:
+
+| Surface | Size | Consumer | Enters a prompt? |
+|---|---|---|---|
+| `registry/catalog.json` | grows with the corpus (thousands of pages) | CI, dashboards, external tooling | **No — never** |
+| `wf context` manifest | bounded by `--max`, `--project`, `--paths` | the agent, before writing code | Yes — the only fabric JSON meant for model-adjacent use |
+
+The fabric's own runtime never reads the catalog: `wf context` compiles from
+page frontmatter directly, so catalog size does not affect task-time context.
+Guardrails for external consumers:
+
+- **Filter, don't ingest.** Slice the catalog with `jq` (by `type`, `scope`,
+  `status`) instead of loading it whole; the `counts` object answers "how much
+  knowledge exists" without reading `pages` at all.
+- **Descriptions are capped** (140 chars) — the catalog is an index, not prose.
+- **The manifest's excluded list is capped** (15 shown, remainder summarized),
+  so a large corpus can't bloat task context either.
+
+Same principle, planned: per-run context receipts will live under the
+project namespace rather than one global file — machine artifacts stay
+partitioned so no consumer must load "everything" to see "anything".
 
 ### `registry/log.md` — the append-only timeline
 

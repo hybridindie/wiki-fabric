@@ -3,7 +3,7 @@ type: index
 title: "Why not just a wiki, notes app, or RAG?"
 description: "Failure modes of alternatives and the core bet"
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-25
 ---
 
 # Why Not Just a Wiki, Notes App, or RAG (Retrieval-Augmented Generation)?
@@ -31,17 +31,39 @@ Wiki Fabric is a governance layer and reference implementation for coding-agent 
 2. **Promotes cross-project patterns with measured maturity** — experience events are deterministically clustered into promotion dossiers; promotion requires ≥2 independent projects and human review.
 3. **Enforces scope precedence at task time** — `wf context` compiles project decisions > domain patterns > global policies into a manifest where every inclusion/exclusion carries a reason, and stale/superseded knowledge is filtered before it can mislead.
 4. **Measures behavior, not vibes** — behavior evals verify the knowledge actually changes agent decisions (avoids banned approaches, honors constraints, escalates gaps); the compiler has its own golden-corpus eval; CI fails on regression.
-
 Everything else — the `wf` CLI, uv installer, Obsidian vault, git-history capture, corpus sync — is reference implementation and integrations around that core.
 
 ---
- — LLM extracts atomic assertions with line-level locators and verbatim quotes. Provenance is mandatory (lint: claims without sources can't become canonical).
-2. **Promotes cross-project patterns with measured maturity** — experience events are deterministically clustered into promotion dossiers; promotion requires ≥2 independent projects and human review.
-3. **Enforces scope precedence at task time** — `wf context` compiles project decisions > domain patterns > global policies into a manifest where every inclusion/exclusion carries a reason, and stale/superseded knowledge is filtered before it can mislead.
-4. **Measures behavior, not vibes** — behavior evals verify the knowledge actually changes agent decisions (avoids banned approaches, honors constraints, escalates gaps); the compiler has its own golden-corpus eval; CI fails on regression.
 
+## What is what: memory, context, and the fabric
 
----
+It's tempting to call the fabric "the agent's memory" in the singular. That
+conflates three different things:
+
+- **Memory** is the capability: what the agent can retain and recall over
+  time. Wiki Fabric is one *substrate* for it — a Git-governed external
+  knowledge store — not the whole capability.
+- **Context** is the runtime projection: the finite, model-visible payload for
+  one inference step. `wf context` compiles it deterministically from
+  project > domain > global knowledge; the harness adds live evidence (code,
+  diffs, test output) at its own layer.
+- **Working state** (plan, hypotheses, current step) belongs to the harness
+  and the run, not the fabric. The fabric holds durable, attributable
+  knowledge only.
+
+Mapping the fabric's asset types to the standard agent-memory taxonomy
+(working / episodic / semantic / procedural):
+
+| Fabric asset | Memory type |
+|---|---|
+| Claims, concepts, decisions | semantic |
+| Patterns, skills, policies | procedural |
+| Experience events | episodic |
+| Prospective commitments (deferred obligations) | prospective (planned) |
+
+A wiki page, a claim, a skill are storage formats — not memory types. What
+matters is that each asset carries its own retrieval and trust policy, which
+is why provenance, scope, and maturity are first-class fields.
 
 ---
 

@@ -3,7 +3,7 @@ type: index
 title: "Task Context — deterministic context assembly"
 description: "How wf context compiles scoped, reasoned manifests"
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-25
 ---
 
 # Task Context: Deterministic Context Assembly
@@ -51,6 +51,28 @@ Output is a **context manifest** with three properties:
 This is the payoff of the scope model: `global/` + `domains/` + `projects/`
 are not filing categories — they are the priority layers of task-time context
 assembly, enforced by the P1 contract (SCOPE, REVIEW-AFTER, status filters).
+
+## Boundary: knowledge vs. live evidence
+
+The manifest deliberately contains **knowledge and policy only** — not code
+slices, diffs, test output, or task working state. That's a design decision,
+not a gap:
+
+- **Live evidence is the harness's job.** The agent already reads code, runs
+  tests, and holds its own working state. Duplicating that here would make the
+  manifest stale the moment a file changes and would couple the fabric to one
+  harness's notion of "current".
+- **Determinism depends on the boundary.** `wf context` is 0-token, pure
+  string ops over the corpus. Live evidence is per-session and volatile; the
+  manifest stays stable and re-runnable.
+- **Structure is available when needed.** Call-graph neighborhoods and symbol
+  proximity (via the optional Graphify integration) can inform *which* claims
+  are selected — but the code itself is delivered by the harness, not embedded
+  in the manifest.
+
+The manifest answers "what does the fabric know that the agent must be told
+before writing code?" Everything else — RAM, diffs, working state — is the
+runtime's half of the memory/context split.
 
 ---
 

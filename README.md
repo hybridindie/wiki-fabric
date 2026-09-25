@@ -6,7 +6,7 @@
 > **Git-native, testable knowledge governance for AI coding agents.**
 > Project memory that is scoped by precedence, traceable to evidence, enforced by CI — and *provably delivered* before an agent writes code.
 
-**Positioning in one line:** Wiki Fabric treats repository knowledge as operational infrastructure for agents — a governed context layer, not a note vault. Where generic "LLM wiki" projects stop at self-maintaining Markdown, Wiki Fabric adds the three things that make knowledge *trustworthy at task time*: scope with precedence, provenance with staleness gates, and behavior evaluations that measure whether the knowledge changed the agent's decision.
+**Positioning in one line:** Wiki Fabric treats repository knowledge as operational infrastructure for agents — a governed context layer, not a note vault. Where generic "LLM wiki" projects stop at self-maintaining Markdown, Wiki Fabric adds the three things that make knowledge *trustworthy at task time*: scope with precedence, provenance with staleness gates, and behavior evaluations that measure whether the knowledge changed the agent's decision. It is one substrate of agent memory — the durable, Git-governed one — not the whole capability: the agent's context window and working state remain the harness's to manage.
 
 > [!WARNING]
 > **Very early alpha — expect breaking changes.** The core loop works end-to-end
@@ -215,7 +215,7 @@ Full docs at **[hybridindie.github.io/wiki-fabric](https://hybridindie.github.io
 ## Status & roadmap
 
 - **Works today:** capture → ingest → query → promote loop; deterministic context compiler; behavior evals; git-hooks automation; team sync; OKF v0.2 export/import.
-- **Next:** MCP server, multi-harness skill packs, embeddings re-ranking.
+- **Next:** persisted context receipts (per-run record of what was delivered and why), prospective-memory commitments (deferred obligations tracked by the fabric), MCP server, multi-harness skill packs, embeddings re-ranking.
 - **Contributing:** see [CONTRIBUTING.md](CONTRIBUTING.md). The fabric self-documents — if something isn't clear, that's a bug in the fabric; issues welcome.
 
 ## License
