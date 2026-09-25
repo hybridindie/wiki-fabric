@@ -68,8 +68,10 @@ fi
 
 # post-commit body: capture (drift-gated) → ingest changed (LLM optional).
 # Runs detached so git commit returns immediately.
+# All subprocess calls use argument lists (no shell), so slug / fabric can
+# never inject shell metacharacters.
 _REBUILD_BODY_COMMIT = """\
-import os, sys
+import os, subprocess, sys
 from pathlib import Path
 
 fabric = Path(os.environ['WF_FABRIC'])
@@ -77,58 +79,59 @@ slug = os.environ['WF_SLUG']
 py = sys.executable
 
 # 1. Capture (sha256 drift vs recorded sources; exit 2 == drift)
-# os.system returns wait status: exit code 2 arrives as 512 (2 << 8).
-r = os.system(f\\"'{py}' '{fabric}/scripts/cmd/capture.py' '{slug}' --project-root '$PWD' --quiet\\")
-r_code = r >> 8 if r > 127 else r
-if r_code not in (0, 2):
-    print(f'[wf hook] capture failed (exit {r_code}) — run: wf capture {slug}', flush=True)
+r = subprocess.run([py, str(fabric / 'scripts/cmd/capture.py'), slug,
+                    '--project-root', os.getcwd(), '--quiet'],
+                   capture_output=True).returncode
+if r not in (0, 2):
+    print(f'[wf hook] capture failed (exit {r}) — run: wf capture {slug}', flush=True)
     sys.exit(1)
-if r_code == 0:
+if r == 0:
     print('[wf hook] no doc drift — capture skipped', flush=True)
     sys.exit(0)
 
 # 2. Ingest drift. LLM only when --extract-claims was enabled at install time
 #    (WIKI_HOOK_EXTRACT=1); otherwise sources are recorded without claims and
 #    the agent ingests interactively on next session.
-cmd = f\\"'{py}' '{fabric}/scripts/cmd/ingest.py' --changed '{slug}'\\"
+ingest_args = [py, str(fabric / 'scripts/cmd/ingest.py'), '--changed', slug]
 if os.environ.get('WIKI_HOOK_EXTRACT', '').lower() in ('1', 'true', 'yes'):
-    cmd += ' --extract-claims'
+    ingest_args.append('--extract-claims')
 print('[wf hook] captured drift — ingesting...', flush=True)
-os.system(cmd)
+subprocess.run(ingest_args)
 
 # 3. After intake, persist the pending-HITL manifest (promotion dossiers,
 #    domain proposals, stale claims) so ANY AI harness can surface pending
 #    decisions at session start by reading registry/pending-gate.md.
-os.system(f\\"'{py}' '{fabric}/scripts/cmd/gate.py' --quiet --write-manifest\\")
+subprocess.run([py, str(fabric / 'scripts/cmd/gate.py'), '--quiet', '--write-manifest'])
 """
 
 
 _REBUILD_BODY_MERGE = """\
-import os, sys
+import os, subprocess, sys
 from pathlib import Path
 
 fabric = Path(os.environ['WF_FABRIC'])
 slug = os.environ['WF_SLUG']
 py = sys.executable
 
-r = os.system(f\"'{py}' '{fabric}/scripts/cmd/capture.py' '{slug}' --project-root '$PWD' --quiet\")
-r_code = r >> 8 if r > 127 else r
-if r_code not in (0, 2):
-    print(f'[wf hook] capture failed (exit {r_code}) — run: wf capture {slug}', flush=True)
+r = subprocess.run([py, str(fabric / 'scripts/cmd/capture.py'), slug,
+                    '--project-root', os.getcwd(), '--quiet'],
+                   capture_output=True).returncode
+if r not in (0, 2):
+    print(f'[wf hook] capture failed (exit {r}) — run: wf capture {slug}', flush=True)
     sys.exit(1)
-if r_code == 0:
+if r == 0:
     print('[wf hook] no doc drift — capture skipped', flush=True)
     sys.exit(0)
 
-cmd = f\"'{py}' '{fabric}/scripts/cmd/ingest.py' --changed '{slug}'\"
+ingest_args = [py, str(fabric / 'scripts/cmd/ingest.py'), '--changed', slug]
 if os.environ.get('WIKI_HOOK_EXTRACT', '').lower() in ('1', 'true', 'yes'):
-    cmd += ' --extract-claims'
+    ingest_args.append('--extract-claims')
 print('[wf hook] captured drift — ingesting...', flush=True)
-os.system(cmd)
+subprocess.run(ingest_args)
 
 # Surface pending HITL decisions (promotion/domain proposals, stale claims)
 # after a merge too — merge is a common moment for new upstream evidence.
-os.system(f\"'{py}' '{fabric}/scripts/cmd/gate.py' --quiet --write-manifest\")
+subprocess.run([py, str(fabric / 'scripts/cmd/gate.py'), '--quiet', '--write-manifest'])
 """
 
 

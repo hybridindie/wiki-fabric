@@ -132,16 +132,9 @@ def _validate_and_repair_diagrams(article):
     for f in reversed(fences):  # edit from the bottom so line indices stay valid
         if f["lang"] != "mermaid" or _mermaid_valid(f["body"]):
             continue
+        # Degrade the fence language to text; the closing fence needs no change
+        # (``` closes a ```text fence identically).
         lines[f["start"]] = "```text"
-        for j in range(f["start"] + 1, len(lines)):
-            if lines[j] == "```":
-                break
-        # replace the closing fence too
-        # (reversed iteration; find the matching close after start)
-        for j in range(f["start"] + 1, len(lines)):
-            if lines[j] == "```":
-                lines[j] = lines[j]  # closing fence for text is also ```
-                break
         # add repair comment just inside the open fence, on the body's first line
         # insert comment line after the opening fence
         lines.insert(f["start"] + 1,
@@ -747,10 +740,9 @@ def _generate_project_article(project, config, dry_run=False, mode=None):
     if stale:
         lines.append(f"❌ {len(stale)} claim(s) stale (archived below).")
     lines += ["", "## Key findings", ""]
+    footnotes = []
     for cp, st in current[:15]:
-        ref, note = _cite_claim(cp, len(footnotes) + 1 if 'footnotes' in dir() else 1)
-        if 'footnotes' not in dir():
-            footnotes = []
+        ref, note = _cite_claim(cp, len(footnotes) + 1)
         lines.append(f"- {st[:140]} {ref}")
         footnotes.append(note)
     if decisions:
@@ -762,6 +754,12 @@ def _generate_project_article(project, config, dry_run=False, mode=None):
         lines += ["", "## Archived (stale)", ""]
         for cp, st in stale[:10]:
             lines.append(f"- {st[:120]}")
+    if footnotes:
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+        for fn in footnotes:
+            lines.append(fn)
     lines.append("")
     article = "\n".join(lines) + "\n"
     out_dir = _wiki_root() / "projects"
