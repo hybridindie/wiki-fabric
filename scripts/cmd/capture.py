@@ -90,6 +90,7 @@ def capture_project(project_slug, repo_filter=None, dry_run=False):
     # Read .wiki-overlay.md from the PROJECT ROOT (not the fabric namespace)
     # The overlay is created by bootstrap in the project's root directory
     project_paths = [
+        Path.cwd() if (Path.cwd() / ".wiki-overlay.md").exists() else None,
         Path(project_slug) if Path(project_slug).exists() else None,
         VAULT_ROOT.parent / project_slug,  # sibling of fabric
     ]
@@ -107,10 +108,13 @@ def capture_project(project_slug, repo_filter=None, dry_run=False):
     if not overlay_path and config_file.exists():
         try:
             config = yaml.safe_load(config_file.read_text()) or {}
-            repo_cfg = config.get("repos", {}).get(project_slug, {})
+            repos_cfg = config.get("repos") or {}
+            repo_cfg = (repos_cfg or {}).get(project_slug) or {}
             repo_path_str = repo_cfg.get("path", "")
             if repo_path_str:
-                repo_path = (VAULT_ROOT / repo_path_str).resolve()
+                # repos paths resolve against FABRIC_ROOT (fabric.yaml lives
+                # there; bootstrap writes relpath(project_root, FABRIC_ROOT))
+                repo_path = (FABRIC_ROOT / repo_path_str).resolve()
                 if repo_path.exists():
                     # Default globs if not specified in overlay
                     source_repos = [{
