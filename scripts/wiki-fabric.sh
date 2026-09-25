@@ -898,6 +898,10 @@ case "${1:-help}" in
     status)
         cmd_status
         ;;
+    doctor)
+        fdir="$(find_fabric)"
+        run_script "${fdir}" "scripts/cmd/doctor.py"
+        ;;
     vault)
         shift
         cmd_vault "$@"

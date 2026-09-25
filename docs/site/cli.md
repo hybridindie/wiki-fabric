@@ -83,6 +83,7 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 | `wf install [--repo URL] [--dir DIR]` | Clone + set up the fabric |
 | `wf update` | Pull latest, rebuild entity index + catalog, lint, refresh installed CLI + project hooks |
 | `wf status` | Fabric health + inventory counts |
+| `wf doctor [--json]` | Environment diagnosis: endpoint reachability, model resolution (phantom compiler_model), compiler-eval readiness, judgment-tier availability, vault drift, gate — each failure names its fix |
 | `wf vault [PATH]` | Scaffold/audit the Obsidian output vault |
 | `wf bootstrap <project-path>` | Connect a project to the fabric |
 | `wf capture <project-slug> [--repo PATH]` | Capture upstream repo docs → `evidence/raw/` |
