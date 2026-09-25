@@ -23,17 +23,14 @@ if [[ "${MODE}" == "isolated" ]]; then
     TMPROOT="$(mktemp -d "${TMPDIR:-/tmp}/wf-smoke.XXXXXX")"
     trap 'rm -rf "${TMPROOT}"' EXIT
     cp -R "${FABRIC_ROOT}/." "${TMPROOT}/fabric/"
-    rm -rf "${TMPROOT}/fabric/.git" "${TMPROOT}/fabric/.venv" \
-        "${TMPROOT}/fabric/evidence/raw"/* \
-        "${TMPROOT}/fabric/evidence/claims" \
-        "${TMPROOT}/fabric/evidence/sources" \
-        "${TMPROOT}/fabric/evidence/source-summaries" \
-        "${TMPROOT}/fabric/evidence/traces" \
-        "${TMPROOT}/fabric/registry/log.md" \
-        "${TMPROOT}/fabric/registry/catalog.json" \
-        "${TMPROOT}/fabric/registry/catalog.json" \
-        "${TMPROOT}/fabric/index.md" \
-        "${TMPROOT}/fabric/global/entities"
+    rm -rf "${TMPROOT}/fabric/corpus/evidence/raw"/* \
+        "${TMPROOT}/fabric/corpus/evidence/claims" \
+        "${TMPROOT}/fabric/corpus/evidence/sources" \
+        "${TMPROOT}/fabric/corpus/evidence/source-summaries" \
+        "${TMPROOT}/fabric/corpus/evidence/traces" \
+        "${TMPROOT}/fabric/corpus/registry/log.md" \
+        "${TMPROOT}/fabric/corpus/registry/catalog.json" \
+        "${TMPROOT}/fabric/corpus/global/entities"
     FABRIC="${TMPROOT}/fabric"
     echo "Smoke test (isolated): ${FABRIC}"
 else
@@ -43,6 +40,10 @@ fi
 echo ""
 
 cd "${FABRIC}"
+# Pin the fabric root so fabric_config resolves content HERE,
+# not a sibling vault of the temp dir.
+export WIKI_FABRIC_DIR="${FABRIC}"
+CORPUS="${FABRIC}/corpus"
 
 # 0. Python runner: prefer fabric venv (created by wf install), fall back to python3
 if [[ -x "${FABRIC}/.venv/bin/python" ]]; then
@@ -60,11 +61,13 @@ pass "python runner: ${PY}"
 bash "${FABRIC}/scripts/wiki-fabric.sh" help >/dev/null 2>&1 || fail "wf help"
 pass "wf help"
 
-# 2. All Python scripts compile
-for py in "${FABRIC}"/scripts/*.py; do
-    python3 -m py_compile "${py}" || fail "py_compile $(basename "${py}")"
-done
-pass "all $(ls "${FABRIC}"/scripts/*.py | wc -l | tr -d ' ') python scripts compile"
+# 2. All Python scripts compile (nested layout: cmd/, lib/, eval/, harness/)
+script_count=0
+while IFS= read -r py; do
+    python3 -m py_compile "${py}" || fail "py_compile ${py#"${FABRIC}/"}"
+    script_count=$((script_count + 1))
+done < <(find "${FABRIC}/scripts" -name '*.py' -not -path '*__pycache__*')
+pass "all ${script_count} python scripts compile"
 
 # 3. All shell scripts parse
 for sh in "${FABRIC}"/scripts/*.sh; do
@@ -73,12 +76,12 @@ done
 pass "all $(ls "${FABRIC}"/scripts/*.sh | wc -l | tr -d ' ') shell scripts parse"
 
 # 4. Lint is clean on the harness itself
-"${PY}" "${FABRIC}/scripts/cmd/lint.py" . 2>&1 | head -5 || fail "lint (expected 0 errors)"
+"${PY}" "${FABRIC}/scripts/cmd/lint.py" "${CORPUS}" 2>&1 | head -5 || fail "lint (expected 0 errors)"
 pass "lint clean"
 
 # 5. Capture fixture source (dry run reports, no writes)
-mkdir -p "${FABRIC}/evidence/raw/smoke-project"
-cat > "${FABRIC}/evidence/raw/smoke-project/sample.md" <<'MD'
+mkdir -p "${CORPUS}/evidence/raw/smoke-project"
+cat > "${CORPUS}/evidence/raw/smoke-project/sample.md" <<'MD'
 # Sample fixture
 
 The system uses a single writer. Writes serialize; reads pipeline (L4).
@@ -92,8 +95,8 @@ pass "ingest --changed detects fixture"
 
 # 7. ingest --changed ingests, and is idempotent on second run
 "${PY}" "${FABRIC}/scripts/cmd/ingest.py" --changed smoke-project >/dev/null 2>&1 || fail "ingest --changed run"
-[[ -f "evidence/sources/src-smoke-project-sample-md.md" ]] || fail "source record not created"
-[[ -f "evidence/source-summaries/sum-smoke-project-sample-md.md" ]] || fail "source summary not created"
+[[ -f "corpus/evidence/sources/src-smoke-project-sample-md.md" ]] || fail "source record not created"
+[[ -f "corpus/evidence/source-summaries/sum-smoke-project-sample-md.md" ]] || fail "source summary not created"
 pass "ingest creates source record + summary"
 
 out="$("${PY}" "${FABRIC}/scripts/cmd/ingest.py" --changed smoke-project 2>&1)"
@@ -102,23 +105,23 @@ pass "ingest --changed idempotent (anti-loop)"
 
 # 8. rebuild-index runs and index is stable (idempotent)
 "${PY}" "${FABRIC}/scripts/cmd/rebuild-index.py" >/dev/null 2>&1 || fail "rebuild-index"
-cp "${FABRIC}/registry/catalog.json" /tmp/wf-idx-1.json
+cp "${CORPUS}/registry/catalog.json" /tmp/wf-idx-1.json
 "${PY}" "${FABRIC}/scripts/cmd/rebuild-index.py" >/dev/null 2>&1
-diff <(grep -v 'generated' /tmp/wf-idx-1.json) <(grep -v 'generated' "${FABRIC}/registry/catalog.json") >/dev/null || fail "rebuild-index not idempotent"
+diff <(grep -v 'generated' /tmp/wf-idx-1.json) <(grep -v 'generated' "${CORPUS}/registry/catalog.json") >/dev/null || fail "rebuild-index not idempotent"
 pass "rebuild-index idempotent"
 
 # 9. Lint still clean after ingest artifacts
-"${PY}" "${FABRIC}/scripts/cmd/lint.py" . >/dev/null 2>&1 || fail "lint after ingest"
+"${PY}" "${FABRIC}/scripts/cmd/lint.py" "${CORPUS}" >/dev/null 2>&1 || fail "lint after ingest"
 pass "lint clean after ingest"
 
 # 9b. Lint JSON report is valid + registry/catalog.json is machine-readable
-"${PY}" "${FABRIC}/scripts/cmd/lint.py" . --format json | "${PY}" -m json.tool >/dev/null 2>&1 || fail "lint --format json invalid"
+"${PY}" "${FABRIC}/scripts/cmd/lint.py" "${CORPUS}" --format json | "${PY}" -m json.tool >/dev/null 2>&1 || fail "lint --format json invalid"
 pass "lint --format json valid"
-"${PY}" -c "import json; d=json.load(open('registry/catalog.json')); assert 'pages' in d and 'counts' in d" 2>/dev/null || fail "registry/catalog.json invalid"
+"${PY}" -c "import json; d=json.load(open('corpus/registry/catalog.json')); assert 'pages' in d and 'counts' in d" 2>/dev/null || fail "registry/catalog.json invalid"
 pass "registry/catalog.json valid"
 
 # 10. log.md was appended
-grep -q "ingest | smoke-project" registry/log.md || fail "registry/log.md not appended"
+grep -q "ingest | smoke-project" corpus/registry/log.md || fail "registry/log.md not appended"
 pass "registry/log.md appended"
 
 # 11. capture-git local repo path (uses this repo's own git history as source)
