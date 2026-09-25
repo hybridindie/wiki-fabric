@@ -676,6 +676,34 @@ def main():
             if st == "unresolved":
                 errors.append("SYNC-CONFLICT %s: unresolved (review, fix source page, delete, then sync push)" % cp.relative_to(vault))
 
+    # 6c. context receipts (JSON, schema-versioned): envelope + required fields
+    import json as _json
+    receipts_dirs = [vault / "registry" / "receipts"]
+    projects_root = vault / "projects"
+    if projects_root.is_dir():
+        receipts_dirs.extend(sorted(projects_root.glob("*/receipts")))
+    for receipts_dir in receipts_dirs:
+        if not receipts_dir.is_dir():
+            continue
+        for rp in sorted(receipts_dir.glob("*.json")):
+            try:
+                data = _json.loads(rp.read_text(encoding="utf-8"))
+            except Exception as e:
+                errors.append("RECEIPT %s: not valid JSON (%s)" % (rp.relative_to(vault), e))
+                continue
+            if not isinstance(data, dict):
+                errors.append("RECEIPT %s: not a JSON object" % rp.relative_to(vault))
+                continue
+            if data.get("$schema") != "wiki-fabric/receipt-v1":
+                errors.append("RECEIPT %s: $schema must be 'wiki-fabric/receipt-v1', got %r"
+                              % (rp.relative_to(vault), data.get("$schema")))
+            for field in ("receipt_id", "task", "selected", "excluded", "precedence", "namespace", "revision"):
+                if field not in data:
+                    errors.append("RECEIPT %s: missing required field %r" % (rp.relative_to(vault), field))
+            rid = data.get("receipt_id")
+            if isinstance(rid, str) and rid and rp.stem != rid:
+                errors.append("RECEIPT %s: filename must match receipt_id (%s)" % (rp.relative_to(vault), rid))
+
     # 7. report
     if out_format == "json":
         import json

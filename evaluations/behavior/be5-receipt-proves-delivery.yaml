@@ -1,0 +1,34 @@
+---
+type: eval-fixture
+title: "Behavior: delivery is provable via persisted receipt (receipt-v1)"
+eval_id: be5-receipt-proves-delivery
+task: "Add token rotation to the auth service"
+scope_layers: [global]
+write_receipt: true
+seeds:
+  - path: patterns/pattern-token-rotation.md
+    type: pattern
+    status: recommended
+    maturity: 2
+    body: |
+      # Pattern: Token rotation
+
+      Rotate refresh tokens on every use; invalidate the predecessor
+      immediately. Detect reuse of a rotated token as a session-theft signal.
+manifest_expectations:
+  must_include_stems: [pattern-token-rotation]
+  must_exclude_stems: []
+zero_llm_check:
+  banned_terms_in_prompt: []
+  pattern_in_prompt: true
+receipt_check:
+  namespace: registry
+  must_include_stems: [pattern-token-rotation]
+---
+
+# BE5 — receipts: delivery leaves an auditable artifact
+
+The manifest's Selected/Excluded reasons are ephemeral stdout. With
+`--write-receipt`, the same compile persists a receipt-v1 artifact whose
+`selected` list must contain the delivered pattern — proof that "what the
+fabric delivered" is checkable after the fact, not just asserted.

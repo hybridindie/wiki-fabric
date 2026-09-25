@@ -214,8 +214,8 @@ Full docs at **[hybridindie.github.io/wiki-fabric](https://hybridindie.github.io
 
 ## Status & roadmap
 
-- **Works today:** capture → ingest → query → promote loop; deterministic context compiler; behavior evals; git-hooks automation; team sync; OKF v0.2 export/import.
-- **Next:** persisted context receipts (per-run record of what was delivered and why), prospective-memory commitments (deferred obligations tracked by the fabric), MCP server, multi-harness skill packs, embeddings re-ranking.
+- **Works today:** capture → ingest → query → promote loop; deterministic context compiler; behavior evals; persisted context receipts (`wf context --write-receipt` — auditable per-run delivery record); git-hooks automation; team sync; OKF v0.2 export/import.
+- **Next:** prospective-memory commitments (deferred obligations tracked by the fabric), MCP server, multi-harness skill packs, embeddings re-ranking.
 - **Contributing:** see [CONTRIBUTING.md](CONTRIBUTING.md). The fabric self-documents — if something isn't clear, that's a bug in the fabric; issues welcome.
 
 ## License

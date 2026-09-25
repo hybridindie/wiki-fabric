@@ -47,7 +47,7 @@ persistent memory layer.
 
 | Task | Command | LLM cost | Notes |
 |------|---------|----------|-------|
-| Compile task context | `wf context --task "<task>"` | **0** | Deterministic manifest: claims, patterns, decisions, skills |
+| Compile task context | `wf context --task "<task>"` | **0** | Deterministic manifest: claims, patterns, decisions, skills. Add `--write-receipt` to persist an auditable delivery record (receipt-v1) |
 | Answer a question | `wf query "<question>"` | **0** | Evidence-backed answer with locators |
 | Capture upstream docs | `wf capture <slug>` | 0 | Copies from source repos → `evidence/raw/` |
 | Ingest a source | `wf ingest <path> [--extract-claims]` | 1 call | Source record + summary + claims |

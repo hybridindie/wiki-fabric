@@ -74,6 +74,24 @@ The manifest answers "what does the fabric know that the agent must be told
 before writing code?" Everything else — RAM, diffs, working state — is the
 runtime's half of the memory/context split.
 
+## Receipts: make delivery auditable
+
+Add `--write-receipt` to persist the manifest as a **context receipt**
+(`wiki-fabric/receipt-v1`):
+
+```bash
+wf context --task "Add token rotation to the OAuth service" --write-receipt
+# stderr: receipt: <fabric>/registry/receipts/receipt-3f9c2b1a77d0.json (receipt-3f9c2b1a77d0)
+```
+
+- The receipt is the full manifest payload + provenance fields, written to
+  `projects/<p>/receipts/` (pinned) or `registry/receipts/` (unpinned).
+- Its id is derived from the manifest content — same corpus + task gives the
+  same id, so re-runs overwrite in place and are byte-identical.
+- The receipt path goes to stderr; the manifest on stdout is unchanged.
+- `wf lint` validates the envelope (`RECEIPT` code); behavior eval `be5`
+  proves delivery through a persisted receipt.
+
 ---
 
 ---

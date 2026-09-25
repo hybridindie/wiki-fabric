@@ -140,11 +140,30 @@ pass "mine-promotions dry-run"
 # 14. context manifest compiles (markdown) and valid JSON output
 "${PY}" "${FABRIC}/scripts/cmd/context.py" --task "smoke test task" | grep -q "## Precedence" || fail "context markdown manifest"
 "${PY}" "${FABRIC}/scripts/cmd/context.py" --task "smoke test task" --format json | "${PY}" -m json.tool >/dev/null 2>&1 || fail "context --format json"
+# 14b. receipt: --write-receipt persists a valid receipt-v1 artifact (stdout unchanged)
+_CTX_STDOUT="$("${PY}" "${FABRIC}/scripts/cmd/context.py" --task "smoke test task" --format json)"
+_CTX_RSTDOUT="$("${PY}" "${FABRIC}/scripts/cmd/context.py" --task "smoke test task" --format json --write-receipt 2>/dev/null)"
+[ "${_CTX_STDOUT}" = "${_CTX_RSTDOUT}" ] || fail "receipt: stdout changed with --write-receipt"
+_RECEIPT_COUNT=$(find "${FABRIC}/corpus/registry/receipts" -name "*.json" 2>/dev/null | wc -l | tr -d " ")
+[ "${_RECEIPT_COUNT}" = "1" ] || fail "receipt: expected exactly 1 persisted receipt, got ${_RECEIPT_COUNT}"
+"${PY}" - "${FABRIC}/corpus/registry/receipts" <<'PYEOF' >/dev/null 2>&1 || fail "receipt envelope invalid"
+import json, sys
+from pathlib import Path
+receipts = list(Path(sys.argv[1]).glob("*.json"))
+r = json.loads(receipts[0].read_text())
+assert r["$schema"] == "wiki-fabric/receipt-v1"
+assert r["receipt_id"] == receipts[0].stem
+PYEOF
+"${PY}" "${FABRIC}/scripts/cmd/context.py" --task "smoke test task" --format json --write-receipt >/dev/null 2>&1
+_RECEIPT_COUNT2=$(find "${FABRIC}/corpus/registry/receipts" -name "*.json" 2>/dev/null | wc -l | tr -d " ")
+[ "${_RECEIPT_COUNT2}" = "1" ] || fail "receipt: re-run accumulated duplicates (${_RECEIPT_COUNT2})"
+rm -rf "${FABRIC}/corpus/registry/receipts"
+pass "context receipt (write-receipt: envelope, idempotent, stdout untouched)"
 pass "context manifest compiles (md + json)"
 
 # 15. behavior evaluation passes (0 tokens, manifest compliance)
 "${PY}" "${FABRIC}/scripts/eval/eval-behavior.py" >/dev/null 2>&1 || fail "behavior eval"
-pass "behavior eval (4 fixtures)"
+pass "behavior eval (5 fixtures)"
 
 # 16. stability eval (deterministic gates only)
 "${PY}" "${FABRIC}/scripts/eval/eval-stability.py" --skip-llm >/dev/null 2>&1 || fail "stability eval"
