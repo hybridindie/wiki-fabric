@@ -155,7 +155,12 @@ def register_in_fabric_yaml(project_slug, project_root):
     except Exception:
         config = {}
 
-    repos = config.setdefault("repos", {})
+    # "repos:" followed only by comments parses as None — setdefault won't
+    # replace an existing None key, so coerce explicitly.
+    repos = config.get("repos")
+    if not isinstance(repos, dict):
+        repos = {}
+    config["repos"] = repos
     rel_path = os.path.relpath(project_root, FABRIC_ROOT)
     repos[project_slug] = {
         "path": rel_path,
@@ -331,6 +336,8 @@ def main():
         print(f"  Slug:       {project_slug}")
         print(f"  Root:       {project_root}")
         print(f"  Domains:    {', '.join(domains)}")
+        routing_keys = {"extract": args.extract, "synthesize": args.synthesize,
+                        "dossier": args.dossier, "graph_dir": args.graph_dir}
         if any(v for v in routing_keys.values()):
             routes = ", ".join(f"{k}={v}" for k, v in routing_keys.items() if v)
             print(f"  Routing:    {routes}")
@@ -585,6 +592,7 @@ WIKI_LLM_MODEL={config["llm"]["model"]}
         print("To share it with a team: wf sync init <git-url> && wf sync push")
 
     # 8b. Extraction routing (interactive): privacy tiering per stage
+    import sys as _sys
     if not args.non_interactive and _sys.stdin.isatty():
         print()
         print("  Extraction routing for this project:")
