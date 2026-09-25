@@ -193,3 +193,13 @@ def verdict(question, state, threshold=0.5):
     existing human-gate machinery, never auto-decide."""
     p = noul(question, state)
     return (p >= threshold, p)
+
+
+def same_recurrence(item_a, item_b, threshold=0.6):
+    """Pairwise 'same recurring pattern?' judgment for cluster refinement.
+    Returns (same: bool, probability: float). Used by mine-promotions to
+    rescue near-miss keyword pairs (judgment-enabled mode only)."""
+    state = (f"Item A: {item_a}\n\nItem B: {item_b}")
+    p = noul("Do these two records describe the same recurring problem and intervention?",
+             state)
+    return (p >= threshold, p)
