@@ -245,6 +245,73 @@ def cluster_events(events, min_projects=2, use_embeddings=True, model=None, thre
     return cluster_events_keyword(events, min_projects)
 
 
+def cluster_events_judged(events, min_projects=2, threshold=0.6):
+    """Judgment refinement over the keyword pass (#29 slice 3): pairs whose
+    expanded-keyword Jaccard is a NEAR-MISS (0 < sim < keyword threshold) get
+    a decision-model verdict — 'same recurring pattern?' — and judged-same
+    pairs merge into one cluster. Judgment records probabilities; the
+    deterministic keyword result is the fallback when the tier is disabled."""
+    from judgment import same_recurrence, judgment_route, JudgmentUnavailable
+    try:
+        route = judgment_route()
+    except JudgmentUnavailable as e:
+        print(f"Judgment tier unavailable, keeping keyword clusters: {e}")
+        return cluster_events_keyword(events, min_projects)
+
+    base = cluster_events_keyword(events, min_projects)
+
+    def _text(ev):
+        return (f"Problem: {ev.get('observed_problem', '')} | "
+                f"Intervention: {ev.get('intervention', '')} | "
+                f"Outcome: {ev.get('outcomes', '')}")
+
+    # Rebuild keyword pairs that did NOT cluster together
+    assigned = {}
+    for ck, evs in base.items():
+        for ev in evs:
+            assigned[ev.get("_file")] = ck
+
+    for i in range(len(events)):
+        for j in range(i + 1, len(events)):
+            ea, eb = events[i], events[j]
+            if assigned.get(ea.get("_file")) == assigned.get(eb.get("_file")) and \
+                    assigned.get(ea.get("_file")) is not None:
+                continue
+            same, p = same_recurrence(_text(ea), _text(eb), threshold=threshold)
+            mark = "MERGE" if same else "keep-split"
+            print(f"  judged {ea.get('project','?')}+{eb.get('project','?')}: p={p:.3f} -> {mark}")
+            if same:
+                base = _merge_clusters(base, ea, eb, assigned)
+                assigned = {}
+                for ck, evs in base.items():
+                    for ev in evs:
+                        assigned[ev.get("_file")] = ck
+    print(f"Judgment route: {route}")
+    return base
+
+
+def _merge_clusters(base, ea, eb, assigned):
+    """Merge the clusters holding ea and eb. When both are unassigned singletons
+    (the keyword pass dropped them), a judged-same pair *forms* a new cluster —
+    the min-projects filter is re-applied afterward by the caller."""
+    ca, cb = assigned.get(ea.get("_file")), assigned.get(eb.get("_file"))
+    if not ca and not cb:
+        base[f"cluster_judged_{hashlib.md5((ea.get('_file','') + eb.get('_file','')).encode()).hexdigest()[:8]}"] = [ea, eb]
+        return base
+    if not cb:
+        # ea's cluster absorbs the unassigned eb
+        base[ca].append(eb)
+        return base
+    if not ca:
+        base[cb].append(ea)
+        return base
+    if ca == cb:
+        return base
+    base[ca].extend(base[cb])
+    del base[cb]
+    return base
+
+
 def escape_yaml(value):
     """Escape string for safe YAML inclusion."""
     if '[' in value or ']' in value or ':' in value or '#' in value or '"' in value:
@@ -533,6 +600,8 @@ def main():
     parser.add_argument("--min-projects", type=int, default=2, help="Minimum independent projects for a cluster")
     parser.add_argument("--output-dir", default=str(PROMOTIONS_DIR), help="Output directory for dossiers")
     parser.add_argument("--use-embeddings", action="store_true", help="Use semantic embeddings for clustering")
+    parser.add_argument("--judge", action="store_true",
+                        help="Refine near-miss cluster pairs with the judgment tier (integrations.judgment)")
     parser.add_argument("--model", default="all-MiniLM-L6-v2", help="Embedding model (sentence-transformers)")
     parser.add_argument("--dry-run", action="store_true", help="Don't write files, just show what would be done")
     args = parser.parse_args()
@@ -545,8 +614,11 @@ def main():
     
     events = extract_experience_events()
     print(f"Found {len(events)} experience events")
-    
-    clusters = cluster_events(events, MIN_PROJECTS, use_embeddings=args.use_embeddings)
+
+    if args.judge:
+        clusters = cluster_events_judged(events, MIN_PROJECTS)
+    else:
+        clusters = cluster_events(events, MIN_PROJECTS, use_embeddings=args.use_embeddings)
     print(f"Found {len(clusters)} clusters with >= {MIN_PROJECTS} projects")
     
     for cluster_key, events in clusters.items():

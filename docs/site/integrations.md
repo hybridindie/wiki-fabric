@@ -33,10 +33,17 @@ probabilities** — no text generation. LangChain's benchmark of Jev as a judge
 found 100% binary accuracy vs a human oracle with 92–913× lower variance than
 GPT-5.6/Claude LLM judges, at ~1/80th Claude's cost.
 
-**Where it may run (today):** `wf eval-behavior --judge` — the `--llm` probe
-of behavior evals becomes a `noul` judgment ("does the prompt deliver the
-binding decision?"), stable enough to gate CI. Planned: promotion-dossier
-refinement and borderline-context re-ranking (each judgment recorded).
+**Where it may run (today):**
+- `wf eval-behavior --judge` — the `--llm` probe of behavior evals becomes a
+  `noul` judgment ("does the prompt deliver the binding decision?"), stable
+  enough to gate CI.
+- `eval-stability.py --judge` — **G4-J**: model pairs the fuzzy gate failed
+  (near-miss, not empty) are re-asked "same factual content?"; judged-SAME
+  downgrades wording drift to a warning, with the probability recorded.
+- `mine-promotions.py --judge` — near-miss keyword pairs get a pairwise
+  "same recurring pattern?" verdict; judged-same pairs merge (and judged-same
+  singletons can *form* clusters the keyword pass dropped).
+- Planned: borderline-context re-ranking (each judgment recorded).
 
 **Hard contract:**
 - **Never the 0-token core.** `wf context`, `wf query`, `lint` stay pure

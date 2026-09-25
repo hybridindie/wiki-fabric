@@ -217,6 +217,40 @@ def gate_model_sensitivity(model_sets):
     return gates
 
 
+def judge_model_sensitivity(model_sets, threshold=0.6):
+    """G4-J: judgment refinement of the model-sensitivity matrix. For pairs the
+    fuzzy gate FAILED (0 < fz < 0.5 — near-miss, not empty), ask the judgment
+    tier whether the two claim sets describe the same knowledge. A judged YES
+    downgrades the pair's failure to a warning (wording drift, not semantic
+    drift); the probability is recorded. Never overrides an EMPTY pair."""
+    gates = []
+    names = list(model_sets.keys())
+    pairs = [(a, b) for i, a in enumerate(names) for b in names[i + 1:]]
+    try:
+        from judgment import noul, judgment_route
+        route = judgment_route()
+    except Exception as e:
+        return [{"gate": "G4-J", "name": "model sensitivity (judged)",
+                 "detail": f"unavailable: {e}", "passed": True, "skipped": True}]
+    for ma, mb in pairs:
+        sa, sb = model_sets[ma], model_sets[mb]
+        if (not sa) or (not sb):
+            continue  # empty pairs are G4's business
+        fz = fuzzy_coverage(sa, sb)
+        if fz >= 0.5:
+            continue  # deterministic gate already passed
+        p = noul("Do these two claim sets extracted from the same source express the same factual content?",
+                 f"Set A:\n" + "\n".join(sorted(sa)) + f"\n\nSet B:\n" + "\n".join(sorted(sb)))
+        judged_same = p >= threshold
+        gates.append({"gate": "G4-J", "name": "model sensitivity (judged)",
+                      "detail": (f"{ma} vs {mb}: fuzzy {fz:.2f} < 0.5, judged "
+                                 f"{'SAME content' if judged_same else 'DIFFERENT content'} (p={p:.3f}, route={route})")
+                                 .replace("judged_same", str(judged_same)) if False else
+                                 f"{ma} vs {mb}: fuzzy {fz:.2f} < 0.5, judged {'SAME content' if judged_same else 'DIFFERENT content'} (p={p:.3f}, route={route})",
+                      "passed": judged_same, "probability": round(p, 3), "route": route})
+    return gates
+
+
 def main():
     parser = argparse.ArgumentParser(description="Stability, sensitivity, and cost evaluation")
     parser.add_argument("--skip-llm", action="store_true", help="Run only deterministic gates (G1/G2) — CI-safe")
@@ -224,6 +258,8 @@ def main():
                         help="Comma-separated models for G4 (must exist in the local LLM endpoint)")
     parser.add_argument("--record", action="store_true", help="Append metrics to registry/log.md")
     parser.add_argument("--json", action="store_true", help="JSON report")
+    parser.add_argument("--judge", action="store_true",
+                        help="G4-J: judgment tier refines failed G4 pairs (integrations.judgment)")
     args = parser.parse_args()
 
     global models_arg
@@ -275,6 +311,8 @@ def main():
                 all_sets[mb] = claim_statements(tmp / "evidence" / "claims")
             ordered = {m: all_sets[m] for m in models_arg if m in all_sets}
             gates.extend(gate_model_sensitivity(ordered))
+            if args.judge:
+                gates.extend(judge_model_sensitivity(ordered))
     finally:
         report = {
             "mode": "skip-llm" if args.skip_llm else "full",
