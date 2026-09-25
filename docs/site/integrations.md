@@ -19,7 +19,7 @@ Integrations add capabilities on top of the core loop. They are declared in `fab
 
 | Integration | When active | Cost |
 |-------------|-------------|------|
-| **graphify** | claims carry `code_symbols` + `graph_edges` (doc→code provenance); `graphify-bridge --diff` adds AST staleness detection after refactors; query expansion follows call/import edges; code-reachable claims surface first | 0 tokens (AST + community detection) |
+| **graphify** | claims carry `code_symbols` + `graph_edges` (doc→code provenance); `graphify-bridge --diff` adds AST staleness detection after refactors; **`wf context` gains a `Code navigation` block** — task tokens → graph symbols → ranked file shortlist (0 tokens, deterministic); code-reachable claims surface first | 0 tokens (AST + community detection) |
 | **embeddings** | semantic re-ranking of retrieval results (planned — off by default) | local inference |
 | **judgment** | low-variance decision-model judging (System One models: [TypeSafe Jev](https://docs.typesafe.ai/introduction) cloud, [Laya-MLX](https://github.com/rbrus/laya-as-judge) local) for eval gates: `wf eval-behavior --judge` scores fixtures with calibrated probabilities instead of a generative LLM judge | ~$0.0004/call (cloud) or on-device (local) |
 
