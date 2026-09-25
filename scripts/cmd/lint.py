@@ -697,7 +697,7 @@ def main():
             if data.get("$schema") != "wiki-fabric/receipt-v1":
                 errors.append("RECEIPT %s: $schema must be 'wiki-fabric/receipt-v1', got %r"
                               % (rp.relative_to(vault), data.get("$schema")))
-            for field in ("receipt_id", "task", "selected", "excluded", "precedence", "namespace"):
+            for field in ("receipt_id", "task", "selected", "excluded", "precedence", "namespace", "revision"):
                 if field not in data:
                     errors.append("RECEIPT %s: missing required field %r" % (rp.relative_to(vault), field))
             rid = data.get("receipt_id")

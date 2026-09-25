@@ -110,7 +110,10 @@ a checkable artifact: eval fixtures, attesters, and CI can assert *after the
 fact* that a given task received the required knowledge.
 
 - **Envelope:** the full manifest payload plus `receipt_id`, `manifest`
-  (schema of the wrapped manifest), `fabric_root`, `namespace`.
+  (schema of the wrapped manifest), `fabric_root`, `namespace`, and
+  `revision` (the corpus's git HEAD sha — receipts record *which* corpus
+  revision they compiled against, so an audit can re-run the exact compile;
+  `null` when the corpus isn't a git repo).
 - **Id is content-derived:** `receipt-<sha256[:12]>` of the manifest payload.
   Same corpus + task + flags ⇒ same id ⇒ re-running overwrites in place —
   receipts never accumulate duplicates, and re-runs are byte-identical.

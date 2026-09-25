@@ -379,6 +379,21 @@ def receipt_id(manifest):
     return f"receipt-{digest[:12]}"
 
 
+def _corpus_revision():
+    """Git HEAD sha of the corpus (the vault is the sync unit); null when not
+    a git repo. Receipts record *which* corpus revision they compiled against
+    so an audit can re-run the exact compile."""
+    try:
+        import subprocess as _sp
+        out = _sp.run(["git", "rev-parse", "HEAD"], cwd=VAULT_ROOT,
+                      capture_output=True, text=True, timeout=5)
+        if out.returncode == 0:
+            return out.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
 def build_receipt(manifest, rid, fabric_root, project):
     """receipt-v1 envelope: the manifest payload + provenance + location."""
     receipt = dict(manifest)
@@ -387,6 +402,7 @@ def build_receipt(manifest, rid, fabric_root, project):
     receipt["manifest"] = "wiki-fabric/context-manifest-v1"
     receipt["fabric_root"] = fabric_root.name
     receipt["namespace"] = f"projects/{project}" if project else "registry"
+    receipt["revision"] = _corpus_revision()
     return receipt
 
 

@@ -247,6 +247,7 @@ class TestReceipts:
         assert data["receipt_id"] == receipts[0].stem
         assert data["namespace"] == "registry"
         assert data["manifest"] == "wiki-fabric/context-manifest-v1"
+        assert "revision" in data  # corpus git sha, or null outside a repo
         assert {s["stem"] for s in data["selected"]} == {"pattern-x"}
 
     def test_receipt_path_on_stderr_stdout_untouched(self, tmp_path):
