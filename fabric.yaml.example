@@ -89,6 +89,10 @@ integrations:
   embeddings:
     enabled: false                       # true → semantic re-ranking (optional ML, planned)
     model: all-MiniLM-L6-v2
+  judgment:
+    enabled: false                       # true → low-variance decision-model judging (eval gates)
+    route: cloud                         # "cloud" (TypeSafe Jev API) | "local" (Laya-MLX on-device)
+    cloud_model: jev-1                   # Jev model id (cloud route); local route uses llm.local_model
 
 domains:
   agent-systems:

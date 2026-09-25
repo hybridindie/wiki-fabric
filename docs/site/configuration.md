@@ -3,7 +3,7 @@ type: index
 title: "Configuration — LLM providers, routing, and fabric.yaml"
 description: "Every knob: OpenAI-compatible providers, model tiers, per-stage routing, ignores, integrations"
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-25
 ---
 
 # Configuration
@@ -335,7 +335,23 @@ integrations:
   embeddings:
     enabled: false       # semantic re-ranking (planned)
     model: all-MiniLM-L6-v2
+  judgment:
+    enabled: false       # decision-model judging for eval gates (Jev / Laya)
+    route: cloud         # "cloud" | "local"
+    cloud_model: jev-1
 ```
+
+### Judgment tier
+
+The judgment tier (`integrations.judgment`) enables low-variance
+decision-model judging for evaluation surfaces — `wf eval-behavior --judge`.
+It is **never** used by `wf context`, `wf query`, or `lint` (the 0-token
+core); a test enforces that isolation. `route: cloud` uses the TypeSafe Jev
+API (`TYPESAFE_API_KEY` env var, key never committed); `route: local` runs an
+on-device judge (Laya-MLX) through the same local-model stack as
+`extract: local`. Every judgment records backend, model, and probability —
+low-variance judgment, not determinism; near-threshold values escalate to
+human review. See [Optional Integrations](./integrations#the-judgment-tier).
 
 ## Domains
 

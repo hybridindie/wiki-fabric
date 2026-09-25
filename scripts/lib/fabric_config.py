@@ -134,6 +134,10 @@ _DEFAULTS = {
         # When active, skills/scripts gain graph-aware steps (see system/skills).
         "graphify": {"enabled": False, "graph_dir": "graphify-out"},
         "embeddings": {"enabled": False, "model": "all-MiniLM-L6-v2"},
+        # Judgment tier: low-variance decision-model judging (Jev cloud /
+        # Laya-MLX local). Eval + promotion-review surfaces ONLY — never the
+        # 0-token core (see scripts/lib/judgment.py contract).
+        "judgment": {"enabled": False, "route": "cloud", "cloud_model": "jev-1"},
     },
     "domains": {
         "agent-systems": {"signals": ["agent", "mcp", "fastmcp", "opencode", "claude"]},
