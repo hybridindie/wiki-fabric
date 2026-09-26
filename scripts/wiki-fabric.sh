@@ -117,6 +117,15 @@ find_harness() {
         echo "${HOME}/wiki-fabric"
         return 0
     fi
+    # The installed CLI is a copy — BASH_SOURCE points at ~/.local/bin. The
+    # fabric may still sit beside a harness clone (dev layout): <sibling>/wiki-fabric.
+    if [[ -n "${WIKI_FABRIC_DIR:-}" ]]; then
+        local sibling_harness="$(dirname "${WIKI_FABRIC_DIR}")/wiki-fabric"
+        if [[ -d "${sibling_harness}/scripts" ]]; then
+            echo "${sibling_harness}"
+            return 0
+        fi
+    fi
     return 1
 }
 
@@ -189,6 +198,15 @@ find_fabric() {
     local sibling_vault="$(dirname "${script_dir}")/vault"
     if [[ -d "${sibling_vault}/corpus" ]] || [[ -d "${sibling_vault}/evidence" ]]; then
         echo "${sibling_vault}"
+        return 0
+    fi
+    # 2b. Dev layout from any cwd: sibling vault of a sibling harness clone.
+    # The installed CLI is a copy — its BASH_SOURCE can't see the harness
+    # checkout, so also look for <cwd-sibling>/vault (the documented dev
+    # layout: wiki-fabric/ + vault/ side by side).
+    local cwd_parent="$(dirname "$(pwd)")"
+    if [[ -d "${cwd_parent}/wiki-fabric/scripts" && ( -d "${cwd_parent}/vault/corpus" || -d "${cwd_parent}/vault/evidence" ) ]]; then
+        echo "${cwd_parent}/vault"
         return 0
     fi
     # 3. XDG default fabric (the vault)
