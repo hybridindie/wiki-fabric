@@ -356,7 +356,7 @@ def code_navigation(task, project=None, max_files=None):
         toks = [t for t in re.findall(r"[a-z0-9]{3,}", (task or "").lower())]
         if not toks:
             return None
-        out = []
+        entries = []
         for repo in get_all_repo_names(cfg):
             repo_cfg = get_repo_config(cfg, repo)
             if not is_integration_active(cfg, "graphify"):
@@ -383,10 +383,15 @@ def code_navigation(task, project=None, max_files=None):
                 if f:
                     files[f] = files.get(f, 0) + 1
             ranked = sorted(files.items(), key=lambda x: -x[1])[:max_files]
-            out.append({"repo": repo,
-                        "symbols_matched": len(hits),
-                        "files": [{"path": f, "symbol_count": c} for f, c in ranked]})
-        return out or None
+            entries.append({"repo": repo,
+                            "symbols_matched": len(hits),
+                            "files": [{"path": f, "symbol_count": c} for f, c in ranked]})
+        # #54: pinned project's repo leads; remaining repos rank by symbol
+        # matches (name tie-break keeps byte-identical re-runs).
+        pinned = (project or "").strip().lower()
+        entries.sort(key=lambda e: (0 if e["repo"].lower() == pinned else 1,
+                                    -e["symbols_matched"], e["repo"]))
+        return entries or None
     except Exception:
         return None
 
