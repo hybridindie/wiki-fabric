@@ -1156,9 +1156,10 @@ case "${1:-help}" in
         shift
         fdir=$(find_fabric)
         if [[ -z "${1:-}" ]]; then
-            err "Usage: wf sync {init <git-url> | status | push [-m msg] | pull}"
+            err "Usage: wf sync {setup [name] | init <git-url> | status | push [-m msg] | pull}"
             exit 1
         fi
+        export WIKI_FABRIC_DIR="${fdir}"
         run_script "${fdir}" "scripts/cmd/sync.py" "$@"
         ;;
     integrations)
