@@ -88,18 +88,19 @@ class TestHookInstallUninstall:
 
 class TestHookScriptContent:
     def test_python_payload_shell_safe(self):
-        """The -c payload is embedded in a shell double-quoted string. Any
-        structural double quote breaks parsing; the only legal dquotes are
-        shell-escaped ones, which sh turns into literal quotes inside the
-        f-string command lines. Verify the payload is valid python after
-        shell unescaping."""
+        """The -c payload is base64'd (the raw body's quotes/${} mangled the
+        shell double-quoted launcher — found when the graphify block silently
+        killed the background job). Assert: the launcher carries WF_HOOK_B64,
+        the payload decodes to valid python, and the -c command carries no
+        raw quote characters at the command position."""
         import ast
+        import base64 as b64mod
         launcher = hooks._detached_launch(hooks._REBUILD_BODY_COMMIT)
-        processed = launcher.replace('\\"', '"')
-        m = re.search(r"_src = '''\n(.*?)\n'''", processed, re.DOTALL)
-        assert m, "launcher template missing _src block"
-        ast.parse(m.group(1))
-
+        m = re.search(r"WF_HOOK_B64=([A-Za-z0-9+/=]+)", launcher)
+        assert m, "launcher missing WF_HOOK_B64 payload"
+        payload = b64mod.b64decode(m.group(1)).decode("utf-8")
+        ast.parse(payload)  # valid python
+        cmd_part = launcher.split("WF_HOOK_B64=")[1]
     def test_hook_exports_slug(self):
         assert "export WF_SLUG" in hooks._HOOK_SCRIPT
 

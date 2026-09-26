@@ -564,7 +564,6 @@ if __name__ == "__main__":
     elif args.cmd == "reinstall":
         print(reinstall(repos_from_config=args.repos_from_config))
     else:
-        print(status())# graphify hook probe 1790382013
+        print(status())
 # hook cycle probe 1790382458
-# graphify cycle probe 3 1790382537
-# graphify hook probe 4 1790382801
+# graphify cycle probe 3 1790382537 1790382801
