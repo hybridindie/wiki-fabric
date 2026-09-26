@@ -220,6 +220,7 @@ def cmd_diff(repos=None):
     """Detect stale claims by comparing stored graph hash with current."""
     targets = _repo_targets(repos)
     stale_count = 0
+    unimported_count = 0
 
     for repo_name in targets:
         graph_path = get_graph_path(repo_name)
@@ -241,11 +242,13 @@ def cmd_diff(repos=None):
             else:
                 print(f"  {repo_name}: fresh ({current_hash[:8]})")
         else:
-            print(f"  {repo_name}: no stored hash (run --import first)")
-            stale_count += 1
+            print(f"  {repo_name}: not imported (run --import first)")
+            unimported_count += 1
 
     if stale_count:
-        print(f"\n{stale_count} repo(s) with stale graphs")
+        print(f"\n{stale_count} repo(s) with STALE graphs (imported hash != current)")
+    if unimported_count:
+        print(f"{unimported_count} repo(s) not imported yet (graph exists, no stored hash)")
 
 
 def cmd_status():
