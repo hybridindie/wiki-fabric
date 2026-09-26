@@ -80,7 +80,7 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 
 | Command | Purpose |
 |---------|---------|
-| `wf install [--repo URL] [--dir DIR]` | Clone + set up the fabric |
+| `wf install [--repo URL] [--dir DIR] [--vault PATH] [--corpus GIT-URL]` | Clone + set up the fabric; `--corpus` pulls the team corpus when joining (or publishes as lead); `--vault` pins the vault shell location |
 | `wf update` | Pull latest, rebuild entity index + catalog, lint, refresh installed CLI + project hooks |
 | `wf status` | Fabric health + inventory counts |
 | `wf doctor [--json]` | Environment diagnosis: endpoint reachability, model resolution (phantom compiler_model), compiler-eval readiness, judgment-tier availability, vault drift, gate — each failure names its fix |
