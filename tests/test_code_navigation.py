@@ -81,3 +81,54 @@ class TestCodeNavigation:
         cm = _make_fabric(tmp_path)
         with cm:
             assert ctx.code_navigation("payroll reimbursement task", "godot-mcp") is None
+
+
+def _make_multi_repo_fabric(tmp, project):
+    """Two repos with graphs; repo-a carries stronger symbol overlap."""
+    repos = {}
+    for name, syms in (("repo-a", ["debugger", "session"]),
+                       ("repo-b", ["debugger"])):
+        repo = tmp / "repos" / name
+        (repo / "graphify-out").mkdir(parents=True)
+        (repo / "graphify-out" / "graph.json").write_text(json.dumps({
+            "nodes": [{"id": f"{name}_{s}", "label": s, "_callable": True,
+                       "source_file": f"{name}/{s}.py"} for s in syms],
+            "links": []}))
+        repos[name] = repo
+    cfg = {"integrations": {"graphify": {"enabled": True}},
+           "repos": {n: {"path": str(p), "graph_dir": "graphify-out"}
+                     for n, p in repos.items()}}
+    import fabric_config as fc
+    cm = contextlib.ExitStack()
+    cm.enter_context(mock.patch.object(fc, "get_config", return_value=cfg))
+    cm.enter_context(mock.patch.object(fc, "is_integration_active", lambda c, n: True))
+    cm.enter_context(mock.patch.object(fc, "get_all_repo_names", return_value=["repo-b", "repo-a"]))
+    cm.enter_context(mock.patch.object(fc, "get_repo_config",
+                                       side_effect=lambda c, r: {"path": str(repos[r]),
+                                                                 "graph_dir": "graphify-out"}))
+    cm.enter_context(mock.patch.object(fc, "resolve_repo_path",
+                                       side_effect=lambda c, r: repos[r]))
+    return cm
+
+
+class TestCodeNavigationPinning:
+    def test_pinned_project_leads_even_with_weaker_overlap(self, tmp_path):
+        with _make_multi_repo_fabric(tmp_path, "repo-b"):
+            nav = ctx.code_navigation("fix debugger session", "repo-b")
+        assert [r["repo"] for r in nav] == ["repo-b", "repo-a"], nav
+
+    def test_unpinned_ranks_by_symbol_matches(self, tmp_path):
+        with _make_multi_repo_fabric(tmp_path, None):
+            nav = ctx.code_navigation("fix debugger session", None)
+        assert [r["repo"] for r in nav] == ["repo-a", "repo-b"], nav
+
+    def test_pinned_case_insensitive(self, tmp_path):
+        with _make_multi_repo_fabric(tmp_path, "Repo-B"):
+            nav = ctx.code_navigation("fix debugger session", "Repo-B")
+        assert nav[0]["repo"] == "repo-b", nav
+
+    def test_deterministic_repeats(self, tmp_path):
+        with _make_multi_repo_fabric(tmp_path, "repo-b"):
+            a = ctx.code_navigation("fix debugger session", "repo-b")
+            b = ctx.code_navigation("fix debugger session", "repo-b")
+        assert a == b
