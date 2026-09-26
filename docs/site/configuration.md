@@ -191,6 +191,9 @@ extraction disagreement is capability-correlated, so compiler work runs on the
 most capable model, and swapping it requires a recorded compiler eval
 ([Model Policy & Evals](./evals)).
 
+The design reasoning — which model class fits which stage, and why compiler
+swaps are eval-gated — is in [Why: Model splits](./why#model-splits-different-models-for-different-cognitive-tasks).
+
 ## On-device (local) routes: privacy tiering
 
 Per-repo, per-stage routing sends sensitive work to on-device models:

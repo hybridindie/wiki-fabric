@@ -106,6 +106,58 @@ What that means in practice:
   the mechanism — sensitive repos pin all stages local, shared repos choose
   per stage
 
+---
+
+## Model splits: different models for different cognitive tasks
+
+The fabric doesn't have "a model" — it has stages, each with a different
+cognitive shape, sensitivity profile, and failure cost. Routing them
+independently is the mechanism; choosing *which* model class fits which stage
+is the design judgment:
+
+| Stage | Sees | Cognitive task | Model class that fits | Failure cost |
+|---|---|---|---|---|
+| **query** | question + corpus (read-only) | answer synthesis, short | cheap/ops model — a wrong answer is *visible and citable*, not acted on | low |
+| **extract** | raw docs, highest sensitivity | atomic claims + locators + quotes | strongest available (cloud compiler) — extraction quality is the corpus's ceiling | high: a bad claim poisons everything downstream |
+| **synthesize** | sanitized claims | concept pages from linked atoms | mid-tier: creative compression, but claims are the guardrails | medium — concepts are regenerable from claims |
+| **dossier** | experience events | pattern proposal narrative | mid-tier: the 7-point checklist + human gate catch weak proposals | low (human-gated) |
+| **judgment** | assembled manifest/prompt | graded verdicts | **typed decision models, not generative** — calibration is the product | low (recorded, escalated) |
+| **evals** | golden corpus | model-swap sensitivity | any candidate model, gated | gated (G4 refuses unvalidated swaps) |
+
+The routing rules fall out of that table:
+
+- **Sensitivity routes privacy**: stages that see raw docs (`extract`) route
+  local for sensitive repos; stages that see only sanitized derivatives
+  (`synthesize`, `dossier`) can cloud more freely.
+- **Quality routes by failure cost**: extraction is the corpus's ceiling —
+  a weak compiler model caps everything downstream, which is why `compiler_model`
+  is eval-gated (G4 refuses model swaps without a recorded golden-corpus eval)
+  while the dossier stage is human-gated instead.
+- **Generative vs decision models is a boundary, not a preference**: generative
+  LLMs write (claims, concepts, dossiers); typed decision models judge
+  (behavior evals, cluster cohesion). Saturation data (generative judges return
+  1.00/0.00) says these roles don't interchange.
+- **Deterministic stages never route**: anything with a byte-stable guarantee
+  (context, lint, receipts, staleness) touches no model at all.
+
+In configuration, the split is three knobs plus per-repo overrides:
+
+```yaml
+llm:
+  model: qwen2.5-coder:7b            # ops: query, capture, status
+  compiler_model: glm-5.3-flash:cloud # extraction, synthesis, mining (eval-gated)
+  local_model: mlx-community/gemma-4-e4b-it-4bit  # privacy routes (on-device)
+repos:
+  my-sensitive-repo:
+    extract: local       # route by sensitivity
+  shared-repo:
+    dossier: cloud       # route by stage cost
+```
+
+A model swap in the compiler tier is a **compiler change** — the same eval
+gate (golden-corpus stability) validates cloud models and on-device models
+alike, so quality tiering never becomes quality drift.
+
 ## Inspirations, and what this design adds
 
 Wiki Fabric didn't invent its parts — it composes ideas from several lines of
