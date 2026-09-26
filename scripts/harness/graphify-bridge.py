@@ -35,6 +35,17 @@ from datetime import date
 from collections import defaultdict, Counter
 
 from fabric_config import get_config, FABRIC_ROOT, CORPUS_ROOT, resolve_repo_path, get_all_repo_names, get_repo_graph_dir
+
+# Optional GDScript language pack: tree-sitter-gdscript grammar → real .gd
+# callables (aperiodic's graph had 5 callables/767 nodes without it). Skips
+# silently when the grammar isn't installed.
+try:
+    import tree_sitter_gdscript  # noqa: F401
+    from graphify_langpack_gdscript import install as _install_gd_lang_pack
+    _install_gd_lang_pack()
+except ImportError:
+    pass
+
 from wf_common import parse_frontmatter
 
 VAULT_ROOT = CORPUS_ROOT
@@ -86,6 +97,59 @@ def _repo_targets(repos=None):
     return names
 
 
+def _gdscript_extract_merge(repo_path):
+    """Augment a repo's graph.json with GDScript callables.
+
+    graphify's CLI AST scan is Python-centric: GDScript files fall to the
+    generic path and produce almost no callables (aperiodic: 5 callable
+    nodes across 767). When tree-sitter-gdscript is installed, extract .gd
+    files in-process and merge the result into graph.json so staleness
+    detection and code navigation work for GDScript repos too."""
+    try:
+        import tree_sitter_gdscript  # noqa: F401
+    except ImportError:
+        return False
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from graphify_langpack_gdscript import install
+    install()
+
+    import graphify.extract as gx
+    gd_files = [Path(p) for p in repo_path.rglob("*.gd")
+                if "node_modules" not in str(p) and ".opencode" not in str(p)
+                and ".git" not in str(p)]
+    if not gd_files:
+        return False
+    out = gx.extract(gd_files, root=repo_path, parallel=False)
+    graph_path = repo_path / "graphify-out" / "graph.json"
+    if not graph_path.exists():
+        graph_path.write_text(json.dumps({"nodes": out.get("nodes", []),
+                                          "links": out.get("edges", []),
+                                          "directed": True}))
+        print(f"    GDScript pack: wrote graph from scratch "
+              f"({len(out.get('nodes', []))} nodes)")
+        return True
+    g = json.loads(graph_path.read_text())
+    existing = {n["id"] for n in g.get("nodes", [])}
+    added = 0
+    for n in out.get("nodes", []):
+        if n["id"] not in existing:
+            g["nodes"].append(n)
+            existing.add(n["id"])
+            added += 1
+    known_links = {(l.get("source"), l.get("target"), l.get("relation"))
+                   for l in g.get("links", [])}
+    added_links = 0
+    for l in out.get("edges", []):
+        key = (l.get("source"), l.get("target"), l.get("relation"))
+        if key not in known_links:
+            g["links"].append(l)
+            known_links.add(key)
+            added_links += 1
+    graph_path.write_text(json.dumps(g))
+    print(f"    GDScript pack: +{added} nodes, +{added_links} links merged")
+    return True
+
+
 def cmd_update(repos=None):
     """Run graphify update on connected repos (AST-only, 0 API cost)."""
     config = get_config()
@@ -106,6 +170,10 @@ def cmd_update(repos=None):
                 timeout=120,
             )
             if result.returncode == 0:
+                # GDScript repos: the CLI's scan is Python-centric and yields
+                # almost no callables for .gd files — augment with the
+                # language pack when the grammar is installed.
+                _gdscript_extract_merge(repo_path)
                 graph_path = get_graph_path(repo_name)
                 if graph_path:
                     g = load_graph(repo_name)
