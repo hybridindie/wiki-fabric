@@ -213,6 +213,7 @@ export WF_SLUG
 _WF_LOG="${HOME}/.cache/wiki-fabric-hook.log"
 mkdir -p "$(dirname "$_WF_LOG")"
 export WIKI_HOOK_LOG="$_WF_LOG"
+export WF_FABRIC="$_WF_FABRIC"
 echo "[wf hook] merged upstream docs — launching background capture (log: $_WF_LOG)"
 """ + _detached_launch(_REBUILD_BODY_MERGE) + """)
 # wf-merge-hook-end
