@@ -34,9 +34,20 @@ received = []
 
 def _serve_once(srv):
     conn, _ = srv.accept()
-    data = conn.recv(65536).decode("utf-8", errors="replace")
-    body = data.split("\r\n\r\n", 1)[1] if "\r\n\r\n" in data else ""
-    received.append(json.loads(body))
+    data = b""
+    conn.settimeout(10)
+    # read headers first, then the body per Content-Length (the POST may
+    # arrive in multiple TCP segments — a single recv truncated the JSON on CI)
+    while b"\r\n\r\n" not in data:
+        data += conn.recv(65536)
+    headers, _, rest = data.partition(b"\r\n\r\n")
+    clen = 0
+    for line in headers.decode("utf-8", errors="replace").split("\r\n"):
+        if line.lower().startswith("content-length:"):
+            clen = int(line.split(":", 1)[1].strip())
+    while len(rest) < clen:
+        rest += conn.recv(65536)
+    received.append(json.loads(rest.decode("utf-8", errors="replace")))
     conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
     conn.close()
     srv.close()
