@@ -153,7 +153,7 @@ Scripts live in four subdirectories of `scripts/` — `cmd/` (entrypoints), `eva
 |--------|---------|----------|
 | `harnesses.py` | Multi-harness registry + installer (11 agent tools) | 0 |
 | `skill.py` | Universal skill loader (prints procedures) | 0 |
-| `hooks.py` | Git post-commit/post-merge capture+ingest hooks | 0 |
+| `hooks.py` | Git post-commit/post-merge capture+ingest hooks (code commits also run the graphify cycle when enabled) | 0 |
 | `always_on.py` | Legacy always-on installer (superseded by `wf harness install`) | 0 |
 | `graphify-bridge.py` | Optional graphify integration (update/import/enrich/diff) | 0 |
 

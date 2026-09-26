@@ -19,9 +19,7 @@ Integrations add capabilities on top of the core loop. They are declared in `fab
 
 | Integration | When active | Cost |
 |-------------|-------------|------|
-| **graphify** | claims carry `code_symbols` + `graph_edges` (doc→code provenance); `graphify-bridge --diff` adds AST staleness detection after refactors; **`wf context` gains a `Code navigation` block** — task tokens → graph symbols → ranked file shortlist (0 tokens, deterministic); code-reachable claims surface first | 0 tokens (AST + community detection) |
-
-**GDScript repos** (godot-mcp, aperiodic, godot-agents): the bridge augments the CLI's Python-centric scan with a tree-sitter GDScript language pack when installed — `uv pip install tree-sitter-gdscript` (graphify's dispatch has no `.gd` entry natively; aperiodic was navigation-blind: 5 callables/767 nodes before, 1705 after). Navigation then leads with the repo's `.gd` addon files for Godot-side tasks.
+| **graphify** | claims carry `code_symbols` + `graph_edges` (doc→code provenance); `graphify-bridge --diff` adds AST staleness detection after refactors; **`wf context` gains a `Code navigation` block** — task tokens → graph symbols → ranked file shortlist (0 tokens, deterministic); code-reachable claims surface first; optional tree-sitter language packs extend extraction to additional languages | 0 tokens (AST + community detection) |
 | **embeddings** | semantic re-ranking of retrieval results (planned — off by default) | local inference |
 | **judgment** | low-variance decision-model judging (System One models: [TypeSafe Jev](https://docs.typesafe.ai/introduction) cloud, [Laya-MLX](https://github.com/rbrus/laya-as-judge) local) for eval gates: `wf eval-behavior --judge` scores fixtures with calibrated probabilities instead of a generative LLM judge | ~$0.0004/call (cloud) or on-device (local) |
 
