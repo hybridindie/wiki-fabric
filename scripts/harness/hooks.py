@@ -105,26 +105,33 @@ if r == 2:
 #    decisions at session start by reading registry/pending-gate.md.
 subprocess.run([py, str(fabric / 'scripts/cmd/gate.py'), '--quiet', '--write-manifest'])
 
-# 4. Graphify cycle — ONLY when code files changed and the integration is
-#    enabled. The graph is committed with the corpus (global/graphs/), so
-#    staleness detection and code navigation stay fresh on every code commit.
-CODE_CHANGED = subprocess.run(
-    ['git', '-C', str(os.getcwd()), 'diff', '--name-only', 'HEAD~1', 'HEAD'],
-    capture_output=True, text=True).stdout
-code_files = [f for f in CODE_CHANGED.splitlines()
-              if f.endswith(('.py', '.js', '.ts', '.gd', '.go', '.rs', '.java'))]
+# 4. Graphify BRIDGE steps — the graph rebuild itself belongs to graphify's
+#    own hook (`graphify hook install` appends a post-commit block that runs
+#    its incremental watcher with timeout/resource guards; do not duplicate
+#    it here). This step consumes that output: import the fresh graph into
+#    the corpus, enrich claims with graph_edges, run the staleness diff.
+#    Gated on: bridge present, integration enabled (bridge refuses loudly
+#    to the log otherwise). Note ordering: graphify's rebuild runs detached
+#    too, so a tiny sleep-free retry on import covers the rebuild finishing.
 bridge = fabric / 'scripts/harness/graphify-bridge.py'
-if not bridge.exists() or not code_files:
+if not bridge.exists():
     sys.exit(0)
-# integration check lives in the bridge itself (gated, prints reason)
-r = subprocess.run([py, str(bridge), '--update', '--repo', slug],
-                   capture_output=True, text=True, timeout=300)
-if r.returncode != 0 or 'not enabled' in r.stdout:
-    print(f'[wf hook] graphify skipped (rc={r.returncode}) '
-          f'{(r.stderr or r.stdout)[-200:]}', flush=True)
+r = subprocess.run([py, str(bridge), '--status', '--repo', slug],
+                   capture_output=True, text=True, timeout=60)
+if 'not enabled' in r.stdout:
     sys.exit(0)  # graphify off — quiet, by design
-print('[wf hook] graphify update ok — importing/enriching...', flush=True)
-for step in ('--import', '--enrich', '--diff'):
+import time as _time
+for attempt in range(6):
+    r = subprocess.run([py, str(bridge), '--import', '--repo', slug],
+                       capture_output=True, text=True, timeout=300)
+    if 'no graph' not in r.stdout or attempt == 2:
+        break
+    _time.sleep(2)  # graphify's detached rebuild may still be writing
+if 'no graph' in r.stdout:
+    print('[wf hook] graphify graph not ready — bridge steps skipped', flush=True)
+    sys.exit(0)
+print('[wf hook] ' + r.stdout.strip().splitlines()[-1][:120], flush=True)
+for step in ('--enrich', '--diff'):
     r = subprocess.run([py, str(bridge), step, '--repo', slug],
                        capture_output=True, text=True, timeout=300)
     if r.stdout.strip():
