@@ -121,6 +121,14 @@ def capture_project(project_slug, repo_filter=None, dry_run=False):
                 # there; bootstrap writes relpath(project_root, FABRIC_ROOT))
                 repo_path = (FABRIC_ROOT / repo_path_str).resolve()
                 if repo_path.exists():
+                    # prefer the overlay's declared source_repos/globs when
+                    # present (the overlay is the project's config; the
+                    # fabric.yaml entry only locates the repo)
+                    overlay_fm, _ = parse_frontmatter(repo_path / ".wiki-overlay.md")
+                    declared = overlay_fm.get("source_repos") if isinstance(overlay_fm, dict) else None
+                    if declared:
+                        return process_sources(project_slug, declared, repo_filter, dry_run,
+                                               project_root=str(repo_path))
                     # Default globs if not specified in overlay
                     source_repos = [{
                         "path": str(repo_path),

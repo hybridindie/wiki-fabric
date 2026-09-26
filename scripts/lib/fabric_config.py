@@ -698,13 +698,17 @@ def is_ignored(rel_posix, ignores):
     for g in ignores.get("globs", []):
         g_norm = g.replace("\\", "/").lstrip("/").rstrip("/")
         if "**" in g_norm:
-            # dir/** pattern: prefix + anything under it (incl. the dir itself)
+            # dir/** pattern: prefix + anything under it (incl. the dir itself).
+            # A leading '**/' means "at any depth": strip it and match the
+            # remainder at any path depth (found onboarding aperiodic:
+            # '**/node_modules/**' never matched — the leading ** was escaped
+            # as a literal, so node_modules READMEs were captured as evidence).
             if g_norm.endswith("/**"):
-                base = re.escape(g_norm[:-3])
-                if re.match(base + "(?:/.*)?$", posix):
+                prefix = re.sub(r"^\*\*/", "", g_norm[:-3])
+                base = re.escape(prefix)
+                if re.match(base + "(?:/.*)?$", posix) or re.match(
+                        r"(?:[^/]+/)*" + base + "(?:/.*)?$", posix):
                     return True
-            else:
-                # a/**/b: a/(anything/)*b
                 pre, post = g_norm.split("**", 1)
                 pat = re.escape(pre) + "(?:[^/]+/)*" + re.escape(post.lstrip("/"))
                 if re.fullmatch(pat, posix):
