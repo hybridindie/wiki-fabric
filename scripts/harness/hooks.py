@@ -87,21 +87,48 @@ if r not in (0, 2):
     sys.exit(1)
 if r == 0:
     print('[wf hook] no doc drift — capture skipped', flush=True)
-    sys.exit(0)
+    # doc capture skipped, but CODE changes still drive the graphify cycle
+    # (fall through to steps 3-4 rather than exiting)
 
-# 2. Ingest drift. LLM only when --extract-claims was enabled at install time
-#    (WIKI_HOOK_EXTRACT=1); otherwise sources are recorded without claims and
-#    the agent ingests interactively on next session.
-ingest_args = [py, str(fabric / 'scripts/cmd/ingest.py'), '--changed', slug]
-if os.environ.get('WIKI_HOOK_EXTRACT', '').lower() in ('1', 'true', 'yes'):
-    ingest_args.append('--extract-claims')
-print('[wf hook] captured drift — ingesting...', flush=True)
-subprocess.run(ingest_args)
+if r == 2:
+    # 2. Ingest drift. LLM only when --extract-claims was enabled at install
+    #    time (WIKI_HOOK_EXTRACT=1); otherwise sources are recorded without
+    #    claims and the agent ingests interactively on next session.
+    ingest_args = [py, str(fabric / 'scripts/cmd/ingest.py'), '--changed', slug]
+    if os.environ.get('WIKI_HOOK_EXTRACT', '').lower() in ('1', 'true', 'yes'):
+        ingest_args.append('--extract-claims')
+    print('[wf hook] captured drift — ingesting...', flush=True)
+    subprocess.run(ingest_args)
 
 # 3. After intake, persist the pending-HITL manifest (promotion dossiers,
 #    domain proposals, stale claims) so ANY AI harness can surface pending
 #    decisions at session start by reading registry/pending-gate.md.
 subprocess.run([py, str(fabric / 'scripts/cmd/gate.py'), '--quiet', '--write-manifest'])
+
+# 4. Graphify cycle — ONLY when code files changed and the integration is
+#    enabled. The graph is committed with the corpus (global/graphs/), so
+#    staleness detection and code navigation stay fresh on every code commit.
+CODE_CHANGED = subprocess.run(
+    ['git', '-C', str(os.getcwd()), 'diff', '--name-only', 'HEAD~1', 'HEAD'],
+    capture_output=True, text=True).stdout
+code_files = [f for f in CODE_CHANGED.splitlines()
+              if f.endswith(('.py', '.js', '.ts', '.gd', '.go', '.rs', '.java'))]
+bridge = fabric / 'scripts/harness/graphify-bridge.py'
+if not bridge.exists() or not code_files:
+    sys.exit(0)
+# integration check lives in the bridge itself (gated, prints reason)
+r = subprocess.run([py, str(bridge), '--update', '--repo', slug],
+                   capture_output=True, text=True, timeout=300)
+if r.returncode != 0 or 'not enabled' in r.stdout:
+    print(f'[wf hook] graphify skipped (rc={r.returncode}) '
+          f'{(r.stderr or r.stdout)[-200:]}', flush=True)
+    sys.exit(0)  # graphify off — quiet, by design
+print('[wf hook] graphify update ok — importing/enriching...', flush=True)
+for step in ('--import', '--enrich', '--diff'):
+    r = subprocess.run([py, str(bridge), step, '--repo', slug],
+                       capture_output=True, text=True, timeout=300)
+    if r.stdout.strip():
+        print('[wf hook] ' + r.stdout.strip().splitlines()[-1][:120], flush=True)
 """
 
 
@@ -121,7 +148,9 @@ if r not in (0, 2):
     sys.exit(1)
 if r == 0:
     print('[wf hook] no doc drift — capture skipped', flush=True)
-    sys.exit(0)
+    # doc capture skipped, but CODE changes still drive the graphify cycle
+    # (fall through to steps 3-4 rather than exiting)
+else:
 
 ingest_args = [py, str(fabric / 'scripts/cmd/ingest.py'), '--changed', slug]
 if os.environ.get('WIKI_HOOK_EXTRACT', '').lower() in ('1', 'true', 'yes'):
@@ -167,8 +196,14 @@ else:
 
 
 def _detached_launch(rebuild_body: str) -> str:
+    import base64
     launcher = _LAUNCHER_TEMPLATE.replace("__REBUILD_BODY__", rebuild_body)
-    return '"$WF_PYTHON" -c "' + launcher + '"\n'
+    # base64 the whole -c payload: the body contains single quotes, ${...}
+    # and nested quotes that a shell double-quoted -c string mangles (found
+    # when the graphify block's quoting silently truncated the launcher —
+    # the background job died with a syntax error before its first log line)
+    b64 = base64.b64encode(launcher.encode("utf-8")).decode("ascii")
+    return f"WF_HOOK_B64={b64} \"$WF_PYTHON\" -c \"import base64,os;exec(base64.b64decode(os.environ['WF_HOOK_B64']).decode())\"\n"
 
 
 _WORKTREE_GUARD = """\
@@ -204,7 +239,8 @@ _NON_FABRIC=$(printf '%s\n' "$CHANGED" | grep -Ev '^(evidence/|registry/|pattern
 [ -z "$_NON_FABRIC" ] && exit 0
 
 _DOCS=$(printf '%s\n' "$_NON_FABRIC" | grep -E '\\.(md|markdown)$' || true)
-[ -z "$_DOCS" ] && exit 0
+_CODE=$(printf '%s\n' "$_NON_FABRIC" | grep -E '\\.(py|js|ts|gd|go|rs|java)$' || true)
+[ -z "$_DOCS" ] && [ -z "$_CODE" ] && exit 0
 
 """ + _PYTHON_DETECT + """
 WF_SLUG=$(basename "$(pwd)")
@@ -246,7 +282,8 @@ _NON_FABRIC=$(printf '%s\\n' "$CHANGED" | grep -Ev '^(""" + _FABRIC_OUTPUT_DIRS 
 
 # Only doc-bearing files trigger capture (capture globs are md-centric)
 _DOCS=$(printf '%s\\n' "$_NON_FABRIC" | grep -E '\\.(md|markdown)$|^AGENTS\\.md$|^README\\.md$|^CONTRIBUTING\\.md$' || true)
-[ -z "$_DOCS" ] && exit 0
+_CODE=$(printf '%s\\n' "$_NON_FABRIC" | grep -E '\\.(py|js|ts|gd|go|rs|java)$' || true)
+[ -z "$_DOCS" ] && [ -z "$_CODE" ] && exit 0
 
 """ + _PYTHON_DETECT + """
 # Project slug = directory name of this repo (matches bootstrap slugify for
@@ -528,3 +565,5 @@ if __name__ == "__main__":
         print(reinstall(repos_from_config=args.repos_from_config))
     else:
         print(status())
+# hook cycle probe 1790382458
+# graphify cycle probe 3 1790382537 1790382801
