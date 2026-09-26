@@ -101,6 +101,42 @@ def _emit(sections, actionable, quiet=False):
           "python3 scripts/cmd/promote-domains.py --apply <dossier>")
 
 
+
+
+def _notify(manifest_path, sections, _log_prefix="[gate notify]"):
+    """Gate notification seam (#67): push pending decisions to where the human is.
+
+    Opt-in via fabric.yaml notify: adapters — the payload is the manifest
+    content (selection facts: what, why, evidence), never hidden reasoning.
+    Deterministic, fire-and-forget; notification failure never fails the gate."""
+    import urllib.request
+    from fabric_config import get_config as _get_config
+    try:
+        cfg = _get_config()
+    except Exception as e:
+        print(f"{_log_prefix} disabled (config unreadable: {e})", file=sys.stderr)
+        return
+    for adapter in (cfg.get("notify") or []):
+        if not isinstance(adapter, dict) or adapter.get("kind") != "webhook":
+            continue
+        import os
+        url_env = adapter.get("url_env", "WF_GATE_WEBHOOK_URL")
+        url = os.environ.get(url_env)
+        if not url:
+            continue
+        try:
+            payload = json.dumps({
+                "kind": "wiki-fabric-gate",
+                "manifest": manifest_path.read_text(encoding="utf-8", errors="replace")[:8000],
+                "summary": {k: len(v[1]) for k, v in sections.items() if v[1]},
+            }).encode()
+            req = urllib.request.Request(url, data=payload,
+                                         headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                print(f"{_log_prefix} webhook {url} -> {resp.status}")
+        except Exception as e:
+            print(f"{_log_prefix} webhook failed: {e}")
+
 def main():
     import argparse
     from fabric_config import CORPUS_ROOT
@@ -114,8 +150,11 @@ def main():
 
     sections, actionable = gate()
 
+    manifest_path = CORPUS_ROOT / "registry" / "pending-gate.md"
     if args.write_manifest:
-        _write_manifest(CORPUS_ROOT / "registry" / "pending-gate.md", sections, actionable)
+        _write_manifest(manifest_path, sections, actionable)
+        if actionable:
+            _notify(manifest_path, sections)
 
     if args.json:
         print(json.dumps({
