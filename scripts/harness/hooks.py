@@ -292,6 +292,24 @@ def _git_root(path: Path):
 
 
 def _hooks_dir(root: Path) -> Path:
+    # core.hooksPath wins: git EXECUTES hooks from there, so installing to
+    # .git/hooks while core.hooksPath is set silently no-ops (found when the
+    # wiki-fabric repo set core.hooksPath=scripts/hooks for its own dev hooks
+    # and wf hook install landed in .git/hooks — never fired).
+    try:
+        res = subprocess.run(
+            ["git", "-C", str(root), "config", "--get", "core.hooksPath"],
+            capture_output=True, text=True,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            raw = res.stdout.strip()
+            if "\n" not in raw and "\x00" not in raw and "\\" not in raw:
+                hp = Path(raw)
+                d = (hp if hp.is_absolute() else (root / hp)).resolve()
+                d.mkdir(parents=True, exist_ok=True)
+                return d
+    except (OSError, FileNotFoundError):
+        pass
     try:
         res = subprocess.run(
             ["git", "-C", str(root), "rev-parse", "--git-path", "hooks"],
