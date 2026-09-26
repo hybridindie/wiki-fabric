@@ -552,6 +552,46 @@ config; the fabric discovers it (see fabric.yaml repos.auto_discover).
     (namespace_dir / "decisions").mkdir(parents=True, exist_ok=True)
     print(f"Created project namespace: {namespace_dir}")
 
+    # 5a. Cold-start vocabulary: on the FIRST project (empty ontology), derive
+    # provisional domains from this project's own structural evidence — the
+    # vocabulary builds itself rather than shipping hardcoded defaults.
+    # Written as PROPOSALS: they become ontology domains after human review
+    # (promote-domains --apply), or are used as this project's routing scope.
+    try:
+        ontology = fabric_root / "corpus" / "domains" / "ontology.md"
+        ontology_has_domains = ontology.exists() and "## Domains" in ontology.read_text() \
+            and bool(re.search(r"## Domains\n\n- ", ontology.read_text()))
+        if not ontology_has_domains:
+            import importlib.util as _ilu
+            _spec = _ilu.spec_from_file_location(
+                "propose_domains", fabric_root / "scripts" / "cmd" / "propose-domains.py")
+            _pd = _ilu.module_from_spec(_spec)
+            _spec.loader.exec_module(_pd)
+            detected = _pd.structural_domains(project_root)
+            if detected:
+                top = [d for d, _ in detected.most_common(3)]
+                print(f"  Cold-start vocabulary: structural scan detected {top}")
+                # provisional domains: recorded in the ontology doc as proposed
+                header = ('---\ntype: ontology\ntitle: Domain Ontology\n'
+                          f'created: {date.today().isoformat()}\n---\n\n## Domains\n')
+                onto_src = ontology.read_text() if ontology.exists() else header
+                if "## Domains" in onto_src:
+                    onto_src = onto_src.replace(
+                        "## Domains",
+                        "## Domains\n\n"
+                        + "\n".join(f"- `{d}` (proposed, structural scan of {project_slug})"
+                                    for d in top) + "\n",
+                        1)
+                    ontology.parent.mkdir(parents=True, exist_ok=True)
+                    ontology.write_text(onto_src)
+                    print(f"  Ontology: proposed {top} (human review: promote-domains --apply)")
+                # route this project to its detected domains
+                domains = top
+            else:
+                print("  No structural signals detected — project runs without domains")
+    except Exception as _e:
+        print(f"  (domain bootstrap skipped: {_e})")
+
     # 5b. Vault freshness: write the fabric-side overlay view + refresh links
     try:
         harness_root = find_harness_root()

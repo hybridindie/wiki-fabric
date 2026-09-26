@@ -139,11 +139,11 @@ _DEFAULTS = {
         # 0-token core (see scripts/lib/judgment.py contract).
         "judgment": {"enabled": False, "route": "cloud", "cloud_model": "jev-1"},
     },
-    "domains": {
-        "agent-systems": {"signals": ["agent", "mcp", "fastmcp", "opencode", "claude"]},
-        "godot-systems": {"signals": ["godot", "gdscript", "voxel"]},
-        "web-systems": {"signals": ["fastapi", "flask", "react", "nextjs", "supabase", "postgresql"]},
-    },
+    # Domain vocabulary is NOT bootstrapped — it builds itself from each
+    # project's own evidence (propose-domains structural scan on cold start;
+    # signal-based discovery thereafter; human-gated merge). Override via
+    # fabric.yaml domains: for teams that want a fixed vocabulary.
+    "domains": {},
     "vault": {"path": None},  # Obsidian output dir; None => FABRIC_ROOT.parent/vault
 }
 
