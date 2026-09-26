@@ -196,7 +196,7 @@ Full docs at **[hybridindie.github.io/wiki-fabric](https://hybridindie.github.io
 | Doc | Contents |
 |-----|----------|
 | [Getting Started](docs/site/getting-started.md) | Install, quickstart, first loop, requirements |
-| [Why not just a wiki or RAG?](docs/site/why.md) | Failure modes of the alternatives, and the core bet |
+| [Why not just a wiki or RAG?](docs/site/why.md) | Failure modes of the alternatives, the core bet, and the inspirations this design builds on and enriches |
 | [Architecture](docs/site/architecture.md) | The pipeline, module map, reading order |
 | [Core Workflows](docs/site/core-workflows.md) | Ingest, git-history capture, query, experience → pattern, bootstrap, maintenance, hooks — with scenarios |
 | [Configuration](docs/site/configuration.md) | **OpenAI-compatible providers, env vars, model tiers, per-stage routing, ignores** |
