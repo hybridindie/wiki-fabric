@@ -213,6 +213,33 @@ Review: `python3 scripts/cmd/promote-domains.py --apply <domain-proposal-{slug}>
     return path, True
 
 
+def structural_domains(repo_path):
+    """Vocabulary-free domain detection from structural evidence only.
+
+    No seeded signal lexicon: file-type profiles and top-level directory
+    names map to GENERIC structural families. Used when the ontology has
+    no domains yet (cold-start fabric) so the vocabulary builds from the
+    first project's own shape rather than hardcoded defaults."""
+    exts = Counter(f.suffix for f in repo_path.rglob("*")
+                   if f.is_file() and "node_modules" not in str(f)
+                   and ".venv" not in str(f) and not f.name.startswith("."))
+    dirs = {d.name for d in repo_path.iterdir()
+            if d.is_dir() and not d.name.startswith(".")}
+    signals = Counter()
+    if exts.get(".gd", 0) >= 3:
+        signals["godot"] += min(exts[".gd"], 5)
+    if (exts.get(".sql", 0) >= 3 or "migrations" in dirs
+            or any(d in dirs for d in ("k8s", "docker"))):
+        signals["devops"] += 3
+    if exts.get(".tsx", 0) + exts.get(".jsx", 0) >= 3 or "frontend" in dirs:
+        signals["web-ui"] += 3
+    if any(d in dirs for d in ("tests", "spec", "e2e")):
+        signals["testing"] += 2
+    if "migrations" in dirs:
+        signals["data-layer"] += 2
+    return signals
+
+
 def main():
     parser = argparse.ArgumentParser(description="Discover and propose new domains")
     parser.add_argument("--apply", action="store_true",
@@ -230,8 +257,25 @@ def main():
     print(f"Existing ontology domains: {sorted(existing)}")
     print()
 
-    # Compute scores
-    scores = compute_domain_scores(config)
+    if not existing:
+        # Cold-start: no ontology vocabulary yet. Build the first proposals
+        # from STRUCTURAL evidence (file-type profiles, directory shapes) —
+        # no seeded lexicon. The vocabulary derives from the projects
+        # themselves rather than hardcoded bootstrap defaults.
+        print("Cold-start: no ontology domains yet — using structural scan.")
+        scores = Counter()
+        for repo_name in get_all_repo_names(config):
+            repo_path = resolve_repo_path(config, repo_name)
+            if not repo_path or not repo_path.exists():
+                continue
+            repo_signals = structural_domains(repo_path)
+            for d, s in repo_signals.items():
+                scores[d] += s
+            if repo_signals:
+                print(f"  {repo_name}: {dict(repo_signals)}")
+    else:
+        # Compute scores
+        scores = compute_domain_scores(config)
 
     # Separate known vs new
     new_domains = {d: s for d, s in scores.items()
