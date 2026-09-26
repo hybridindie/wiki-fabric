@@ -204,22 +204,27 @@ def _config_fingerprint():
     stat = config_file.stat() if (config_file and config_file.exists()) else None
     file_sig = f"{stat.st_mtime_ns}:{stat.st_size}" if stat else "none"
     env_sig = "|".join(f"{k}={os.environ.get(k, '')}" for k in (
-        "WIKI_LLM_BASE_URL", "WIKI_LLM_API_KEY", "WIKI_LLM_MODEL",
-        "WIKI_LLM_COMPILER_MODEL", "WIKI_LLM_LOCAL_MODEL"))
+        "WIKI_FABRIC_DIR", "WIKI_LLM_BASE_URL", "WIKI_LLM_API_KEY",
+        "WIKI_LLM_MODEL", "WIKI_LLM_COMPILER_MODEL", "WIKI_LLM_LOCAL_MODEL"))
     return hashlib.sha1(f"{file_sig}|{env_sig}".encode()).hexdigest()
 
 
 def _merge_user_config(base, user_config):
     """Merge a user config into a (already deep-copied) defaults dict.
-    Top-level keys: owner/llm/repos/domains/ignore/integrations/corpus.
-    Dicts merge shallowly at the top level; scalars/lists replace.
-    Does NOT mutate `base`."""
-    for key in ("owner", "llm", "repos", "domains", "ignore", "integrations", "corpus", "vault"):
-        if key in user_config and user_config[key] is not None:
-            if isinstance(base.get(key), dict) and isinstance(user_config[key], dict):
-                base[key].update(user_config[key])
-            else:
-                base[key] = user_config[key]
+    Known top-level keys (owner/llm/repos/domains/ignore/integrations/corpus/
+    vault/tuning/proposed_types/notify) merge; dicts merge shallowly, scalars/
+    lists replace. UNKNOWN top-level keys are carried through as-is — a config
+    section added by a newer fabric (e.g. notify, tuning) must reach scripts
+    even on a version-skew, and silently dropping keys was found breaking the
+    gate notification seam (#67) and would have broken tuning (#63) the same
+    way. Does NOT mutate `base`."""
+    for key, val in user_config.items():
+        if val is None:
+            continue
+        if isinstance(base.get(key), dict) and isinstance(val, dict):
+            base[key].update(val)
+        else:
+            base[key] = val
     return base
 
 
