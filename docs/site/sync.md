@@ -6,7 +6,11 @@ created: 2026-09-19
 updated: 2026-09-19
 ---
 
-# Team Sync
+# Team Sync (Command Reference)
+
+> The team *story* — roles, the two-way join gate, conflict policy, CI on the
+corpus — is in [Teams: Sharing the Vault](./teams). This page is the command
+reference.
 
 Team sync is the deployment story: one fabric per machine, one corpus shared via git. Configure the corpus remote in [Configuration](./configuration) or at install time.
 
