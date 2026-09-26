@@ -36,6 +36,9 @@ wf ingest evidence/raw/my-project/docs/readme.md --extract-claims
 wf query "Why does my code batch writes?"
 wf context --task "Add token rotation to the OAuth service"
 wf log --project my-project --problem "..." --intervention "..." --outcomes "..."
+
+# Make it a team system (gh CLI creates + publishes the corpus repo):
+wf sync setup
 ```
 
 The daily loop — connect → capture → ingest → validate → context → work → mine/review — compounding at step 7 into step 5's context for the next project. Full walkthrough, flags, and requirements: **[Getting Started](https://hybridindie.github.io/wiki-fabric/getting-started.html)**.
