@@ -1,0 +1,12 @@
+# Compilation policy profile — the manifest composition contract.
+# v1 = shipped behavior, byte-identical to select_context()'s built-in
+# constants. Behavior evals validate any profile before it can ship.
+#
+# schema: wiki-fabric/policy-profile-v1
+schema: wiki-fabric/policy-profile-v1
+name: default-coding-agent
+tiers:
+  P1-project: [decision, experience-event, commitment, claim]
+  P2-domain: [pattern, anti-pattern, skill, question]
+  P3-global: [pattern, anti-pattern, skill, concept]
+tier_order: [P1-project, P2-domain, P3-global]
