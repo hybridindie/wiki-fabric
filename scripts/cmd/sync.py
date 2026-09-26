@@ -31,6 +31,7 @@ for _dir in (_HERE, _HERE.parent / "lib"):
 import re
 import subprocess
 import argparse
+import shutil
 from pathlib import Path
 from datetime import date, datetime
 from fabric_config import FABRIC_ROOT
@@ -147,8 +148,19 @@ def get_remote():
 
 
 def validate_fabric():
-    """Refuse to sync a non-fabric directory."""
-    if not (VAULT_ROOT / "AGENTS.md").exists() or not (VAULT_ROOT / "registry").exists():
+    """Refuse to sync a non-fabric directory. A fresh corpus may lack the
+    AGENTS.md marker — scaffold it from the harness rather than failing
+    (same gap install-time teammate onboarding hit; the corpus needs the
+    marker for git validation, the harness clone has the source)."""
+    registry = VAULT_ROOT / "registry"
+    registry.mkdir(parents=True, exist_ok=True)
+    if not (VAULT_ROOT / "AGENTS.md").exists():
+        harness = Path(__file__).resolve().parent.parent.parent
+        src_ag = harness / "AGENTS.md"
+        if src_ag.exists():
+            shutil.copy(src_ag, VAULT_ROOT / "AGENTS.md")
+            print(f"Scaffolded corpus/AGENTS.md (from harness) — sync marker")
+    if not (VAULT_ROOT / "AGENTS.md").exists() or not registry.exists():
         print("Error: not in a wiki-fabric root (missing AGENTS.md + registry/)", file=sys.stderr)
         sys.exit(1)
 
@@ -187,6 +199,74 @@ def cmd_init(remote_url):
     print("  Team members: clone your fabric, then:")
     print(f"    git remote add corpus {remote_url}")
     print(f"    git fetch corpus corpus && git checkout corpus")
+
+
+
+
+def cmd_setup(name=None, private=True, yes=False):
+    """First-class corpus setup: create (or adopt) the GitHub corpus repo and
+    wire + publish this fabric's corpus as the source of truth.
+
+    Uses the gh CLI when available (detection + auth check); falls back to
+    printing manual git instructions otherwise. Human-gated: prompts unless
+    --yes."""
+    validate_fabric()
+
+    # 1. gh CLI detection + auth
+    def _run(args, timeout=30):
+        try:
+            return subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return None
+
+    gh = _run(["gh", "--version"])
+    gh_ok = gh is not None and gh.returncode == 0
+    if not gh_ok:
+        print("gh CLI not found. Two options:", file=sys.stderr)
+        print("  a) install gh: https://cli.github.com/ then `gh auth login`", file=sys.stderr)
+        print("  b) create the corpus repo manually, then:", file=sys.stderr)
+        print(f"     wf sync init git@github.com:<owner>/{name or 'wiki-fabric-corpus'}.git", file=sys.stderr)
+        sys.exit(1)
+    auth = _run(["gh", "auth", "status"])
+    authed = auth is not None and auth.returncode == 0 and "not logged in" not in (auth.stderr or "")
+    if not authed:
+        print("gh is installed but not authenticated. Run: gh auth login", file=sys.stderr)
+        sys.exit(1)
+    who = _run(["gh", "api", "user", "--jq", ".login"])
+    owner = (who.stdout.strip() if who and who.returncode == 0 else "") or "you"
+    print(f"gh CLI detected (authenticated as {owner})")
+
+    # 2. repo name + creation gate
+    name = name or "wiki-fabric-corpus"
+    full = f"{owner}/{name}"
+    existing = _run(["gh", "repo", "view", full, "--json", "name"])
+    repo_exists = existing is not None and existing.returncode == 0
+    if repo_exists:
+        print(f"Corpus repo exists: {full} — adopting it")
+    else:
+        vis = "--private" if private else "--public"
+        if not yes:
+            resp = input(f"Create GitHub repo {full} ({'private' if private else 'public'})? [y/N]: ").strip().lower()
+            if resp not in ("y", "yes"):
+                print("Aborted. Create it later with: gh repo create "
+                      f"{full} {vis} && wf sync init git@github.com:{full}.git")
+                sys.exit(1)
+        create = _run(["gh", "repo", "create", full, vis], timeout=60)
+        # gh >= 2.x dropped --confirm; --json validates success differently
+        if create is None or create.returncode != 0:
+            # repo may already exist under a different visibility; check
+            check = _run(["gh", "repo", "view", full, "--json", "name"])
+            if check is None or check.returncode != 0:
+                print(f"Error: could not create {full}: {(create.stderr or '')[-200:]}", file=sys.stderr)
+                sys.exit(1)
+        print(f"Created corpus repo: {full}")
+
+    # 3. wire + publish
+    remote_url = f"git@github.com:{full}.git"
+    cmd_init(remote_url)
+    print(f"\nCorpus published. Teammates join with:")
+    print("  curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/scripts/wiki-fabric.sh | bash -s -- \\")
+    print(f"    --corpus git@github.com:{full}.git")
 
 
 def cmd_status():
@@ -362,12 +442,17 @@ def cmd_pull():
 
 def main():
     parser = argparse.ArgumentParser(description="Share the corpus via a git remote (source-of-truth sync)")
-    parser.add_argument("command", choices=["init", "status", "push", "pull"], help="Sync operation")
+    parser.add_argument("command", choices=["setup", "init", "status", "push", "pull"], help="Sync operation")
     parser.add_argument("remote", nargs="?", help="Git URL for `init`")
+    parser.add_argument("name", nargs="?", help="Corpus repo name for `setup` (default: wiki-fabric-corpus)")
     parser.add_argument("-m", "--message", help="Commit message for push")
+    parser.add_argument("--public", action="store_true", help="setup: create the corpus repo public (default private)")
+    parser.add_argument("--yes", "-y", action="store_true", help="setup: skip the creation prompt")
     args = parser.parse_args()
 
-    if args.command == "init":
+    if args.command == "setup":
+        cmd_setup(name=args.name, private=not args.public, yes=args.yes)
+    elif args.command == "init":
         if not args.remote:
             print("Error: `wf sync init` requires a git URL", file=sys.stderr)
             sys.exit(1)

@@ -634,7 +634,9 @@ WIKI_LLM_MODEL={config["llm"]["model"]}
         print(f"Teammates receive it on their next: wf sync pull")
     else:
         print("Note: no corpus remote configured — this project is local-only.")
-        print("To share it with a team: wf sync init <git-url> && wf sync push")
+        print("To share it with a team (gh CLI creates + publishes the corpus repo):")
+        print("  wf sync setup          # creates <owner>/wiki-fabric-corpus (private) and publishes")
+        print("  wf sync init <git-url> # or point at an existing repo, then: wf sync push")
 
     # 8b. Extraction routing (interactive): privacy tiering per stage
     import sys as _sys
