@@ -97,9 +97,37 @@ def _yaml_scalar(value):
     return f'"{out}"'
 
 
-def claim_frontmatter(claim, source_slug, idx):
+def provenance_relations(source_slug, source_path):
+    """#79: evidence-plane provenance edges on claims.
+
+    The source the claim came from is already known at ingest time — record
+    the typed link instead of emitting relations: []. Chat captures get
+    originated_in (the claim originated in that conversation); PR/issue
+    captures get decided_in (the PR is where the decision/fix landed);
+    doc captures stay edge-less (their provenance is the source_refs block).
+    Provenance only — never a second truth layer; targets are evidence pages.
+    """
+    rel = {"type": "originated_in", "target": f"[[src-{source_slug}]]"}
+    p = str(source_path).replace("\\", "/")
+    if "/git/pr-" in p or "/git/issue-" in p:
+        rel = {"type": "decided_in", "target": f"[[src-{source_slug}]]"}
+    elif "/chats/" in p:
+        rel = {"type": "originated_in", "target": f"[[src-{source_slug}]]"}
+    else:
+        return []
+    return [rel]
+
+
+def claim_frontmatter(claim, source_slug, idx, provenance=None):
     quote = clean_quote(claim.get('quote', ''))
     statement = claim.get('statement', '')
+    rels = list(provenance or [])
+    if rels:
+        rel_lines = "\n".join(
+            f"  - type: {r['type']}\n    target: \"{r['target']}\"" for r in rels)
+        relations_block = f"relations:\n{rel_lines}"
+    else:
+        relations_block = "relations: []"
     return f"""---
 type: claim
 id: claim-{source_slug}-{idx:03d}
@@ -119,7 +147,7 @@ source_refs:
     quote: {_yaml_scalar(quote)}
     supports: true
 last_verified: {date.today().isoformat()}
-relations: []
+{relations_block}
 ---
 
 # claim-{source_slug}-{idx:03d}
@@ -284,7 +312,8 @@ Faithful summary: [[sum-{source_slug}]].
     (VAULT_ROOT / "evidence" / "claims").mkdir(parents=True, exist_ok=True)
     for i, claim in enumerate(claims):
         claim_path = VAULT_ROOT / "evidence" / "claims" / f"claim-{source_slug}-{i:03d}.md"
-        claim_path.write_text(claim_frontmatter(claim, source_slug, i))
+        claim_path.write_text(claim_frontmatter(claim, source_slug, i,
+                                                provenance=provenance_relations(source_slug, source_path)))
         print(f"  Claim {i+1}: {claim_path}")
 
     # 4. Summary

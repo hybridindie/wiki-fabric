@@ -59,7 +59,7 @@ Per-type required fields. A page lacking required fields fails `scripts/cmd/lint
 | `source_refs` | list of `{source, locator, quote, supports?}` — **must be non-empty** unless `status: proposed` |
 | `last_verified` | `YYYY-MM-DD` |
 | `temporal` | `asserted_at`, `observed_at`, `valid_from`, `valid_until`, `applies_when` |
-| `relations` | list of `{type: supports\|contradicts\|refines\|supersedes\|depends_on, target: [[claim-...]]}` |
+| `relations` | list of `{type: supports\|contradicts\|refines\|supersedes\|depends_on\|originated_in\|decided_in\|validated_in, target: [[...]]}` — synthesis semantics target claims; provenance types (`originated_in`/`decided_in`/`validated_in`) target evidence pages (the chat session / PR the claim came from, #79). Provenance only — never a second truth layer |
 
 **Invariants**:
 - `status != proposed` ⇒ `source_refs` non-empty and every `locator` resolves.
