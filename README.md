@@ -16,215 +16,50 @@
 > with `uv`; Windows untested). Useful today if you want to shape the
 > direction — not yet load-bearing team infrastructure.
 
----
-
-## The one-session proof
-
-A fabric containing one pattern, one anti-pattern, and one project decision changes what an agent is *told* before it writes code:
-
-```bash
-bash scripts/demo.sh
-```
-
-```text
-▸ Agent asks for task context: "Add token refresh to the auth service"
-
-## Selected
-### Project (highest precedence)
-- [[decision-rotation-over-sessions]] — project match: auth-service
-### Global
-- [[anti-pattern-shared-token-cache]] — global pattern match: token
-- [[pattern-token-rotation]] — global pattern match: refresh, token
-
-## Excluded
-- `patterns/pattern-superseded.md` — superseded
-- `patterns/pattern-stale.md` — stale: review_after overdue 255 days
-
-✓ anti-pattern warning delivered: agent is told NOT to build a shared token cache
-✓ project decision delivered: binding, highest precedence
-✓ correct alternative delivered: per-session cache
-
-PROOF: without the fabric, an LLM would plausibly implement the banned shared cache.
-With the manifest, the banned approach is named in the prompt BEFORE code is written.
-```
-
-Every inclusion and exclusion carries a reason; delivery is deterministic, 0 tokens. Run `bash scripts/demo.sh --json` for the machine-checkable manifest.
-
-**What is core vs. optional:**
-
-| Layer | Status |
-|-------|--------|
-| Knowledge format (claims with locators, patterns, decisions, scopes) | **core format** |
-| `wf context` — task manifest compiler | **core** |
-| Contract enforcement (`lint.py` + JSON, CI gate) | **core** |
-| Behavior evaluations (`eval-behavior.py`) | **core** |
-| `wf` CLI, uv install | reference implementation |
-| **Graphify** (call-graph staleness, claim enrichment, graph expansion) | **optional integration** — off by default |
-| **Embeddings** (semantic re-ranking) | **optional integration** — off by default, planned |
-| Git history capture, corpus team sync | integrations |
-| MCP server, multi-harness skill packs | roadmap |
-
----
-
-## The Loop (one page, start to finish)
-
-The daily-use cycle — each step is a command, every step is checked:
-
-| # | Step | Command | Enforced by |
-|---|------|---------|-------------|
-| 1 | **Connect** a project | `wf bootstrap /path/to/project` | namespace created, README written to corpus |
-| 2 | **Capture** knowledge | `wf capture p --git owner/repo` | immutable raw + sha256 |
-| 3 | **Compile** sources → claims | `wf ingest <src> --extract-claims` | change-set + lint gate |
-| 4 | **Validate** | `wf lint` | 0 errors before merge |
-| 5 | **Compile task context** | `wf context --task "..."` | manifest with reasons + precedence |
-| 6 | **Agent works, then learns** | `wf log --project p ...` | experience event captured |
-| 7 | **Mine + review** | `mine-promotions` → human gate → `promote` | maturity gates, no auto-promotion |
-
-Then loop: step 7's promoted pattern is step 5's context for the next project — that's the compounding. CI proves every arrow in this table.
-
----
-
-## Quick Start
-
-> Alpha reality check: the demo below is deterministic and works everywhere.
-> Real-fabric setup (`wf bootstrap` + ingest + extraction) is the alpha part —
-> expect rough edges, and file issues for anything that bites.
-
-Full walkthrough: **[Getting Started](https://hybridindie.github.io/wiki-fabric/getting-started.html)** (install flags, manual install, first loop).
+## Quick start
 
 ```bash
 # See the value in 5 seconds (no install):
 bash scripts/demo.sh
 
-# One-liner install (installs uv if missing, then the `wf` CLI at ~/.local/bin/)
+# Install (installs uv if missing, then the `wf` CLI at ~/.local/bin/):
 curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/scripts/wiki-fabric.sh | bash
 
 # Teammate: pulls the team corpus automatically when the remote carries one
 # (--vault <path> pins where the vault shell lives):
 curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/scripts/wiki-fabric.sh | bash -s -- --corpus git@github.com:your-org/wiki-fabric-corpus.git
 
-wf status                              # check fabric health
-wf bootstrap /path/to/my-project       # connect a project (auto-discovered; --extract local for privacy)
-wf hook install                        # freshen an older project (bootstrap installs it automatically)
-wf capture my-project                  # pull docs from upstream repos → evidence/raw/
+wf status                        # fabric health
+wf bootstrap /path/to/my-project # connect a project (--extract local for privacy)
+wf capture my-project            # pull docs from upstream repos → evidence/raw/
 wf ingest evidence/raw/my-project/docs/readme.md --extract-claims
 wf query "Why does my code batch writes?"
+wf context --task "Add token rotation to the OAuth service"
 wf log --project my-project --problem "..." --intervention "..." --outcomes "..."
-
-# Automate the refresh loop (opt-in, per project):
-wf hook install --extract-claims       # doc-drift commits auto-capture + auto-ingest
-wf harness install                     # configure every detected agent harness (Claude Code, Codex, Copilot, ...)
-wf review --auto-reverify              # clear the mechanical review debt (0 tokens)
-wf export wiki                         # generate the human wiki (topics, projects, staleness)
-wf mine chats my-project               # distill chat transcripts into patterns/anti-patterns
 ```
 
-The one-liner installs **uv** if missing, creates a `.venv` inside the fabric,
-and installs Python deps from `requirements.txt` (pyyaml, openai, anthropic)
-with `uv pip`. Everything Python runs inside that venv. If uv can't be
-installed, `wf` falls back to plain `python3`. `wf update` re-syncs deps when
-`requirements.txt` changes. All `wf` commands also work without the install —
-the scripts in `scripts/` run with plain `python3`. Install flags, manual
-install, and requirements: [Getting Started](docs/site/getting-started.md).
+The daily loop — connect → capture → ingest → validate → context → work → mine/review — compounding at step 7 into step 5's context for the next project. Full walkthrough, flags, and requirements: **[Getting Started](https://hybridindie.github.io/wiki-fabric/getting-started.html)**.
 
-### Verify the install
+## What it is
 
-```bash
-python3 -m pytest tests/ -q                # full suite (includes live-model tests)
-python3 -m pytest tests/ -m "not live" -q  # fast suite: skips on-device model tests
-bash scripts/smoke-test.sh                 # end-to-end CLI checks in a throwaway fabric
-wf lint                                    # fabric self-lint (0-error gate)
-```
-
-Tests marked `live` run real on-device models (GGUF/MLX) and self-skip when the
-model isn't cached or the platform lacks the backend.
-
----
-
-## Repository layout
-
-Two kinds of tree live here: the **harness** (tooling, shipped in this repo) and the **fabric** (your knowledge, gitignored — lives in your corpus/vault).
-
-| Path | Kind | What it is |
-|------|------|-----------|
-| `README.md` `AGENTS.md` `CONTRIBUTING.md` `LICENSE` `index.md` | harness | entry points (index.md is the OKF root index) |
-| `pyproject.toml` `requirements.txt` `okf-base.yaml` | harness | Python packaging, deps, okflint profile |
-| `scripts/` | harness | the pipeline — `cmd/` (ingest, query, context, lint, promote, gate), `lib/` (shared), `eval/`, `harness/` |
-| `tests/` | harness | 220+ unit tests (`-m "not live"` for fast suite) |
-| `docs/site/` | harness | this documentation (VitePress, deployed to Pages) |
-| `system/` | harness | agent-facing assets: `skills/` (ingest, promote), `always-on/`, `opencode/plugins/` |
-| `schemas/` | harness | frontmatter contracts (`frontmatter.md`) + domain ontology |
-| `templates/` | harness | page scaffolds (`pattern.md`, `decision.md`, ...) + `examples/` |
-| `references/` | harness | attesters (deterministic receipt checks) + executor skills |
-| `evaluations/` | harness | golden corpus, behavior fixtures, eval scripts' data |
-| `global/computations/` | harness | attested-computation contracts (OKF §10) |
-**The harness clone never holds your knowledge.** In dev mode (a clone with a
-`fabric.yaml`) the content dirs below exist gitignored; in installed mode they
-live in the **fabric dir** — `~/.local/share/wiki-fabric/` by default
-(`WIKI_FABRIC_DIR` overrides), created by `wf install`:
-
-| Path (in the fabric dir) | Kind | What it is |
-|------|------|-----------|
-| `fabric.yaml` | yours | config (see [Configuration](docs/site/configuration.md)) |
-| `evidence/` | **fabric** | captured sources, summaries, claims |
-| `projects/` | **fabric** | per-project namespaces |
-| `patterns/` `concepts/` `skills/` `anti-patterns/` `domains/` `syntheses/` | **fabric** | canonical knowledge |
-| `registry/` | fabric | `log.md`, `catalog.json`, promotion queue |
-
-| Path (in this repo) | Kind | What it is |
-|------|------|-----------|
-| `README.md` `AGENTS.md` `CONTRIBUTING.md` `LICENSE` `index.md` | harness | entry points (index.md is the OKF root index) |
-| `pyproject.toml` `requirements.txt` `okf-base.yaml` | harness | Python packaging, deps, okflint profile |
-| `scripts/` | harness | the pipeline — `cmd/` (ingest, query, context, lint, promote, gate), `lib/` (shared), `eval/`, `harness/` |
-| `tests/` | harness | 220+ unit tests (`-m "not live"` for fast suite) |
-| `docs/site/` | harness | this documentation (VitePress, deployed to Pages) |
-| `system/` | harness | agent-facing assets: `skills/` (ingest, promote), `always-on/`, `opencode/plugins/` |
-| `schemas/` | harness | frontmatter contracts (`frontmatter.md`) + domain ontology |
-| `templates/` | harness | page scaffolds (`pattern.md`, `decision.md`, ...) + `examples/` |
-| `references/` | harness | attesters (deterministic receipt checks) + executor skills |
-| `evaluations/` | harness | golden corpus, behavior fixtures, eval scripts' data |
-| `global/computations/` | harness | attested-computation contracts (OKF §10) |
-| `graphify-out/` | generated | the self knowledge graph (harness-side) |
-
-Your knowledge accumulates in the fabric dir and syncs via [Team Sync](docs/site/sync.md).
-
----
+Two trees: the **harness** (tooling, this repo) and the **fabric** (your knowledge — gitignored, lives in the corpus/vault; teammates pull it at install). The harness ships: the knowledge format (claims with locators, patterns, decisions, commitments), the deterministic context compiler (`wf context` — every inclusion/exclusion carries a reason, persisted receipts), contract enforcement (lint + CI gate), behavior evaluations, and the self-building domain vocabulary. Optional integrations: graphify (call-graph staleness + code navigation), judgment tier (decision-model eval gates), embeddings (planned), team sync. See [Architecture](docs/site/architecture.md) for the pipeline and [Core Workflows](docs/site/core-workflows.md) for the loop with scenarios.
 
 ## Documentation
 
 Full docs at **[hybridindie.github.io/wiki-fabric](https://hybridindie.github.io/wiki-fabric/)** — with search.
 
-| Doc | Contents |
+| Start here | Then |
 |-----|----------|
-| [Getting Started](docs/site/getting-started.md) | Install, quickstart, first loop, requirements |
-| [Why not just a wiki or RAG?](docs/site/why.md) | Failure modes of the alternatives, the core bet, and the inspirations this design builds on and enriches |
-| [Architecture](docs/site/architecture.md) | The pipeline, module map, reading order |
-| [Core Workflows](docs/site/core-workflows.md) | Ingest, git-history capture, query, experience → pattern, bootstrap, maintenance, hooks — with scenarios |
-| [Configuration](docs/site/configuration.md) | **OpenAI-compatible providers, env vars, model tiers, per-stage routing, ignores** |
-| [Task Context](docs/site/context.md) | `wf context` — the deterministic manifest compiler |
-| [CLI & Scripts Reference](docs/site/cli.md) | Every `wf` command, note types, scripts + shared modules |
-| [Model policy & evals](docs/site/evals.md) | Compiler-eval gate, behavior evals, stability, PR replay, real-repo |
-| [OKF v0.2 conformance](docs/site/okf.md) | The portable-bundle standard, trust tiers, attested computations |
-| [Governance](docs/site/governance.md) | The hard questions, and where the fabric answers them |
-| [Machine-Readable Contract](docs/site/machine-contract.md) | Lint codes, `registry/catalog.json`, CI consumption |
-| [Optional Integrations](docs/site/integrations.md) | Graphify (0-token call-graph intelligence), embeddings |
-| [Team Sync](docs/site/sync.md) | Share the corpus as source of truth via git |
-| [Troubleshooting](docs/site/troubleshooting.md) | Common failure modes and fixes |
+| [Getting Started](docs/site/getting-started.md) · [Why not just a wiki or RAG?](docs/site/why.md) | [Architecture](docs/site/architecture.md) · [Core Workflows](docs/site/core-workflows.md) · [Task Context](docs/site/context.md) |
+| [Configuration](docs/site/configuration.md) · [CLI Reference](docs/site/cli.md) | [Model policy & evals](docs/site/evals.md) · [Governance](docs/site/governance.md) · [Team Sync](docs/site/sync.md) |
+| [OKF v0.2](docs/site/okf.md) · [Machine-Readable Contract](docs/site/machine-contract.md) | [Integrations](docs/site/integrations.md) · [Troubleshooting](docs/site/troubleshooting.md) |
 
----
+## Status
 
-## Status & roadmap
-
-- **Works today:** capture → ingest → query → promote loop; deterministic context compiler; behavior evals; persisted context receipts (`wf context --write-receipt` — auditable per-run delivery record); prospective-memory commitments (deferred obligations resurface at task time); judgment tier (`--judge` on eval + promotion mining — low-variance decision-model gates); git-hooks automation; team sync; OKF v0.2 export/import.
+- **Works today:** capture → ingest → query → promote loop; deterministic context compiler; persisted context receipts; prospective-memory commitments; judgment tier (`--judge` eval gates); git-hooks automation; team sync with teammate corpus pull; OKF v0.2 export/import.
 - **Next:** judgment-informed context re-ranking, compiler-eval judged mode in eval.py, MCP server, multi-harness skill packs, embeddings re-ranking.
 - **Contributing:** see [CONTRIBUTING.md](CONTRIBUTING.md). The fabric self-documents — if something isn't clear, that's a bug in the fabric; issues welcome.
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
-## PR Agent
-- Configured via pr-agent.toml — reviews only Python/shell scripts with high reasoning effort.
-- See https://github.com/Codium-ai/pr-agent for commands: /review, /describe, /improve
-# Testing PR Agent review on wiki-fabric
-
-<!-- drift probe 1790381099 -->
