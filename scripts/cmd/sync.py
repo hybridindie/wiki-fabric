@@ -34,6 +34,7 @@ import argparse
 import shutil
 from pathlib import Path
 from datetime import date, datetime
+from wf_common import parse_frontmatter
 from fabric_config import FABRIC_ROOT
 from fabric_config import CORPUS_ROOT
 from fabric_config import CORPUS_ROOT
@@ -326,7 +327,8 @@ def cmd_status():
         print(f"\n⚠ Unresolved sync conflicts ({len(conflicts)}) in registry/conflicts/:")
         for c in conflicts:
             print(f"  {c}")
-        print("Resolve each, then: wf sync push")
+        print("Resolve each: wf sync resolve <conflict> --strategy ours|theirs|union")
+        print("Then: wf sync push")
 
     # Project namespace visibility
     try:
@@ -346,10 +348,52 @@ def cmd_push(message=None):
         print("No corpus remote. Run: wf sync init <git-url>", file=sys.stderr)
         sys.exit(1)
 
+    # LOUD pre-check: fetch and compare. Pushing over a moved remote is the
+    # multi-writer failure mode — be loud BEFORE the push, not after git
+    # rejects it (#'s team-sync hardening).
+    sh("fetch", CONTENT_REMOTE_NAME, "corpus")
+    remote_head = sh("rev-parse", f"{CONTENT_REMOTE_NAME}/corpus")
+    local_head = sh("rev-parse", "HEAD")
+    # behind = remote has commits local lacks. Ancestor check, not sha
+    # equality: after a sync pull (merge), local HEAD is a merge commit whose
+    # sha differs from the remote head even though it CONTAINS it — a sha
+    # equality check false-blocked every post-pull push (found in the
+    # two-machine race test).
+    behind = None
+    ahead = 0
+    if remote_head and local_head:
+        anc = sh("merge-base", "--is-ancestor", f"{CONTENT_REMOTE_NAME}/corpus", "HEAD")
+        if anc is not None:
+            behind = 0
+            ahead_n = sh("rev-list", "--count", f"{CONTENT_REMOTE_NAME}/corpus..HEAD")
+            ahead = int(ahead_n) if ahead_n else 0
+        else:
+            behind = int(sh("rev-list", "--count", f"HEAD..{CONTENT_REMOTE_NAME}/corpus") or 0)
+    if behind:  # None (unknown) or > 0
+        print("", file=sys.stderr)
+        print("══════════════════════════════════════════════════════", file=sys.stderr)
+        print("  CORPUS OUT OF SYNC — the remote has moved", file=sys.stderr)
+        print("══════════════════════════════════════════════════════", file=sys.stderr)
+        if behind:
+            print(f"  Your local corpus is BEHIND the team remote by {behind} commit(s):", file=sys.stderr)
+            print("  teammates have published claims/patterns/decisions you don't have.", file=sys.stderr)
+        if ahead and int(ahead) > 0:
+            print(f"  You are also AHEAD by {ahead} commit(s) (your local work).", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("  PUSH BLOCKED. First:", file=sys.stderr)
+        print("    wf sync pull      # fetch + merge the team's knowledge", file=sys.stderr)
+        print("    wf sync push      # then publish", file=sys.stderr)
+        print("", file=sys.stderr)
+        if behind:
+            print("  If the merge conflicts, resolve via: wf sync resolve", file=sys.stderr)
+        print("══════════════════════════════════════════════════════", file=sys.stderr)
+        sys.exit(1)
+
     # Block push when conflicts are unresolved
     conflicts = list_conflicts()
     if conflicts:
         print(f"Error: {len(conflicts)} unresolved conflict(s) in registry/conflicts/ — resolve them first:", file=sys.stderr)
+        print("  Resolve with: wf sync resolve <conflict> --strategy ours|theirs|union", file=sys.stderr)
         for c in conflicts:
             print(f"  {c}", file=sys.stderr)
         sys.exit(1)
@@ -381,6 +425,90 @@ def list_conflicts():
     return sorted(str(p.relative_to(VAULT_ROOT)) for p in conflicts_dir.glob("**/*.md"))
 
 
+
+
+def _parse_conflict(conflict_file):
+    """Extract the conflicted path + ours/theirs payloads from a conflict record."""
+    fm, body = parse_frontmatter(conflict_file)
+    path = fm.get("path") or ""
+    ours = theirs = ""
+    m_ours = re.search(r"## Ours \(this machine\)\n\n```\n(.*?)\n```", body, re.DOTALL)
+    m_theirs = re.search(r"## Theirs \(remote\)\n\n```\n(.*?)\n```", body, re.DOTALL)
+    if m_ours:
+        ours = m_ours.group(1)
+    if m_theirs:
+        theirs = m_theirs.group(1)
+    return path, ours, theirs, fm
+
+
+def cmd_resolve(conflict, strategy, message=None):
+    """Resolution policy for sync conflicts (#'s team-sync hardening).
+
+    The corpus never diminishes: the conflict record preserves both versions;
+    resolution picks how the knowledge combines:
+      ours   — keep this machine's version; the remote version is superseded
+               (recorded in the file's history, retrievable)
+      theirs — take the teammate's version (e.g. theirs was re-verified later)
+      union  — keep both: the incoming content is APPENDED as a new section
+               (claims: both extractions survive; dedup is a later judgment)
+    The conflict record is deleted on resolve; lint's SYNC-CONFLICT gate
+    unblocks; the resolution is committed so the push carries the decision."""
+    validate_fabric()
+    conflict_file = VAULT_ROOT / conflict
+    if not conflict_file.exists() and conflict.startswith("corpus/"):
+        # conflict paths are recorded relative to the VAULT root; VAULT_ROOT
+        # is the corpus dir (nested layout) — the join doubles. Resolve
+        # corpus/-prefixed paths against the vault shell.
+        conflict_file = VAULT_ROOT.parent / conflict
+    if not conflict_file.exists():
+        print(f"Error: conflict file not found: {conflict}", file=sys.stderr)
+        print("List conflicts with: wf sync status", file=sys.stderr)
+        sys.exit(1)
+    if strategy not in ("ours", "theirs", "union"):
+        print(f"Error: strategy must be ours|theirs|union (got {strategy!r})", file=sys.stderr)
+        sys.exit(1)
+
+    path, ours, theirs, fm = _parse_conflict(conflict_file)
+    if not path:
+        print("Error: conflict record has no target path", file=sys.stderr)
+        sys.exit(1)
+
+    target = VAULT_ROOT / path
+    if not target.exists() and path.startswith("corpus/"):
+        target = VAULT_ROOT.parent / path  # nested corpus layout (see above)
+    today = date.today().isoformat()
+    stamp = datetime.now().strftime("%Y-%m-%dT%H:%M")
+
+    if strategy == "ours":
+        # ours is already on disk (the merge aborted) — just confirm
+        final = target.read_text(encoding="utf-8", errors="replace") if target.exists() else ours
+        resolution = "kept ours"
+    elif strategy == "theirs":
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(theirs, encoding="utf-8")
+        final = theirs
+        resolution = "took teammate's version"
+    else:  # union
+        target.parent.mkdir(parents=True, exist_ok=True)
+        existing = target.read_text(encoding="utf-8", errors="replace") if target.exists() else ours
+        # union for markdown corpus content: keep both blocks side by side,
+        # labeled — the human (or next ingest pass) dedups substance
+        final = existing.rstrip("\n") + "\n\n<!-- sync-union: from teammate (" + stamp + ") -->\n\n" + theirs
+        target.write_text(final, encoding="utf-8")
+        resolution = "union (both versions kept, marked)"
+
+    # delete the conflict record
+    conflict_file.unlink()
+
+    # commit the resolution
+    subprocess.run(["git", "add", "--", path, str(conflict_file)], cwd=str(VAULT_ROOT), capture_output=True)
+    msg = f"sync resolve [{strategy}]: {path} ({stamp})"
+    subprocess.run(["git", "commit", "-q", "-m", msg], cwd=str(VAULT_ROOT), capture_output=True)
+
+    print(f"Resolved [{strategy}]: {path} — {resolution}")
+    print(f"Conflict record removed; SYNC-CONFLICT gate cleared for this file.")
+    print("Next: wf sync pull — if the same file conflicts again, resolve with")
+    print("  'ours' (your resolution already carries the union) — then push.")
 def cmd_pull():
     validate_fabric()
     if not get_remote():
@@ -466,11 +594,13 @@ def cmd_pull():
 
 def main():
     parser = argparse.ArgumentParser(description="Share the corpus via a git remote (source-of-truth sync)")
-    parser.add_argument("command", choices=["setup", "init", "status", "push", "pull"], help="Sync operation")
+    parser.add_argument("command", choices=["setup", "init", "status", "push", "pull", "resolve"], help="Sync operation")
     parser.add_argument("remote", nargs="?", help="Git URL for `init`")
     parser.add_argument("name", nargs="?", help="Corpus repo name for `setup` (default: wiki-fabric-corpus)")
     parser.add_argument("-m", "--message", help="Commit message for push")
     parser.add_argument("--public", action="store_true", help="setup: create the corpus repo public (default private)")
+    parser.add_argument("--strategy", choices=["ours", "theirs", "union"], default=None, help="resolve: how to resolve the conflict")
+    parser.add_argument("conflict_file", nargs="?", help="Conflict file (from registry/conflicts/) for `resolve`")
     parser.add_argument("--yes", "-y", action="store_true", help="setup: skip the creation prompt")
     args = parser.parse_args()
 
@@ -487,6 +617,12 @@ def main():
         cmd_push(args.message)
     elif args.command == "pull":
         cmd_pull()
+    elif args.command == "resolve":
+        conflict = args.conflict_file or args.remote
+        if not conflict:
+            print("Error: `wf sync resolve` requires a conflict file (from registry/conflicts/)", file=sys.stderr)
+            sys.exit(1)
+        cmd_resolve(conflict, args.strategy)
 
 
 if __name__ == "__main__":
