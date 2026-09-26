@@ -67,7 +67,8 @@ export default withMermaid(defineConfig({
         items: [
           { text: 'Configuration', link: '/configuration' },
           { text: 'Optional Integrations', link: '/integrations' },
-          { text: 'Team Sync', link: '/sync' }
+          { text: 'Teams: Sharing the Vault', link: '/teams' },
+          { text: 'Team Sync (commands)', link: '/sync' }
         ]
       },
       {
