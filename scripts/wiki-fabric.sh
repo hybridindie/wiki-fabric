@@ -887,6 +887,13 @@ cmd_bootstrap() {
 }
 
 # === Main dispatcher ===
+# One-liner default: `curl ... | bash` (stdin-piped, no args) runs INSTALL —
+# that's the documented first step; an installed `wf` with no args still
+# shows help (BASH_SOURCE != $0 only when executed via stdin).
+if [[ $# -eq 0 && "${BASH_SOURCE[0]:-}" != "${0:-}" ]]; then
+    set -- install
+fi
+
 case "${1:-help}" in
     install)
         shift
