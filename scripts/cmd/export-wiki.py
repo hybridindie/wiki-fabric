@@ -357,8 +357,11 @@ def _cite_claim(claim_path, idx):
     return f"[{idx}]", f"[{idx}] {claim_path.stem} — {title}"
 
 # === topic selection: concepts with >= N claims become topic articles ===
-def select_topics(min_claims=6):
+def select_topics(min_claims=None):
     """Group claims by concept → topics with enough evidence become articles."""
+    if min_claims is None:
+        from fabric_config import get_tuning
+        min_claims = get_tuning(None, "export", "topic_min_claims", 6)
     topics = []
     for c in sorted((CORPUS_ROOT / "concepts").glob("concept-*.md")):
         s = c.read_text(encoding="utf-8", errors="replace")

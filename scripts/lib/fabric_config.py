@@ -144,6 +144,17 @@ _DEFAULTS = {
     # signal-based discovery thereafter; human-gated merge). Override via
     # fabric.yaml domains: for teams that want a fixed vocabulary.
     "domains": {},
+    # Tunable thresholds (documented in docs/site/machine-contract.md +
+    # integrations.md). Calibration provenance travels with each value:
+    # mining_threshold calibrated on Laya (issue #39), near_band escalation
+    # per the judgment-tier contract. Defaults reproduce shipped behavior.
+    "tuning": {
+        "mining": {"min_projects": 2, "keyword_threshold": 0.05},
+        "judgment": {"mining_threshold": 0.8, "near_band": 0.1},
+        "context": {"max_items": 20, "nav_max_files": 5, "excluded_cap": 15},
+        "synthesize": {"min_claims": 2},
+        "export": {"topic_min_claims": 6},
+    },
     "vault": {"path": None},  # Obsidian output dir; None => FABRIC_ROOT.parent/vault
 }
 
@@ -787,3 +798,17 @@ def get_vault_path(config=None):
             p = (FABRIC_ROOT / p).resolve()
         return p.resolve()
     return None
+
+
+def get_tuning(config=None, section=None, key=None, default=None):
+    """Read a tuning value from fabric.yaml (merged over shipped defaults).
+    Three-arg access: get_tuning(cfg, "judgment", "near_band", 0.1)."""
+    config = config or get_config()
+    tuning = config.get("tuning") or {}
+    if section is None:
+        return tuning
+    sec = tuning.get(section) or {}
+    if not isinstance(sec, dict):
+        return default
+    val = sec.get(key, default)
+    return default if val is None else val

@@ -94,6 +94,16 @@ integrations:
     route: cloud                         # "cloud" (TypeSafe Jev API) | "local" (Laya-MLX on-device)
     cloud_model: jev-1                   # Jev model id (cloud route); local route uses llm.local_model
 
+# Tunable thresholds (defaults shown; provenance in machine-contract.md).
+# calibration-sensitive values (judgment.mining_threshold) carry their
+# derivation in issue history — change deliberately.
+# tuning:
+#   mining: {min_projects: 2, keyword_threshold: 0.05}
+#   judgment: {mining_threshold: 0.8, near_band: 0.1}
+#   context: {max_items: 20, nav_max_files: 5, excluded_cap: 15}
+#   synthesize: {min_claims: 2}
+#   export: {topic_min_claims: 6}
+
 domains:
   agent-systems:
     signals: [agent, mcp, fastmcp, opencode, claude]

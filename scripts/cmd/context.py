@@ -50,7 +50,7 @@ except ImportError:
 from fabric_config import FABRIC_ROOT
 from fabric_config import CORPUS_ROOT
 from fabric_config import CORPUS_ROOT
-from fabric_config import get_config, get_ignores, is_ignored
+from fabric_config import get_config, get_ignores, is_ignored, get_tuning
 from wf_common import parse_frontmatter
 
 VAULT_ROOT = CORPUS_ROOT
@@ -315,7 +315,7 @@ def trust_tier(fm):
     return "machine-confirmed"
 
 
-def code_navigation(task, project=None, max_files=5):
+def code_navigation(task, project=None, max_files=None):
     """Graphify-gated navigation: map task tokens → code symbols in the
     connected repo's graphify graph → ranked file shortlist. 0 tokens (pure
     graph lookups); the harness still opens the files itself. Empty when the
@@ -323,10 +323,12 @@ def code_navigation(task, project=None, max_files=5):
     try:
         from fabric_config import (get_config, is_integration_active,
                                    get_all_repo_names, get_repo_config,
-                                   resolve_repo_path)
+                                   resolve_repo_path, get_tuning)
         cfg = get_config()
         if not is_integration_active(cfg, "graphify"):
             return None
+        if max_files is None:
+            max_files = int(get_tuning(cfg, "context", "nav_max_files", 5))
         toks = [t for t in re.findall(r"[a-z0-9]{3,}", (task or "").lower())]
         if not toks:
             return None
@@ -371,6 +373,10 @@ def body_tokens(page):
 
 
 def render_markdown(task, paths, project, selected, excluded, nav=None):
+    try:
+        _excluded_cap = int(get_tuning(get_config(), "context", "excluded_cap", 15))
+    except Exception:
+        _excluded_cap = 15
     lines = [
         "# Context Manifest",
         "",
@@ -415,10 +421,10 @@ def render_markdown(task, paths, project, selected, excluded, nav=None):
     lines.append("## Excluded")
     lines.append("")
     if excluded:
-        for it in excluded[:15]:
+        for it in excluded[:_excluded_cap]:
             lines.append(f"- `{it['path']}` — {it['reason']}")
-        if len(excluded) > 15:
-            lines.append(f"- ... and {len(excluded) - 15} more")
+        if len(excluded) > _excluded_cap:
+            lines.append(f"- ... and {len(excluded) - _excluded_cap} more")
     else:
         lines.append("_(nothing excluded)_")
     lines.append("")

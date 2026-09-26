@@ -126,8 +126,11 @@ def cluster_events_semantic(events, min_projects=2, model=None, threshold=0.7):
     return valid_clusters
 
 
-def cluster_events_keyword(events, min_projects=2):
+def cluster_events_keyword(events, min_projects=2, _keyword_threshold=None):
     """Fallback: keyword-based clustering with semantic expansion and Jaccard similarity."""
+    if _keyword_threshold is None:
+        from fabric_config import get_tuning as _gt
+        _keyword_threshold = _gt(None, "mining", "keyword_threshold", 0.05)
     domain_synonyms = {
         "threading": ["concurrency", "parallel", "sync", "async", "mutex", "lock", "race", "deadlock"],
         "batching": ["batch", "composite", "bundle", "group"],
@@ -186,7 +189,7 @@ def cluster_events_keyword(events, min_projects=2):
             union = len(kw_i | kw_j)
             similarity = intersection / union if union > 0 else 0
             
-            if similarity >= 0.05:  # lowered threshold
+            if similarity >= _keyword_threshold:  # tuning: mining.keyword_threshold
                 cluster.append(j)
                 used.add(j)
         
@@ -639,7 +642,7 @@ def main():
     args = parser.parse_args()
     
     global MIN_PROJECTS, OUTPUT_DIR
-    MIN_PROJECTS = args.min_projects
+    MIN_PROJECTS = args.min_projects or get_tuning(config, 'mining', 'min_projects', 2)
     OUTPUT_DIR = Path(args.output_dir)
     
     print(f"Mining promotions (min projects: {MIN_PROJECTS}, embeddings: {args.use_embeddings})...")

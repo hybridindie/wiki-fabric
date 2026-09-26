@@ -179,6 +179,17 @@ fact* that a given task received the required knowledge.
   asserts the persisted receipt proves delivery (schema, id/filename match,
   selected set equals the manifest's, required stems present).
 
+
+### Tunable thresholds (`tuning:`)
+
+Behavioral constants (mining `min_projects`, cluster thresholds, judgment
+`mining_threshold`/`near_band`, context caps, concept-density gate) read
+from a `tuning:` section in fabric.yaml, falling back to shipped defaults.
+Defaults reproduce shipped behavior exactly (no-op test guarded). Two are
+**calibration-sensitive**: `judgment.mining_threshold` (0.8, calibrated on
+Laya — see issue #39) and `judgment.near_band` — their provenance travels
+in the issue history; changing them is a policy change, not a tweak.
+
 ## Keeping the catalog out of context (bloat guardrails)
 
 The catalog is an index over the whole corpus; the task manifest is a
