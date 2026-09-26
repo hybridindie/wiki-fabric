@@ -102,6 +102,23 @@ subprocess.run(ingest_args)
 #    domain proposals, stale claims) so ANY AI harness can surface pending
 #    decisions at session start by reading registry/pending-gate.md.
 subprocess.run([py, str(fabric / 'scripts/cmd/gate.py'), '--quiet', '--write-manifest'])
+
+# 4. Graphify cycle — ONLY when code files changed and the integration is
+#    enabled. The graph is committed with the corpus (global/graphs/), so
+#    staleness detection and code navigation stay fresh on every code commit.
+bridge = fabric / 'scripts/harness/graphify-bridge.py'
+if not bridge.exists():
+    sys.exit(0)
+# integration check lives in the bridge itself (gated, prints reason)
+r = subprocess.run([py, str(bridge), '--update', '--repo', slug],
+                   capture_output=True, text=True, timeout=300)
+if r.returncode != 0 or 'not enabled' in r.stdout:
+    sys.exit(0)  # graphify off — quiet, by design
+for step in ('--import', '--enrich', '--diff'):
+    r = subprocess.run([py, str(bridge), step, '--repo', slug],
+                       capture_output=True, text=True, timeout=300)
+    if r.stdout.strip():
+        print('[wf hook] ' + r.stdout.strip().splitlines()[-1][:120], flush=True)
 """
 
 
@@ -527,4 +544,4 @@ if __name__ == "__main__":
     elif args.cmd == "reinstall":
         print(reinstall(repos_from_config=args.repos_from_config))
     else:
-        print(status())
+        print(status())# graphify hook probe 1790382013
