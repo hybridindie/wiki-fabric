@@ -121,7 +121,10 @@ if not bridge.exists() or not code_files:
 r = subprocess.run([py, str(bridge), '--update', '--repo', slug],
                    capture_output=True, text=True, timeout=300)
 if r.returncode != 0 or 'not enabled' in r.stdout:
+    print(f'[wf hook] graphify skipped (rc={r.returncode}) '
+          f'{(r.stderr or r.stdout)[-200:]}', flush=True)
     sys.exit(0)  # graphify off — quiet, by design
+print('[wf hook] graphify update ok — importing/enriching...', flush=True)
 for step in ('--import', '--enrich', '--diff'):
     r = subprocess.run([py, str(bridge), step, '--repo', slug],
                        capture_output=True, text=True, timeout=300)
@@ -555,3 +558,4 @@ if __name__ == "__main__":
         print(reinstall(repos_from_config=args.repos_from_config))
     else:
         print(status())# graphify hook probe 1790382013
+# hook cycle probe 1790382458
