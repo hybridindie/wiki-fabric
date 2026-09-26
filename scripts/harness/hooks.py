@@ -87,16 +87,19 @@ if r not in (0, 2):
     sys.exit(1)
 if r == 0:
     print('[wf hook] no doc drift — capture skipped', flush=True)
-    sys.exit(0)
+    # doc capture skipped, but CODE changes still drive the graphify cycle
+    # (fall through to steps 3-4 rather than exiting)
+else:
 
-# 2. Ingest drift. LLM only when --extract-claims was enabled at install time
-#    (WIKI_HOOK_EXTRACT=1); otherwise sources are recorded without claims and
-#    the agent ingests interactively on next session.
-ingest_args = [py, str(fabric / 'scripts/cmd/ingest.py'), '--changed', slug]
-if os.environ.get('WIKI_HOOK_EXTRACT', '').lower() in ('1', 'true', 'yes'):
-    ingest_args.append('--extract-claims')
-print('[wf hook] captured drift — ingesting...', flush=True)
-subprocess.run(ingest_args)
+if r == 2:
+    # 2. Ingest drift. LLM only when --extract-claims was enabled at install
+    #    time (WIKI_HOOK_EXTRACT=1); otherwise sources are recorded without
+    #    claims and the agent ingests interactively on next session.
+    ingest_args = [py, str(fabric / 'scripts/cmd/ingest.py'), '--changed', slug]
+    if os.environ.get('WIKI_HOOK_EXTRACT', '').lower() in ('1', 'true', 'yes'):
+        ingest_args.append('--extract-claims')
+    print('[wf hook] captured drift — ingesting...', flush=True)
+    subprocess.run(ingest_args)
 
 # 3. After intake, persist the pending-HITL manifest (promotion dossiers,
 #    domain proposals, stale claims) so ANY AI harness can surface pending
@@ -106,8 +109,13 @@ subprocess.run([py, str(fabric / 'scripts/cmd/gate.py'), '--quiet', '--write-man
 # 4. Graphify cycle — ONLY when code files changed and the integration is
 #    enabled. The graph is committed with the corpus (global/graphs/), so
 #    staleness detection and code navigation stay fresh on every code commit.
+CODE_CHANGED = subprocess.run(
+    ['git', '-C', str(os.getcwd()), 'diff', '--name-only', 'HEAD~1', 'HEAD'],
+    capture_output=True, text=True).stdout
+code_files = [f for f in CODE_CHANGED.splitlines()
+              if f.endswith(('.py', '.js', '.ts', '.gd', '.go', '.rs', '.java'))]
 bridge = fabric / 'scripts/harness/graphify-bridge.py'
-if not bridge.exists():
+if not bridge.exists() or not code_files:
     sys.exit(0)
 # integration check lives in the bridge itself (gated, prints reason)
 r = subprocess.run([py, str(bridge), '--update', '--repo', slug],
@@ -138,7 +146,9 @@ if r not in (0, 2):
     sys.exit(1)
 if r == 0:
     print('[wf hook] no doc drift — capture skipped', flush=True)
-    sys.exit(0)
+    # doc capture skipped, but CODE changes still drive the graphify cycle
+    # (fall through to steps 3-4 rather than exiting)
+else:
 
 ingest_args = [py, str(fabric / 'scripts/cmd/ingest.py'), '--changed', slug]
 if os.environ.get('WIKI_HOOK_EXTRACT', '').lower() in ('1', 'true', 'yes'):
