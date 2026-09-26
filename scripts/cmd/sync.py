@@ -167,8 +167,31 @@ def validate_fabric():
 
 # === Commands ===
 
+
+
+def scaffold_ci_workflow():
+    """Write the corpus CI workflow (lint 0-error gate + OKF floor + catalog
+    freshness + conflict block) into <corpus>/.github/workflows/ when absent.
+    The corpus is the team source of truth — every push should pass the
+    governance floor, not just machines where someone remembers to run lint.
+    Template ships with the harness (system/corpus/lint-workflow.yml); never
+    overwrites an existing workflow (#'s vault-CI)."""
+    harness = Path(__file__).resolve().parent.parent.parent
+    template = harness / "system" / "corpus" / "lint-workflow.yml"
+    wf_dir = VAULT_ROOT / ".github" / "workflows"
+    wf_dir.mkdir(parents=True, exist_ok=True)
+    target = wf_dir / "lint.yml"
+    if target.exists() or not template.exists():
+        return False
+    shutil.copy(template, target)
+    print("Scaffolded CI workflow: .github/workflows/lint.yml "
+          "(corpus lint gate runs on every push)")
+    return True
+
+
 def cmd_init(remote_url):
     validate_fabric()
+    scaffold_ci_workflow()
     if get_remote():
         print(f"Corpus remote already set: {get_remote()}")
         print(f"Change it with: git remote set-url {CONTENT_REMOTE_NAME} <url>")
@@ -211,6 +234,7 @@ def cmd_setup(name=None, private=True, yes=False):
     printing manual git instructions otherwise. Human-gated: prompts unless
     --yes."""
     validate_fabric()
+    scaffold_ci_workflow()
 
     # 1. gh CLI detection + auth
     def _run(args, timeout=30):
