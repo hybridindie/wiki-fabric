@@ -68,3 +68,34 @@ is why provenance, scope, and maturity are first-class fields.
 ---
 
 Next: [See the architecture that implements this bet](./architecture)
+
+---
+
+## Inspirations, and what this design adds
+
+Wiki Fabric didn't invent its parts — it composes ideas from several lines of
+work and adds the governance layer none of them ship. Crediting the sources
+makes the additions legible.
+
+| Inspiration | What it contributes | What Wiki Fabric adds beyond it |
+|---|---|---|
+| **Karpathy's LLM Wiki** | The core posture: an agent-maintained, interlinked Markdown wiki *between* raw sources and the agent — synthesized once, incrementally updated, not re-derived per query. | The wiki is **governed, not just maintained**: every claim carries provenance (source + locator + verbatim quote), a staleness gate, and a lint-enforced contract. A wiki page here is navigational memory, never ground truth — live code and tests outrank it. |
+| **LangChain OpenWiki** | Wiki-as-agent-context: curated pages the agent reads before raw source, and wiki-memory as a durable substrate. | **Deterministic compilation instead of generation-time retrieval**: task context is compiled by pure string ops (0 tokens, byte-identical re-runs) with per-item reasons — and *persisted receipts* (`receipt-v1`) make "what the agent was told" an auditable artifact, not a transient prompt. |
+| **CoALA's memory taxonomy** (working/episodic/semantic/procedural) | The vocabulary for typed memory stores with different update and retrieval rules. | Prospective memory is a first-class *asset kind* (`commitments/`) with trigger conditions that resurface obligations at task time — the forward-looking quarter CoALA names but most implementations omit. Scope precedence (project > domain > global) is enforced at compile time, not by prompt convention. |
+| **Graphify** | Incremental AST knowledge graphs of code repos: call/import edges, communities, symbol neighborhoods. | The fabric **consumes the graph at task time**: a `Code navigation` block in every manifest (task → symbols → ranked files, 0 tokens), plus claim enrichment (`graph_edges`) and hash-based staleness detection that catches upstream graph changes between imports. |
+| **System One decision models** (TypeSafe Jev; Laya-MLX open equivalent) | Low-variance, typed judgment: calibrated probabilities instead of autoregressive "LLM-as-judge" generation. | Judgment is a **tier with a contract**, never a core dependency: gated behind an integration flag, probability-recorded, never authoritative (near-threshold values escalate to the human gate), and test-isolated from the deterministic core. |
+
+The through-line: each inspiration contributes a capability, and Wiki Fabric
+wraps it in the same governance spine — provenance, scope, staleness, and
+human gates are enforced by deterministic tooling (lint, CI, behavior evals)
+rather than promised by convention. The unique flows are the seams between
+inspired parts: the context manifest is where Graphify's structure, the
+wiki's claims, and the memory taxonomy meet an agent's finite window.
+
+## Design differences from each, in one line each
+
+- **vs a plain LLM wiki**: knowledge is *governed* (lint, provenance, staleness), not just written.
+- **vs RAG**: retrieval is deterministic and explainable; answers cite line-level locators you can open.
+- **vs memory tools**: contradictions are represented (`contested`), not collapsed; confidence is a field, not a vibe.
+- **vs ADR collections**: decisions connect to experience events; a pattern read but never applied gets flagged.
+- **vs prompt/skill libraries**: promotion requires replication in ≥2 independent projects with measured maturity.
