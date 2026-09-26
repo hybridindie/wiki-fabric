@@ -449,6 +449,7 @@ cmd_install() {
     local install_dir="${DEFAULT_DIR}"
     local skip_vault=false
     local corpus_url=""
+    local vault_path_arg=""
     local with_graphify=false
     local interactive=false
 
@@ -458,6 +459,7 @@ cmd_install() {
             --repo) repo_url="$2"; shift 2 ;;
             --dir) install_dir="$2"; shift 2 ;;
             --no-vault) skip_vault=true; shift ;;
+            --vault) vault_path_arg="$2"; shift 2 ;;
             --corpus) corpus_url="$2"; shift 2 ;;
             --with-graphify) with_graphify=true; shift ;;
             --interactive|-i) interactive=true; shift ;;
@@ -528,6 +530,21 @@ cmd_install() {
         interactive_setup "${fabric_dir}"
     fi
 
+    # Vault location: --vault <PATH> pins where the fabric's content root
+    # lives (any path; the fabric config carries it so every later wf call
+    # resolves the same place). Default: sibling of the fabric dir.
+    if [[ -n "${vault_path_arg}" ]]; then
+        local cfg="${install_dir}/fabric.yaml"
+        if [[ -f "${cfg}" ]]; then
+            {
+                echo ""
+                echo "vault:"
+                echo "  path: ${vault_path_arg}"
+            } >> "${cfg}"
+            ok "Vault location pinned: ${vault_path_arg}"
+        fi
+    fi
+
     # Ensure content dirs in the fabric (evidence/, projects/, patterns/, ...)
     ensure_directories "${fabric_dir}"
 
@@ -575,8 +592,43 @@ cmd_install() {
 
     # Wire up team corpus sync if a remote was provided
     if [[ -n "${corpus_url}" ]]; then
-        info "Configuring corpus sync → ${corpus_url}"
-        run_python "${install_dir}" "${install_dir}/scripts/cmd/sync.py" init "${corpus_url}"
+        # sync.py's validate_fabric expects AGENTS.md + registry/ at the
+        # corpus root; a fresh fabric has neither. Scaffold the minimum so
+        # sync init works — team content replaces it on checkout.
+        mkdir -p "${fabric_dir}/corpus/registry"
+        [[ -f "${fabric_dir}/corpus/AGENTS.md" ]] || \
+            cp "${install_dir}/AGENTS.md" "${fabric_dir}/corpus/AGENTS.md" 2>/dev/null || true
+        export WIKI_FABRIC_DIR="${fabric_dir}"
+
+        # Teammate detection FIRST: if the remote already carries a corpus
+        # branch and this fabric is fresh, PULL it — running init would push
+        # an empty corpus as the "source of truth" and clobber the team.
+        local remote_corpus_head=""
+        remote_corpus_head=$(git -C "${fabric_dir}" ls-remote "${corpus_url}" refs/heads/corpus 2>/dev/null | cut -f1)
+        # Fresh = no knowledge content: scaffold dirs (evidence/, projects/,
+        # registry/, ...) contain nothing a teammate needs. Real content =
+        # claims/patterns/concepts/domain ontology files.
+        local local_corpus_content
+        local_corpus_content=$(find "${fabric_dir}/corpus" -name '*.md' -not -path '*node_modules*' 2>/dev/null \
+            | grep -Ev 'AGENTS.md|ontology.md|README.md' || true \
+            | head -1)
+
+        if [[ -n "${remote_corpus_head}" && -z "${local_corpus_content}" ]]; then
+            info "Team corpus found on remote — pulling it (branch: corpus)..."
+            (cd "${fabric_dir}" && git remote add corpus "${corpus_url}" 2>/dev/null || true)
+            if (cd "${fabric_dir}" && git fetch -q corpus corpus 2>/dev/null); then
+                (cd "${fabric_dir}" && git checkout -q -B main corpus/corpus 2>/dev/null || \
+                 git reset -q --hard corpus/corpus 2>/dev/null || true)
+                ok "Team corpus checked out — the fabric carries the team's knowledge"
+            else
+                warn "Could not fetch corpus branch — fabric starts empty (wf sync pull later)"
+            fi
+        else
+            # Lead-machine case: no remote corpus (or local content wins) —
+            # publish this fabric's corpus as the source of truth.
+            run_python "${install_dir}" "${install_dir}/scripts/cmd/sync.py" init "${corpus_url}"
+            info "Local corpus has content — it is the initial source of truth (wf sync pull merges the remote)"
+        fi
         echo ""
     else
         echo "────────────────────────────────────────────"
@@ -887,11 +939,17 @@ cmd_bootstrap() {
 }
 
 # === Main dispatcher ===
-# One-liner default: `curl ... | bash` (stdin-piped, no args) runs INSTALL —
-# that's the documented first step; an installed `wf` with no args still
-# shows help (BASH_SOURCE != $0 only when executed via stdin).
-if [[ $# -eq 0 && "${BASH_SOURCE[0]:-}" != "${0:-}" ]]; then
-    set -- install
+# One-liner mode: `curl ... | bash [flags]` (stdin-piped execution —
+# BASH_SOURCE != $0) treats unparsed input as INSTALL arguments, since that's
+# the documented first step. An installed `wf` parses normally.
+if [[ "${BASH_SOURCE[0]:-}" != "${0:-}" ]]; then
+    case "${1:-}" in
+        install|help|update|status|version|vault|bootstrap|capture|ingest|query|context|log|models|sync|hook|claude|harness|review|promote|export|mine|lint|integrations|okf|doctor|"") ;;
+        *) set -- install "$@" ;;
+    esac
+    if [[ $# -eq 0 ]]; then
+        set -- install
+    fi
 fi
 
 case "${1:-help}" in
