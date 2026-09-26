@@ -1,0 +1,79 @@
+name: Fabric refresh
+
+# Post-merge fabric freshness: graphify cycle + fabric capture on every push
+# to main (i.e. every merged PR). Mirrors the local post-merge hook for
+# contributors who never run the local loop.
+#
+# Gates itself on secrets: if GRAPHIFY_API_KEY / CORPUS_DEPLOY_KEY are not
+# configured, jobs skip with a notice instead of failing — the fabric loop
+# is opt-in infrastructure, never a CI tax.
+
+"on":
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: fabric-refresh-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  graphify:
+    name: Graphify cycle (update → import → enrich → diff)
+    runs-on: ubuntu-latest
+    if: ${{ vars.WIKI_FABRIC_REFRESH == '1' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 30
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install graphify CLI
+        run: uv tool install graphify
+
+      - name: Graphify update (AST graph of the repo)
+        if: ${{ secrets.GRAPHIFY_API_KEY != '' }}
+        run: graphify --backend=gemini --update . 2>&1 | tail -5
+        env:
+          GEMINI_API_KEY: ${{ secrets.GRAPHIFY_API_KEY }}
+        continue-on-error: true
+
+      - name: Fabric bridge cycle
+        run: |
+          uv venv
+          uv pip install -r requirements.txt
+          uv run python scripts/harness/graphify-bridge.py --import || true
+          uv run python scripts/harness/graphify-bridge.py --enrich || true
+          uv run python scripts/harness/graphify-bridge.py --diff || true
+
+      - name: Commit enriched claims back (fabric-side)
+        if: ${{ secrets.CORPUS_DEPLOY_KEY != '' }}
+        run: |
+          echo "Fabric content lives in the vault repo, not this harness."
+          echo "Bridge output above is logged; vault sync (wf sync) propagates"
+          echo "enriched claims to the corpus repo where they are committed."
+          # The vault-side commit/push is a Team Sync concern (see docs/site/sync.md);
+          # this job reports — it does not write fabric content.
+
+  fabric-capture:
+    name: Fabric capture (doc drift → change-set)
+    runs-on: ubuntu-latest
+    if: ${{ vars.WIKI_FABRIC_REFRESH == '1' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 30
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Capture doc drift (sha256-gated, no LLM)
+        run: |
+          uv venv
+          uv pip install -r requirements.txt pyyaml
+          # capture without --extract-claims: deterministic, free; claims
+          # compile on the next human/agent ingest pass
+          uv run python scripts/cmd/capture.py wiki-fabric --quiet || true
+          uv run python scripts/cmd/lint.py . || true

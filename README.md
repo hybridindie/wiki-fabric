@@ -225,3 +225,5 @@ MIT — see [LICENSE](LICENSE).
 - Configured via pr-agent.toml — reviews only Python/shell scripts with high reasoning effort.
 - See https://github.com/Codium-ai/pr-agent for commands: /review, /describe, /improve
 # Testing PR Agent review on wiki-fabric
+
+<!-- drift probe 1790381099 -->
