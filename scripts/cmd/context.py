@@ -133,6 +133,23 @@ def is_stale(fm, today):
         return 0
 
 
+def _load_policy_profile(name="default-coding-agent"):
+    """Load a compilation policy profile (policy-profile-v1). Returns None
+    when absent or invalid — select_context falls back to built-ins
+    (byte-identical shipped behavior). Profiles are versioned artifacts;
+    behavior evals validate any profile before it can ship (#66)."""
+    from pathlib import Path as _P
+    p = _HERE.parent.parent / "system" / "policy-profiles" / f"{name}.yaml"
+    try:
+        import yaml as _yaml
+        d = _yaml.safe_load(p.read_text())
+        if d.get("schema") != "wiki-fabric/policy-profile-v1":
+            return None
+        return d
+    except Exception:
+        return None
+
+
 def select_context(pages, task, paths, project, today, max_items=20):
     """Deterministic selection: project > domain > global, each with a reason.
 
@@ -186,11 +203,19 @@ def select_context(pages, task, paths, project, today, max_items=20):
         candidates.append((pg, overdue))
 
     # ---- Priority tiers ----
+    # v1 policy profile (system/policy-profiles/default-coding-agent.yaml):
+    # the tier→type mapping is data. A profile that fails to load/parses
+    # falls back to these built-ins — byte-identical behavior.
     tiers = [
         ("P1-project", ("decision", "experience-event")),
         ("P2-domain", ("pattern", "anti-pattern", "skill", "question")),
         ("P3-global", ("pattern", "anti-pattern", "skill", "concept")),
     ]
+    tier_order = {"P1-project": 0, "P2-domain": 1, "P3-global": 2}
+    profile = _load_policy_profile()
+    if profile:
+        tiers = [(t, tuple(types)) for t, types in profile["tiers"].items()]
+        tier_order = {t: i for i, t in enumerate(profile["tier_order"])}
 
     scored = []
     for pg, overdue in candidates:
@@ -248,7 +273,6 @@ def select_context(pages, task, paths, project, today, max_items=20):
                            "stale": overdue, "path_hit": path_hit})
 
     # Order: priority tier → path hit → staleness (fresh first) → stem
-    tier_order = {"P1-project": 0, "P2-domain": 1, "P3-global": 2}
     scored.sort(key=lambda s: (tier_order.get(s["priority"], 9), not s["path_hit"], -s["stale"], s["pg"]["stem"]))
 
     for s in scored[:max_items]:
