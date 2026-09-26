@@ -41,7 +41,8 @@ Install flags:
 
 | Flag | Effect |
 |------|--------|
-| `--corpus <git-url>` | Point the fabric at a team-shared corpus (the shared knowledge content, synced via git — see [Team Sync](./sync)) |
+| `--corpus <git-url>` | Point the fabric at a team-shared corpus. **Teammate join:** if the remote already carries a corpus, it's pulled at install — the fabric carries the team's knowledge from the first command. **Lead machine:** publishes the initial corpus. See [Team Sync](./sync) |
+| `--vault <path>` | Pin where the Obsidian vault shell lives (written to fabric.yaml so every later `wf` call resolves the same place) |
 | `--with-graphify` | Enable the graphify integration (see [Integrations](./integrations)) |
 | `--dir <path>` | Harness clone location (default `./wiki-fabric` — the current directory) |
 | `--repo <url>` | Install from a fork |

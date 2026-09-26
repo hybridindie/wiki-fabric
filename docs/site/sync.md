@@ -28,7 +28,13 @@ wf sync status        # ahead/behind + uncommitted corpus changes + conflicts
 wf sync push -m "ingested upstream docs"   # commit + push corpus changes
 wf sync pull          # fetch + merge; conflicts → review queue
 
-# A teammate joins: clone your fabric, then
+# A teammate joins — one command (install pulls the corpus when the
+# remote already carries one; --vault pins where the vault shell lives):
+curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/scripts/wiki-fabric.sh | bash -s -- \
+  --corpus git@github.com:your-org/wiki-fabric-corpus.git \
+  --vault ~/knowledge/vault
+
+# Manual join (existing install): wire the remote + pull
 git remote add corpus git@github.com:your-org/wiki-fabric-corpus.git
 wf sync pull
 ```
@@ -44,6 +50,17 @@ local-only or corpus-wired, and `wf sync status` lists new namespaces waiting
 on the remote ("New projects on the corpus (pull to receive)"); `wf sync pull`
 announces each namespace it delivers, with owner. Teammates discover
 new projects by pulling — nothing to configure on their side.
+
+## Install-time join: two-way gate
+
+`install --corpus` decides the direction automatically:
+
+| Condition | What happens |
+|---|---|
+| Remote carries a corpus branch, local corpus has no knowledge content (.md claims/ontology) | **Teammate join** — the remote corpus is fetched and checked out; the fabric carries the team's knowledge from the first command |
+| Remote has no corpus (or local corpus has content) | **Lead machine** — `sync init` publishes the local corpus as the source of truth |
+
+The freshness loop then applies on both sides: hooks capture drift per commit, `wf sync push/pull` move it to/from the team remote.
 
 ## Conflict policy: review queue, never silent overwrite
 

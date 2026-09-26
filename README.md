@@ -99,7 +99,8 @@ bash scripts/demo.sh
 # One-liner install (installs uv if missing, then the `wf` CLI at ~/.local/bin/)
 curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/scripts/wiki-fabric.sh | bash
 
-# With team corpus sync wired in from the start:
+# Teammate: pulls the team corpus automatically when the remote carries one
+# (--vault <path> pins where the vault shell lives):
 curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/scripts/wiki-fabric.sh | bash -s -- --corpus git@github.com:your-org/wiki-fabric-corpus.git
 
 wf status                              # check fabric health
