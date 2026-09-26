@@ -547,7 +547,19 @@ def main():
             fm = {}
         t = fm.get("type")
         if t is not None and t not in VALID_TYPES and not is_tpl(rel):
-            errors.append("TYPE %s: unknown type %r" % (rel, t))
+            # proposed types (proposed_types: in fabric.yaml) are a governed
+            # middle path (#64): usable without a code change, flagged for
+            # adoption review rather than rejected outright.
+            proposed = []
+            try:
+                proposed = (yaml.safe_load((vault / "fabric.yaml").read_text()) or {}).get("proposed_types") or []
+            except Exception:
+                proposed = []
+            if t in proposed:
+                warnings.append("PROPOSED-TYPE %s: %r is proposed, not adopted "
+                                "(add to VALID_TYPES via PR to adopt)" % (rel, t))
+            else:
+                errors.append("TYPE %s: unknown type %r" % (rel, t))
         if t in ("registry", "index"):
             for m in LINK_RE.finditer(strip_code(body)):
                 INDEX.add(m.group(1).strip().lower())
