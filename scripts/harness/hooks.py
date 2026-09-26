@@ -89,7 +89,6 @@ if r == 0:
     print('[wf hook] no doc drift — capture skipped', flush=True)
     # doc capture skipped, but CODE changes still drive the graphify cycle
     # (fall through to steps 3-4 rather than exiting)
-else:
 
 if r == 2:
     # 2. Ingest drift. LLM only when --extract-claims was enabled at install
@@ -204,7 +203,7 @@ def _detached_launch(rebuild_body: str) -> str:
     # when the graphify block's quoting silently truncated the launcher —
     # the background job died with a syntax error before its first log line)
     b64 = base64.b64encode(launcher.encode("utf-8")).decode("ascii")
-    return f"WF_HOOK_B64={b64} '$WF_PYTHON' -c \"import base64,os;exec(base64.b64decode(os.environ['WF_HOOK_B64']).decode())\"\n"
+    return f"WF_HOOK_B64={b64} \"$WF_PYTHON\" -c \"import base64,os;exec(base64.b64decode(os.environ['WF_HOOK_B64']).decode())\"\n"
 
 
 _WORKTREE_GUARD = """\
@@ -240,7 +239,8 @@ _NON_FABRIC=$(printf '%s\n' "$CHANGED" | grep -Ev '^(evidence/|registry/|pattern
 [ -z "$_NON_FABRIC" ] && exit 0
 
 _DOCS=$(printf '%s\n' "$_NON_FABRIC" | grep -E '\\.(md|markdown)$' || true)
-[ -z "$_DOCS" ] && exit 0
+_CODE=$(printf '%s\n' "$_NON_FABRIC" | grep -E '\\.(py|js|ts|gd|go|rs|java)$' || true)
+[ -z "$_DOCS" ] && [ -z "$_CODE" ] && exit 0
 
 """ + _PYTHON_DETECT + """
 WF_SLUG=$(basename "$(pwd)")
@@ -282,7 +282,8 @@ _NON_FABRIC=$(printf '%s\\n' "$CHANGED" | grep -Ev '^(""" + _FABRIC_OUTPUT_DIRS 
 
 # Only doc-bearing files trigger capture (capture globs are md-centric)
 _DOCS=$(printf '%s\\n' "$_NON_FABRIC" | grep -E '\\.(md|markdown)$|^AGENTS\\.md$|^README\\.md$|^CONTRIBUTING\\.md$' || true)
-[ -z "$_DOCS" ] && exit 0
+_CODE=$(printf '%s\\n' "$_NON_FABRIC" | grep -E '\\.(py|js|ts|gd|go|rs|java)$' || true)
+[ -z "$_DOCS" ] && [ -z "$_CODE" ] && exit 0
 
 """ + _PYTHON_DETECT + """
 # Project slug = directory name of this repo (matches bootstrap slugify for
@@ -566,3 +567,4 @@ if __name__ == "__main__":
         print(status())# graphify hook probe 1790382013
 # hook cycle probe 1790382458
 # graphify cycle probe 3 1790382537
+# graphify hook probe 4 1790382801
