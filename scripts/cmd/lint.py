@@ -43,6 +43,13 @@ VALID_TYPES = {
      "attested-computation", "wiki-article",
 }
 PATTERN_STATUSES = {"candidate", "recommended", "standard", "deprecated"}
+# Claim relation types: synthesis semantics (supports/contradicts/...) plus
+# evidence-plane provenance (#79): originated_in (chat capture), decided_in /
+# validated_in (PR/issue capture). Provenance edges never replace claims as atoms.
+REL_TYPES = {
+    "supports", "contradicts", "refines", "supersedes", "depends_on",
+    "originated_in", "decided_in", "validated_in",
+}
 EXCLUDE_DIRS = {".git", ".obsidian", ".opencode", "__pycache__", ".pytest_cache", ".venv", "venv", "node_modules", "graphify-out", "docs/site", "wiki"}
 EXCLUDE_DIR_PREFIXES = ("evidence/traces", "system/always-on")
 TEMPLATE_DIRS = {"global/templates", "schemas", "templates"}
@@ -613,6 +620,25 @@ def main():
                 if isinstance(ref, dict) and not ref.get("locator"):
                     warnings.append("CLAIM %s: source_ref without locator: %s" %
                                      (rel, ref.get("source", "?")))
+            # relations: provenance/thread edges (#79) — typed, targets resolve
+            rels = fm.get("relations")
+            if rels not in (None, []):
+                if not isinstance(rels, list):
+                    errors.append("CLAIM %s: relations must be a list" % rel)
+                else:
+                    for r in rels:
+                        if not isinstance(r, dict) or not r.get("type") or not r.get("target"):
+                            errors.append("CLAIM %s: relation needs {type, target}: %r" % (rel, r))
+                            continue
+                        if r["type"] not in REL_TYPES:
+                            errors.append("CLAIM %s: relation type %r not in %s" %
+                                          (rel, r["type"], sorted(REL_TYPES)))
+                        target = str(r["target"]).strip()
+                        if target.startswith("[[") and target.endswith("]]"):
+                            stem = target[2:-2].split("|")[0].strip().lower()
+                            if stem not in pages and not is_placeholder(stem):
+                                errors.append("BROKEN-LINK %s: relation target [[%s]] -> no page" %
+                                              (rel, stem))
         if t == "concept" and not fm.get("claims"):
             errors.append("CONCEPT %s: must link >=1 claim to draw from" % rel)
         if t == "commitment":

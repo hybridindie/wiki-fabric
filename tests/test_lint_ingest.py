@@ -140,3 +140,94 @@ class TestIngestSlug:
 
     def test_slugify_path(self):
         assert ingest_mod.slugify("docs/architecture.md") == "docs-architecture-md"
+
+
+class TestProvenanceRelations:
+    """#79: claims from chat/PR captures carry typed provenance edges."""
+
+    def test_chat_capture_gets_originated_in(self):
+        rels = ingest_mod.provenance_relations(
+            "proj-session-1", "/corpus/evidence/raw/proj/chats/2026-09-26-topic.md")
+        assert rels == [{"type": "originated_in", "target": "[[src-proj-session-1]]"}]
+
+    def test_pr_capture_gets_decided_in(self):
+        rels = ingest_mod.provenance_relations(
+            "proj-git-pr-42", "/corpus/evidence/raw/proj/git/pr-42.md")
+        assert rels == [{"type": "decided_in", "target": "[[src-proj-git-pr-42]]"}]
+
+    def test_issue_capture_gets_decided_in(self):
+        rels = ingest_mod.provenance_relations(
+            "proj-git-issue-7", "/corpus/evidence/raw/proj/git/issue-7.md")
+        assert rels[0]["type"] == "decided_in"
+
+    def test_doc_capture_has_no_edge(self):
+        rels = ingest_mod.provenance_relations(
+            "proj-doc", "/corpus/evidence/raw/proj/docs/site/context.md")
+        assert rels == []
+
+    def test_claim_frontmatter_emits_relations_block(self):
+        prov = [{"type": "decided_in", "target": "[[src-proj-git-pr-42]]"}]
+        fm_text = ingest_mod.claim_frontmatter(
+            {"statement": "S", "quote": "Q", "locator": "L1"}, "proj-git-pr-42", 0,
+            provenance=prov)
+        assert "relations:" in fm_text
+        assert "type: decided_in" in fm_text
+        assert 'target: "[[src-proj-git-pr-42]]"' in fm_text
+
+    def test_claim_frontmatter_default_stays_empty_list(self):
+        fm_text = ingest_mod.claim_frontmatter(
+            {"statement": "S", "quote": "Q", "locator": "L1"}, "proj-doc", 0)
+        assert "relations: []" in fm_text
+
+
+class TestLintRelations:
+    """Lint validates claim relation targets resolve (BROKEN-LINK) and types."""
+
+    @staticmethod
+    def _run_lint(tmp_path):
+        import sys as _sys, io, contextlib
+        old_argv = _sys.argv
+        _sys.argv = ["lint.py", str(tmp_path)]
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                lint_mod.main()
+        finally:
+            _sys.argv = old_argv
+        return buf.getvalue()
+
+    def _write_claim(self, tmp_path, relations_yaml):
+        (tmp_path / "evidence" / "claims").mkdir(parents=True)
+        (tmp_path / "evidence" / "claims" / "claim-x.md").write_text(
+            "---\ntype: claim\nid: claim-x\nstatus: supported\n"
+            "source_refs:\n  - source: \"[[src-s]]\"\n    locator: L1\n"
+            f"    quote: q\n{relations_yaml}\n---\n\n# claim-x\n\nBody\n")
+
+    def test_valid_relation_passes(self, tmp_path):
+        (tmp_path / "evidence" / "sources").mkdir(parents=True)
+        (tmp_path / "evidence" / "sources" / "src-s.md").write_text(
+            "---\ntype: source\ntitle: S\n---\n\n# src-s\n")
+        self._write_claim(tmp_path,
+                          "relations:\n  - type: originated_in\n    target: \"[[src-s]]\"")
+        out = self._run_lint(tmp_path)
+        assert "BROKEN-LINK" not in out
+        assert "relation type" not in out
+
+    def test_broken_relation_target_errors(self, tmp_path):
+        self._write_claim(tmp_path,
+                          "relations:\n  - type: originated_in\n    target: \"[[src-missing]]\"")
+        out = self._run_lint(tmp_path)
+        assert "BROKEN-LINK evidence/claims/claim-x.md: relation target [[src-missing]]" in out
+
+    def test_unknown_relation_type_errors(self, tmp_path):
+        (tmp_path / "evidence" / "sources").mkdir(parents=True)
+        (tmp_path / "evidence" / "sources" / "src-s.md").write_text(
+            "---\ntype: source\ntitle: S\n---\n\n# src-s\n")
+        self._write_claim(tmp_path,
+                          "relations:\n  - type: vibes_with\n    target: \"[[src-s]]\"")
+        out = self._run_lint(tmp_path)
+        assert "relation type 'vibes_with'" in out
+
+    def test_provenance_types_are_valid(self):
+        for t in ("originated_in", "decided_in", "validated_in"):
+            assert t in lint_mod.REL_TYPES
