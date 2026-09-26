@@ -197,8 +197,14 @@ else:
 
 
 def _detached_launch(rebuild_body: str) -> str:
+    import base64
     launcher = _LAUNCHER_TEMPLATE.replace("__REBUILD_BODY__", rebuild_body)
-    return '"$WF_PYTHON" -c "' + launcher + '"\n'
+    # base64 the whole -c payload: the body contains single quotes, ${...}
+    # and nested quotes that a shell double-quoted -c string mangles (found
+    # when the graphify block's quoting silently truncated the launcher —
+    # the background job died with a syntax error before its first log line)
+    b64 = base64.b64encode(launcher.encode("utf-8")).decode("ascii")
+    return f"WF_HOOK_B64={b64} '$WF_PYTHON' -c \"import base64,os;exec(base64.b64decode(os.environ['WF_HOOK_B64']).decode())\"\n"
 
 
 _WORKTREE_GUARD = """\
@@ -559,3 +565,4 @@ if __name__ == "__main__":
     else:
         print(status())# graphify hook probe 1790382013
 # hook cycle probe 1790382458
+# graphify cycle probe 3 1790382537
