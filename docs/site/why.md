@@ -71,6 +71,41 @@ Next: [See the architecture that implements this bet](./architecture)
 
 ---
 
+---
+
+## Local-first, cloud-optional
+
+The governance spine is deliberately cloud-independent. The fabric's
+deterministic core — capture, lint, context compilation, receipts, query,
+mining's clustering, staleness detection — runs entirely on-device with zero
+tokens. When the LLM is needed (claim extraction, synthesis, dossier
+generation), each stage routes independently:
+
+```yaml
+repos:
+  my-project:
+    extract: local      # raw docs never leave the machine
+    synthesize: local   # claims stay local too
+    dossier: cloud      # experience events are less sensitive
+```
+
+The design bet: **an LLM is a good compiler but an unreliable memory** — so
+the only stages that touch a model are compilation stages, and each one is
+individually routable. Mixed clusters follow the least-private input (a
+dossier over any cloud-routed project's events stays cloud; fully-local
+clusters can go fully local). On-device runs via MLX (Apple Silicon) or
+llama.cpp (GGUF, any OS), human-gated download, no always-on service.
+
+What that means in practice:
+
+- **Fully offline**: capture → claims (local extraction) → context → query →
+  receipts → navigation → staleness → mining decisions — the whole daily loop
+- **Cloud optional**: the compiler model is a quality tier for extraction and
+  synthesis, validated by the same golden-corpus eval regardless of route
+- **Private by configuration, not by policy**: per-repo, per-stage routing is
+  the mechanism — sensitive repos pin all stages local, shared repos choose
+  per stage
+
 ## Inspirations, and what this design adds
 
 Wiki Fabric didn't invent its parts — it composes ideas from several lines of
