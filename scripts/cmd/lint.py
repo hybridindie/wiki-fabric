@@ -173,9 +173,16 @@ def scope_for(rel):
 
 
 def validate_scope(fm, rel):
-    """Frontmatter scope (when present) must match the path-implied scope."""
+    """Frontmatter scope (when present) must match the path-implied scope.
+    Transitional proposal artifacts (change-set / promotion-dossier /
+    domain-proposal dossiers) are exempt: their scope names the TARGET of
+    the proposal (e.g. scope: domains on a dossier awaiting merge), not
+    the file's own location — found when propose-domains wrote dossiers
+    into registry/domain-proposals/."""
     declared = fm.get("scope")
     if not declared:
+        return None
+    if str(fm.get("type")) in ("change-set", "promotion-dossier"):
         return None
     expected = scope_for(rel)
     if declared != expected:
