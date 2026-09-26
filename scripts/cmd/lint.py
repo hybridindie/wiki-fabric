@@ -669,6 +669,10 @@ def main():
             if isinstance(sh, str) and "<multi-file>" in sh:
                 continue
             rp = vault / sp
+            if not rp.exists() and (vault / "corpus").is_dir() and (vault / "corpus" / sp).exists():
+                # nested corpus layout (vault root passed to lint): source
+                # paths are recorded relative to corpus/, not the vault root
+                rp = vault / "corpus" / sp
             if not rp.exists():
                 errors.append("SOURCE %s: raw missing: %s" % (rel, sp))
                 continue

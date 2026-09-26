@@ -1,0 +1,63 @@
+name: Corpus lint
+
+# The vault's own CI: the knowledge corpus is the source of truth for the
+# team — every push must pass the governance floor. Runs the harness's
+# deterministic lint (0-error gate) + OKF v0.2 conformance floor against
+# this repo. Knowledge checks, not code checks.
+
+on:
+  push:
+    branches: [main, corpus]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: corpus-lint-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  lint:
+    name: Lint + OKF floor
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout corpus (this repo)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 5
+
+      - name: Checkout harness (the lint tooling)
+        uses: actions/checkout@v4
+        with:
+          repository: hybridindie/wiki-fabric
+          ref: main
+          path: harness
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Lint corpus (0-error gate)
+        run: |
+          cd harness
+          uv venv
+          uv pip install -r requirements.txt pyyaml
+          WIKI_FABRIC_DIR="$(pwd)/../" uv run python scripts/cmd/lint.py ../corpuscorpus --okf
+          WIKI_FABRIC_DIR="$(pwd)/../" uv run python scripts/cmd/lint.py ../corpus
+
+      - name: Catalog freshness (rebuild must be a no-op)
+        run: |
+          cd harness
+          cp ../corpus/registry/catalog.json /tmp/catalog-before.json
+          WIKI_FABRIC_DIR="$(pwd)/../" uv run python scripts/cmd/rebuild-index.py || true
+          diff <(python3 -c "import json;d=json.load(open('/tmp/catalog-before.json'));print(json.dumps(d,sort_keys=True))") \
+               <(python3 -c "import json;d=json.load(open('../corpus/registry/catalog.json'));print(json.dumps(d,sort_keys=True))") \
+          && echo "catalog consistent" || (echo "catalog.json is stale — run rebuild-index (WIKI_FABRIC_DIR=vault) and commit" && exit 1)
+
+      - name: Sync conflicts block (deterministic)
+        run: |
+          if ls ../corpus/registry/conflicts/*/ 2>/dev/null | grep -q .; then
+            echo "Unresolved sync conflicts present — resolve then push"
+            ls ../corpus/registry/conflicts/
+            exit 1
+          else
+            echo "no unresolved conflicts"
+          fi
