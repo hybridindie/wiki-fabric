@@ -124,6 +124,20 @@ wf export wiki                       # generate the human wiki (topics, projects
 wf mine chats my-project             # distill chat transcripts into patterns/anti-patterns
 ```
 
+### Optional: make it a team system
+
+The fabric above is single-node by default. To make it a team system
+(teammates inherit the corpus from their first install):
+
+```bash
+wf sync setup    # gh CLI creates <owner>/wiki-fabric-corpus (private) and publishes
+                 # your corpus; prints the teammate one-liner. See Team Sync.
+```
+
+Deterministic steps (capture, context, receipts, navigation) work fully
+offline before and after — the corpus sync is for teams, not for the loop.
+
+
 `wf bootstrap` writes `.wiki-overlay.md` into the project, creates its
 namespace in the fabric, and additively merges agent config (never overwrites
 your MCP setup). Then [Core Workflows](./core-workflows) takes over: capture →

@@ -21,7 +21,26 @@ and code have different lifecycles and remotes.
 ```bash
 # One-time: point your fabric at the shared corpus remote
 # (or pass --corpus <git-url> to the installer and this is done for you)
-wf sync init git@github.com:your-org/wiki-fabric-corpus.git
+wf sync setup         # FIRST-TIME: gh CLI creates <owner>/wiki-fabric-corpus (private) and publishes
+wf sync init git@github.com:your-org/wiki-fabric-corpus.git  # or point at an existing repo
+
+## First-time setup: `wf sync setup`
+
+`wf sync setup` is the initial-setup step that makes the fabric a team
+system. It uses the **gh CLI** (checked at run time — install gh and run
+`gh auth login` if missing) to:
+
+1. Create the corpus repo — `<owner>/wiki-fabric-corpus`, **private** by
+   default (`--public` to flip). Prompts before creating unless `-y`.
+2. Publish your fabric's corpus as the source of truth (`sync init` + push).
+3. Print the teammate one-liner — teammates inherit the team's knowledge
+   from their first install command.
+
+If gh isn't available, setup prints the manual path instead
+(`gh repo create` by hand, or `wf sync init <url>` pointing at an existing
+repo). The corpus holds your project knowledge — the privacy default is
+deliberate. Note: `wf sync setup`/`init` scaffold `corpus/AGENTS.md` if
+the corpus lacks it (a fresh fabric needs the marker to sync).
 
 # Day-to-day, on any machine:
 wf sync status        # ahead/behind + uncommitted corpus changes + conflicts
