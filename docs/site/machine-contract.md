@@ -65,9 +65,9 @@ Rebuilt by `rebuild-index.py` from actual files (never hand-edited):
   "counts": { "claim": 3800, "pattern": 14, "...": 0 },
   "pages": [
     {
-      "id": "claim-alpaca-agents-retry-backoff-001",
-      "stem": "claim-alpaca-agents-retry-backoff-001",
-      "path": "evidence/claims/claim-alpaca-agents-retry-backoff-001.md",
+      "id": "claim-my-project-retry-backoff-001",
+      "stem": "claim-my-project-retry-backoff-001",
+      "path": "evidence/claims/claim-my-project-retry-backoff-001.md",
       "type": "claim",
       "title": "...",
       "scope": "project",
