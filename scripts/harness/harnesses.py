@@ -104,8 +104,63 @@ SPECS = [
 ]
 
 
-def spec_by_key(key):
-    for spec in SPECS:
+def load_manifest_adapters(project_root=None):
+    """User-declared harness adapters (#65).
+
+    A YAML manifest declares the same surfaces a built-in spec does:
+
+        key: myagent
+        name: My Agent
+        instructions: ["AGENTS.md"]
+        skills_dir: .myagent/skills
+        detect: [".myagent"]
+
+    Sources (merged, later wins): system/harnesses/manifests/*.yaml in the
+    harness, then <project>/.wiki-fabric/harnesses/*.yaml — so a user can
+    add a harness without code. Built-in SPECS take precedence on key clash
+    (governed adapters can't be shadowed by a manifest)."""
+    import yaml
+    manifests = []
+    roots = []
+    hr = _HERE.parent / "system" / "harnesses" / "manifests"
+    if hr.is_dir():
+        roots.append(hr)
+    if project_root:
+        local = Path(project_root) / ".wiki-fabric" / "harnesses"
+        if local.is_dir():
+            roots.append(local)
+    for root in roots:
+        for f in sorted(root.glob("*.yaml")):
+            try:
+                data = yaml.safe_load(f.read_text()) or {}
+                if isinstance(data, dict) and data.get("key"):
+                    # minimal validation: a harness must be locatable
+                    if not data.get("name") or not (
+                            data.get("instructions") or data.get("skills_dir")
+                            or data.get("config") or data.get("plugin")):
+                        print(f"[harnesses] manifest {f.name} missing name/integration surfaces — skipped",
+                              file=sys.stderr)
+                        continue
+                    data["_manifest"] = str(f)
+                    manifests.append(data)
+            except Exception as e:
+                print(f"[harnesses] bad manifest {f.name}: {e}", file=sys.stderr)
+    return manifests
+
+
+def all_specs(project_root=None):
+    """Built-in SPECS + manifest adapters (#65). Built-ins win on key clash:
+    a governed adapter can't be shadowed by a user manifest."""
+    builtin_keys = {s["key"] for s in SPECS}
+    out = list(SPECS)
+    for m in load_manifest_adapters(project_root):
+        if m.get("key") not in builtin_keys:
+            out.append(m)
+    return out
+
+
+def spec_by_key(key, project_root=None):
+    for spec in all_specs(project_root):
         if spec["key"] == key:
             return spec
     return None
@@ -116,7 +171,7 @@ def detect_installed(project_root):
     includes the AGENTS.md-reading tools (they read the file we write anyway)."""
     root = Path(project_root)
     found, agentic = [], []
-    for spec in SPECS:
+    for spec in all_specs(project_root):
         hits = any(list(root.glob(pat)) for pat in spec.get("detect", []))
         if hits:
             found.append(spec)
@@ -222,14 +277,14 @@ def main():
         targets = [spec_by_key(k) for k in keys]
         targets = [t for t in targets if t]
     elif args.all:
-        targets = list(SPECS)
+        targets = all_specs(project_root)
     else:
         targets = detect_installed(project_root)
 
     if args.action == "status":
         print(f"Project: {project_root}")
         print()
-        for spec in SPECS:
+        for spec in all_specs(project_root):
             marker = marker_for(spec)
             hit = any(list(project_root.glob(pat)) for pat in spec.get("detect", []))
             installed = any(
