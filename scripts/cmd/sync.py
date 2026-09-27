@@ -25,7 +25,7 @@ import sys as _s, pathlib as _p
 _HERE = _p.Path(__file__).resolve().parent
 # Explicit import bootstrap: this script's own dir (same-dir siblings)
 # + scripts/lib (shared modules). No shotgun path injection.
-for _dir in (_HERE, _HERE.parent / "lib"):
+for _dir in (_HERE, _HERE.parent / "lib", _HERE.parent):
     if str(_dir) not in _s.path:
         _s.path.insert(0, str(_dir))
 import re
@@ -35,7 +35,16 @@ import shutil
 from pathlib import Path
 from datetime import date, datetime
 import wf_common
-from wf_common import parse_frontmatter
+from wf_common import git_sh as _git_sh, parse_frontmatter, yaml_scalar
+from sync_lib.policy import (sync_mode, evidence_prs_policy, classify_change,
+                             classify_changes, pr_merge_policy, use_pr_mode,
+                             machine_name, pr_branch_name)
+from sync_lib.pr import (gh_run, gh_last_error, corpus_github_repo,
+                         build_pr_body, push_via_pr,
+                         change_set_manifests_for_range)
+
+def sh(*args, cwd=None, timeout=120):
+    return _git_sh(*args, cwd=str(cwd or VAULT_ROOT), timeout=timeout)
 from fabric_config import FABRIC_ROOT
 from fabric_config import CORPUS_ROOT, VAULT_ROOT
 
@@ -74,66 +83,6 @@ LOCAL_ONLY_PATHS = [
 # diff, actor trail, CI verdict). Evidence-plane PRs auto-merge on green CI;
 # atom-plane PRs always wait for a human. Local-first is untouched: this gates
 # distribution, not local commits.
-ATOM_PATHS = (
-    "evidence/claims/",
-    "concepts/", "patterns/", "anti-patterns/", "skills/", "syntheses/",
-    "domains/", "projects/", "global/", "questions/",
-)
-EVIDENCE_PATHS = (
-    "evidence/raw/", "evidence/sources/", "evidence/source-summaries/",
-    "evidence/experiments/", "evidence/traces/", "evidence/_inbox/",
-    "evidence/insights/",
-)
-REGISTRY_PATHS = ("registry/",)
-
-
-def sync_mode(config=None):
-    """sync.mode from fabric.yaml: 'solo' (default, sticky — direct push) or
-    'team' (every push opens a PR)."""
-    try:
-        from fabric_config import get_config
-        cfg = config or get_config()
-        mode = str((cfg.get("sync") or {}).get("mode", "solo")).lower()
-        return mode if mode in ("solo", "team") else "solo"
-    except Exception:
-        return "solo"
-
-
-def evidence_prs_policy(config=None):
-    """sync.evidence_prs: 'auto' (default — evidence-only PRs auto-merge on
-    green CI) or 'review' (everything waits for a human)."""
-    try:
-        from fabric_config import get_config
-        cfg = config or get_config()
-        pol = str((cfg.get("sync") or {}).get("evidence_prs", "auto")).lower()
-        return pol if pol in ("auto", "review") else "auto"
-    except Exception:
-        return "auto"
-
-
-def classify_change(path_str):
-    """'atom' | 'evidence' | 'registry' | 'other' — the PR merge policy input.
-    A changed file set is as risky as its riskiest member (atoms dominate)."""
-    p = path_str.lstrip('"').strip()
-    if p.startswith(ATOM_PATHS):
-        return "atom"
-    if p.startswith(EVIDENCE_PATHS):
-        return "evidence"
-    if p.startswith(REGISTRY_PATHS):
-        return "registry"
-    return "other"
-
-
-def classify_changes(paths):
-    """Worst-case plane for a change set; empty set → 'registry' (bookkeeping)."""
-    kinds = {classify_change(p) for p in paths}
-    if "atom" in kinds or "other" in kinds:
-        return "atom"  # unknown paths treated as atoms (fail closed)
-    if "evidence" in kinds:
-        return "evidence"
-    return "registry"
-
-
 def local_projects():
     """Project namespaces that exist locally."""
     pd = VAULT_ROOT / "projects"
@@ -395,175 +344,24 @@ def cmd_status():
 
 # === PR push path (#100) ===
 
-def gh_run(*args, timeout=60, capture_err=False):
-    """Run a gh CLI command for the corpus remote; return stdout or None.
-    capture_err=True stashes stderr for gh_last_error() (pr-create failure
-    diagnostics — a swallowed error once printed 'Awaiting human review'
-    while no PR existed, sim finding #8)."""
-    import subprocess as _sp
-    global _GH_LAST_ERR
-    try:
-        out = _sp.run(["gh"] + [str(a) for a in args],
-                      capture_output=True, text=True, timeout=timeout)
-        _GH_LAST_ERR = (out.stderr or "")[-400:] if out.returncode != 0 else ""
-        return out.stdout if out.returncode == 0 else None
-    except (FileNotFoundError, _sp.TimeoutExpired) as e:
-        _GH_LAST_ERR = str(e)
-        return None
 
 
-_GH_LAST_ERR = ""
 
 
-def gh_last_error():
-    return _GH_LAST_ERR
 
 
-def corpus_github_repo():
-    """'owner/name' of the corpus remote, or None (non-GitHub → no PR path)."""
-    return wf_common.github_repo_from_remote_url(get_remote())
 
 
-def machine_name():
-    """Short machine id for sync branch names (hostname, sanitized)."""
-    import socket
-    host = socket.gethostname().split(".")[0].lower()
-    return re.sub(r"[^a-z0-9-]", "-", host)[:30] or "unknown"
 
 
-def pr_branch_name():
-    """sync/<machine>-<yyyymmdd-hhmm> — one branch per push."""
-    from datetime import datetime
-    stamp = datetime.now().strftime("%Y%m%d-%H%M")
-    return f"sync/{machine_name()}-{stamp}"
 
 
-def change_set_manifests_for_range(base_head):
-    """Change-set pages touched since base_head (the PR body's receipt half)."""
-    out = sh("diff", "--name-only", f"{base_head}", "HEAD", "--", "evidence/traces/change-sets/") or []
-    if isinstance(out, str):
-        out = [l.strip() for l in out.splitlines() if l.strip()]
-    return out
 
 
-def build_pr_body(changes, base_head):
-    """PR body = change-set receipts + classified file inventory. Deterministic.
-    Entries may be porcelain lines ("XY path") or bare paths (committed-range
-    list) — the marker is stripped only when actually present."""
-    def _path_of(entry):
-        entry = entry if entry is not None else ""
-        return entry[3:] if len(entry) > 3 and entry[1:3] in ("M ", "A ", "D ", "R ") else entry
-    planes = {}
-    for l in changes:
-        p = _path_of(l).lstrip('"').rstrip('"')
-        planes.setdefault(classify_change(p), []).append(p)
-    lines = [
-        "---",
-        "type: change-set",
-        "sync-pr: true",
-        f"machine: {machine_name()}",
-        f"date: {date.today().isoformat()}",
-        "---",
-        "",
-        "# Corpus sync",
-        "",
-        f"Machine: `{machine_name()}` — one PR per `sync push` (#100).",
-        "",
-        "## Change-set receipts",
-        "",
-    ]
-    cs = change_set_manifests_for_range(base_head)
-    if cs:
-        for c in cs[:20]:
-            lines.append(f"- `{c}`")
-        if len(cs) > 20:
-            lines.append(f"- … and {len(cs) - 20} more")
-    else:
-        lines.append("_(no change-set traces in this range)_")
-    lines += ["", "## Files by plane", ""]
-    for kind in ("atom", "evidence", "registry", "other"):
-        items = planes.get(kind) or []
-        if not items:
-            continue
-        lines.append(f"**{kind}** ({len(items)}):")
-        for p in items[:15]:
-            # entries come as "XY path" (porcelain) or bare path (range list)
-            display = p[3:] if len(p) > 3 and p[1:3] in ("M ", "A ", "D ", "R ") else p
-            lines.append(f"- `{display.strip(chr(34))}`")
-        if len(items) > 15:
-            lines.append(f"- … and {len(items) - 15} more")
-        lines.append("")
-    lines.append("Merge policy: evidence-only PRs auto-merge on green CI (`sync.evidence_prs: auto`); "
-                 "any atom-plane change waits for human review.")
-    return "\n".join(lines) + "\n"
 
 
-def pr_merge_policy(changes):
-    """'auto-merge' | 'review' for this push's file set (team mode)."""
-    if evidence_prs_policy() == "review":
-        return "review"
-    if classify_changes([l[3:] for l in changes]) == "evidence":
-        return "auto-merge"
-    return "review"
 
 
-def use_pr_mode(pr=False, no_pr=False):
-    """--pr forces PR path, --no-pr forces direct; else the sticky
-    fabric.yaml sync.mode decides (solo default). #100."""
-    return pr or (sync_mode() == "team" and not no_pr)
-
-
-def push_via_pr(changes, message):
-    """One branch + one PR per push. Evidence-only + auto policy → gh pr merge
-    --auto (squash) so CI verdict drives the merge; otherwise leave open.
-
-    The PR classifies the COMMITTED RANGE (base..HEAD) — the uncommitted
-    `changes` list is empty by the time we get here (commit happened in
-    cmd_push); classifying it wrongly armed review for evidence pushes
-    (sim finding #8). gh failures are LOUD: a swallowed pr-create error
-    printed 'Awaiting human review' while no PR existed."""
-    repo = corpus_github_repo()
-    if not repo:
-        print("Error: PR push requires a GitHub corpus remote (owner/name), got: "
-              f"{(get_remote() or '').strip()[:60]}", file=sys.stderr)
-        sys.exit(1)
-    branch = pr_branch_name()
-    base_head = sh("rev-parse", f"{CONTENT_REMOTE_NAME}/corpus")
-    if not base_head:
-        print("Error: cannot resolve corpus remote head — run: wf sync pull", file=sys.stderr)
-        sys.exit(1)
-    base_head = base_head.strip()
-    if sh("push", CONTENT_REMOTE_NAME, f"HEAD:refs/heads/{branch}") is None:
-        print(f"Error: could not push branch {branch}", file=sys.stderr)
-        sys.exit(1)
-    # committed range = what this push distributes (drives body + policy)
-    range_files = sh("diff", "--name-only", f"{base_head}", "HEAD") or ""
-    range_changes = [f" M {p.strip()}" for p in
-                     (range_files.splitlines() if isinstance(range_files, str) else range_files)
-                     if p.strip()]
-    body = build_pr_body(range_changes, base_head)
-    title = message or f"sync {machine_name()} {date.today().isoformat()}"
-    out = gh_run("pr", "create",
-                 "--repo", repo,
-                 "--base", "corpus",
-                 "--head", branch,
-                 "--title", title,
-                 "--body", body, capture_err=True)
-    if not out:
-        # distinguish the empty-range case from a real failure
-        err = gh_last_error()
-        print(f"Error: PR creation failed: {err or '(no output)'}", file=sys.stderr)
-        print("The branch was pushed; inspect: gh pr create --repo "
-              f"{repo} --base corpus --head {branch}", file=sys.stderr)
-        sys.exit(1)
-    url = gh_run("pr", "view", branch, "--repo", repo, "--json", "url", "--jq", ".url")
-    print(f"PR opened: {(url or '').strip()}")
-    policy = pr_merge_policy(range_changes)
-    if policy == "auto-merge":
-        gh_run("pr", "merge", branch, "--repo", repo, "--auto", "--squash")
-        print("Auto-merge armed (evidence-plane only, CI-gated).")
-    else:
-        print("Awaiting human review (atom-plane changes are never auto-merged).")
 
 
 def cmd_push(message=None, pr=False, no_pr=False):
