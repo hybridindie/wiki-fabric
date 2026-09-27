@@ -49,6 +49,10 @@ import threading as _threading
 from wf_common import slugify
 _LOG_LOCK = _threading.Lock()
 
+# main() sets this from argv (global). Module-level default so ingest_source()
+# stays callable as a library entry point (tests, evals) without a NameError.
+args_dry_run = False
+
 
 def _dt_iso():
     """ISO-8601 instant with UTC offset (OKF §5: every timestamp has explicit offset)."""
@@ -172,6 +176,12 @@ def find_pending_sources(project_slug):
     never claim-extracted). Complements find_changed_sources: --changed handles
     NEW/CHANGED files, --pending handles recorded-but-unextracted ones without
     tripping the anti-loop."""
+    return _sources_with_status(project_slug, "pending")
+
+
+def _sources_with_status(project_slug, status):
+    """Source records for a project with the given status, resolved to their
+    raw paths. Shared by --pending and --reclaim (#93)."""
     raw_dir = VAULT_ROOT / "evidence" / "raw" / project_slug
     if not raw_dir.exists():
         return []
@@ -180,7 +190,7 @@ def find_pending_sources(project_slug):
     if sources_dir.exists():
         for rec in sources_dir.glob("src-*.md"):
             text = rec.read_text(encoding="utf-8", errors="replace")
-            if "status: pending" not in text:
+            if f"status: {status}" not in text:
                 continue
             m = re.search(r"source_path:\s*(.+)", text)
             if not m:
@@ -195,6 +205,51 @@ def find_pending_sources(project_slug):
         if f.exists():
             pending.append(f)
     return pending
+
+
+def find_orphaned_sources(project_slug):
+    """#93 recovery: sources recorded as `ingested` but with zero claim files
+    (claim-<slug>-*.md). Silent orphans from the pre-fix resume flip or an
+    outage — recoverable by flipping back to pending (--reclaim)."""
+    claims_dir = VAULT_ROOT / "evidence" / "claims"
+    orphans = []
+    for rec in _sources_with_status(project_slug, "ingested"):
+        # rec is the raw file path; find its record to get the slug
+        text_of = rec
+        slug = None
+        try:
+            rel = rec.relative_to(VAULT_ROOT / "evidence" / "raw")
+            slug = slugify(rel.as_posix())[:80]
+        except ValueError:
+            slug = slugify(rec.name)[:80]
+        rec_path = VAULT_ROOT / "evidence" / "sources" / f"src-{slug}.md"
+        if rec_path.exists() and not list(claims_dir.glob(f"claim-{slug}-*.md")):
+            orphans.append((rec_path, rec))
+    return orphans
+
+
+def reclaim_orphans(project_slug, dry_run=False):
+    """Flip zero-claim `ingested` records back to `status: pending` (#93).
+    Mechanical, 0 tokens — after this, `--pending` picks them up normally."""
+    orphans = find_orphaned_sources(project_slug)
+    if not orphans:
+        print(f"No orphaned sources for {project_slug} (ingested with zero claims)")
+        return 0
+    print(f"=== Reclaiming {len(orphans)} orphaned source(s) for {project_slug} ===")
+    n = 0
+    for rec_path, raw in orphans:
+        if dry_run:
+            print(f"  [dry-run] {rec_path.name} -> status: pending")
+            n += 1
+            continue
+        text = rec_path.read_text(encoding="utf-8", errors="replace")
+        rec_path.write_text(text.replace("status: ingested", "status: pending", 1),
+                            encoding="utf-8")
+        print(f"  reclaimed: {rec_path.name} (raw: {raw.name})")
+        n += 1
+    if not dry_run and n:
+        print(f"\nNow run: wf ingest --pending {project_slug} --extract-claims")
+    return n
 
 
 def find_changed_sources(project_slug):
@@ -345,11 +400,19 @@ Faithful summary of {source_path.name}.
 {claim_lines or '- claim 1 (locator)'}
 """)
 
-    # 4b. Resume: flip the source record to ingested once claims exist
+    # 4b. Resume: flip the source record to ingested once claims exist (#93).
+    # A 0-claim resume stays pending — flipping it would orphan the source
+    # (ingested + zero claims is indistinguishable from a claim-less doc, and
+    # the anti-loop gate would block every retry). LLM outages, malformed
+    # JSON, and reasoning-budget burnout all surface as empty claims.
     if resuming:
-        rec = source_record_path.read_text(encoding="utf-8", errors="replace")
-        rec = rec.replace("status: pending", "status: ingested")
-        source_record_path.write_text(rec)
+        if claims:
+            rec = source_record_path.read_text(encoding="utf-8", errors="replace")
+            rec = rec.replace("status: pending", "status: ingested")
+            source_record_path.write_text(rec)
+        else:
+            print("  0 claims extracted — source stays pending (retry: wf ingest --pending <project> --extract-claims)",
+                  file=sys.stderr)
 
     # 5. Change-set
     Path(change_dir).mkdir(parents=True, exist_ok=True)
@@ -429,6 +492,7 @@ def main():
     parser.add_argument("source", nargs="?", help="Path to source file under evidence/raw/")
     parser.add_argument("--changed", metavar="PROJECT", help="Ingest all NEW/CHANGED raw files for a project slug (vs. recorded sha256s)")
     parser.add_argument("--pending", metavar="PROJECT", help="Claim-extract all recorded-but-pending sources for a project slug (anti-loop safe)")
+    parser.add_argument("--reclaim", metavar="PROJECT", help="Flip zero-claim ingested sources back to pending (#93 recovery; 0 tokens)")
     parser.add_argument("--project", help="Project namespace (from .wiki-overlay.md)")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be done without writing")
     parser.add_argument("--extract-claims", action="store_true", help="Extract claims using LLM")
@@ -439,6 +503,10 @@ def main():
 
     global args_dry_run
     args_dry_run = args.dry_run
+
+    if args.reclaim:
+        n = reclaim_orphans(args.reclaim, dry_run=args.dry_run)
+        sys.exit(0 if n or not find_orphaned_sources(args.reclaim) else 1)
 
     if args.pending:
         project = args.pending
