@@ -95,6 +95,74 @@ def load_pages():
     return pages
 
 
+def graphify_active():
+    """Gate for graph proximity ranking (#48): integrations.graphify.enabled."""
+    try:
+        from fabric_config import get_config, is_integration_active
+        return is_integration_active(get_config(), "graphify")
+    except Exception:
+        return False
+
+
+def graph_edge_symbols(pg):
+    """Code symbols reachable from a claim via graphify enrichment: the
+    `graph_edges` frontmatter entries ('called_by:X', 'inherits:Y', ...).
+    Method-style entries ('._handle_peer()') split into parts so a query
+    naming the method matches."""
+    edges = pg["fm"].get("graph_edges")
+    if isinstance(edges, str):
+        edges = [edges]
+    out = set()
+    for e in edges or []:
+        if not isinstance(e, str):
+            continue
+        s = e.strip().strip('"')
+        if ":" not in s:
+            continue
+        sym = s.split(":", 1)[1].strip().lower()
+        out.add(sym)
+        for part in re.findall(r"[a-z_][a-z0-9_]*", sym):
+            if len(part) >= 4:
+                out.add(part)
+    return out
+
+
+def symbol_tokens(query):
+    """Identifiers from the query: snake_case/camelCase fragments, method
+    calls, and dotted paths — the tokens graph proximity can match against."""
+    toks = set()
+    for m in re.finditer(r"[A-Za-z_][A-Za-z0-9_]*", query):
+        raw = m.group(0)
+        if len(raw) < 4 or raw.lower() in _SYMBOL_STOPWORDS:
+            continue
+        # split snake_case and camelCase into parts + keep the whole id
+        toks.add(raw.lower())
+        for part in re.findall(r"[A-Z][a-z0-9]+|[a-z][a-z0-9]*", raw):
+            if len(part) >= 4:
+                toks.add(part.lower())
+    return toks
+
+
+_SYMBOL_STOPWORDS = {"what", "does", "this", "that", "with", "from", "have",
+                     "when", "where", "should", "would", "there", "about"}
+
+
+def graphify_boost(pg, q_tokens, q_words):
+    """Graph-proximity ranking signal (#48): a claim enriched with a symbol
+    the query names is code-reachable — boost it modestly. Zero when the
+    query names no symbols or the claim has no graph_edges. Deterministic."""
+    if not q_tokens:
+        return 0.0
+    symbols = graph_edge_symbols(pg)
+    if not symbols:
+        return 0.0
+    # whole-identifier hits count; part-hits (snake/camel fragments) count less
+    hits = len(q_tokens & symbols)
+    if not hits:
+        return 0.0
+    return 0.15 * min(hits, 3)
+
+
 def score_pages(pages, query, query_type):
     """Score pages against the query, weighted by query type."""
     q_n = norm(query)
@@ -169,6 +237,12 @@ def score_pages(pages, query, query_type):
             except ValueError:
                 pass
 
+        # Graph-proximity boost (#48, gated on integrations.graphify.enabled):
+        # a claim whose graphify edges name a symbol the query mentions is
+        # code-reachable — nudge it up. Additive, capped; deterministic.
+        if graphify_active():
+            boost += graphify_boost(pg, symbol_tokens(query), q_words)
+
         final_score = overlap * boost
         scored.append((final_score, pg))
 
@@ -227,9 +301,15 @@ def expand_graph(scored_pages, relations, pages, max_hops=1):
 # Answer generation
 # ---------------------------------------------------------------------------
 
-def generate_answer(query, scored, pages, query_type):
-    """Produce a structured answer per the query protocol."""
-    if not scored:
+def generate_answer(query, scored, pages, query_type, symbol_hits=None):
+    """Produce a structured answer per the query protocol.
+
+    symbol_hits (#48): claims discovered via graphify symbol proximity —
+    code-reachable evidence that lexical scoring missed. Rendered as their
+    own evidence tier, never ranked above lexical evidence."""
+    q_sym_set = symbol_tokens(query)
+    symbol_hits = [pg for pg in (symbol_hits or []) if isinstance(pg, dict) and pg.get("fm")]
+    if not scored and not symbol_hits:
         return "No relevant pages found for this query."
 
     # Take top results
@@ -316,6 +396,21 @@ def generate_answer(query, scored, pages, query_type):
             lines.append(f"- {ec['statement'][:100]}")
             lines.append(f"  [{ec['locator']}] quote: \"{ec['quote'][:60]}...\"")
             lines.append(f"  status={ec['status']} conf={ec['confidence']} ev={ec['evidence_strength']}")
+            lines.append("")
+
+    if symbol_hits:
+        lines.append("## Code-reachable evidence (graphify)")
+        lines.append("")
+        lines.append("Claims whose code-symbol graph neighborhood matches this query:")
+        lines.append("")
+        for pg in symbol_hits[:4]:
+            refs = pg["fm"].get("source_refs", [{}])
+            ref = refs[0] if isinstance(refs, list) and refs else {}
+            stmt = pg["fm"].get("statement", "")
+            syms = sorted(graph_edge_symbols(pg) & q_sym_set or graph_edge_symbols(pg))[:3]
+            lines.append(f"- {stmt[:100]}")
+            lines.append(f"  [{ref.get('locator', '?')}] quote: \"{ref.get('quote', '')[:60]}...\"")
+            lines.append(f"  symbols: {', '.join(f'`{s}`' for s in syms)}")
             lines.append("")
 
     if patterns:
@@ -460,10 +555,31 @@ def main():
     relations = load_relations(pages)
     expanded = expand_graph(scored, relations, pages)
 
+    # Symbol proximity discovery (#48, gated on integrations.graphify.enabled):
+    # a claim whose graphify edges name a symbol the query mentions is
+    # code-reachable even when lexically invisible (the claim text never says
+    # the symbol name — the enrichment does). Collected separately so the
+    # answer can surface them as a dedicated evidence tier.
+    symbol_hits = []
+    if graphify_active():
+        scored_stems = {pg["stem"] for _, pg in expanded}
+        q_syms = symbol_tokens(args.query)
+        if q_syms:
+            for pg in pages:
+                if pg["type"] != "claim" or pg["stem"] in scored_stems:
+                    continue
+                if q_syms & graph_edge_symbols(pg):
+                    expanded.append((0.1, pg))
+                    scored_stems.add(pg["stem"])
+                    symbol_hits.append(pg)
+            if args.verbose and symbol_hits:
+                print(f"  symbol-discovered: {[pg['stem'] for pg in symbol_hits][:5]}", file=sys.stderr)
+
     if args.verbose:
         print(f"After graph expansion: {len(expanded)}", file=sys.stderr)
 
-    answer = generate_answer(args.query, expanded, pages, query_type)
+    answer = generate_answer(args.query, expanded, pages, query_type,
+                             symbol_hits=symbol_hits)
     print(answer)
 
     if args.save:
