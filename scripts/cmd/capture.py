@@ -27,24 +27,13 @@ from pathlib import Path
 from datetime import date
 
 from fabric_config import get_config, get_ignores, is_ignored
-from fabric_config import CORPUS_ROOT
+from fabric_config import CORPUS_ROOT, VAULT_ROOT
 from wf_common import parse_frontmatter
 from fabric_config import FABRIC_ROOT
 from fabric_config import CORPUS_ROOT
 
-VAULT_ROOT = CORPUS_ROOT
 PROJECTS_DIR = VAULT_ROOT / "projects"
 EVIDENCE_RAW = VAULT_ROOT / "evidence" / "raw"
-
-
-def get_config_safe():
-    try:
-        from fabric_config import get_config
-        return get_config()
-    except Exception:
-        return {}
-
-
 args_quiet = False
 
 
@@ -52,29 +41,6 @@ def sha256(path):
     h = hashlib.sha256()
     h.update(Path(path).read_bytes())
     return h.hexdigest()
-
-
-def get_source_repos(project_slug):
-    """Read source_repos from the project's .wiki-overlay.md in the fabric."""
-    overlay_path = PROJECTS_DIR / project_slug / ".wiki-overlay.md"
-    if not overlay_path.exists():
-        # Also check project root (bootstrap puts it there)
-        for candidate in PROJECTS_DIR.glob(f"{project_slug}*/.wiki-overlay.md"):
-            overlay_path = candidate
-            break
-
-    if not overlay_path.exists():
-        # Try the actual project root
-        for d in PROJECTS_DIR.iterdir():
-            if d.name == project_slug:
-                # .wiki-overlay.md is in the project root, not in the fabric namespace
-                break
-        return []
-
-    fm, _ = parse_frontmatter(overlay_path)
-    return fm.get("source_repos", []) or []
-
-
 def match_globs(repo_path, globs):
     """Find files in repo_path matching the glob patterns."""
     matched = []

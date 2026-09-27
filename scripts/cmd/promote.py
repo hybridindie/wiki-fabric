@@ -16,9 +16,8 @@ from pathlib import Path
 from datetime import date, datetime
 
 from wf_common import parse_frontmatter
-from fabric_config import CORPUS_ROOT
+from fabric_config import CORPUS_ROOT, VAULT_ROOT
 
-VAULT_ROOT = CORPUS_ROOT
 # The golden-eval attester ships with the harness (references/), not the corpus.
 _HARNESS = Path(__file__).resolve().parent.parent.parent
 PROMOTION_QUEUE = VAULT_ROOT / "registry" / "promotion-queue.md"
@@ -38,18 +37,6 @@ def list_pending_promotions():
         if fm.get("status") == "pending-review":
             dossiers.append((dossier_path, fm))
     return dossiers
-
-
-def list_recommended():
-    """List recommended patterns."""
-    patterns = []
-    for pattern_path in (VAULT_ROOT / "patterns").glob("*.md"):
-        fm, _ = parse_frontmatter(pattern_path)
-        if fm.get("status") == "recommended":
-            patterns.append((pattern_path, fm))
-    return patterns
-
-
 def promote_dossier(dossier_path, dry_run=False):
     """Promote a dossier from pending-review to recommended."""
     from fabric_config import get_config, compiler_eval_recorded

@@ -377,13 +377,6 @@ def select_topics(min_claims=None):
     for t in topics:
         t["slug"] = re.sub(r"[^a-z0-9-]+", "-", t["title"].lower()).strip("-")
     return topics
-
-
-def _project_slug_from_claim(claim_stem):
-    m = re.match(r"claim-([a-z0-9-]+?)-", claim_stem)
-    return m.group(1) if m else "unknown"
-
-
 WIKI_ARTICLE_PROMPT = """You are writing a concept page for a knowledge-fabric wiki (LangChain-OpenWiki style). The page covers: {title}
 
 You have the following evidence — claims with locators. Every claim carries a numbered reference [N] that you MUST cite inline wherever you use it. Draw ONLY from this evidence; never invent facts, examples, or architecture not entailed by a claim.

@@ -34,7 +34,7 @@ from pathlib import Path
 from datetime import date
 from collections import defaultdict, Counter
 
-from fabric_config import get_config, FABRIC_ROOT, CORPUS_ROOT, resolve_repo_path, get_all_repo_names, get_repo_graph_dir
+from fabric_config import get_config, FABRIC_ROOT, CORPUS_ROOT, VAULT_ROOT, resolve_repo_path, get_all_repo_names, get_repo_graph_dir
 
 # Optional GDScript language pack: tree-sitter-gdscript grammar → real .gd
 # callables (aperiodic's graph had 5 callables/767 nodes without it). Skips
@@ -48,7 +48,6 @@ except ImportError:
 
 from wf_common import parse_frontmatter
 
-VAULT_ROOT = CORPUS_ROOT
 GRAPHS_DIR = VAULT_ROOT / "global" / "graphs"
 CLAIMS_DIR = VAULT_ROOT / "evidence" / "claims"
 

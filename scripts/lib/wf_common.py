@@ -107,3 +107,40 @@ def github_repo_from_remote(repo_path, remote="origin", git_fn=None):
                 return None
     url = git_fn(repo_path, "remote", "get-url", remote)
     return github_repo_from_remote_url(url)
+
+def normalize_match(text, casefold=False):
+    """Markdown-normalized comparison text for quote/locator matching.
+
+    Canonical form: strips markdown artifacts (*, `, >), collapses whitespace.
+    casefold=True adds lowercase (locator verification matches regardless of
+    case; extraction repair preserves case distinctions)."""
+    t = re.sub(r"[*`>]+", "", text or "")
+    t = re.sub(r"\s+", " ", t).strip()
+    return t.lower() if casefold else t
+
+
+def yaml_scalar(value):
+    """Emit a YAML-safe inline double-quoted scalar for LLM-derived free text.
+
+    Hand-escaping breaks on model artifacts (literal backslash-escaped quotes
+    inside already-decoded JSON strings land as `\\"` and break the block
+    mapping). Build the double-quoted form explicitly: backslash, double
+    quote, and control chars are the only characters that need escaping in
+    YAML double-quoted style; everything else passes through literally."""
+    s = str(value or "")
+    out = s.replace("\\", "\\\\").replace('"', '\\"')
+    out = out.replace("\n", "\\n").replace("\r", "").replace("\t", "\\t")
+    return f'"{out}"'
+
+
+def git_sh(*args, cwd=None, timeout=120):
+    """Run a git command; return stdout or None on failure."""
+    import subprocess
+    try:
+        out = subprocess.run(
+            ["git"] + [str(a) for a in args],
+            cwd=str(cwd) if cwd else None, capture_output=True, text=True, timeout=timeout,
+        )
+        return out.stdout if out.returncode == 0 else None
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return None

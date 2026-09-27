@@ -380,22 +380,6 @@ def check_stale_after(fm, rel, today):
 # lifecycle status (draft|stable|deprecated) is omitted on these to avoid
 # collision (schemas/frontmatter.md — status mapping decision).
 _LIFECYCLE_STATUS_TYPES = {"pattern", "anti-pattern", "source", "source-summary", "log", "ontology", "commitment"}
-
-
-def check_status_collision(fm, rel):
-    """Warn when a non-lifecycle status value appears on a type that keeps its
-    own status vocabulary, or when an unknown lifecycle value is used."""
-    t = fm.get("type")
-    st = fm.get("status")
-    if t in _LIFECYCLE_STATUS_TYPES or st is None:
-        return None
-    LIFECYCLE = {"draft", "stable", "deprecated"}
-    if isinstance(st, str) and st.strip().lower() in LIFECYCLE:
-        return None  # lifecycle value on a lifecycle-capable type
-    return None  # type-specific vocabularies are validated by their own checks
-
-
-
 ACTOR_RE = re.compile(r"^(agent/[\w.@-]+/[\w.@:-]+|human:[\w.@-]+|process:[\w.@-]+)$")
 
 

@@ -37,10 +37,8 @@ from datetime import date, datetime
 import wf_common
 from wf_common import parse_frontmatter
 from fabric_config import FABRIC_ROOT
-from fabric_config import CORPUS_ROOT
-from fabric_config import CORPUS_ROOT
+from fabric_config import CORPUS_ROOT, VAULT_ROOT
 
-VAULT_ROOT = CORPUS_ROOT
 CONTENT_REMOTE_NAME = "corpus"
 SYNC_BRANCH = "main"
 
@@ -134,18 +132,6 @@ def classify_changes(paths):
     if "evidence" in kinds:
         return "evidence"
     return "registry"
-
-
-def sh(*args, cwd=None):
-    """Run a git command; return stdout or None on failure."""
-    try:
-        out = subprocess.run(
-            ["git"] + [str(a) for a in args],
-            cwd=str(cwd or VAULT_ROOT), capture_output=True, text=True, timeout=120,
-        )
-        return out.stdout if out.returncode == 0 else None
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return None
 
 
 def local_projects():

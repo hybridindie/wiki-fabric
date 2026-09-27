@@ -27,13 +27,11 @@ from datetime import date
 from collections import defaultdict
 
 from fabric_config import FABRIC_ROOT, get_tuning
-from fabric_config import CORPUS_ROOT
-from fabric_config import CORPUS_ROOT
+from fabric_config import CORPUS_ROOT, VAULT_ROOT
 from extract_backends import llm_config
 from fabric_config import get_local_model
 from wf_common import parse_frontmatter, norm
 
-VAULT_ROOT = CORPUS_ROOT
 CLAIMS_DIR = VAULT_ROOT / "evidence" / "claims"
 CONCEPTS_BASE = VAULT_ROOT
 
@@ -72,60 +70,6 @@ def load_existing_concepts():
             "claims": fm.get("claims", []),
         })
     return concepts
-
-
-def cluster_claims(claims, threshold=0.25):
-    """Cluster claims by concept-overlap of their statements."""
-    # Compute pairwise similarity
-    n = len(claims)
-    stmt_norms = [norm(c["statement"]) for c in claims]
-
-    # Union-Find clustering
-    parent = list(range(n))
-
-    def find(i):
-        while parent[i] != i:
-            parent[i] = parent[parent[i]]
-            i = parent[i]
-        return i
-
-    def union(i, j):
-        pi, pj = find(i), find(j)
-        if pi != pj:
-            parent[pi] = pj
-
-    for i in range(n):
-        for j in range(i + 1, n):
-            si = set(stmt_norm[i].split())
-            sj = set(stmt_norm[j].split())
-            if not si or not sj:
-                continue
-            stopwords = {"the", "a", "an", "is", "of", "to", "in", "and", "or",
-                         "for", "on", "with", "at", "by", "from", "that", "this",
-                         "it", "as", "be", "are", "was", "were", "per", "not",
-                         "must", "can", "cannot", "only", "all", "each", "when"}
-            si_c = si - stopwords
-            sj_c = sj - stopwords
-            if not si_c or not sj_c:
-                continue
-            overlap = len(si_c & sj_c) / max(len(si_c), len(sj_c))
-            if overlap >= threshold:
-                union(i, j)
-
-    # Group by root
-    clusters = defaultdict(list)
-    for i in range(n):
-        clusters[find(i)].append(i)
-
-    # Filter by min size
-    valid = []
-    for root, indices in clusters.items():
-        if len(indices) >= MIN_CLAIMS:
-            valid.append([claims[i] for i in indices])
-
-    return valid
-
-
 def generate_concept_slug(cluster, existing_stems):
     """Generate a concept slug from the cluster's common theme."""
     # Extract common words from all statements

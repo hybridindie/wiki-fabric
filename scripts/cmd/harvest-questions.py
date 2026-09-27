@@ -30,7 +30,7 @@ import re
 import argparse
 from pathlib import Path
 from datetime import date
-from wf_common import parse_frontmatter, slugify
+from wf_common import parse_frontmatter, slugify, yaml_scalar
 from fabric_config import CORPUS_ROOT, get_config, actor
 
 CONCEPTS_DIR = CORPUS_ROOT / "concepts"
@@ -95,8 +95,8 @@ def harvest_concept(concept_path, dry_run=False):
         rel_target.write_text(f"""---
 type: question
 id: {qid}
-title: {_yaml_scalar(q[:140])}
-question: {_yaml_scalar(q)}
+title: {yaml_scalar(q[:140])}
+question: {yaml_scalar(q)}
 priority: {priority}
 rationale: "Open question raised by concept [[{stem}]] — what is unknown or unverified about it"
 related:
@@ -120,12 +120,6 @@ created: {date.today().isoformat()}
 def rel_target_exists(qid):
     """Question already proposed (staging) or applied (canonical)."""
     return (PROPOSALS_DIR / f"{qid}.md").exists() or (QUESTIONS_DIR / f"{qid}.md").exists()
-
-
-def _yaml_scalar(s):
-    out = str(s or "").replace("\\", "\\\\").replace('"', '\\"')
-    out = out.replace("\n", "\\n").replace("\r", "").replace("\t", "\\t")
-    return f'"{out}"'
 
 
 def actor_block():

@@ -48,12 +48,10 @@ except ImportError:
     HAVE_YAML = False
 
 from fabric_config import FABRIC_ROOT
-from fabric_config import CORPUS_ROOT
-from fabric_config import CORPUS_ROOT
+from fabric_config import CORPUS_ROOT, VAULT_ROOT
 from fabric_config import get_config, get_ignores, is_ignored, get_tuning
 from wf_common import parse_frontmatter
 
-VAULT_ROOT = CORPUS_ROOT
 
 # wiki/ is the OpenWiki-style human-facing layer: its prose is a paraphrase of
 # claims (drift risk + context bloat if fed back to a model). The machine

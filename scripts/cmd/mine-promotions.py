@@ -23,10 +23,9 @@ from pathlib import Path
 from collections import defaultdict
 from datetime import datetime
 from datetime import timedelta
-from wf_common import parse_frontmatter
+from wf_common import parse_frontmatter, yaml_scalar
 from fabric_config import FABRIC_ROOT
-from fabric_config import CORPUS_ROOT
-from fabric_config import CORPUS_ROOT
+from fabric_config import CORPUS_ROOT, VAULT_ROOT
 
 try:
     from sentence_transformers import SentenceTransformer
@@ -41,7 +40,6 @@ except ImportError:
     np = None
     HAS_NUMPY = False
 
-VAULT_ROOT = CORPUS_ROOT
 
 EXPERIENCE_DIR = VAULT_ROOT / "projects"
 PROMOTIONS_DIR = VAULT_ROOT / "registry" / "promotions"
@@ -49,13 +47,6 @@ PROMOTION_QUEUE = VAULT_ROOT / "registry" / "promotion-queue.md"
 
 MIN_PROJECTS = 2
 OUTPUT_DIR = PROMOTIONS_DIR
-
-
-def escape_yaml(value):
-    """Escape string for safe YAML inclusion."""
-    if '[' in value or ']' in value or ':' in value or '#' in value or '"' in value:
-        return '"' + value.replace('"', '\\"') + '"'
-    return value
 
 
 def get_event_embedding(event, model=None):
@@ -412,16 +403,6 @@ def _merge_clusters(base, ea, eb, assigned):
     base[ca].extend(base[cb])
     del base[cb]
     return base
-
-
-def escape_yaml(value):
-    """Escape string for safe YAML inclusion."""
-    if '[' in value or ']' in value or ':' in value or '#' in value or '"' in value:
-        return '"' + value.replace('"', '\\"') + '"'
-    return value
-
-
-def _mine_actor(model=None):
     """Actor for dossier generation: agent/<owner>/<dossier-model>."""
     from fabric_config import get_config, actor
     return actor(get_config(), "agent", model=model)
@@ -591,12 +572,6 @@ def generate_pattern_file(cluster_key, events):
     """Generate a pattern file template."""
     projects = list(set(ev.get("project", "") for ev in events))
     
-    def escape_yaml(value):
-        """Escape string for safe YAML inclusion."""
-        if '[' in value or ']' in value or ':' in value or '#' in value or '"' in value:
-            return '"' + value.replace('"', '\\"') + '"'
-        return value
-    
     # Build the pattern file content using string concatenation to avoid f-string indentation issues
     lines = []
     lines.append("---")
@@ -616,7 +591,7 @@ def generate_pattern_file(cluster_key, events):
         lines.append(f"    kind: {kind}")
         stem = ev.get("_file")
         ref = f"[[{Path(stem).stem if stem else 'ee-unknown'}]]"
-        lines.append(f"    ref: {escape_yaml(ref)}")
+        lines.append(f"    ref: {yaml_scalar(ref)}")
     
     lines.append("applicability:")
     lines.append("   includes:")
@@ -655,8 +630,8 @@ def generate_pattern_file(cluster_key, events):
     lines.append('      outcome: negative')
     lines.append("counterexamples: []")
     lines.append("related:")
-    lines.append(f'    - {escape_yaml("[[anti-pattern-unverified-parallel-writes]]")}')
-    lines.append(f'    - {escape_yaml("[[concept-single-writer-serialization]]")}')
+    lines.append(f'    - {yaml_scalar("[[anti-pattern-unverified-parallel-writes]]")}')
+    lines.append(f'    - {yaml_scalar("[[concept-single-writer-serialization]]")}')
     lines.append(f"review_after: {(datetime.now().replace(month=datetime.now().month+3)).strftime('%Y-%m-%d') if datetime.now().month <= 9 else (datetime.now().replace(year=datetime.now().year+1, month=datetime.now().month-9)).strftime('%Y-%m-%d')}")
     lines.append("tags: [agent, threading, serialization, verifier, parity, single-writer]")
     lines.append("---")

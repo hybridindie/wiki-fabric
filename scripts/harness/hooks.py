@@ -588,12 +588,6 @@ def reinstall(repos_from_config: bool = False) -> str:
         except RuntimeError as e:
             results.append(f"{t.name}: skipped ({e})")
     return "\n".join(results) if results else "no connected repos to refresh"
-
-
-def _sys_exec():
-    return sys.executable
-
-
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="wiki-fabric git hooks")
