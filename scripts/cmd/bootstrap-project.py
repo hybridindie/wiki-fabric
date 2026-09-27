@@ -214,28 +214,8 @@ Namespace `projects/{project_slug}/` — bootstrapped by `{owner}` on the machin
     print(f"Wrote namespace README: {readme.relative_to(FABRIC_ROOT)}")
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Bootstrap a new project with Wiki Fabric",
-        epilog="Interactive walkthrough: overlay, routing, hooks, capture, ingest, query. Without flags: prompts at each step. Use --non-interactive to skip."
-    )
-    parser.add_argument("project_root", nargs="?", help="Path to project root directory")
-    parser.add_argument("--name", help="Human-readable project name")
-    parser.add_argument("--slug", help="Project slug (namespace)")
-    parser.add_argument("--domain", action="append", help="Domain to load (repeatable)")
-    parser.add_argument("--skill", action="append", help="Global skill to auto-load (repeatable)")
-    parser.add_argument("--source-repo", action="append", help="Upstream repo: path:raw_path:globs")
-    parser.add_argument("--extract", default=None, help="Stage route: local | cloud | model id (raw docs — highest sensitivity)")
-    parser.add_argument("--synthesize", default=None, help="Stage route: local | cloud | model id (sanitized claims)")
-    parser.add_argument("--dossier", default=None, help="Stage route: local | cloud | model id (experience events)")
-    parser.add_argument("--graph-dir", default=None, help="Per-repo graphify graph dir (default: integrations.graphify.graph_dir)")
-    parser.add_argument("--init-git", action="store_true", help="Initialize git repo")
-    parser.add_argument("--no-hook", action="store_true", help="Skip the git post-commit hook (default: installed, capture-only)")
-    parser.add_argument("--hook-extract-claims", action="store_true", help="Hook also runs LLM claim extraction on drift")
-    parser.add_argument("--non-interactive", action="store_true", help="Skip prompts, use defaults")
-    args = parser.parse_args()
-
-    # === Phase 1: Detect what we can ===
+def _detect_environment(config):
+    """Phase 1: detect what we can (git identity, available domains/skills)."""
     config = get_config()
 
     git_name = git_config("user.name")
@@ -249,7 +229,21 @@ def main():
     if owner == "you" and git_name:
         owner = git_name
 
-    # === Phase 2: Prompt for what we need ===
+
+    return {"git_name": git_name, "git_email": git_email,
+            "available_domains": available_domains, "available_skills": available_skills,
+            "existing_repos": existing_repos, "owner": owner}
+
+
+def _collect_config(args, env):
+    """Phase 2: resolve project root/name/slug/domains/skills/owner.
+    Flags win over prompts; prompts only when a human is attached.
+    Returns (project_root_str, project_name, project_slug, domains, skills, owner)."""
+    available_domains = env["available_domains"]
+    available_skills = env["available_skills"]
+    git_name = env["git_name"]
+    owner = env["owner"]
+
     # Explicit flags (--name/--slug/--domain/--skill/--extract/...) skip their
     # own prompt; when EVERYTHING material is flagged, skip the confirmation
     # too — a fully-specified invocation should never abort on a prompt
@@ -350,6 +344,12 @@ def main():
             sys.exit(0)
         print()
 
+    return (project_root_str, project_name, project_slug, domains, skills, owner, everything_flagged)
+
+
+def _execute_bootstrap(args, project_root_str, project_name, project_slug, domains, skills, owner, everything_flagged):
+    """Phase 3: execute — git init, overlay, opencode config, hooks,
+    registration, capture/ingest walkthrough."""
     # === Phase 3: Execute ===
     project_root = Path(project_root_str).resolve()
     project_root.mkdir(parents=True, exist_ok=True)
@@ -723,6 +723,35 @@ Ongoing:
   wf log --project {project_slug}  # log experience events (feeds promotion)
   wf lint                          # health check (0 errors before commit)
 """)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Bootstrap a new project with Wiki Fabric",
+        epilog="Interactive walkthrough: overlay, routing, hooks, capture, ingest, query. Without flags: prompts at each step. Use --non-interactive to skip."
+    )
+    parser.add_argument("project_root", nargs="?", help="Path to project root directory")
+    parser.add_argument("--name", help="Human-readable project name")
+    parser.add_argument("--slug", help="Project slug (namespace)")
+    parser.add_argument("--domain", action="append", help="Domain to load (repeatable)")
+    parser.add_argument("--skill", action="append", help="Global skill to auto-load (repeatable)")
+    parser.add_argument("--source-repo", action="append", help="Upstream repo: path:raw_path:globs")
+    parser.add_argument("--extract", default=None, help="Stage route: local | cloud | model id (raw docs — highest sensitivity)")
+    parser.add_argument("--synthesize", default=None, help="Stage route: local | cloud | model id (sanitized claims)")
+    parser.add_argument("--dossier", default=None, help="Stage route: local | cloud | model id (experience events)")
+    parser.add_argument("--graph-dir", default=None, help="Per-repo graphify graph dir (default: integrations.graphify.graph_dir)")
+    parser.add_argument("--init-git", action="store_true", help="Initialize git repo")
+    parser.add_argument("--no-hook", action="store_true", help="Skip the git post-commit hook (default: installed, capture-only)")
+    parser.add_argument("--hook-extract-claims", action="store_true", help="Hook also runs LLM claim extraction on drift")
+    parser.add_argument("--non-interactive", action="store_true", help="Skip prompts, use defaults")
+    args = parser.parse_args()
+    config = get_config()
+
+    env = _detect_environment(config)
+    owner = env["owner"]
+    (project_root_str, project_name, project_slug, domains, skills, owner, everything_flagged) = _collect_config(args, env)
+    _execute_bootstrap(args, project_root_str, project_name, project_slug, domains, skills, owner, everything_flagged)
+    return 0
 
 
 if __name__ == "__main__":
