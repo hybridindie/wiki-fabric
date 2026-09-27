@@ -269,11 +269,55 @@ def churn_report(repo_path, since, top=15):
         print(f"    {n:4d}  {path}")
 
 
+# === Last-capture state (#85: hook runs are incremental) ===
+
+def state_path(project):
+    """Per-project last-capture marker: <corpus>/evidence/raw/<project>/git/.last-capture."""
+    return EVIDENCE_RAW / project / "git" / ".last-capture"
+
+
+def read_since_state(project, fallback="6m"):
+    """Last capture timestamp (YYYY-MM-DD) or the fallback window."""
+    try:
+        return state_path(project).read_text(encoding="utf-8").strip() or fallback
+    except OSError:
+        return fallback
+
+
+def write_since_state(project):
+    """Record this capture run — the next --since-state run looks back to here."""
+    try:
+        sp = state_path(project)
+        sp.parent.mkdir(parents=True, exist_ok=True)
+        sp.write_text(datetime.now().strftime("%Y-%m-%d"), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def github_repo_from_remote(repo_path):
+    """Derive 'owner/name' from a repo's origin remote (git@ or https URLs).
+
+    None when the remote isn't GitHub — local-only repos keep working without gh.
+    """
+    url = git("remote", "get-url", "origin", cwd=repo_path)
+    if not url:
+        return None
+    url = url.strip()
+    m = re.match(r"^git@github\.com:([^/]+/[^/]+?)(?:\.git)?$", url)
+    if not m:
+        m = re.match(r"^https://github\.com/([^/]+/[^/]+?)(?:\.git)?$", url)
+    if not m:
+        return None
+    return m.group(1)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Capture PR/issue/commit history into evidence/raw/")
     parser.add_argument("project", help="Project slug (e.g. my-project)")
     parser.add_argument("--repo", required=True, help="GitHub 'owner/name' (via gh CLI) or local repo path")
     parser.add_argument("--since", default="6m", help="Lookback window: 30d, 6m, 1y, or YYYY-MM-DD (default 6m)")
+    parser.add_argument("--since-state", action="store_true",
+                        help="Since the last capture of this project (state marker; falls back to --since when never captured)")
     parser.add_argument("--limit", type=int, default=30, help="Max PRs/issues to fetch (default 30)")
     parser.add_argument("--no-comments", action="store_true", help="Skip review/discussion comments")
     parser.add_argument("--churn", action="store_true", help="Also print a file-churn ranking (local repos)")
@@ -281,6 +325,8 @@ def main():
     args = parser.parse_args()
 
     include_comments = not args.no_comments
+    if args.since_state:
+        args.since = read_since_state(args.project, fallback=args.since)
 
     print(f"=== Capturing git history for {args.project} ===")
     print(f"  Window: since {args.since}, limit {args.limit}")
@@ -295,6 +341,8 @@ def main():
         stats = capture_github(args.project, args.repo, args.since, args.limit, include_comments, args.dry_run)
 
     total = stats["new"] + stats["changed"]
+    if not args.dry_run:
+        write_since_state(args.project)
     print()
     print(f"Capture summary: {stats['new']} new, {stats['changed']} changed, {stats['unchanged']} unchanged")
     if args.dry_run:

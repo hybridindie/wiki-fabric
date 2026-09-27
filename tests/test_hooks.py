@@ -120,6 +120,45 @@ class TestHookScriptContent:
         assert 'WIKI_HOOK_EXTRACT:-1' in script
 
 
+class TestMergeBodyValidity:
+    """Regression: the merge body carried a bare `else:` — every installed
+    post-merge hook died at exec with a syntax error before doing anything
+    (found while wiring #85's capture-git step: live hooks in aperiodic/
+    alpaca-agents were silently dead)."""
+
+    def test_merge_body_compiles(self):
+        import ast
+        ast.parse(hooks._REBUILD_BODY_MERGE)
+
+    def test_commit_body_compiles(self):
+        import ast
+        ast.parse(hooks._REBUILD_BODY_COMMIT)
+
+    def test_merge_body_launches_as_python(self):
+        import ast
+        import base64 as b64mod
+        launcher = hooks._detached_launch(hooks._REBUILD_BODY_MERGE)
+        m = re.search(r"WF_HOOK_B64=([A-Za-z0-9+/=]+)", launcher)
+        payload = b64mod.b64decode(m.group(1)).decode("utf-8")
+        ast.parse(payload)
+
+
+class TestMergeCaptureGit:
+    """#85: post-merge hook runs capture-git for the merged repo."""
+
+    def test_merge_body_runs_capture_git(self):
+        assert "capture-git" in hooks._REBUILD_BODY_MERGE
+
+    def test_capture_git_is_incremental(self):
+        assert "--since-state" in hooks._REBUILD_BODY_MERGE
+
+    def test_capture_git_gated_on_config(self):
+        # config unreadable → skip, never crash the hook
+        body = hooks._REBUILD_BODY_MERGE
+        assert "config unreadable" in body
+        assert "get_all_repo_names" in body
+
+
 class TestAlwaysOn:
     def test_install_uninstall_roundtrip(self, tmp_path):
         target = tmp_path / "AGENTS.md"
