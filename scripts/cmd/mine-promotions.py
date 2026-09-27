@@ -126,6 +126,38 @@ def cluster_events_semantic(events, min_projects=2, model=None, threshold=0.7):
     return valid_clusters
 
 
+def _thread_graph():
+    """The thread-signals graph or the empty one (fail-open)."""
+    try:
+        import thread_signals
+        return thread_signals.build_graph(thread_signals.load_index())
+    except Exception:
+        return ({}, {}, set())
+
+
+def _judged_context(ea, eb):
+    """#103b: thread context string for judgment prompts — what structure
+    says about the pair beyond their wording. Empty when unconnected."""
+    try:
+        import thread_signals
+        return thread_signals.thread_context(ea, eb, _thread_graph())
+    except Exception:
+        return ""
+
+
+def _classify_with_threads(ev_a, ev_b, similarity, threshold):
+    """(merge, reason) for one candidate pair; text decides at the margin,
+    thread structure rescues near-misses (#103a)."""
+    graph = _thread_graph()
+    if not any((ev_a.get("session"), ev_b.get("session"))):
+        return (similarity >= threshold, "text" if similarity >= threshold else "")
+    try:
+        import thread_signals
+        return thread_signals.classify_pair(ev_a, ev_b, graph, similarity, threshold)
+    except Exception:
+        return (similarity >= threshold, "text" if similarity >= threshold else "")
+
+
 def cluster_events_keyword(events, min_projects=2, _keyword_threshold=None):
     """Fallback: keyword-based clustering with semantic expansion and Jaccard similarity."""
     if _keyword_threshold is None:
@@ -188,10 +220,16 @@ def cluster_events_keyword(events, min_projects=2, _keyword_threshold=None):
             intersection = len(kw_i & kw_j)
             union = len(kw_i | kw_j)
             similarity = intersection / union if union > 0 else 0
-            
-            if similarity >= _keyword_threshold:  # tuning: mining.keyword_threshold
+
+            # Thread signals (#103): graph structure (shared session, files
+            # overlap, continuations) rescues near-miss text pairs. Fail-open:
+            # no index → signals are zero → today's text-only behavior.
+            merge, why = _classify_with_threads(ev_i, ev_j, similarity, _keyword_threshold)
+            if merge:
                 cluster.append(j)
                 used.add(j)
+                if why != "text":
+                    print(f"  thread-rescued pair: {ev_i.get('project','?')}+{ev_j.get('project','?')} ({why})")
         
         if len(cluster) >= MIN_PROJECTS:
             projects = set(event_keywords[idx][0].get("project", "") for idx in cluster)
@@ -269,6 +307,8 @@ def cluster_events_judged(events, min_projects=2, threshold=None):
                 f"Intervention: {ev.get('intervention', '')} | "
                 f"Outcome: {ev.get('outcomes', '')}")
 
+    _judged = _judged_context
+
     # Rebuild keyword pairs that did NOT cluster together
     assigned = {}
     for ck, evs in base.items():
@@ -281,7 +321,7 @@ def cluster_events_judged(events, min_projects=2, threshold=None):
             if assigned.get(ea.get("_file")) == assigned.get(eb.get("_file")) and \
                     assigned.get(ea.get("_file")) is not None:
                 continue
-            same, p = same_recurrence(_text(ea), _text(eb), threshold=threshold)
+            same, p = same_recurrence(_text(ea), _text(eb), threshold=threshold, context=_judged(ea, eb))
             mark = "MERGE" if same else "keep-split"
             print(f"  judged {ea.get('project','?')}+{eb.get('project','?')}: p={p:.3f} -> {mark}")
             if same:
@@ -339,7 +379,7 @@ def _split_incoherent_clusters(base, _text, threshold, route):
             if ev is rep:
                 keep.append(ev)
                 continue
-            same, p = same_recurrence(_text(rep), _text(ev), threshold=threshold)
+            same, p = same_recurrence(_text(rep), _text(ev), threshold=threshold, context=_judged_context(rep, ev))
             (keep if same else demote).append(ev)
             print(f"  judged split {ck[:18]}: rep+{ev.get('project','?')} p={p:.3f} -> "
                   f"{'keep' if same else 'DEMOTE'}")
@@ -385,6 +425,39 @@ def _mine_actor(model=None):
     """Actor for dossier generation: agent/<owner>/<dossier-model>."""
     from fabric_config import get_config, actor
     return actor(get_config(), "agent", model=model)
+
+
+def _dossier_thread_citations(events):
+    """#103c: for each event with a session/receipt provenance field, look up
+    the thread node (kind, project, files) and render a citation line.
+    Deterministic; empty string when no event carries thread links."""
+    try:
+        import thread_signals
+        index = thread_signals.load_index()
+        if not index:
+            return None
+        _, _, _ = thread_signals.build_graph(index)
+        session_nodes = {str(n.get("session", "")).lower(): n
+                         for n in index.get("nodes", []) if n.get("session")}
+    except Exception:
+        return None
+    lines, seen = [], set()
+    for ev in events:
+        sid = str(ev.get("session") or "").strip()
+        if not sid or sid.lower() in seen:
+            continue
+        seen.add(sid.lower())
+        node = session_nodes.get(sid.lower())
+        if not node:
+            lines.append(f"- session `{sid}` (not in thread index)")
+            continue
+        if node.get("kind") == "pr-record":
+            lines.append(f"- PR #{node.get('pr')} [{node.get('pr_state', '')}] — `{node.get('file', '')}`")
+        else:
+            nf = len(node.get("files_touched") or [])
+            lines.append(f"- session `{sid}` ({node.get('harness', '?')}, {node.get('project', '?')}) "
+                         f"— `{node.get('file', '')}` — open with: wf thread {sid}")
+    return "\n".join(lines) if lines else None
 
 
 def generate_dossier(cluster_key, events, local_model=None):
@@ -447,6 +520,18 @@ anti_pattern_ref: "[[anti-pattern-{cluster_key}]]"
         stem = ev.get("_file")
         ref = f"[[{Path(stem).stem if stem else 'ee-unknown'}]]"
         dossier += f"- {ref} — the **{outcome}** mode ({ev.get('observed_problem', '')[:100]}...)\n"
+
+    # #103c: provenance-citable — the conversations/PRs behind the cluster.
+    # A reviewer can open the actual discussion that produced the pattern.
+    thread_lines = _dossier_thread_citations(events)
+    if thread_lines:
+        dossier += f"""
+## Evidence sources (threads)
+
+The discussions and PR records this cluster traces to:
+
+{thread_lines}
+"""
     
     from fabric_config import get_config as _gc
     _owner = (_gc() or {}).get("owner", "you")

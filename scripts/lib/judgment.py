@@ -307,16 +307,20 @@ def is_near_threshold(p, threshold):
     return abs(p - threshold) <= _near_band()
 
 
-def same_recurrence(item_a, item_b, threshold=None, config=None):
+def same_recurrence(item_a, item_b, threshold=None, config=None, context=None):
     """Pairwise 'same recurring pattern?' judgment for cluster refinement.
     Returns (same: bool, probability: float). Threshold defaults to
     MINING_THRESHOLD_DEFAULT (0.8) — live-calibrated on Laya: true paraphrase
     pairs score ~0.93, unrelated pairs ~0.75, so 0.6 would wrongly merge
-    unrelated content. Used by mine-promotions (judgment-enabled mode only)."""
+    unrelated content. Used by mine-promotions (judgment-enabled mode only).
+    context (#103b): optional thread-structure note — the model sees that
+    the records' sessions share files or continue each other."""
     if threshold is None:
         threshold = get_tuning(config, "judgment", "mining_threshold",
                                MINING_THRESHOLD_DEFAULT)
     state = (f"Item A: {item_a}\n\nItem B: {item_b}")
+    if context:
+        state = f"{state}\n\n{context}"
     p = noul("Do these two records describe the same recurring problem and intervention?",
              state)
     return (p >= threshold, p)

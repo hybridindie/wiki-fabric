@@ -60,7 +60,7 @@ def _now_iso():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def write_event(project, problem, intervention, conditions, outcomes, evidence, tags, receipt=None):
+def write_event(project, problem, intervention, conditions, outcomes, evidence, tags, receipt=None, session=None):
     ns_dir = PROJECTS_DIR / project / "experience-events"
     ns_dir.mkdir(parents=True, exist_ok=True)
 
@@ -100,6 +100,11 @@ def write_event(project, problem, intervention, conditions, outcomes, evidence, 
         if not rid.startswith("receipt-"):
             rid = f"receipt-{rid}"
         lines.append(f"receipt: \"{rid}\"")
+
+    if session:
+        # #103: the source session — the thread-index join key. Mining uses
+        # it to cluster events by shared discussion, not just text overlap.
+        lines.append(f"session: \"{str(session).strip()}\"")
 
     lines.append("evidence: []")
     lines.append("confidence: medium")
@@ -176,6 +181,7 @@ def main():
     parser.add_argument("--outcomes", help="key=value pairs, comma-separated [optional]")
     parser.add_argument("--tags", help="Comma-separated tags [optional]")
     parser.add_argument("--receipt", help="Receipt id of the context delivery that informed this work (#87: receipt ↔ outcome linkage)")
+    parser.add_argument("--session", help="Source session id this event came from (#103: thread-index join key for mining)")
     parser.add_argument("--list", action="store_true", help="List available projects")
     args = parser.parse_args()
 
@@ -238,7 +244,8 @@ def main():
     tags = getattr(locals().get('tags_arg', None), 'strip', lambda: '')() if 'tags_arg' in locals() else (args.tags or "")
 
     # Write event
-    event_path = write_event(project, problem, intervention, conditions, outcomes, [], tags, receipt=args.receipt)
+    event_path = write_event(project, problem, intervention, conditions, outcomes, [], tags,
+                             receipt=args.receipt, session=args.session)
 
     print(f"Logged experience event:")
     print(f"  {event_path.relative_to(VAULT_ROOT)}")
