@@ -128,6 +128,25 @@ def sha256_str(s):
 
 # === GitHub (gh CLI) ===
 
+def pr_frontmatter(pr, repo):
+    """#102: PR records are graph nodes. Derived data only — number, state,
+    title; never content claims."""
+    merged = pr.get("mergedAt") or ""
+    lines = ["---",
+             "type: source",
+             "kind: pr-record",
+             f"source_repo: \"{repo}\"",
+             f"pr: {pr['number']}",
+             f"pr_state: {pr.get('state') or 'unknown'}"]
+    if merged:
+        lines.append(f"merged_at: {merged[:10]}")
+    title = str(pr.get("title") or "").replace('"', "'")[:140]
+    lines.append(f'title: "{title}"')
+    lines.append("---")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def capture_github(project, repo, since, limit, include_comments, dry_run):
     """Capture PRs and issues from a GitHub repo via the gh CLI."""
     dest_dir = EVIDENCE_RAW / project / "git"
@@ -169,7 +188,8 @@ def capture_github(project, repo, since, limit, include_comments, dry_run):
                         sections.append(f"### {author} ({c['created_at'][:10]})")
                         sections.append(c.get("body") or "")
                         sections.append("")
-            status = write_capture(dest_dir / f"pr-{num}.md", pr["title"], sections[:4], sections[4:], dry_run)
+            status = write_capture(dest_dir / f"pr-{num}.md", pr["title"],
+                                   [pr_frontmatter(pr, repo)] + sections[:4], sections[4:], dry_run)
             stats[status.lower()] += 1
             print(f"  PR #{num}: {status}")
 

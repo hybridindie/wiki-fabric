@@ -204,12 +204,90 @@ def write_catalog(registry):
     return out
 
 
+def build_thread_index():
+    """#102: derive registry/threads.json from evidence/ alone — chat/PR
+    records are graph nodes (frontmatter: kind, session, project,
+    files_touched, pr), claims join via originated_in/decided_in relations.
+    Rebuildable, no hand-maintenance; absent captures → clean no-op."""
+    from wf_common import parse_frontmatter as _pf
+    raw = VAULT_ROOT / "evidence" / "raw"
+    nodes = []
+    if raw.is_dir():
+        for p in sorted(raw.rglob("*.md")):
+            fm, _ = parse_frontmatter(p)
+            kind = fm.get("kind")
+            if kind not in ("chat-session", "pr-record"):
+                continue
+            node = {
+                "file": p.relative_to(VAULT_ROOT).as_posix(),
+                "kind": kind,
+                "project": fm.get("project", ""),
+                "session": str(fm.get("session") or ""),
+                "harness": fm.get("harness", ""),
+            }
+            if kind == "pr-record":
+                node["pr"] = fm.get("pr")
+                node["pr_state"] = fm.get("pr_state", "")
+                node["source_repo"] = fm.get("source_repo", "")
+            files = fm.get("files_touched") or []
+            if isinstance(files, list):
+                node["files_touched"] = [str(f).strip('"') for f in files][:20]
+            if fm.get("merged_at"):
+                node["merged_at"] = str(fm["merged_at"])[:10]
+            rel_sessions = fm.get("related_sessions") or []
+            if isinstance(rel_sessions, list) and rel_sessions:
+                node["related_sessions"] = [str(s).strip('"') for s in rel_sessions][:20]
+            nodes.append(node)
+
+    # claims → session/PR edges (from claim frontmatter relations)
+    edges = []
+    claims_dir = VAULT_ROOT / "evidence" / "claims"
+    if claims_dir.is_dir():
+        for cp in sorted(claims_dir.glob("claim-*.md")):
+            fm, _ = parse_frontmatter(cp)
+            rels = fm.get("relations") or []
+            if not isinstance(rels, list):
+                continue
+            for r in rels:
+                if not isinstance(r, dict):
+                    continue
+                if r.get("type") in ("originated_in", "decided_in", "validated_in"):
+                    edges.append({
+                        "claim": cp.stem.lower(),
+                        "type": r.get("type"),
+                        "target": str(r.get("target", "")).strip('"[]'),
+                    })
+
+    # session ↔ session continuity edges (#102c)
+    for node in nodes:
+        for other in node.get("related_sessions", []):
+            edges.append({
+                "claim": None,
+                "type": "continues",
+                "source_session": node.get("session", ""),
+                "target": other,
+            })
+    index = {
+        "$schema": "wiki-fabric/threads-v1",
+        "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "node_count": len(nodes),
+        "edge_count": len(edges),
+        "nodes": nodes,
+        "edges": edges,
+    }
+    out = VAULT_ROOT / "registry" / "threads.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return out, len(nodes), len(edges)
+
+
 def main():
     import argparse
     import os
     parser = argparse.ArgumentParser(description="Rebuild registry catalog (catalog.json)")
     parser.add_argument("--json", action="store_true", help="Print the JSON registry to stdout instead of writing files")
     parser.add_argument("--root", default=None, help="Fabric root (default: repo parent of this script, or $WIKI_FABRIC_ROOT)")
+    parser.add_argument("--no-threads", action="store_true", help="Skip the thread index build (#102)")
     args = parser.parse_args()
 
     global VAULT_ROOT, INDEX_PATH
@@ -226,6 +304,10 @@ def main():
     print(f"  Pages cataloged: {total}")
     for name, count in sorted(registry["counts"].items()):
         print(f"  {name}: {count}")
+
+    if not args.no_threads:
+        tpath, nn, ne = build_thread_index()
+        print(f"  Threads: {nn} node(s), {ne} edge(s) → {tpath.name}")
 
     if args.json:
         print(json.dumps(registry, indent=2))
