@@ -48,7 +48,7 @@ PATTERN_STATUSES = {"candidate", "recommended", "standard", "deprecated"}
 # validated_in (PR/issue capture). Provenance edges never replace claims as atoms.
 REL_TYPES = {
     "supports", "contradicts", "refines", "supersedes", "depends_on",
-    "originated_in", "decided_in", "validated_in",
+    "originated_in", "decided_in", "validated_in", "answers",
 }
 EXCLUDE_DIRS = {".git", ".obsidian", ".opencode", "__pycache__", ".pytest_cache", ".venv", "venv", "node_modules", "graphify-out", "docs/site", "wiki"}
 EXCLUDE_DIR_PREFIXES = ("evidence/traces", "system/always-on")
@@ -170,7 +170,8 @@ def scope_for(rel):
     """Derive the expected scope from a page's path (AGENTS.md scope mapping)."""
     s = rel.as_posix()
     if s.startswith(("global/", "registry/", "schemas/", "evaluations/", "syntheses/", "concepts/",
-                     "patterns/", "anti-patterns/", "skills/", "system/", "tests/", "templates/")):
+                     "patterns/", "anti-patterns/", "skills/", "system/", "tests/", "templates/",
+                     "questions/", "evidence/")):
         return "global"
     if s.startswith("domains/"):
         return "domain"
@@ -659,6 +660,18 @@ def main():
             dep = fm.get("depends_on")
             if dep is not None and not (isinstance(dep, list) and all(isinstance(x, str) and x.startswith("[[") for x in dep)):
                 errors.append("COMMITMENT %s: depends_on must be a list of [[wikilinks]]" % rel)
+        if t == "question":
+            # lifecycle (#88): open → answered (an answers relation lands) →
+            # closed. answered/superseded must name the closing claim.
+            qst = str(fm.get("status") or "open").lower()
+            if qst not in ("proposed", "open", "answered", "superseded", "rejected"):
+                errors.append("QUESTION %s: status %r not in proposed|open|answered|superseded|rejected" % (rel, qst))
+            if qst in ("answered", "superseded") and not fm.get("answered_by"):
+                errors.append("QUESTION %s: %s requires answered_by ([[claim-...]])" % (rel, qst))
+            if not fm.get("question") and not fm.get("title"):
+                errors.append("QUESTION %s: missing question/title" % rel)
+            if qst == "open" and not fm.get("priority"):
+                warnings.append("QUESTION %s: open without priority (P0|P1|P2 expected)" % rel)
         if t in ("pattern", "anti-pattern"):
             mat, st = fm.get("maturity"), fm.get("status")
             if st in PATTERN_STATUSES:
