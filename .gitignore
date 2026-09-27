@@ -70,3 +70,4 @@ dist/
 build/
 src/wiki_fabric/_harness/
 src/wiki_fabric.egg-info/
+registry/wiki-export-manifest.json

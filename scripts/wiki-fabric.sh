@@ -1211,6 +1211,15 @@ case "${1:-help}" in
             echo "     effect when active: skills gain graph staleness/enrichment steps; query gains call-graph expansion"
         fi
         echo ""
+        if grep -q 'obsidian:' "${fdir}/fabric.yaml" 2>/dev/null && grep -A3 'obsidian:' "${fdir}/fabric.yaml" | grep -q 'enabled: true'; then
+            ok "obsidian: ENABLED (two-way vault: harvest-before-export, REST export via --push)"
+            run_script "${fdir}" "scripts/cmd/obsidian_status.py" 2>/dev/null || true
+        else
+            info "obsidian: inactive"
+            echo "     enable: fabric.yaml integrations.obsidian.enabled: true (Local REST API plugin required)"
+            echo "     effect when active: export harvests human wiki edits as evidence before regenerating; --push writes via REST"
+        fi
+        echo ""
         ;;
     version)
         echo "wf ${WF_VERSION} (harness: $(find_harness 2>/dev/null || echo unknown))"
