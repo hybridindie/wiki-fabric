@@ -97,6 +97,12 @@ def _resolve_corpus_root():
 
 CORPUS_ROOT = _resolve_corpus_root()
 
+
+def get_CORPUS_ROOT_or_none():
+    """CORPUS_ROOT at call time (module import froze it; tests patch the
+    module attribute and late readers should pick that up)."""
+    return CORPUS_ROOT
+
 # Canonical content root. All knowledge-atom paths (evidence/, registry/,
 # patterns/, projects/, global/, ...) resolve here — NOT at FABRIC_ROOT (the
 # vault shell). Legacy scripts define their own local VAULT_ROOT; the canonical
