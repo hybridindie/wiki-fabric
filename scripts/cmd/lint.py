@@ -50,7 +50,7 @@ REL_TYPES = {
     "supports", "contradicts", "refines", "supersedes", "depends_on",
     "originated_in", "decided_in", "validated_in", "answers",
 }
-EXCLUDE_DIRS = {".git", ".obsidian", ".opencode", "__pycache__", ".pytest_cache", ".venv", "venv", "node_modules", "graphify-out", "docs/site", "wiki"}
+EXCLUDE_DIRS = {".git", ".obsidian", ".opencode", "__pycache__", ".pytest_cache", ".venv", "venv", "node_modules", "graphify-out", "docs/site", "wiki", "build", "dist", "src"}
 EXCLUDE_DIR_PREFIXES = ("evidence/traces", "system/always-on")
 TEMPLATE_DIRS = {"global/templates", "schemas", "templates"}
 HUB_KINDS = {"ontology", "registry", "index", "log"}
