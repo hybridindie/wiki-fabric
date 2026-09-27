@@ -113,6 +113,7 @@ Per-type required fields. A page lacking required fields fails `scripts/cmd/lint
 | `outcomes` | dict — happy_path, metrics, etc. |
 | `evidence` | list of `[[src-...]]` |
 | `lineage` | free text describing the source lineage (for the independence rule) |
+| `receipt` | optional `receipt-<id>` — the context delivery receipt that informed this work (#87: receipt ↔ outcome linkage; provenance only) |
 
 ## `commitment`
 

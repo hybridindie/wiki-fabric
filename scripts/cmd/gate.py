@@ -53,12 +53,45 @@ def _gate_domains():
 
 def _gate_questions():
     """#88: harvested open questions awaiting triage (staging proposals +
-    canonical open questions). Returns (pending, list)."""
+    canonical open questions). Returns (pending, open_qs)."""
     import importlib
     promote_questions = importlib.import_module("promote-questions")
     pending = promote_questions.list_pending()
     open_qs = promote_questions.list_open_questions()
     return pending, open_qs
+
+
+def _recent_deliveries(limit=10):
+    """#87: recent context receipts — 'these tasks ran with this knowledge'.
+    The review question: was the manifest right? Provenance only; never scored.
+    Returns newest-first [{receipt_id, task, namespace, compiled, path}]."""
+    from fabric_config import get_CORPUS_ROOT_or_none
+    _C = get_CORPUS_ROOT_or_none()
+    import json as _json
+    seen = {}
+    if _C is None:
+        return []
+    dirs = [_C / "registry" / "receipts"]
+    projects_root = _C / "projects"
+    if projects_root.is_dir():
+        dirs.extend(sorted(projects_root.glob("*/receipts")))
+    for d in dirs:
+        if not d.is_dir():
+            continue
+        for rp in sorted(d.glob("receipt-*.json")):
+            try:
+                data = _json.loads(rp.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            rid = data.get("receipt_id") or rp.stem
+            seen.setdefault(rid, {
+                "receipt_id": rid,
+                "task": str(data.get("task", ""))[:70],
+                "namespace": data.get("namespace", ""),
+                "compiled": data.get("compiled", ""),
+                "path": rp,
+            })
+    return sorted(seen.values(), key=lambda x: str(x.get("compiled", "")), reverse=True)[:limit]
 
 
 def _safe(fn):
@@ -120,6 +153,20 @@ def _emit(sections, actionable, quiet=False):
 
 
 
+def _emit_deliveries(deliveries):
+    """#87 delivery-review surface: recent receipts, newest first. The review
+    question is 'was the manifest right?' — provenance artifacts only, the
+    gate never scores them (human gate unchanged)."""
+    if not deliveries:
+        print("gate: no context receipts on record yet")
+        print("  Agents record one per delivery: wf context --write-receipt (0 extra cost)")
+        return
+    print("Recent deliveries (context receipts, newest first):\n")
+    for d in deliveries:
+        print(f"  □ {d['receipt_id']}  [{d['namespace']}]  {d['compiled']}  {d['task']}")
+    print("\n  Review: was the manifest right? Link outcomes: wf log --project <slug> --receipt <id>")
+
+
 def _notify(manifest_path, sections, _log_prefix="[gate notify]"):
     """Gate notification seam (#67): push pending decisions to where the human is.
 
@@ -163,9 +210,15 @@ def main():
     parser.add_argument("--write-manifest", action="store_true",
                         help="Persist a deterministic pending-manifest to registry/pending-gate.md "
                              "(read by the AI harness at session start)")
+    parser.add_argument("--deliveries", action="store_true",
+                        help="Surface recent context receipts (#87): 'these tasks ran with this knowledge' — review was the manifest right?")
     args = parser.parse_args()
 
     sections, actionable = gate()
+
+    if args.deliveries:
+        _emit_deliveries(_recent_deliveries())
+        sys.exit(0)
 
     manifest_path = CORPUS_ROOT / "registry" / "pending-gate.md"
     if args.write_manifest:

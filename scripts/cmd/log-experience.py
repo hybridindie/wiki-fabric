@@ -60,7 +60,7 @@ def _now_iso():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def write_event(project, problem, intervention, conditions, outcomes, evidence, tags):
+def write_event(project, problem, intervention, conditions, outcomes, evidence, tags, receipt=None):
     ns_dir = PROJECTS_DIR / project / "experience-events"
     ns_dir.mkdir(parents=True, exist_ok=True)
 
@@ -92,6 +92,14 @@ def write_event(project, problem, intervention, conditions, outcomes, evidence, 
     lines.append("outcomes:")
     for k, v in outcomes.items():
         lines.append(f"    {k}: \"{v}\"")
+
+    if receipt:
+        # #87: the delivery receipt is the missing provenance half — what the
+        # agent KNEW before acting (receipt) ↔ what happened (this event)
+        rid = str(receipt).strip()
+        if not rid.startswith("receipt-"):
+            rid = f"receipt-{rid}"
+        lines.append(f"receipt: \"{rid}\"")
 
     lines.append("evidence: []")
     lines.append("confidence: medium")
@@ -167,6 +175,7 @@ def main():
     parser.add_argument("--conditions", help="key=value pairs, comma-separated [optional]")
     parser.add_argument("--outcomes", help="key=value pairs, comma-separated [optional]")
     parser.add_argument("--tags", help="Comma-separated tags [optional]")
+    parser.add_argument("--receipt", help="Receipt id of the context delivery that informed this work (#87: receipt ↔ outcome linkage)")
     parser.add_argument("--list", action="store_true", help="List available projects")
     args = parser.parse_args()
 
@@ -229,12 +238,14 @@ def main():
     tags = getattr(locals().get('tags_arg', None), 'strip', lambda: '')() if 'tags_arg' in locals() else (args.tags or "")
 
     # Write event
-    event_path = write_event(project, problem, intervention, conditions, outcomes, [], tags)
+    event_path = write_event(project, problem, intervention, conditions, outcomes, [], tags, receipt=args.receipt)
 
     print(f"Logged experience event:")
     print(f"  {event_path.relative_to(VAULT_ROOT)}")
     print(f"  Project: {project}")
     print(f"  Problem: {problem[:80]}")
+    if args.receipt:
+        print(f"  Receipt: {args.receipt}")
     if intervention:
         print(f"  Intervention: {intervention[:80]}")
 
