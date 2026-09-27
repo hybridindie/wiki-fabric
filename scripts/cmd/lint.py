@@ -59,26 +59,47 @@ FENCE_RE = re.compile(r"^```")
 INLINE_RE = re.compile(r"`[^`]+`")
 
 
-def parse_frontmatter(path):
-    """Return (fm_dict_or_None, body, error_or_None)."""
+def parse_frontmatter(path, _cache=None):
+    """Return (fm_dict_or_None, body, error_or_None).
+
+    #108: pass _cache to reuse a parsed entry across sections — lint walks
+    the corpus 9-10× per run and YAML dominated everything (22s of 25s at
+    2k files). _cache: {(path, mtime, size): (fm, body, err)}."""
+    if _cache is not None:
+        try:
+            st = path.stat()
+            key = (str(path), st.st_mtime_ns, st.st_size)
+            if key in _cache:
+                return _cache[key]
+        except OSError:
+            pass
     text = path.read_text(encoding="utf-8", errors="replace")
     m = re.match(r"^---\n(.*?)\n---\n(.*)$", text, re.DOTALL)
     if not m:
-        return None, text, "missing frontmatter block"
-    raw, body = m.group(1), m.group(2)
-    if HAVE_YAML:
+        out = (None, text, "missing frontmatter block")
+    else:
+        raw, body = m.group(1), m.group(2)
+        if HAVE_YAML:
+            try:
+                fm = yaml.safe_load(raw)
+                out = ((fm or {}), body, None)
+            except Exception as e:
+                out = (None, body, "yaml parse error: " + str(e)[:80])
+        else:
+            fm = {}
+            for line in raw.splitlines():
+                mm = re.match(r"([\w-]+):\s*(.*)$", line)
+                if mm:
+                    val = mm.group(2).strip().strip("'\"")
+                    fm[mm.group(1)] = val or None
+            out = fm, body, None
+    if _cache is not None:
         try:
-            fm = yaml.safe_load(raw)
-        except Exception as e:
-            return None, body, "yaml parse error: " + str(e)[:80]
-        return (fm or {}), body, None
-    fm = {}
-    for line in raw.splitlines():
-        mm = re.match(r"([\w-]+):\s*(.*)$", line)
-        if mm:
-            val = mm.group(2).strip().strip("'\"")
-            fm[mm.group(1)] = val or None
-    return fm, body, None
+            st = path.stat()
+            _cache[(str(path), st.st_mtime_ns, st.st_size)] = out
+        except (OSError, NameError):
+            pass
+    return out
 
 
 def strip_code(body):
@@ -534,6 +555,9 @@ def main():
     errors, warnings = [], []
     pages = {}
     INDEX = set()
+    # #108: one frontmatter parse per file per run — all check sections share
+    # this cache instead of re-parsing (9-10× per run was the lint bottleneck)
+    _fm_cache = {}
 
     # 0. fabric.yaml llm config checks (local_model shape)
     try:
@@ -547,7 +571,7 @@ def main():
 
     # 1. collect pages
     for p, rel in md_files(vault):
-        fm, body, err = parse_frontmatter(p)
+        fm, body, err = parse_frontmatter(p, _cache=_fm_cache)
         if err and not is_tpl(rel):
             errors.append("FRONTMATTER %s: %s" % (rel, err))
         pages[rel.stem.lower()] = p
@@ -574,7 +598,7 @@ def main():
 
     # 2. wikilinks resolve (skip fences, placeholders, templates)
     for p, rel in md_files(vault):
-        fm, body, _ = parse_frontmatter(p)
+        fm, body, _ = parse_frontmatter(p, _cache=_fm_cache)
         if is_tpl(rel):
             continue
         for m in LINK_RE.finditer(strip_code(body)):
@@ -586,7 +610,7 @@ def main():
 
     # 3. claim / concept / pattern invariants + scope + staleness
     for p, rel in md_files(vault):
-        fm, _, err = parse_frontmatter(p)
+        fm, _, err = parse_frontmatter(p, _cache=_fm_cache)
         if not isinstance(fm, dict):
             continue
         # scope consistency (declared scope must match path-implied scope)
@@ -687,7 +711,7 @@ def main():
     # 4. duplicate ids
     ids = {}
     for p, rel in md_files(vault):
-        fm, _, _ = parse_frontmatter(p)
+        fm, _, _ = parse_frontmatter(p, _cache=_fm_cache)
         if isinstance(fm, dict) and fm.get("id"):
             ids.setdefault(str(fm["id"]).lower(), []).append(str(rel))
     for i, locs in ids.items():
@@ -696,7 +720,7 @@ def main():
 
     # 5. source hash check (templates excluded)
     for p, rel in md_files(vault):
-        fm, _, _ = parse_frontmatter(p)
+        fm, _, _ = parse_frontmatter(p, _cache=_fm_cache)
         if not isinstance(fm, dict):
             continue
         if fm.get("type") == "source" and not is_tpl(rel):
@@ -732,7 +756,7 @@ def main():
     # 6. orphans (no inbound link; hubs/templates/index excluded)
     inbound = {}
     for p, rel in md_files(vault):
-        fm, body, _ = parse_frontmatter(p)
+        fm, body, _ = parse_frontmatter(p, _cache=_fm_cache)
         key = rel.stem.lower()
         iid = fm.get("id") if isinstance(fm, dict) else None
         if iid:
@@ -743,7 +767,7 @@ def main():
                 tt = "promotion-single-writer-with-parity-check"
             inbound[tt] = inbound.get(tt, 0) + 1
     for p, rel in md_files(vault):
-        fm, _, _ = parse_frontmatter(p)
+        fm, _, _ = parse_frontmatter(p, _cache=_fm_cache)
         if not isinstance(fm, dict):
             continue
         t = fm.get("type")

@@ -107,6 +107,9 @@ def main():
     parser.add_argument("--verify-all", action="store_true", help="Re-verify all overdue claims")
     parser.add_argument("--auto-reverify", action="store_true",
                         help="Mechanically re-verify claims whose source hasn't drifted (sha256 + quote check, 0 tokens)")
+    parser.add_argument("--verify-locators", action="store_true",
+                        help="Re-check every claim's locator against its raw source (#109): rewrite drifted locators, strip the verification stamp + contest claims whose quote vanished (0 tokens)")
+    parser.add_argument("--limit", type=int, default=None, help="Limit claims processed (verify-locators)")
     args = parser.parse_args()
 
     if args.verify:
@@ -123,6 +126,16 @@ def main():
         print(f"✓ re-verified {target.name}")
         print(f"  last_verified: {TODAY.isoformat()}")
         print(f"  review_after:  {new_review} ({tier}d tier)")
+        return 0
+
+    if args.verify_locators:
+        r = verify_locators(dry_run=False, project=args.project, limit=args.limit)
+        print(f"Locator re-verification: {r['checked']} checked")
+        print(f"  kept:      {r['kept']} (quote found at locator)")
+        print(f"  fixed:     {r['fixed']} (locator rewritten to the true span)")
+        print(f"  contested: {r['contested']} (quote NOT in source — stamp stripped, status contested)")
+        for name in r["contested_files"][:10]:
+            print(f"    ⚠ {name}")
         return 0
 
     if args.auto_reverify:
@@ -146,6 +159,152 @@ def main():
     print_report(report, args.project)
     return 0
 
+
+
+# === Locator re-verification (#109) =======================================
+
+def _norm(s):
+    """Markdown-normalized comparison text (same rules as extraction's matcher)."""
+    t = re.sub(r"[*`>]+", "", s or "")
+    return re.sub(r"\s+", " ", t).strip().lower()
+
+
+def repair_backtick_elision(quote, source_segment):
+    """#109 acceptance: repair the backtick-elision hallucination class — the
+    extraction model empties inline-code spans (source '`L1:`, `L2:`' becomes
+    quote '`, `'). Substitutes the source's backticked contents into the
+    quote's empty spans. Conservative: fires only when EVERY quote span is
+    empty and the source segment has non-empty spans to fill from."""
+    if "`" not in quote or "`" not in source_segment:
+        return quote, False
+    q_spans = re.findall(r"`([^`]*)`", quote)
+    if not q_spans or not all(not s.strip() for s in q_spans):
+        return quote, False
+    s_spans = re.findall(r"`([^`]*)`", source_segment)
+    filled = [s for s in s_spans if s.strip()]
+    if len(filled) < len(q_spans):
+        return quote, False
+    it = iter(filled)
+
+    def sub(m):
+        return f"`{next(it).strip()}`"
+
+    return re.sub(r"`[^`]*`", sub, quote), True
+
+
+def verify_locators(dry_run=False, project=None, limit=None):
+    """Deterministic locator re-verification for every claim (#109).
+
+    The `process:locator-verification` stamp was applied at extract time and
+    never re-checked: the audit found 14% of claims carry drifted locators
+    while stamped verified. This pass re-checks every claim with a source_ref:
+
+      quote found AT the locator        → stamp stays
+      quote found in the source NEARBY  → locator rewritten, stamp stays
+      quote NOT in the source at all    → stamp STRIPPED, status → contested
+
+    0 tokens, deterministic. Returns dict of counts."""
+    from wf_common import parse_frontmatter, sha256_file
+    claims_dir = CORPUS_ROOT / "evidence" / "claims"
+    checked = fixed = kept = contested = skipped = 0
+    contested_files = []
+    for cp in sorted(claims_dir.glob("claim-*.md")):
+        if project and project not in cp.name:
+            continue
+        if limit and checked >= limit:
+            break
+        fm, _ = parse_frontmatter(cp)
+        refs = fm.get("source_refs")
+        if not refs or not isinstance(refs, list) or not isinstance(refs[0], dict):
+            skipped += 1
+            continue
+        ref = refs[0]
+        loc = str(ref.get("locator", "")).strip()
+        quote = str(ref.get("quote", "")).strip()
+        m = re.match(r"L(\d+)(?:-L?(\d+))?$", loc)
+        if not m or not quote:
+            skipped += 1
+            continue
+        src_page = CORPUS_ROOT / "evidence" / "sources" / (str(ref.get("source", "")).strip('"[]').lower() + ".md")
+        if not src_page.exists():
+            skipped += 1
+            continue
+        sfm, _ = parse_frontmatter(src_page)
+        raw_rel = str(sfm.get("source_path") or "").strip()
+        raw = (CORPUS_ROOT / raw_rel) if raw_rel else None
+        if not raw or not raw.exists():
+            skipped += 1
+            continue
+        checked += 1
+        lines = raw.read_text(encoding="utf-8", errors="replace").splitlines()
+        a, b = int(m.group(1)), int(m.group(2) or m.group(1))
+        q_norm = _norm(quote)
+        head = q_norm[:60]  # search heuristic only
+        # the quote's own line span in the raw source (windows must be able to
+        # hold it — a 3-line window misses quotes spanning more lines)
+        q_span = max(1, len(str(quote).split("\n")) + 2)
+
+        def span_text(x, y):
+            return _norm("\n".join(lines[max(0, x - 1):min(y, len(lines))]))
+
+        # kept = the FULL quote sits inside the RECORDED span (exact locator);
+        # the q_span extension is only a search-phase allowance, never a pass
+        if q_norm and q_norm in span_text(a, b):
+            kept += 1
+            continue
+        # locator drifted — find the true span: head locates the start line,
+        # then grow from ONE line upward until the full quote fits (the tightest
+        # containing span — a wide default window once wrote L1-L3 for a
+        # quote that lives entirely on L2)
+        found = None
+        if head:
+            for i in range(len(lines)):
+                if head in span_text(i + 1, i + 1):
+                    for ext in range(1, q_span + 5):
+                        if q_norm in span_text(i + 1, i + ext):
+                            found = (i + 1, i + ext)
+                            break
+                    if found:
+                        break
+        if found:
+            fixed += 1
+            if not dry_run:
+                new_loc = f"L{found[0]}-L{found[1]}" if found[1] > found[0] else f"L{found[0]}"
+                s = cp.read_text(encoding="utf-8", errors="replace")
+                if f'locator: "{loc}"' in s:
+                    s = s.replace(f'locator: "{loc}"', f'locator: "{new_loc}"', 1)
+                else:  # unquoted form
+                    s = re.sub(rf"locator: {re.escape(loc)}\b", f"locator: {new_loc}", s, count=1)
+                cp.write_text(s, encoding="utf-8")
+        else:
+            # last chance: the backtick-elision class — the model emptied
+            # inline-code spans. Repair the quote from the recorded span's
+            # source text; a repaired quote is re-checked against the span.
+            seg_raw = "\n".join(lines[max(0, a - 1):min(b + q_span, len(lines))])
+            repaired, did = repair_backtick_elision(str(quote), seg_raw)
+            if did and _norm(repaired) in _norm(seg_raw):
+                if not dry_run:
+                    s = cp.read_text(encoding="utf-8", errors="replace")
+                    s = s.replace(f'quote: "{quote}"', f'quote: "{repaired}"', 1)
+                    if f'quote: "{repaired}"' not in s:
+                        print(f"  warn: could not rewrite quote (escaping mismatch): {cp.name}", file=sys.stderr)
+                    else:
+                        cp.write_text(s, encoding="utf-8")
+                fixed += 1
+                continue
+            # quote no longer in the source: the stamp lies — strip it
+            contested += 1
+            contested_files.append(cp.name)
+            if not dry_run:
+                s = cp.read_text(encoding="utf-8", errors="replace")
+                # edit ONLY the status field — a quote can legitimately contain
+                # 'status: supported' (sim audit false-positive lesson)
+                s = re.sub(r"^status: supported$", "status: contested", s, count=1, flags=re.MULTILINE)
+                s = s.replace('  - by: "process:locator-verification"\n', "", 1)
+                cp.write_text(s, encoding="utf-8")
+    return {"checked": checked, "kept": kept, "fixed": fixed,
+            "contested": contested, "skipped": skipped,
+            "contested_files": contested_files}
 
 
 def auto_reverify(dry_run=False, project=None):
