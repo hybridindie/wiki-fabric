@@ -167,16 +167,22 @@ wf hook install --extract-claims   # doc-drift commits auto-capture + auto-inges
 
 `wf harness install` configures every agent tool it detects (or `--all`):
 
-| Harness | Always-on instructions | Skills |
-|---------|----------------------|--------|
-| Claude Code | `CLAUDE.md` + `AGENTS.md` | `.claude/skills/` (native skills) |
-| opencode | `AGENTS.md` + `opencode.json` merge | `.opencode/skill/` + plugin |
-| OpenAI Codex CLI | `AGENTS.md` (native) | — |
-| GitHub Copilot | `.github/copilot-instructions.md` | — |
-| Gemini CLI | `GEMINI.md` | — |
-| Cursor | `.cursor/rules/wiki-fabric.mdc` | — |
-| Pi | `AGENTS.md` / `PI.md` | — |
-| Aider / Zed / Cline / Windsurf | `CONVENTIONS.md` / `.rules` / `.clinerules/` / `.windsurf/rules/` | — |
+| Harness | Always-on instructions | Skills | Session capture |
+|---------|----------------------|--------|-----------------|
+| Claude Code | `CLAUDE.md` + `AGENTS.md` | `.claude/skills/` (native skills) | ✅ `~/.claude/projects/` (JSONL) |
+| opencode | `AGENTS.md` + `opencode.json` merge | `.opencode/skill/` + plugin | ✅ `~/.local/share/opencode/opencode.db` (SQLite) |
+| OpenAI Codex CLI | `AGENTS.md` (native) | — | ✅ `~/.codex/sessions/` (JSONL, #113) |
+| Gemini CLI | `GEMINI.md` | — | ✅ `~/.gemini/tmp/*/chats/` (JSONL, #113) |
+| GitHub Copilot | `.github/copilot-instructions.md` | — | — |
+| Cursor | `.cursor/rules/wiki-fabric.mdc` | — | — |
+| Pi | `AGENTS.md` / `PI.md` | — | — |
+| Aider / Zed / Cline / Windsurf | `CONVENTIONS.md` / `.rules` / `.clinerules/` / `.windsurf/rules/` | — | — |
+
+Session capture: `wf capture chat <slug>` reads installed harnesses' session stores
+(auto-detects what exists; `--harness <name>` to scope). Captured sessions carry the
+thread frontmatter (session id, files touched) that feeds the thread index (#102).
+Claude Code + opencode have native skill folders; others use the universal
+`wf skill <name>` on-demand procedures.
 
 The instruction content is identical everywhere — the same always-on block,
 which includes the procedures pointer (`wf skill <name>`). Workflow

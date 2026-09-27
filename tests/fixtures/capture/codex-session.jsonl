@@ -1,0 +1,8 @@
+{"timestamp":"2026-09-27T10:00:00.000Z","type":"session_meta","payload":{"id":"ses-codex-fixture-1","cwd":"/tmp/proj"}}
+{"timestamp":"2026-09-27T10:00:05.000Z","type":"turn_context","payload":{"cwd":"/tmp/proj"}}
+{"timestamp":"2026-09-27T10:00:10.000Z","type":"event_msg","payload":{"type":"user_message","message":"Fix the retry loop in worker.py"}}
+{"timestamp":"2026-09-27T10:00:20.000Z","type":"event_msg","payload":{"type":"agent_message","message":"I'll read the worker first."}}
+{"timestamp":"2026-09-27T10:00:30.000Z","type":"event_msg","payload":{"type":"function_call","name":"read","call_id":"call_1","arguments":"{\"filePath\":\"/tmp/proj/worker.py\"}"}}
+{"timestamp":"2026-09-27T10:00:40.000Z","type":"event_msg","payload":{"type":"function_call","name":"edit","call_id":"call_2","arguments":"{\"filePath\":\"/tmp/proj/worker.py\",\"oldString\":\"x\",\"newString\":\"y\"}"}}
+{"timestamp":"2026-09-27T10:00:50.000Z","type":"event_msg","payload":{"type":"exec_command","command":"ls -la"}}
+{"timestamp":"2026-09-27T10:01:00.000Z","type":"event_msg","payload":{"type":"agent_message","message":"Done. The retry now uses exponential backoff."}}
