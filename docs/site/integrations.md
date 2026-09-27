@@ -107,6 +107,19 @@ Wiki Fabric installs into any agent harness — see the matrix in
 install` detects what you use and writes the always-on block + skills in each
 tool's native format; `wf harness status` shows the current state.
 
+**Session capture** (`wf capture chat <slug>`) covers four harnesses:
+Claude Code, opencode, OpenAI Codex CLI, and Gemini CLI. Formats were built
+from the harnesses' own storage schemas (verified against
+`google-gemini/gemini-cli`'s `chatRecordingTypes.ts` and claude-mem's
+transcript schema). Design note vs claude-mem's approach: they capture via
+*hooks* (SessionStart/UserPromptSubmit/PreToolUse events) — real-time but
+plugin-dependent; wiki-fabric reads the *session stores* the harnesses write
+anyway — zero install requirements, sha256 anti-loop, and thread-index
+frontmatter on every capture. claude-mem's hook lifecycle mapped to our
+file-based capture: SessionStart/Stop ≈ session boundaries (our capture is
+whole-session), PreToolUse file extraction ≈ our tool-args files_touched
+(bash commands excluded by rule).
+
 ## Enabling
 
 ```bash
