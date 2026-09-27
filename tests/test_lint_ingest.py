@@ -403,3 +403,47 @@ class TestLintRelations:
     def test_provenance_types_are_valid(self):
         for t in ("originated_in", "decided_in", "validated_in"):
             assert t in lint_mod.REL_TYPES
+
+class TestLintSections:
+    """#124.3: the extracted check sections are independently testable."""
+
+    @staticmethod
+    def _state(tmp_path, with_claim=None):
+        (tmp_path / "evidence" / "claims").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "evidence" / "sources").mkdir(parents=True, exist_ok=True)
+        import datetime as dt
+        state = lint_mod.LintState(tmp_path, dt.date.today())
+        return state
+
+    def test_sections_run_on_clean_corpus(self, tmp_path):
+        state = self._state(tmp_path)
+        lint_mod._section_collect(state)
+        lint_mod._section_wikilinks(state)
+        lint_mod._section_invariants(state)
+        lint_mod._section_dup_ids(state)
+        lint_mod._section_sources(state)
+        lint_mod._section_orphans(state)
+        lint_mod._section_conflicts(state)
+        lint_mod._section_receipts(state)
+        assert state.errors == []
+
+    def test_broken_link_detected_by_section(self, tmp_path):
+        (tmp_path / "evidence" / "claims").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "evidence" / "claims" / "claim-x.md").write_text(
+            "---\ntype: claim\nid: claim-x\nstatus: supported\n"
+            "source_refs:\n  - source: \"[[src-missing]]\"\n    locator: L1\n    quote: q\n---\n\nsee [[nope]]\n")
+        state = self._state(tmp_path)
+        lint_mod._section_collect(state)
+        lint_mod._section_wikilinks(state)
+        assert any("BROKEN-LINK" in e for e in state.errors)
+
+    def test_dup_id_detected_by_section(self, tmp_path):
+        (tmp_path / "evidence" / "claims").mkdir(parents=True, exist_ok=True)
+        for name in ("claim-a", "claim-b"):
+            (tmp_path / "evidence" / "claims" / f"{name}.md").write_text(
+                "---\ntype: claim\nid: claim-dup\nstatus: supported\n"
+                "source_refs:\n  - source: \"[[src-s]]\"\n    locator: L1\n    quote: q\n---\n\nb\n")
+        state = self._state(tmp_path)
+        lint_mod._section_collect(state)
+        lint_mod._section_dup_ids(state)
+        assert any("DUP-ID" in e for e in state.errors)
