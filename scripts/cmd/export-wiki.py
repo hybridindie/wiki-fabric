@@ -1060,12 +1060,28 @@ def main():
     parser.add_argument("--mode", default=None, choices=["mechanical", "llm", "hybrid"],
                        help="Override generation mode (default: fabric.yaml wiki.generation)")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--push", action="store_true",
+                        help="Write generated notes through the Obsidian Local REST API (#112; requires integrations.obsidian)")
     args = parser.parse_args()
 
     config = get_config()
     mode = args.mode or (config.get("wiki", {}).get("generation", {}).get("default") or "hybrid")
 
     print(f"=== Generating wiki ({mode}) ===")
+
+    # (H) Harvest-before-export (#112): human edits to wiki notes land as
+    # evidence BEFORE regeneration overwrites them. No-op when the obsidian
+    # integration is off (graphify gating pattern).
+    try:
+        from obsidian_bridge import harvest_before_export
+        harvest = harvest_before_export(dry_run=args.dry_run, project=args.project)
+        if harvest.get("harvested"):
+            print(f"  harvested: {harvest['harvested']} human-edited note(s) → evidence/raw/"
+                  f"{(args.project or 'vault')}/obsidian/")
+        elif harvest.get("reason"):
+            print(f"  harvest: {harvest['reason']}")
+    except Exception as e:
+        print(f"  harvest skipped: {e}", file=sys.stderr)
 
     # (B) Reconcile: clear stale generated pages so the output reflects current
     # evidence, never an accumulating set of orphans.
@@ -1130,6 +1146,34 @@ def main():
           f"{n_projects} project article(s), 1 index")
     if not args.dry_run:
         print(f"Citation graph: {graph_path}")
+        # (P) REST write path (#112d): when --push and the integration is on,
+        # mirror the fresh wiki through the Local REST API (better transport
+        # across sync boundaries; file-copy stays the fallback and default).
+        if args.push:
+            try:
+                from obsidian_bridge import _integration_cfg, check_server, push_notes
+                cfg = _integration_cfg()
+                if cfg is None:
+                    print("  --push ignored: integrations.obsidian not enabled", file=sys.stderr)
+                elif not check_server(cfg):
+                    print("  --push failed: server not reachable (is Obsidian running?)", file=sys.stderr)
+                    return 1
+                else:
+                    wiki_root = _wiki_root()
+                    notes = [(str(p.relative_to(wiki_root)), p.read_text(encoding="utf-8"))
+                             for p in sorted(wiki_root.rglob("*.md"))]
+                    written, failed = push_notes(notes)
+                    print(f"  pushed: {written} note(s) via REST ({failed} failed)")
+            except Exception as e:
+                print(f"  push failed: {e}", file=sys.stderr)
+                return 1
+        # (R) Record the fresh output in the export manifest (#112): the next
+        # harvest diff is against THIS content.
+        try:
+            from obsidian_bridge import record_export
+            record_export(_wiki_root())
+        except Exception as e:
+            print(f"  export manifest not recorded: {e}", file=sys.stderr)
     print(f"Wiki: {_wiki_root()}/")
     return 0
 

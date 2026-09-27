@@ -173,6 +173,12 @@ _DEFAULTS = {
         # Laya-MLX local). Eval + promotion-review surfaces ONLY — never the
         # 0-token core (see scripts/lib/judgment.py contract).
         "judgment": {"enabled": False, "route": "cloud", "cloud_model": "jev-1"},
+        # Obsidian two-way vault (#112): export via the Local REST API +
+        # harvest-before-export (human wiki edits land as evidence before
+        # regeneration). api_key_env names the env var; the plugin's
+        # data.json (inside vault/.obsidian/plugins/<id>/) is the fallback.
+        "obsidian": {"enabled": False, "api_url": "https://127.0.0.1:27124",
+                     "api_key_env": "OBSIDIAN_REST_KEY"},
     },
     # Domain vocabulary is NOT bootstrapped — it builds itself from each
     # project's own evidence (propose-domains structural scan on cold start;
