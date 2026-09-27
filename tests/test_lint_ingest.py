@@ -142,6 +142,148 @@ class TestIngestSlug:
         assert ingest_mod.slugify("docs/architecture.md") == "docs-architecture-md"
 
 
+class TestResumeFlipGate:
+    """#93: resume must not flip pending→ingested when 0 claims extracted.
+
+    The old code flipped unconditionally, orphaning the source: `ingested`
+    with zero claims, permanently blocked by the anti-loop gate."""
+
+    @staticmethod
+    def _make_source(tmp_path, monkeypatch, extract_return):
+        """Corpus with one pending source record; patch VAULT_ROOT + extractor."""
+        import hashlib
+        vault = tmp_path / "corpus"
+        (vault / "evidence" / "sources").mkdir(parents=True)
+        (vault / "evidence" / "raw" / "proj").mkdir(parents=True)
+        (vault / "evidence" / "claims").mkdir(parents=True)
+        (vault / "evidence" / "source-summaries").mkdir(parents=True)
+        (vault / "registry").mkdir(parents=True)
+        raw = vault / "evidence" / "raw" / "proj" / "doc.md"
+        raw.write_text("# Doc\n\nSome content\n")
+        sha = hashlib.sha256(raw.read_bytes()).hexdigest()
+        rec = vault / "evidence" / "sources" / "src-proj-doc-md.md"
+        rec.write_text(
+            "---\ntype: source\ntitle: Doc\nresource: evidence/raw/proj/doc.md\n"
+            f"source_path: evidence/raw/proj/doc.md\nsha256: {sha}\nstatus: pending\n---\n\n# Doc\n")
+        monkeypatch.setattr(ingest_mod, "VAULT_ROOT", vault)
+        monkeypatch.setattr(ingest_mod, "args_dry_run", False)
+        monkeypatch.setattr(ingest_mod, "extract_claims_fn",
+                            lambda text, path, model: extract_return)
+        return vault, raw, rec
+
+    def test_zero_claim_resume_stays_pending(self, tmp_path, monkeypatch):
+        vault, raw, rec = self._make_source(tmp_path, monkeypatch, [])
+        ingest_mod.ingest_source(raw, True, "test-model")
+        assert "status: pending" in rec.read_text()
+
+    def test_claim_resume_flips_to_ingested(self, tmp_path, monkeypatch):
+        vault, raw, rec = self._make_source(tmp_path, monkeypatch, [
+            {"statement": "Something true", "quote": "Some content", "locator": "L2"}])
+        ingest_mod.ingest_source(raw, True, "test-model")
+        assert "status: ingested" in rec.read_text()
+
+
+class TestReclaimOrphans:
+    """#93 recovery: --reclaim flips zero-claim ingested records to pending."""
+
+    def test_reclaim_flips_orphan(self, tmp_path, monkeypatch, capsys):
+        vault = tmp_path / "corpus"
+        (vault / "evidence" / "sources").mkdir(parents=True)
+        (vault / "evidence" / "raw" / "proj").mkdir(parents=True)
+        (vault / "evidence" / "claims").mkdir(parents=True)
+        raw = vault / "evidence" / "raw" / "proj" / "doc.md"
+        raw.write_text("# Doc\n")
+        rec = vault / "evidence" / "sources" / "src-proj-doc-md.md"
+        rec.write_text(
+            "---\ntype: source\ntitle: Doc\nresource: evidence/raw/proj/doc.md\n"
+            "source_path: evidence/raw/proj/doc.md\nsha256: deadbeef\nstatus: ingested\n---\n\n# Doc\n")
+        monkeypatch.setattr(ingest_mod, "VAULT_ROOT", vault)
+        n = ingest_mod.reclaim_orphans("proj")
+        assert n == 1
+        assert "status: pending" in rec.read_text()
+
+    def test_reclaim_skips_sources_with_claims(self, tmp_path, monkeypatch):
+        vault = tmp_path / "corpus"
+        (vault / "evidence" / "sources").mkdir(parents=True)
+        (vault / "evidence" / "raw" / "proj").mkdir(parents=True)
+        (vault / "evidence" / "claims").mkdir(parents=True)
+        raw = vault / "evidence" / "raw" / "proj" / "doc.md"
+        raw.write_text("# Doc\n")
+        rec = vault / "evidence" / "sources" / "src-proj-doc-md.md"
+        rec.write_text(
+            "---\ntype: source\ntitle: Doc\nresource: evidence/raw/proj/doc.md\n"
+            "source_path: evidence/raw/proj/doc.md\nsha256: deadbeef\nstatus: ingested\n---\n\n# Doc\n")
+        (vault / "evidence" / "claims" / "claim-proj-doc-md-000.md").write_text(
+            "---\ntype: claim\nid: claim-proj-doc-md-000\n---\n\n# c\n")
+        monkeypatch.setattr(ingest_mod, "VAULT_ROOT", vault)
+        assert ingest_mod.reclaim_orphans("proj") == 0
+        assert "status: ingested" in rec.read_text()
+
+    def test_reclaim_dry_run_writes_nothing(self, tmp_path, monkeypatch):
+        vault = tmp_path / "corpus"
+        (vault / "evidence" / "sources").mkdir(parents=True)
+        (vault / "evidence" / "raw" / "proj").mkdir(parents=True)
+        (vault / "evidence" / "claims").mkdir(parents=True)
+        raw = vault / "evidence" / "raw" / "proj" / "doc.md"
+        raw.write_text("# Doc\n")
+        rec = vault / "evidence" / "sources" / "src-proj-doc-md.md"
+        rec.write_text(
+            "---\ntype: source\ntitle: Doc\nresource: evidence/raw/proj/doc.md\n"
+            "source_path: evidence/raw/proj/doc.md\nsha256: deadbeef\nstatus: ingested\n---\n\n# Doc\n")
+        monkeypatch.setattr(ingest_mod, "VAULT_ROOT", vault)
+        assert ingest_mod.reclaim_orphans("proj", dry_run=True) == 1
+        assert "status: ingested" in rec.read_text()
+
+
+class TestLintSourceEmpty:
+    """#93 lint signal: ingested + zero claims warns (recoverable, not fatal)."""
+
+    @staticmethod
+    def _run_lint(tmp_path):
+        import sys as _sys, io, contextlib
+        old_argv = _sys.argv
+        _sys.argv = ["lint.py", str(tmp_path)]
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                lint_mod.main()
+        finally:
+            _sys.argv = old_argv
+        return buf.getvalue()
+
+    def test_ingested_zero_claims_warns(self, tmp_path):
+        vault = tmp_path / "corpus"
+        (vault / "evidence" / "sources").mkdir(parents=True)
+        (vault / "evidence" / "raw" / "proj").mkdir(parents=True)
+        (vault / "evidence" / "claims").mkdir(parents=True)
+        import hashlib
+        sha = hashlib.sha256(b"# Doc\n").hexdigest()
+        raw = vault / "evidence" / "raw" / "proj" / "doc.md"
+        raw.write_text("# Doc\n")
+        (vault / "evidence" / "sources" / "src-proj-doc-md.md").write_text(
+            "---\ntype: source\ntitle: Doc\nresource: evidence/raw/proj/doc.md\n"
+            f"source_path: evidence/raw/proj/doc.md\nsha256: {sha}\nstatus: ingested\n---\n\n# Doc\n")
+        out = self._run_lint(vault)
+        assert "SOURCE-EMPTY" in out
+        assert "--reclaim" in out
+
+    def test_ingested_with_claims_no_warning(self, tmp_path):
+        vault = tmp_path / "corpus"
+        (vault / "evidence" / "sources").mkdir(parents=True)
+        (vault / "evidence" / "raw" / "proj").mkdir(parents=True)
+        (vault / "evidence" / "claims").mkdir(parents=True)
+        import hashlib
+        sha = hashlib.sha256(b"# Doc\n").hexdigest()
+        (vault / "evidence" / "raw" / "proj" / "doc.md").write_text("# Doc\n")
+        (vault / "evidence" / "sources" / "src-proj-doc-md.md").write_text(
+            "---\ntype: source\ntitle: Doc\nresource: evidence/raw/proj/doc.md\n"
+            f"source_path: evidence/raw/proj/doc.md\nsha256: {sha}\nstatus: ingested\n---\n\n# Doc\n")
+        (vault / "evidence" / "claims" / "claim-proj-doc-md-000.md").write_text(
+            "---\ntype: claim\nid: claim-proj-doc-md-000\n---\n\n# c\n")
+        out = self._run_lint(vault)
+        assert "SOURCE-EMPTY evidence/sources/src-proj-doc-md.md" not in out
+
+
 class TestProvenanceRelations:
     """#79: claims from chat/PR captures carry typed provenance edges."""
 

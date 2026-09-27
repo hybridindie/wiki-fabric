@@ -718,6 +718,16 @@ def main():
             actual = sha256(rp)
             if actual[:12] != str(sh)[:12]:
                  errors.append("SOURCE-DRIFT %s: %s != %s" % (rel, sh[:12], actual[:12]))
+        if fm.get("type") == "source" and str(fm.get("status")) == "ingested" and not is_tpl(rel):
+            # #93 silent-orphan signal: ingested but zero claim files. Either
+            # the doc genuinely has no claims or the pre-fix resume flip /
+            # an outage left it stranded. Warning (not error): some docs
+            # legitimately extract nothing; --reclaim is the recovery path.
+            slug = rel.stem[4:] if rel.stem.startswith("src-") else rel.stem
+            claims_dir = vault / "evidence" / "claims"
+            found = claims_dir.is_dir() and any(claims_dir.glob(f"claim-{slug}-*.md"))
+            if not found:
+                warnings.append("SOURCE-EMPTY %s: ingested with zero claims (recover: wf ingest --reclaim <project>)" % rel)
 
     # 6. orphans (no inbound link; hubs/templates/index excluded)
     inbound = {}
