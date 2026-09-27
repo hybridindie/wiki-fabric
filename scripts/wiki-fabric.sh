@@ -131,7 +131,14 @@ find_harness() {
 
 # === Helper: CLI sync check (installed ~/.local/bin/wf vs harness script) ===
 cli_sync_state() {
-    # Returns: "current" | "stale" | "missing" | "none"
+    # Returns: "current" | "stale" | "missing" | "none" | "package"
+    # "package": this run IS the packaged tool (#118) — the uv shim is a
+    # python entrypoint, never byte-comparable to the bash script; drift is
+    # impossible within one install, so report that explicitly.
+    if [[ "${WF_PACKAGED:-0}" == "1" ]]; then
+        echo "package"
+        return 0
+    fi
     local harness_dir script_src dest
     harness_dir="$(find_harness)" || { echo "none"; return 0; }
     script_src="${harness_dir}/scripts/wiki-fabric.sh"
@@ -826,6 +833,7 @@ cmd_status() {
         current) ok "CLI:     current (v${WF_VERSION})" ;;
         stale)   warn "CLI:   STALE - installed wf differs from harness; run: wf update" ;;
         missing) warn "CLI:   not installed - run: wf install (or copy scripts/wiki-fabric.sh to ~/.local/bin/wf)" ;;
+        package) ok "CLI:     packaged (uv tool, v${WF_VERSION})" ;;
         *)       info "CLI:   dev mode (running from harness)" ;;
     esac
 
@@ -962,7 +970,7 @@ cmd_bootstrap() {
 # the documented first step. An installed `wf` parses normally.
 if [[ "${BASH_SOURCE[0]:-}" != "${0:-}" ]]; then
     case "${1:-}" in
-        install|help|update|status|version|vault|bootstrap|capture|ingest|query|context|log|models|sync|hook|claude|harness|review|promote|export|mine|lint|integrations|okf|doctor|thread|"") ;;
+        install|help|update|status|version|vault|bootstrap|capture|ingest|query|context|log|models|sync|hook|claude|harness|review|promote|export|mine|lint|integrations|okf|doctor|thread|rebuild-index|"") ;;
         *) set -- install "$@" ;;
     esac
     if [[ $# -eq 0 ]]; then
@@ -988,6 +996,11 @@ case "${1:-help}" in
     vault)
         shift
         cmd_vault "$@"
+        ;;
+    rebuild-index)
+        shift
+        fdir=$(find_fabric)
+        run_script "${fdir}" "scripts/cmd/rebuild-index.py" "$@"
         ;;
     bootstrap)
         shift

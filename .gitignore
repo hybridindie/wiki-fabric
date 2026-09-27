@@ -64,3 +64,9 @@ projects/*/overlay.yml
 tests/_bridge_fixture_fabric/
 # Per-project LLM config (bootstrap-generated, never shipped)
 .env.wiki-*
+
+# === Packaging (#118) ===
+dist/
+build/
+src/wiki_fabric/_harness/
+src/wiki_fabric.egg-info/

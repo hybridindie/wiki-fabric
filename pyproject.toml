@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "wiki-fabric"
 version = "0.2.0"
@@ -5,12 +9,18 @@ description = "Evidence-first knowledge base that compounds across projects — 
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
+keywords = ["wiki", "knowledge-base", "agents", "claude", "opencode", "evidence", "provenance", "okf", "mcp"]
 
 dependencies = [
     "pyyaml>=6.0",
     "openai>=1.40",
     "anthropic>=0.40",
 ]
+
+[project.scripts]
+# Phase-1 (#118): the packaged bash orchestrator is the behavior source; the
+# console script locates and runs it. Phase 2 migrates verbs into python.
+wf = "wiki_fabric.cli:main"
 
 [project.optional-dependencies]
 embeddings = ["numpy", "sentence-transformers"]
@@ -24,6 +34,14 @@ local = [
 ]
 dev = ["pytest>=8.0"]
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+# The harness tree IS the product: ship it as data (phase-1 keeps the bash
+# orchestrator as the behavior source; scripts are run, not imported).
+wiki_fabric = ["_harness/**/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
@@ -31,4 +49,4 @@ markers = [
 ]
 
 [tool.uv]
-package = false
+package = true
