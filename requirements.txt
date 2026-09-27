@@ -11,3 +11,5 @@ anthropic>=0.40
 # Optional semantic clustering (mine-promotions --use-embeddings):
 # numpy
 # sentence-transformers
+# MCP server client/server lib (#117: wf-mcp + the client lib the tests use):
+mcp>=2,<3
