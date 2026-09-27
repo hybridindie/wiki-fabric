@@ -116,3 +116,53 @@ class TestWriteCapture:
     def test_content_hash_consistency(self):
         assert sha256_str("abc") == sha256_str("abc")
         assert sha256_str("abc") != sha256_str("abd")
+
+
+class TestGithubRemoteParse:
+    """#85: derive owner/name from a repo's origin remote (hook gating)."""
+
+    def test_ssh_url(self):
+        assert capture_git.github_repo_from_remote.__module__ == "capture_git"
+        url = "git@github.com:owner/repo.git"
+        import unittest.mock as mock
+        with mock.patch.object(capture_git, "git", lambda *a, **k: url):
+            assert capture_git.github_repo_from_remote(Path("/any")) == "owner/repo"
+
+    def test_ssh_url_no_suffix(self):
+        import unittest.mock as mock
+        with mock.patch.object(capture_git, "git", lambda *a, **k: "git@github.com:o/r"):
+            assert capture_git.github_repo_from_remote(Path("/any")) == "o/r"
+
+    def test_https_url(self):
+        import unittest.mock as mock
+        with mock.patch.object(capture_git, "git", lambda *a, **k: "https://github.com/o/r.git"):
+            assert capture_git.github_repo_from_remote(Path("/any")) == "o/r"
+
+    def test_non_github_returns_none(self):
+        import unittest.mock as mock
+        with mock.patch.object(capture_git, "git", lambda *a, **k: "git@gitlab.com:o/r.git"):
+            assert capture_git.github_repo_from_remote(Path("/any")) is None
+
+    def test_no_remote_returns_none(self):
+        import unittest.mock as mock
+        with mock.patch.object(capture_git, "git", lambda *a, **k: None):
+            assert capture_git.github_repo_from_remote(Path("/any")) is None
+
+
+class TestSinceState:
+    """#85: hook runs are incremental — last capture time recorded per project."""
+
+    def test_state_roundtrip(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(capture_git, "EVIDENCE_RAW", tmp_path)
+        assert capture_git.read_since_state("proj") == "6m"  # fallback
+        capture_git.write_since_state("proj")
+        st = capture_git.read_since_state("proj")
+        # YYYY-MM-DD
+        import re
+        assert re.match(r"^\d{4}-\d{2}-\d{2}$", st)
+
+    def test_write_is_bests_effort(self, tmp_path, monkeypatch):
+        # unwritable location must not raise
+        monkeypatch.setattr(capture_git, "EVIDENCE_RAW", tmp_path / "no" / "deep" / "path")
+        capture_git.write_since_state("proj")  # mkdir parents makes this work
+        capture_git.write_since_state("proj")  # idempotent
