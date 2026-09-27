@@ -47,6 +47,36 @@ class TestLintFrontmatter:
 
 
 class TestLintHelpers:
+    def test_parse_frontmatter_cache_reuses(self, tmp_path):
+        """#108: the shared cache makes lint parse each file once per run
+        (lint used to walk+YAML-parse the corpus 9-10×)."""
+        p = tmp_path / "note.md"
+        p.write_text("---\ntype: claim\ntitle: T\n---\n\nBody\n")
+        cache = {}
+        fm1, body1, err1 = lint_mod.parse_frontmatter(p, _cache=cache)
+        fm2, body2, err2 = lint_mod.parse_frontmatter(p, _cache=cache)
+        assert len(cache) == 1, "second parse must hit the cache"
+        assert (fm1, body1, err1) == (fm2, body2, err2)
+
+    def test_parse_frontmatter_cache_invalidates_on_change(self, tmp_path):
+        import os, time
+        p = tmp_path / "note.md"
+        p.write_text("---\ntype: claim\n---\n\nv1\n")
+        cache = {}
+        fm1, _, _ = lint_mod.parse_frontmatter(p, _cache=cache)
+        # force mtime change + new content
+        os.utime(p, (time.time() + 5, time.time() + 5))
+        p.write_text("---\ntype: source\n---\n\nv2\n")
+        fm2, _, _ = lint_mod.parse_frontmatter(p, _cache=cache)
+        assert fm1["type"] == "claim" and fm2["type"] == "source"
+        assert len(cache) == 2
+
+    def test_parse_frontmatter_cache_missing_key(self, tmp_path):
+        p = tmp_path / "note.md"
+        p.write_text("---\ntype: claim\n---\n\nb\n")
+        fm, body, err = lint_mod.parse_frontmatter(p, _cache={})
+        assert fm["type"] == "claim" and err is None
+
     def test_strip_code_removes_fenced_blocks(self):
         body = "keep this\n```bash\nrm -rf /tmp/x [[not-a-link]]\n```\nand this"
         out = lint_mod.strip_code(body)

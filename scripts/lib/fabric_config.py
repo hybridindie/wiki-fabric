@@ -44,22 +44,51 @@ except ImportError:
 HARNESS_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
+def _looks_like_fabric(d):
+    """A directory that can serve as the fabric root: holds fabric.yaml, or
+    content at its root, or the nested corpus layout."""
+    return ((d / "fabric.yaml").exists()
+            or (d / "evidence").exists()
+            or (d / "projects").exists()
+            or (d / "corpus").exists())
+
+
+def _is_harness_tree(d):
+    """A harness checkout (the tool): has the runner + cmd scripts. Never a
+    fabric — its fabric.yaml is a dev convenience resolved by rule 3."""
+    return (d / "scripts" / "wiki-fabric.sh").exists() and (d / "scripts" / "cmd").is_dir()
+
+
 def _resolve_fabric_root():
     """Where the fabric (content + config) lives.
 
     The harness (this repo) is the TOOL and never holds user content. The vault
     is the full content root: corpus atoms (evidence/, concepts/, ...) under
-    vault/corpus/ and the generated wiki under vault/wiki/. Configs live in the
-    bootstrapped projects, not the harness.
+    vault/corpus/ and the generated wiki under vault/wiki/. Configs live in
+    the bootstrapped projects, not the harness.
 
     Resolution chain:
       1. $WIKI_FABRIC_DIR  — explicit override (the vault dir)
-      2. A vault/ sibling of this harness repo (dev mode) — the vault IS the fabric
-      3. $XDG_DATA_HOME/wiki-fabric  — default install target (the vault)
+      2. cwd or a cwd ancestor that looks like a fabric (sim finding: scripts
+         run from inside a non-standard fabric layout resolved to the wrong
+         fabric via the harness-sibling heuristic)
+      3. A vault/ sibling of this harness repo (dev mode) — the vault IS the fabric
+      4. $XDG_DATA_HOME/wiki-fabric  — default install target (the vault)
     """
     env = os.environ.get("WIKI_FABRIC_DIR")
     if env and Path(env).expanduser().is_dir():
         return Path(env).expanduser().resolve()
+
+    # cwd-based discovery: scripts invoked from inside a fabric should find
+    # THAT fabric — walk up from cwd, stop at the filesystem root. Harness
+    # trees (tool code) are skipped by signature, not by identity: their
+    # dev-mode fabric.yaml must not hijack resolution (sim finding #11).
+    cwd = Path.cwd()
+    for d in (cwd, *cwd.parents):
+        if _is_harness_tree(d):
+            break
+        if _looks_like_fabric(d):
+            return d.resolve()
 
     # dev: the harness repo lives with a sibling vault/ that holds all content
     sibling_vault = HARNESS_ROOT.parent / "vault"

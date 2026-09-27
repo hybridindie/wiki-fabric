@@ -261,6 +261,13 @@ def main():
         owner = git_name
 
     # === Phase 2: Prompt for what we need ===
+    # Explicit flags (--name/--slug/--domain/--skill/--extract/...) skip their
+    # own prompt; when EVERYTHING material is flagged, skip the confirmation
+    # too — a fully-specified invocation should never abort on a prompt
+    # (sim finding: piped answers + flags aborted confusingly).
+    everything_flagged = bool(args.name or args.slug or args.domain or args.skill
+                               or args.extract or args.synthesize
+                               or args.dossier or args.graph_dir)
     if not args.non_interactive:
         print("╔════════════════════════════════════════════╗")
         print("║   Wiki Fabric — Project Bootstrap          ║")
@@ -328,7 +335,8 @@ def main():
                 pass
             owner = new_owner
 
-    # Summary (only in interactive mode — let user confirm)
+    # Summary (only in interactive mode — let user confirm; a fully-flagged
+    # invocation skips the confirmation: everything was explicit already)
     if not args.non_interactive:
         print()
         print("  ── Configuration ──")
@@ -346,7 +354,7 @@ def main():
         print(f"  Skills:     {', '.join(skills)}")
         print(f"  Owner:      {owner}")
         print()
-        if not prompt_yes_no("Proceed with bootstrap?", default=True):
+        if not everything_flagged and not prompt_yes_no("Proceed with bootstrap?", default=True):
             print("Aborted.")
             sys.exit(0)
         print()
@@ -390,7 +398,8 @@ def main():
     # versions with the project repo; fabric.yaml stays fabric-global).
     routing_keys = {"extract": args.extract, "synthesize": args.synthesize,
                     "dossier": args.dossier, "graph_dir": args.graph_dir}
-    if not args.non_interactive and not any(v for v in routing_keys.values()):
+    if (not args.non_interactive and not any(v for v in routing_keys.values())
+            and not everything_flagged and sys.stdin.isatty()):
         # Interactive routing prompt (privacy tiering) unless flags given
         print()
         print("  LLM routing for this project (stage: where raw docs / claims /")
