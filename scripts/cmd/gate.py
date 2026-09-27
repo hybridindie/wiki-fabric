@@ -51,6 +51,16 @@ def _gate_domains():
     return dossiers, dossiers
 
 
+def _gate_questions():
+    """#88: harvested open questions awaiting triage (staging proposals +
+    canonical open questions). Returns (pending, list)."""
+    import importlib
+    promote_questions = importlib.import_module("promote-questions")
+    pending = promote_questions.list_pending()
+    open_qs = promote_questions.list_open_questions()
+    return pending, open_qs
+
+
 def _safe(fn):
     """Run a gate section; on failure report an error instead of crashing."""
     try:
@@ -65,6 +75,7 @@ def gate():
         "review": _safe(_gate_review),
         "promotions": _safe(_gate_promotions),
         "domains": _safe(_gate_domains),
+        "questions": _safe(_gate_questions),
     }
     actionable = any(p for p, _, _ in sections.values())
     return sections, actionable
@@ -94,11 +105,17 @@ def _emit(sections, actionable, quiet=False):
         print(f"  Pending domain proposals ({len(dom)}):")
         for path, fm in dom_list[:10]:
             print(f"    ▸ {path.name}  ({fm.get('domain')})")
+    qpending, qopen, q_err = sections["questions"]
+    if qpending:
+        print(f"  Open questions awaiting triage ({len(qpending)}):")
+        for path, fm in qpending[:10]:
+            print(f"    ? {path.stem}  ({fm.get('priority')}) {str(fm.get('question', ''))[:60]}")
     for section, (p, _, err) in sections.items():
         if err:
             print(f"  [{section} skipped: {err}]")
     print("\n  Resolve:  wf review --auto-reverify | wf promote --promote <dossier> | "
-          "python3 scripts/cmd/promote-domains.py --apply <dossier>")
+          "python3 scripts/cmd/promote-domains.py --apply <dossier> | "
+          "python3 scripts/cmd/promote-questions.py --apply <id> --reject <id> --reason <why>")
 
 
 
