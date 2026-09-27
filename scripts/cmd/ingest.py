@@ -277,7 +277,10 @@ def find_changed_sources(project_slug):
 
 def ingest_source(source_path, extract_claims=False, model=None, dry_run=False, namespace=None):
     """Ingest one source file. `extract_claims` is a bool flag (shadows the module
-    function of the same name inside this scope, hence the alias below)."""
+    function of the same name inside its scope, hence the alias below)."""
+    # /tmp vs /private/tmp (macOS): resolve BOTH sides through the filesystem
+    # so relative_to never throws on symlinked prefixes (sim finding #10).
+    source_path = source_path.resolve()
     if not source_path.exists():
         print(f"Error: Source file not found: {source_path}", file=sys.stderr)
         return False

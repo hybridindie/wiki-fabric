@@ -88,12 +88,12 @@ def _resolve_corpus_root():
     corpus = FABRIC_ROOT / _CORPUS_SUBDIR
     # already nested?
     if (corpus / "evidence").exists() or (corpus / "fabric.yaml").exists():
-        return corpus
+        return corpus.resolve()
     # legacy: content at fabric root?
     if (FABRIC_ROOT / "evidence").exists() or (FABRIC_ROOT / "projects").exists():
-        return FABRIC_ROOT
+        return FABRIC_ROOT.resolve()
     # fresh: use corpus/
-    return corpus
+    return corpus.resolve()
 
 CORPUS_ROOT = _resolve_corpus_root()
 

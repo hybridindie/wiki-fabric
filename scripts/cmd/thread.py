@@ -50,21 +50,24 @@ def resolve_node(index, needle):
 
 def claim_edges_for(index, node):
     """Claim edges terminating at this node — matched on session id and the
-    slug forms ingest generates from the capture path (wf_common.slugify)."""
+    slug forms ingest generates from the capture path. ingest truncates the
+    slug to 80 chars AFTER slugify (then .rstrip('-') normalization loses the
+    trailing dash), so exact-form matching breaks on long chat filenames
+    (sim finding #11) — prefix match covers every truncation variant."""
     from wf_common import slugify
     out = []
     n_file = str(node.get("file", "")).lower()
     n_session = str(node.get("session", "")).lower()
-    # the [[src-...]] target is slugify(evidence/raw-relative path)
     raw_rel = n_file
     if raw_rel.startswith("evidence/raw/"):
         raw_rel = raw_rel[len("evidence/raw/"):]
-    slugs = {n_file, slugify(raw_rel), slugify(n_file), "src-" + slugify(raw_rel)}
+    prefix = "src-" + slugify(raw_rel)[:80]
     for e in index.get("edges", []):
         if e.get("type") not in ("originated_in", "decided_in", "validated_in"):
             continue
         target = str(e.get("target", "")).lower().strip()
-        if target == n_session or target in slugs or target.endswith("/" + raw_rel):
+        if target == n_session or target == prefix or (
+                target.startswith("src-") and prefix.startswith(target) and len(target) >= 60):
             out.append(e)
     return out
 

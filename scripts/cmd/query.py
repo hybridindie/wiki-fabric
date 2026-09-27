@@ -161,7 +161,7 @@ _LINEAGE_QUERY_WORDS = {"where", "origin", "provenance", "discussed", "session",
                         "thread", "came", "source", "decided", "pr", "conversation"}
 
 
-def thread_lineage(query, expanded, query_type, index=None):
+def thread_lineage(query, expanded, query_type, index=None, pages=None):
     """#104b: for lineage-shaped queries (or decision queries), collect the
     thread neighborhood of the top claims — 'where did this come from'.
     Returns [(claim_page, node, edge_type)]. Gated on the thread index;
@@ -174,6 +174,15 @@ def thread_lineage(query, expanded, query_type, index=None):
     lineage_shaped = bool(q_words & _LINEAGE_QUERY_WORDS) or query_type == "decision"
     if not lineage_shaped:
         return []
+    if not expanded and pages is not None:
+        # lineage-shaped but lexically empty ("where did this come from") —
+        # anchor on the most recent provenance-carrying claims instead
+        # (deterministic: load order is stable)
+        candidates = [pg for pg in pages
+                      if pg["type"] == "claim" and pg["fm"].get("relations")]
+        expanded = [(0.0, pg) for pg in candidates[-8:][::-1]]
+    if not expanded:
+        return []
     from wf_common import slugify
     nodes = {str(n.get("session", "")).lower(): n for n in index.get("nodes", [])
              if n.get("session")}
@@ -181,6 +190,9 @@ def thread_lineage(query, expanded, query_type, index=None):
     for n in index.get("nodes", []):
         f = str(n.get("file", ""))
         raw_rel = f[len("evidence/raw/"):] if f.startswith("evidence/raw/") else f
+        # ingest truncates slugs to 80 chars (sim finding #11) — index by the
+        # truncated form so long chat-capture filenames join
+        nodes_by_slug["src-" + slugify(raw_rel)[:80]] = n
         nodes_by_slug["src-" + slugify(raw_rel)] = n
     hits = []
     seen_nodes = set()
@@ -366,7 +378,7 @@ def generate_answer(query, scored, pages, query_type, symbol_hits=None, thread_h
     q_sym_set = symbol_tokens(query)
     thread_hits = [t for t in (thread_hits or []) if isinstance(t, tuple) and len(t) == 3]
     symbol_hits = [pg for pg in (symbol_hits or []) if isinstance(pg, dict) and pg.get("fm")]
-    if not scored and not symbol_hits:
+    if not scored and not symbol_hits and not thread_hits:
         return "No relevant pages found for this query."
 
     # Take top results
@@ -655,7 +667,7 @@ def main():
     # queries surface the evidence-graph neighborhood — session/PR provenance
     # for the top scored claims. Provenance display only, never ranked above
     # lexical evidence.
-    thread_hits = thread_lineage(args.query, expanded, query_type)
+    thread_hits = thread_lineage(args.query, expanded, query_type, pages=pages)
 
     answer = generate_answer(args.query, expanded, pages, query_type,
                              symbol_hits=symbol_hits, thread_hits=thread_hits)

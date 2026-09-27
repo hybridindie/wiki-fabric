@@ -240,6 +240,8 @@ def build_thread_index():
             nodes.append(node)
 
     # claims → session/PR edges (from claim frontmatter relations)
+    # target slug must match ingest's truncation (source_slug[:80]) — long
+    # chat-capture filenames otherwise never join (sim finding #11)
     edges = []
     claims_dir = VAULT_ROOT / "evidence" / "claims"
     if claims_dir.is_dir():
@@ -252,10 +254,11 @@ def build_thread_index():
                 if not isinstance(r, dict):
                     continue
                 if r.get("type") in ("originated_in", "decided_in", "validated_in"):
+                    target = str(r.get("target", "")).strip('"[]')
                     edges.append({
                         "claim": cp.stem.lower(),
                         "type": r.get("type"),
-                        "target": str(r.get("target", "")).strip('"[]'),
+                        "target": target[:83],  # 'src-' + 80-char slug cap
                     })
 
     # session ↔ session continuity edges (#102c)
