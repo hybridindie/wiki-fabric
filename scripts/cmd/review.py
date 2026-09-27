@@ -163,10 +163,7 @@ def main():
 
 # === Locator re-verification (#109) =======================================
 
-def _norm(s):
-    """Markdown-normalized comparison text (same rules as extraction's matcher)."""
-    t = re.sub(r"[*`>]+", "", s or "")
-    return re.sub(r"\s+", " ", t).strip().lower()
+from wf_common import normalize_match as _norm
 
 
 def repair_backtick_elision(quote, source_segment):

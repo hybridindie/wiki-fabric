@@ -27,10 +27,8 @@ from pathlib import Path
 from datetime import date
 from wf_common import slugify
 from fabric_config import FABRIC_ROOT
-from fabric_config import CORPUS_ROOT
-from fabric_config import CORPUS_ROOT
+from fabric_config import CORPUS_ROOT, VAULT_ROOT
 
-VAULT_ROOT = CORPUS_ROOT
 PROJECTS_DIR = VAULT_ROOT / "projects"
 
 

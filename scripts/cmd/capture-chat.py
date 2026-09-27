@@ -32,12 +32,6 @@ from datetime import datetime, timedelta, timezone
 from fabric_config import get_config, resolve_repo_path, FABRIC_ROOT, CORPUS_ROOT
 
 MARKDOWN_FENCE = re.compile(r"```")
-
-
-def _now_ms():
-    return datetime.now(timezone.utc).timestamp() * 1000
-
-
 def _parse_since(since):
     m = re.match(r"^(\d+)([dwy])$", since or "30d")
     if not m:

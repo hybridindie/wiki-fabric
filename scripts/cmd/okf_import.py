@@ -26,9 +26,8 @@ import argparse
 from pathlib import Path
 from datetime import date, datetime, timezone
 
-from fabric_config import CORPUS_ROOT
+from fabric_config import CORPUS_ROOT, VAULT_ROOT
 
-VAULT_ROOT = CORPUS_ROOT
 RESERVED = {"index.md", "log.md"}
 
 # Hidden/injected-content screen (okf-guard-lite, deterministic):

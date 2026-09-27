@@ -50,21 +50,6 @@ SKIP_PARTS = {".git", ".obsidian", ".opencode", "__pycache__", ".venv", "venv", 
 SKIP_DIRS_IN_EVIDENCE = {"raw", "traces"}
 
 LINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]")
-
-
-def first_summary_line(body):
-    """Extract a one-line summary from the body, stripping wikilinks."""
-    for line in body.split("\n"):
-        line = line.strip()
-        if line and not line.startswith("#") and not line.startswith("---") and not line.startswith("[["):
-            # Strip wikilinks and markdown emphasis for a clean summary
-            clean = re.sub(r'\[\[([^\]|]+)(?:\|[^\]]+)?\]\]', r'\1', line)
-            clean = re.sub(r'\*\*([^*]+)\*\*', r'\1', clean)
-            clean = clean[:100]
-            return clean
-    return ""
-
-
 def scan_vault():
     """Walk the vault and categorize pages by directory."""
     categories = {

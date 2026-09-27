@@ -46,7 +46,7 @@ extract_claims_fn = extract_claims
 _MLX_ENSURE_DONE = False
 
 import threading as _threading
-from wf_common import slugify
+from wf_common import slugify, yaml_scalar
 _LOG_LOCK = _threading.Lock()
 
 # main() sets this from argv (global). Module-level default so ingest_source()
@@ -86,19 +86,6 @@ def clean_quote(quote):
     return cleaned
 
 
-def _yaml_scalar(value):
-    """Emit a YAML-safe inline double-quoted scalar for LLM-derived free text.
-
-    Hand-escaping breaks on model artifacts (literal backslash-escaped quotes
-    inside already-decoded JSON strings land as `\\"` and break the block
-    mapping). Build the double-quoted form explicitly: backslash, double
-    quote, and control chars are the only characters that need escaping in
-    YAML double-quoted style; everything else passes through literally.
-    """
-    s = str(value or "")
-    out = s.replace("\\", "\\\\").replace('"', '\\"')
-    out = out.replace("\n", "\\n").replace("\r", "").replace("\t", "\\t")
-    return f'"{out}"'
 
 
 def provenance_relations(source_slug, source_path):
@@ -135,8 +122,8 @@ def claim_frontmatter(claim, source_slug, idx, provenance=None):
     return f"""---
 type: claim
 id: claim-{source_slug}-{idx:03d}
-statement: {_yaml_scalar(statement)}
-description: {_yaml_scalar(statement[:140])}
+statement: {yaml_scalar(statement)}
+description: {yaml_scalar(statement[:140])}
 resource: "[[src-{source_slug}]]"
 generated: {{ by: "{actor(get_config(), 'agent', model=_EXTRACTION_MODEL[0])}", at: "{_dt_iso()}" }}
 verified:
@@ -147,8 +134,8 @@ confidence: {claim.get('conf', claim.get('confidence', 'medium'))}
 evidence_strength: {claim.get('ev', claim.get('evidence_strength', 'primary'))}
 source_refs:
   - source: "[[src-{source_slug}]]"
-    locator: {_yaml_scalar(claim.get('loc', claim.get('locator', 'N/A')))}
-    quote: {_yaml_scalar(quote)}
+    locator: {yaml_scalar(claim.get('loc', claim.get('locator', 'N/A')))}
+    quote: {yaml_scalar(quote)}
     supports: true
 last_verified: {date.today().isoformat()}
 {relations_block}

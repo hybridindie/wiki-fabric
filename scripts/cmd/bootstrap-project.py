@@ -122,17 +122,6 @@ def prompt_multi(prompt_text, options, default=None):
         elif part in options:
             result.append(part)
     return result if result else (default or [])
-
-
-def prompt_yn(prompt_text, default=False):
-    """Yes/no prompt. Returns bool."""
-    dflt = "Y/n" if default else "y/N"
-    val = input(f"  {prompt_text} [{dflt}]: ").strip().lower()
-    if not val:
-        return default
-    return val in ("y", "yes")
-
-
 def prompt_yes_no(prompt_text, default=False):
     """Yes/no prompt. Returns bool."""
     dflt = "Y/n" if default else "y/N"

@@ -40,10 +40,8 @@ from pathlib import Path
 from datetime import date, datetime, timedelta
 import wf_common
 from fabric_config import FABRIC_ROOT
-from fabric_config import CORPUS_ROOT
-from fabric_config import CORPUS_ROOT
+from fabric_config import CORPUS_ROOT, VAULT_ROOT
 
-VAULT_ROOT = CORPUS_ROOT
 EVIDENCE_RAW = VAULT_ROOT / "evidence" / "raw"
 
 SKIP_PREFIXES = ("chore", "docs", "style", "test", "ci", "build", "release")

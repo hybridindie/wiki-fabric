@@ -21,11 +21,10 @@ import argparse
 from pathlib import Path
 from datetime import date
 
-from fabric_config import CORPUS_ROOT
+from fabric_config import CORPUS_ROOT, VAULT_ROOT
 
 # Corpus is the export source root; the bundle's harness dirs (schemas/,
 # system/, references/) are appended by scope from the harness, not here.
-VAULT_ROOT = CORPUS_ROOT
 LINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]")
 RESERVED = {"index.md", "log.md"}
 
