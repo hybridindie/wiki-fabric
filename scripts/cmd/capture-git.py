@@ -38,6 +38,7 @@ import subprocess
 import argparse
 from pathlib import Path
 from datetime import date, datetime, timedelta
+import wf_common
 from fabric_config import FABRIC_ROOT
 from fabric_config import CORPUS_ROOT
 from fabric_config import CORPUS_ROOT
@@ -295,20 +296,9 @@ def write_since_state(project):
 
 
 def github_repo_from_remote(repo_path):
-    """Derive 'owner/name' from a repo's origin remote (git@ or https URLs).
-
-    None when the remote isn't GitHub — local-only repos keep working without gh.
-    """
-    url = git("remote", "get-url", "origin", cwd=repo_path)
-    if not url:
-        return None
-    url = url.strip()
-    m = re.match(r"^git@github\.com:([^/]+/[^/]+?)(?:\.git)?$", url)
-    if not m:
-        m = re.match(r"^https://github\.com/([^/]+/[^/]+?)(?:\.git)?$", url)
-    if not m:
-        return None
-    return m.group(1)
+    """Derive 'owner/name' from a repo's origin remote. Shared impl in
+    wf_common (#100) — sync's PR path needs the same parse."""
+    return wf_common.github_repo_from_remote(repo_path)
 
 
 def main():

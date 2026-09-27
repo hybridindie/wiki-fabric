@@ -119,34 +119,29 @@ class TestWriteCapture:
 
 
 class TestGithubRemoteParse:
-    """#85: derive owner/name from a repo's origin remote (hook gating)."""
+    """#85/#100: derive owner/name from a repo's origin remote (hook gating,
+    sync PR path). Shared impl lives in wf_common; capture-git re-exports."""
 
     def test_ssh_url(self):
-        assert capture_git.github_repo_from_remote.__module__ == "capture_git"
         url = "git@github.com:owner/repo.git"
-        import unittest.mock as mock
-        with mock.patch.object(capture_git, "git", lambda *a, **k: url):
-            assert capture_git.github_repo_from_remote(Path("/any")) == "owner/repo"
+        assert capture_git.wf_common.github_repo_from_remote_url(url) == "owner/repo"
 
     def test_ssh_url_no_suffix(self):
-        import unittest.mock as mock
-        with mock.patch.object(capture_git, "git", lambda *a, **k: "git@github.com:o/r"):
-            assert capture_git.github_repo_from_remote(Path("/any")) == "o/r"
+        assert capture_git.wf_common.github_repo_from_remote_url("git@github.com:o/r") == "o/r"
 
     def test_https_url(self):
-        import unittest.mock as mock
-        with mock.patch.object(capture_git, "git", lambda *a, **k: "https://github.com/o/r.git"):
-            assert capture_git.github_repo_from_remote(Path("/any")) == "o/r"
+        assert capture_git.wf_common.github_repo_from_remote_url("https://github.com/o/r.git") == "o/r"
 
     def test_non_github_returns_none(self):
-        import unittest.mock as mock
-        with mock.patch.object(capture_git, "git", lambda *a, **k: "git@gitlab.com:o/r.git"):
-            assert capture_git.github_repo_from_remote(Path("/any")) is None
+        assert capture_git.wf_common.github_repo_from_remote_url("git@gitlab.com:o/r.git") is None
 
     def test_no_remote_returns_none(self):
-        import unittest.mock as mock
-        with mock.patch.object(capture_git, "git", lambda *a, **k: None):
-            assert capture_git.github_repo_from_remote(Path("/any")) is None
+        assert capture_git.wf_common.github_repo_from_remote_url(None) is None
+
+    def test_injectable_git_fn(self):
+        out = capture_git.wf_common.github_repo_from_remote(
+            Path("/any"), git_fn=lambda cwd, *a: "git@github.com:o/r.git")
+        assert out == "o/r"
 
 
 class TestSinceState:

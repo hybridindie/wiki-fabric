@@ -77,3 +77,101 @@ class TestConflicts:
         out = sync.list_conflicts()
         assert len(out) == 2
         assert all("registry/conflicts" in o for o in out)
+
+
+class TestPlaneClassification:
+    """#100: PR merge policy input — a change set is as risky as its riskiest file."""
+
+    def test_evidence_plane(self):
+        for p in ("evidence/raw/x.md", "evidence/sources/src-x.md",
+                  "evidence/traces/change-sets/2026-01-01-x/manifest.md",
+                  "evidence/insights/proj/i.md", "evidence/_inbox/n.md"):
+            assert sync.classify_change(p) == "evidence", p
+
+    def test_atom_plane(self):
+        for p in ("evidence/claims/claim-x.md", "concepts/c.md", "patterns/p.md",
+                  "anti-patterns/ap.md", "projects/proj/decisions/d.md",
+                  "global/entities/e.md", "questions/q.md", "domains/ontology.md"):
+            assert sync.classify_change(p) == "atom", p
+
+    def test_registry_plane(self):
+        assert sync.classify_change("registry/log.md") == "registry"
+        assert sync.classify_change("registry/catalog.json") == "registry"
+
+    def test_unknown_fails_closed(self):
+        assert sync.classify_change("random/file.md") == "other"
+        assert sync.classify_changes(["evidence/raw/a.md", "random/file.md"]) == "atom"
+
+    def test_worst_case_wins(self):
+        assert sync.classify_changes(["evidence/raw/a.md"]) == "evidence"
+        assert sync.classify_changes(["evidence/raw/a.md", "patterns/p.md"]) == "atom"
+        assert sync.classify_changes(["registry/log.md"]) == "registry"
+        assert sync.classify_changes([]) == "registry"
+
+
+class TestSyncModeConfig:
+    def test_default_solo(self, monkeypatch):
+        import fabric_config as fc
+        monkeypatch.setattr(fc, "get_config", lambda: {}, raising=False)
+        assert sync.sync_mode() == "solo"
+        assert sync.evidence_prs_policy() == "auto"
+
+    def test_team_and_review(self, monkeypatch):
+        import fabric_config as fc
+        cfg = {"sync": {"mode": "team", "evidence_prs": "review"}}
+        monkeypatch.setattr(fc, "get_config", lambda: cfg, raise_=False) if False else None
+        import unittest.mock as mock
+        with mock.patch.object(fc, "get_config", lambda: cfg):
+            assert sync.sync_mode() == "team"
+            assert sync.evidence_prs_policy() == "review"
+
+    def test_invalid_falls_back_solo(self, monkeypatch):
+        import fabric_config as fc
+        cfg = {"sync": {"mode": "banana", "evidence_prs": "maybe"}}
+        import unittest.mock as mock
+        with mock.patch.object(fc, "get_config", lambda: cfg):
+            assert sync.sync_mode() == "solo"
+            assert sync.evidence_prs_policy() == "auto"
+
+
+class TestPrPolicy:
+    def test_evidence_auto_by_default(self):
+        changes = [" M evidence/raw/x.md", " M evidence/sources/y.md"]
+        assert sync.pr_merge_policy(changes) == "auto-merge"
+
+    def test_atom_always_review(self):
+        changes = [" M evidence/raw/x.md", " M patterns/p.md"]
+        import unittest.mock as mock
+        with mock.patch.object(sync, "evidence_prs_policy", lambda: "auto"):
+            assert sync.pr_merge_policy(changes) == "review"
+
+    def test_review_setting_overrides_auto(self):
+        import unittest.mock as mock
+        with mock.patch.object(sync, "evidence_prs_policy", lambda: "review"):
+            assert sync.pr_merge_policy([" M evidence/raw/x.md"]) == "review"
+
+
+class TestPrBody:
+    def test_body_embeds_manifest_and_planes(self, monkeypatch):
+        monkeypatch.setattr(sync, "machine_name", lambda: "testbox")
+        monkeypatch.setattr(sync, "change_set_manifests_for_range", lambda base: [
+            "evidence/traces/change-sets/2026-09-27-x/manifest.md"])
+        changes = [" M evidence/raw/a.md", " M evidence/claims/c.md", " M registry/log.md"]
+        body = sync.build_pr_body(changes, "abc123")
+        assert "type: change-set" in body
+        assert "sync-pr: true" in body
+        assert "machine: testbox" in body
+        assert "2026-09-27-x" in body
+        assert "**atom** (1):" in body
+        assert "**evidence** (1):" in body
+        assert "waits for human review" in body
+
+    def test_branch_name_shape(self, monkeypatch):
+        monkeypatch.setattr(sync, "machine_name", lambda: "testbox")
+        import re
+        assert re.match(r"^sync/testbox-\d{8}-\d{4}$", sync.pr_branch_name())
+
+    def test_machine_name_sanitized(self):
+        import socket, re
+        name = sync.machine_name()
+        assert re.match(r"^[a-z0-9-]{1,30}$", name)

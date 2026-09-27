@@ -34,6 +34,7 @@ import argparse
 import shutil
 from pathlib import Path
 from datetime import date, datetime
+import wf_common
 from wf_common import parse_frontmatter
 from fabric_config import FABRIC_ROOT
 from fabric_config import CORPUS_ROOT
@@ -69,6 +70,70 @@ LOCAL_ONLY_PATHS = [
     ".obsidian",         # editor workspace
     ".venv",             # python env
 ]
+
+# === PR-mode plane classification (#100) ===
+# Remote updates arrive as PRs — the PR is the change-set receipt (reviewable
+# diff, actor trail, CI verdict). Evidence-plane PRs auto-merge on green CI;
+# atom-plane PRs always wait for a human. Local-first is untouched: this gates
+# distribution, not local commits.
+ATOM_PATHS = (
+    "evidence/claims/",
+    "concepts/", "patterns/", "anti-patterns/", "skills/", "syntheses/",
+    "domains/", "projects/", "global/", "questions/",
+)
+EVIDENCE_PATHS = (
+    "evidence/raw/", "evidence/sources/", "evidence/source-summaries/",
+    "evidence/experiments/", "evidence/traces/", "evidence/_inbox/",
+    "evidence/insights/",
+)
+REGISTRY_PATHS = ("registry/",)
+
+
+def sync_mode(config=None):
+    """sync.mode from fabric.yaml: 'solo' (default, sticky — direct push) or
+    'team' (every push opens a PR)."""
+    try:
+        from fabric_config import get_config
+        cfg = config or get_config()
+        mode = str((cfg.get("sync") or {}).get("mode", "solo")).lower()
+        return mode if mode in ("solo", "team") else "solo"
+    except Exception:
+        return "solo"
+
+
+def evidence_prs_policy(config=None):
+    """sync.evidence_prs: 'auto' (default — evidence-only PRs auto-merge on
+    green CI) or 'review' (everything waits for a human)."""
+    try:
+        from fabric_config import get_config
+        cfg = config or get_config()
+        pol = str((cfg.get("sync") or {}).get("evidence_prs", "auto")).lower()
+        return pol if pol in ("auto", "review") else "auto"
+    except Exception:
+        return "auto"
+
+
+def classify_change(path_str):
+    """'atom' | 'evidence' | 'registry' | 'other' — the PR merge policy input.
+    A changed file set is as risky as its riskiest member (atoms dominate)."""
+    p = path_str.lstrip('"').strip()
+    if p.startswith(ATOM_PATHS):
+        return "atom"
+    if p.startswith(EVIDENCE_PATHS):
+        return "evidence"
+    if p.startswith(REGISTRY_PATHS):
+        return "registry"
+    return "other"
+
+
+def classify_changes(paths):
+    """Worst-case plane for a change set; empty set → 'registry' (bookkeeping)."""
+    kinds = {classify_change(p) for p in paths}
+    if "atom" in kinds or "other" in kinds:
+        return "atom"  # unknown paths treated as atoms (fail closed)
+    if "evidence" in kinds:
+        return "evidence"
+    return "registry"
 
 
 def sh(*args, cwd=None):
@@ -342,7 +407,132 @@ def cmd_status():
         pass  # ls-tree failures shouldn't break status
 
 
-def cmd_push(message=None):
+# === PR push path (#100) ===
+
+def gh_run(*args, timeout=60):
+    """Run a gh CLI command for the corpus remote; return stdout or None."""
+    import subprocess as _sp
+    try:
+        out = _sp.run(["gh"] + [str(a) for a in args],
+                      capture_output=True, text=True, timeout=timeout)
+        return out.stdout if out.returncode == 0 else None
+    except (FileNotFoundError, _sp.TimeoutExpired):
+        return None
+
+
+def corpus_github_repo():
+    """'owner/name' of the corpus remote, or None (non-GitHub → no PR path)."""
+    return wf_common.github_repo_from_remote_url(get_remote())
+
+
+def machine_name():
+    """Short machine id for sync branch names (hostname, sanitized)."""
+    import socket
+    host = socket.gethostname().split(".")[0].lower()
+    return re.sub(r"[^a-z0-9-]", "-", host)[:30] or "unknown"
+
+
+def pr_branch_name():
+    """sync/<machine>-<yyyymmdd-hhmm> — one branch per push."""
+    from datetime import datetime
+    stamp = datetime.now().strftime("%Y%m%d-%H%M")
+    return f"sync/{machine_name()}-{stamp}"
+
+
+def change_set_manifests_for_range(base_head):
+    """Change-set pages touched since base_head (the PR body's receipt half)."""
+    out = sh("diff", "--name-only", f"{base_head}", "HEAD", "--", "evidence/traces/change-sets/") or []
+    if isinstance(out, str):
+        out = [l.strip() for l in out.splitlines() if l.strip()]
+    return out
+
+
+def build_pr_body(changes, base_head):
+    """PR body = change-set receipts + classified file inventory. Deterministic."""
+    planes = {}
+    for l in changes:
+        p = l[3:].lstrip('"').rstrip('"')
+        planes.setdefault(classify_change(p), []).append(p)
+    lines = [
+        "---",
+        "type: change-set",
+        "sync-pr: true",
+        f"machine: {machine_name()}",
+        f"date: {date.today().isoformat()}",
+        "---",
+        "",
+        "# Corpus sync",
+        "",
+        f"Machine: `{machine_name()}` — one PR per `sync push` (#100).",
+        "",
+        "## Change-set receipts",
+        "",
+    ]
+    cs = change_set_manifests_for_range(base_head)
+    if cs:
+        for c in cs[:20]:
+            lines.append(f"- `{c}`")
+        if len(cs) > 20:
+            lines.append(f"- … and {len(cs) - 20} more")
+    else:
+        lines.append("_(no change-set traces in this range)_")
+    lines += ["", "## Files by plane", ""]
+    for kind in ("atom", "evidence", "registry", "other"):
+        items = planes.get(kind) or []
+        if not items:
+            continue
+        lines.append(f"**{kind}** ({len(items)}):")
+        for p in items[:15]:
+            lines.append(f"- `{p[3:].lstrip(chr(34)).rstrip(chr(34))}`")
+        if len(items) > 15:
+            lines.append(f"- … and {len(items) - 15} more")
+        lines.append("")
+    lines.append("Merge policy: evidence-only PRs auto-merge on green CI (`sync.evidence_prs: auto`); "
+                 "any atom-plane change waits for human review.")
+    return "\n".join(lines) + "\n"
+
+
+def pr_merge_policy(changes):
+    """'auto-merge' | 'review' for this push's file set (team mode)."""
+    if evidence_prs_policy() == "review":
+        return "review"
+    if classify_changes([l[3:] for l in changes]) == "evidence":
+        return "auto-merge"
+    return "review"
+
+
+def push_via_pr(changes, message):
+    """One branch + one PR per push. Evidence-only + auto policy → gh pr merge
+    --auto (squash) so CI verdict drives the merge; otherwise leave open."""
+    repo = corpus_github_repo()
+    if not repo:
+        print("Error: PR push requires a GitHub corpus remote (owner/name), got: "
+              f"{(get_remote() or '').strip()[:60]}", file=sys.stderr)
+        sys.exit(1)
+    branch = pr_branch_name()
+    base_head = sh("rev-parse", f"{CONTENT_REMOTE_NAME}/corpus").strip()
+    if sh("push", CONTENT_REMOTE_NAME, f"HEAD:refs/heads/{branch}") is None:
+        print(f"Error: could not push branch {branch}", file=sys.stderr)
+        sys.exit(1)
+    body = build_pr_body(changes, base_head)
+    title = message or f"sync {machine_name()} {date.today().isoformat()}"
+    gh_run("pr", "create",
+           "--repo", repo,
+           "--base", "corpus",
+           "--head", branch,
+           "--title", title,
+           "--body", body)
+    if gh_run("pr", "view", branch, "--repo", repo, "--json", "url", "--jq", ".url"):
+        print(f"PR opened: {gh_run('pr', 'view', branch, '--repo', repo, '--json', 'url', '--jq', '.url').strip()}")
+    policy = pr_merge_policy(changes)
+    if policy == "auto-merge":
+        gh_run("pr", "merge", branch, "--repo", repo, "--auto", "--squash")
+        print("Auto-merge armed (evidence-plane only, CI-gated).")
+    else:
+        print("Awaiting human review (atom-plane changes are never auto-merged).")
+
+
+def cmd_push(message=None, pr=False, no_pr=False):
     validate_fabric()
     if not get_remote():
         print("No corpus remote. Run: wf sync init <git-url>", file=sys.stderr)
@@ -412,6 +602,14 @@ def cmd_push(message=None):
         print(f"Committed {len(changes)} corpus files: {msg}")
 
     head = sh("rev-parse", "HEAD")
+
+    # Mode resolution (#100): --pr forces PR path, --no-pr forces direct;
+    # otherwise the sticky fabric.yaml sync.mode decides (solo default).
+    use_pr = pr or (sync_mode() == "team" and not no_pr)
+    if use_pr:
+        push_via_pr(changes if changes else [], message)
+        return
+
     if sh("push", CONTENT_REMOTE_NAME, f"{head.strip()}:refs/heads/corpus") is None:
         print("Error: push rejected — remote has newer commits. Run: wf sync pull", file=sys.stderr)
         sys.exit(1)
@@ -602,6 +800,10 @@ def main():
     parser.add_argument("--strategy", choices=["ours", "theirs", "union"], default=None, help="resolve: how to resolve the conflict")
     parser.add_argument("conflict_file", nargs="?", help="Conflict file (from registry/conflicts/) for `resolve`")
     parser.add_argument("--yes", "-y", action="store_true", help="setup: skip the creation prompt")
+    parser.add_argument("--pr", action="store_true",
+                        help="push: open a PR for this push even in solo mode (#100 receipts/ownership trail)")
+    parser.add_argument("--no-pr", action="store_true",
+                        help="push: direct push even in team mode (explicit opt-out)")
     args = parser.parse_args()
 
     if args.command == "setup":
@@ -614,7 +816,7 @@ def main():
     elif args.command == "status":
         cmd_status()
     elif args.command == "push":
-        cmd_push(args.message)
+        cmd_push(args.message, pr=args.pr, no_pr=args.no_pr)
     elif args.command == "pull":
         cmd_pull()
     elif args.command == "resolve":
