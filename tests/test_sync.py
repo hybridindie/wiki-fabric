@@ -147,14 +147,20 @@ class TestPrPolicy:
 
     def test_review_setting_overrides_auto(self):
         import unittest.mock as mock
-        with mock.patch.object(sync, "evidence_prs_policy", lambda: "review"):
+        import importlib
+        policy_mod = importlib.import_module("sync_lib.policy")
+        with mock.patch.object(policy_mod, "evidence_prs_policy", lambda: "review"):
             assert sync.pr_merge_policy([" M evidence/raw/x.md"]) == "review"
 
 
 class TestPrBody:
     def test_body_embeds_manifest_and_planes(self, monkeypatch):
-        monkeypatch.setattr(sync, "machine_name", lambda: "testbox")
-        monkeypatch.setattr(sync, "change_set_manifests_for_range", lambda base: [
+        import importlib
+        policy_mod = importlib.import_module("sync_lib.policy")
+        monkeypatch.setattr(policy_mod, "machine_name", lambda: "testbox")
+        import importlib
+        pr_mod = importlib.import_module("sync_lib.pr")
+        monkeypatch.setattr(pr_mod, "change_set_manifests_for_range", lambda base: [
             "evidence/traces/change-sets/2026-09-27-x/manifest.md"])
         changes = [" M evidence/raw/a.md", " M evidence/claims/c.md", " M registry/log.md"]
         body = sync.build_pr_body(changes, "abc123")
@@ -167,7 +173,9 @@ class TestPrBody:
         assert "waits for human review" in body
 
     def test_branch_name_shape(self, monkeypatch):
-        monkeypatch.setattr(sync, "machine_name", lambda: "testbox")
+        import importlib
+        policy_mod = importlib.import_module("sync_lib.policy")
+        monkeypatch.setattr(policy_mod, "machine_name", lambda: "testbox")
         import re
         assert re.match(r"^sync/testbox-\d{8}-\d{4}$", sync.pr_branch_name())
 

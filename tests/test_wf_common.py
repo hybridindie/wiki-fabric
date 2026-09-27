@@ -109,6 +109,7 @@ class TestExplicitImportBootstrap(unittest.TestCase):
     ALLOWED_PATH_SETS = {
         '_HERE, _HERE.parent / "lib"',                       # default
         '_HERE, _HERE.parent / "lib", _HERE.parent / "cmd"', # eval.py (imports cmd/ingest)
+        '_HERE, _HERE.parent / "lib", _HERE.parent',         # export-wiki (imports wiki_lib package)
     }
 
     def test_no_shotgun_path_injection(self):
