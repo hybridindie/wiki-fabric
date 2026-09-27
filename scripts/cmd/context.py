@@ -287,6 +287,15 @@ def select_context(pages, task, paths, project, today, max_items=20):
             "priority": s["priority"],
         }
         item["trust_tier"] = trust_tier(pg["fm"])
+        # #104c: thread provenance — delivered items with evidence-plane edges
+        # carry where they came from ("discussed in / decided in")
+        rels = pg["fm"].get("relations") or []
+        if isinstance(rels, list):
+            for r in rels:
+                if isinstance(r, dict) and r.get("type") in ("originated_in", "decided_in", "validated_in"):
+                    item.setdefault("provenance", []).append(
+                        {"type": r.get("type"), "target": str(r.get("target", ""))})
+                    break
         if s["stale"]:
             item["warning"] = f"review_after overdue {s['stale']} day(s)"
         if pg["type"] == "commitment":
@@ -445,6 +454,10 @@ def render_markdown(task, paths, project, selected, excluded, nav=None):
                      "machine-confirmed": "trust: machine-confirmed"}.get(tier, "")
             badge_part = f" `{badge}`" if badge else ""
             lines.append(f"- [[{it['stem']}]] — *{it['reason']}*{badge_part}{warn}")
+            for p in it.get("provenance") or []:
+                verb = {"originated_in": "discussed in", "decided_in": "decided in",
+                        "validated_in": "validated in"}.get(p.get("type"), p.get("type"))
+                lines.append(f"  *{verb}: {p.get('target', '')}*")
         lines.append("")
 
     lines.append("## Excluded")
