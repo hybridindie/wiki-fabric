@@ -1,10 +1,20 @@
 """wiki-fabric — evidence-first knowledge base that compounds across projects.
 
-Package layout (phase-1 spike, #118): the harness tree ships as package data.
-The console script locates it at runtime and runs the bash orchestrator with
-bash — 100% of today's behavior, delivered as an installable package.
+Phase 2 (#118): the dispatcher is pure python (no bash dependency) — every
+verb maps to the shipped script it always ran, executed with the right
+interpreter. The harness tree ships as package data; install/update are
+owned by uv (no script-copy, no CLI/harness drift). Windows-first-class.
 """
 from pathlib import Path
+
+__version__ = "0.2.0"
+
+# Packaged-install detection (phase 2): the _harness tree beside this package
+# means wf runs from a uv tool install — update/status key off WF_PACKAGED.
+import os as _os
+_here = Path(__file__).resolve().parent
+if (_here / "_harness" / "scripts").exists():
+    _os.environ.setdefault("WF_PACKAGED", "1")
 
 
 def package_root() -> Path:

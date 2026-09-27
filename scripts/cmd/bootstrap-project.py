@@ -304,14 +304,16 @@ def main():
 
     # Domains
     domains = args.domain
-    if not domains and not args.non_interactive:
+    if not domains and not args.non_interactive and sys.stdin.isatty():
         domains = prompt_multi("Domains to load", available_domains, default=["agent-systems"])
     if not domains:
         domains = ["agent-systems"]
 
     # Skills
     skills = args.skill
-    if not skills and not args.non_interactive:
+    if not skills and not args.non_interactive and sys.stdin.isatty():
+        # prompt only when a human is attached AND no explicit skill flags —
+        # flag-driven automation (everything_flagged or partial flags) defaults
         default_skills = [s for s in available_skills if s == "serialize-and-verify-writes"]
         if not default_skills:
             default_skills = available_skills[:1]
