@@ -54,12 +54,120 @@ def _slug(text, limit=60):
 
 def _md_escape(text):
     """Trim + fence-protect chat text (``` inside turns would break md blocks)."""
-    text = (text or "").strip()
     return text.replace("```", "~~~")
 
 
+# === Thread structure (#102): captures are graph nodes, not flat text ===
+# Deterministic, 0 tokens: the metadata chat capture already knows (session,
+# harness, files touched via tool calls) goes into frontmatter so the thread
+# index and retrieval can traverse it. Provenance only — never content claims.
+
+_FILES_TOOL_KEYS = {
+    # opencode tool name → input key carrying a repo file path (live-verified)
+    "read": "filePath",
+    "edit": "filePath",
+    "write": "filePath",
+}
+
+
+def _opencode_files_touched(parts_by_msg):
+    """Relative project paths from tool-call parts (read/edit/write only).
+    Deterministic projection of tool inputs; bash commands are NOT parsed."""
+    files = []
+    for plist in parts_by_msg.values():
+        for p in plist:
+            if p.get("type") != "tool":
+                continue
+            tool = str(p.get("tool", "")).lower()
+            key = _FILES_TOOL_KEYS.get(tool)
+            if not key:
+                continue
+            fp = str(((p.get("state") or {}).get("input") or {}).get(key) or "").strip()
+            if fp:
+                files.append(fp)
+    return files
+
+
+def capture_frontmatter(kind, project, session, harness, created_iso=None,
+                        files_touched=None, extra=None):
+    """Frontmatter block for a captured session/PR (#102). The file IS the
+    graph node; derived indices read this, never the body."""
+    # dedupe preserving order (a session touching context.py 8 times lists it once)
+    seen, uniq = set(), []
+    for f in files_touched or []:
+        rel = fp_rel(f)
+        if rel not in seen:
+            seen.add(rel)
+            uniq.append(rel)
+    lines = ["---",
+             "type: source",
+             f"kind: {kind_of(harness)}",
+             f"harness: {harness}",
+             f"session: \"{session}\"",
+             f"project: {project}"]
+    if created_iso:
+        lines.append(f"session_started: {created_iso}")
+    if uniq:
+        lines.append("files_touched:")
+        for f in uniq[:20]:
+            lines.append(f"  - \"{f}\"")
+    for k, v in (extra or {}).items():
+        if v is None:
+            continue
+        if isinstance(v, list):
+            lines.append(f"{k}:")
+            for item in v[:20]:
+                lines.append(f"  - \"{item}\"")
+        else:
+            lines.append(f"{k}: \"{v}\"")
+    lines.append("---")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def kind_of(harness):
+    return "chat-session"
+
+
+def fp_rel(f):
+    """Normalize a file path for the index: absolute project paths →
+    project-relative tail (deterministic, best-effort)."""
+    f = str(f).replace("\\", "/")
+    # strip the workspace root when present (opencode paths are absolute)
+    root = str(getattr(_project_root_for_rel, "value", "") or "").rstrip("/") + "/"
+    if root and f.startswith(root):
+        return f[len(root):]
+    for marker in ("/mcp_server/", "/scripts/", "/docs/", "/tests/", "/src/"):
+        i = f.find(marker)
+        if i > 0:
+            return f[i + 1:]
+    return f
+
+
+def _set_rel_root(project_root):
+    _project_root_for_rel.value = str(project_root)
+
+
+class _project_root_for_rel:
+    value = ""
+
+
+def find_thread_links(session_id, transcript_text, other_sessions):
+    """#102c: explicit thread links — sessions whose ids appear in the
+    transcript (continuations, references) or a shared summary line.
+    Deterministic substring scan; edges only when the reference is exact."""
+    linked = []
+    for other in other_sessions:
+        if other == session_id:
+            continue
+        if other in transcript_text:
+            linked.append(other)
+    return linked
+
+
 def _render_opencode_session(db_path, session_id, min_turns):
-    """Render one opencode session to markdown. Returns (md, meta) or None."""
+    """Render one opencode session to markdown.
+    Returns (turns, user_turns, files_touched) or None."""
     conn = sqlite3.connect(db_path)
     try:
         rows = conn.execute(
@@ -111,7 +219,8 @@ def _render_opencode_session(db_path, session_id, min_turns):
                     out.append(("tool", brief))
     if user_turns < min_turns:
         return None
-    return out, user_turns
+    files = _opencode_files_touched(parts_by_msg)
+    return out, user_turns, files
 
 
 def capture_opencode(project, project_root, raw_dir, since_ms, limit, min_turns, dry_run):
@@ -131,13 +240,17 @@ def capture_opencode(project, project_root, raw_dir, since_ms, limit, min_turns,
         conn.close()
 
     written = []
+    session_ids = list(meta.keys())
     for sid, (directory, slug, created_ms) in meta.items():
         rendered = _render_opencode_session(db, sid, min_turns)
         if not rendered:
             continue
-        turns, user_turns = rendered
+        turns, user_turns, files_touched = rendered
         if len(written) >= limit:
             break
+        # thread edges (#102c): references to other captured sessions
+        transcript_text = "\n".join(t for _, t in turns)
+        links = find_thread_links(sid, transcript_text, session_ids)
         dt = datetime.fromtimestamp(created_ms / 1000, tz=timezone.utc)
         date = dt.strftime("%Y-%m-%d")
         first_user = next((t[:80] for r, t in turns if r == "user"), sid)
@@ -146,7 +259,11 @@ def capture_opencode(project, project_root, raw_dir, since_ms, limit, min_turns,
         out_path = raw_dir / fname
         if out_path.exists():
             continue  # anti-loop: session already captured
-        lines = [f"# Chat session {sid} — {date}", "",
+        lines = [capture_frontmatter("chat-session", project, sid, "opencode",
+                                     created_iso=dt.isoformat(),
+                                     files_touched=files_touched,
+                                     extra={"related_sessions": links} if links else None),
+                 f"# Chat session {sid} — {date}", "",
                  "## Metadata",
                  f"- Harness: opencode",
                  f"- Session: {sid}",
@@ -192,6 +309,8 @@ def capture_claude(project, project_root, raw_dir, since_ms, limit, min_turns, d
         lines = jsonl.read_text(encoding="utf-8", errors="replace").splitlines()
         turns = []
         user_turns = 0
+        files_touched = []
+        _CLAUDE_FILE_TOOLS = {"Read", "Edit", "Write", "NotebookEdit"}
         for line in lines:
             try:
                 rec = json.loads(line)
@@ -200,6 +319,12 @@ def capture_claude(project, project_root, raw_dir, since_ms, limit, min_turns, d
             role = rec.get("type")
             msg = rec.get("message") or {}
             content = msg.get("content")
+            if isinstance(content, list):
+                for c in content:
+                    if isinstance(c, dict) and c.get("type") == "tool_use" and c.get("name") in _CLAUDE_FILE_TOOLS:
+                        fp = str((c.get("input") or {}).get("filePath") or (c.get("input") or {}).get("file_path") or "").strip()
+                        if fp:
+                            files_touched.append(fp)
             text = ""
             if isinstance(content, str):
                 text = content
@@ -217,7 +342,10 @@ def capture_claude(project, project_root, raw_dir, since_ms, limit, min_turns, d
         out_path = raw_dir / f"{date}-chat-{slug}.md"
         if out_path.exists():
             continue
-        md = [f"# Chat session {jsonl.stem} — {date}", "",
+        md = [capture_frontmatter("chat-session", project, jsonl.stem, "claude",
+                                  created_iso=date,
+                                  files_touched=sorted(set(files_touched))),
+              f"# Chat session {jsonl.stem} — {date}", "",
               "## Metadata",
               f"- Harness: claude",
               f"- Project: {project}",
@@ -256,6 +384,7 @@ def main():
     if not project_root or not project_root.exists():
         print(f"Unknown project {args.project!r} (no repos entry / dir)", file=sys.stderr)
         return 2
+    _set_rel_root(project_root)
     raw_dir = CORPUS_ROOT / "evidence" / "raw" / args.project / "chats"
     since_ms = _parse_since(args.since)
 
