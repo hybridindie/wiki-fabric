@@ -14,6 +14,7 @@
 #   silent fallback) — that one is intentionally not folded in here.
 
 import re
+import subprocess
 from pathlib import Path
 
 try:
@@ -76,3 +77,33 @@ def now_iso_utc():
     """ISO-8601 instant with explicit UTC offset (OKF §5)."""
     from datetime import datetime, timezone
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def github_repo_from_remote_url(url):
+    """Derive 'owner/name' from a GitHub remote URL (git@ or https forms).
+
+    None when the URL isn't GitHub. Shared by capture-git (repo gating)
+    and sync (#100 PR push path). """
+    if not url:
+        return None
+    url = str(url).strip()
+    m = re.match(r"^git@github\.com:([^/]+/[^/]+?)(?:\.git)?$", url)
+    if not m:
+        m = re.match(r"^https://github\.com/([^/]+/[^/]+?)(?:\.git)?$", url)
+    return m.group(1) if m else None
+
+
+def github_repo_from_remote(repo_path, remote="origin", git_fn=None):
+    """Derive 'owner/name' from a repo's git remote. None when the remote
+    is missing or isn't GitHub — local-only repos keep working without gh.
+    git_fn(path, *args) is injectable for tests; default shells out."""
+    if git_fn is None:
+        def git_fn(cwd, *args):
+            try:
+                out = subprocess.run(["git"] + list(args), cwd=str(cwd),
+                                     capture_output=True, text=True, timeout=30)
+                return out.stdout if out.returncode == 0 else None
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                return None
+    url = git_fn(repo_path, "remote", "get-url", remote)
+    return github_repo_from_remote_url(url)
