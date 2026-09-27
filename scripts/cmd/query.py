@@ -147,6 +147,60 @@ _SYMBOL_STOPWORDS = {"what", "does", "this", "that", "with", "from", "have",
                      "when", "where", "should", "would", "there", "about"}
 
 
+def load_thread_index():
+    """registry/threads.json or None (#104 gate: absent → all thread features
+    no-op cleanly, same pattern as graphify gating)."""
+    try:
+        import json as _json
+        return _json.loads((VAULT_ROOT / "registry" / "threads.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+_LINEAGE_QUERY_WORDS = {"where", "origin", "provenance", "discussed", "session",
+                        "thread", "came", "source", "decided", "pr", "conversation"}
+
+
+def thread_lineage(query, expanded, query_type, index=None):
+    """#104b: for lineage-shaped queries (or decision queries), collect the
+    thread neighborhood of the top claims — 'where did this come from'.
+    Returns [(claim_page, node, edge_type)]. Gated on the thread index;
+    deterministic; empty for thread-free corpora. index injectable for tests."""
+    if index is None:
+        index = load_thread_index()
+    if not index:
+        return []
+    q_words = set(norm(query).split())
+    lineage_shaped = bool(q_words & _LINEAGE_QUERY_WORDS) or query_type == "decision"
+    if not lineage_shaped:
+        return []
+    from wf_common import slugify
+    nodes = {str(n.get("session", "")).lower(): n for n in index.get("nodes", [])
+             if n.get("session")}
+    nodes_by_slug = {}
+    for n in index.get("nodes", []):
+        f = str(n.get("file", ""))
+        raw_rel = f[len("evidence/raw/"):] if f.startswith("evidence/raw/") else f
+        nodes_by_slug["src-" + slugify(raw_rel)] = n
+    hits = []
+    seen_nodes = set()
+    for score, pg in expanded[:8]:
+        if pg["type"] != "claim":
+            continue
+        rels = pg["fm"].get("relations") or []
+        if not isinstance(rels, list):
+            continue
+        for r in rels:
+            if not isinstance(r, dict) or r.get("type") not in ("originated_in", "decided_in", "validated_in"):
+                continue
+            target = str(r.get("target", "")).strip('"[]').lower()
+            node = nodes_by_slug.get(target) or nodes.get(target)
+            if node and id(node) not in seen_nodes:
+                seen_nodes.add(id(node))
+                hits.append((pg, node, r.get("type")))
+    return hits
+
+
 def graphify_boost(pg, q_tokens, q_words):
     """Graph-proximity ranking signal (#48): a claim enriched with a symbol
     the query names is code-reachable — boost it modestly. Zero when the
@@ -301,13 +355,16 @@ def expand_graph(scored_pages, relations, pages, max_hops=1):
 # Answer generation
 # ---------------------------------------------------------------------------
 
-def generate_answer(query, scored, pages, query_type, symbol_hits=None):
+def generate_answer(query, scored, pages, query_type, symbol_hits=None, thread_hits=None):
     """Produce a structured answer per the query protocol.
 
     symbol_hits (#48): claims discovered via graphify symbol proximity —
     code-reachable evidence that lexical scoring missed. Rendered as their
-    own evidence tier, never ranked above lexical evidence."""
+    own evidence tier, never ranked above lexical evidence.
+    thread_hits (#104): (claim, node, edge_type) provenance neighborhoods —
+    lineage display only, never scored."""
     q_sym_set = symbol_tokens(query)
+    thread_hits = [t for t in (thread_hits or []) if isinstance(t, tuple) and len(t) == 3]
     symbol_hits = [pg for pg in (symbol_hits or []) if isinstance(pg, dict) and pg.get("fm")]
     if not scored and not symbol_hits:
         return "No relevant pages found for this query."
@@ -411,6 +468,22 @@ def generate_answer(query, scored, pages, query_type, symbol_hits=None):
             lines.append(f"- {stmt[:100]}")
             lines.append(f"  [{ref.get('locator', '?')}] quote: \"{ref.get('quote', '')[:60]}...\"")
             lines.append(f"  symbols: {', '.join(f'`{s}`' for s in syms)}")
+            lines.append("")
+
+    if thread_hits:
+        lines.append("## Lineage (evidence graph)")
+        lines.append("")
+        for claim_pg, node, edge_type in thread_hits[:4]:
+            kind = node.get("kind", "?")
+            if kind == "pr-record":
+                label = f"PR #{node.get('pr')} [{node.get('pr_state', '')}]"
+            else:
+                label = f"session {node.get('session', '?')[:24]} ({node.get('harness', '?')})"
+            lines.append(f"- {claim_pg['fm'].get('statement', '')[:80]}")
+            lines.append(f"  provenance: {edge_type} → {node.get('file', '?')} — {label}")
+            files = node.get("files_touched") or []
+            if files:
+                lines.append(f"  files touched: {', '.join(files[:5])}")
             lines.append("")
 
     if patterns:
@@ -578,8 +651,14 @@ def main():
     if args.verbose:
         print(f"After graph expansion: {len(expanded)}", file=sys.stderr)
 
+    # Thread lineage (#104, gated on threads.json existing): lineage-shaped
+    # queries surface the evidence-graph neighborhood — session/PR provenance
+    # for the top scored claims. Provenance display only, never ranked above
+    # lexical evidence.
+    thread_hits = thread_lineage(args.query, expanded, query_type)
+
     answer = generate_answer(args.query, expanded, pages, query_type,
-                             symbol_hits=symbol_hits)
+                             symbol_hits=symbol_hits, thread_hits=thread_hits)
     print(answer)
 
     if args.save:
