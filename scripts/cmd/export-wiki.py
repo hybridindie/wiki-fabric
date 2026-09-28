@@ -148,6 +148,8 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="Generate the human-layer wiki from the evidence corpus")
     parser.add_argument("--project", help="Generate for one project only")
+    parser.add_argument("--deep-dives", action="store_true",
+                        help="Also render graphify deep dives (architecture/components/tour) for connected projects (#145)")
     parser.add_argument("--mode", default=None, choices=["mechanical", "llm", "hybrid"],
                        help="Override generation mode (default: fabric.yaml wiki.generation)")
     parser.add_argument("--dry-run", action="store_true")
@@ -224,6 +226,30 @@ def main():
     if hubs:
         print(f"  domain hub(s): {n_domains}")
 
+    # Deep dives (#145): graphify-rendered architecture/components/tour pages.
+    n_dd_pages = 0
+    if args.deep_dives:
+        from wiki_lib.deepdives import generate as _dd, _graph_path
+        dd_root = _wiki_root() / "projects"
+        active = set(get_all_repo_names(config))
+        # reconcile: remove deep-dive trees for projects with no graph/repo
+        if dd_root.is_dir() and not args.dry_run:
+            for sub in sorted(dd_root.glob("*/")):
+                if sub.name not in active or not _graph_path(sub.name).exists():
+                    for sub_p in sorted(sub.rglob("*.md")):
+                        try:
+                            sub_p.unlink()
+                        except OSError:
+                            pass
+        for proj in sorted(active):
+            try:
+                written, n_nodes = _dd(proj, dry_run=args.dry_run)
+                if written:
+                    n_dd_pages += len(written)
+                    print(f"  deep-dive: {proj} — {len(written)} page(s) from {n_nodes} nodes")
+            except Exception as e:
+                print(f"  deep-dive skipped for {proj}: {e}", file=sys.stderr)
+
     # Machine value of the human wiki: the citation edges, as deterministic JSON.
     graph_path = emit_citation_graph(topics, get_all_repo_names(config), dry_run=args.dry_run)
 
@@ -234,7 +260,8 @@ def main():
     # Human exploration is done in Obsidian's native Graph view (which renders the
     # [[wikilinks]] between generated wiki pages); no separate HTML viewer.
     print(f"\n{'[DRY RUN] ' if args.dry_run else ''}Generated {n_topics} topic article(s), "
-          f"{n_projects} project article(s), 1 index")
+          f"{n_projects} project article(s), 1 index"
+          + (f", {n_dd_pages} deep-dive page(s)" if args.deep_dives else ""))
     if not args.dry_run:
         print(f"Citation graph: {graph_path}")
         # (P) REST write path (#112d): when --push and the integration is on,
