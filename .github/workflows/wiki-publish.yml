@@ -1,0 +1,85 @@
+name: Wiki publish
+
+# Living-wiki S4 (#146): scheduled/CI publish of the generated wiki as a
+# static site. No-op clean: a run where the wiki export manifest is unchanged
+# produces zero commits. Changes open a docs PR (never direct pushes).
+#
+# Prerequisite for auto-merge: branch protection with the required check
+# ('publish-wiki') must be enabled; without it, keep auto-merge off.
+# Dedicated PR token (OPENWIKI_PR_TOKEN-analog: WIKI_PUBLISH_TOKEN) because
+# GITHUB_TOKEN-initiated PRs do not trigger required workflows.
+
+'on':
+  workflow_dispatch:
+  schedule:
+    - cron: '23 3 * * *'   # daily 03:23 UTC — cheap; no-op unless the wiki changed
+
+concurrency:
+  group: wiki-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Export wiki (deterministic)
+        run: |
+          uv venv
+          uv pip install -r requirements.txt pyyaml
+          uv run python scripts/cmd/export-wiki.py --deep-dives --mode mechanical
+
+      - name: No-op gate (sha256 manifest)
+        id: gate
+        run: |
+          OLD=$(python3 -c "import json;print(json.load(open('corpus/registry/wiki-export-manifest.json')).get('content_hash',''))" 2>/dev/null || echo "")
+          NEW=$(find corpus/wiki -name '*.md' -type f -print0 2>/dev/null | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)
+          if [ "$NEW" = "$OLD" ] && [ -n "$NEW" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No wiki changes — clean no-op run (manifest unchanged)."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build site (Quartz)
+        if: steps.gate.outputs.changed == 'true'
+        run: uv run python scripts/cmd/publish-wiki.py --out corpus/site
+
+      - name: Open docs PR
+        if: steps.gate.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.WIKI_PUBLISH_TOKEN }}
+        run: |
+          git config user.name "wiki-fabric publish"
+          git config user.email "noreply@users.noreply.github.com"
+          BR="wiki-site/$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BR"
+          git add corpus/ wiki/ site/public/ 2>/dev/null || git add corpus/ || true
+          if git diff --cached --quiet; then
+            echo "Nothing to commit — clean no-op."
+            exit 0
+          fi
+          git commit -m "wiki-site: publish $(date -u +%F) (export + quartz build)"
+          git push origin "$BR"
+          gh pr create --repo hybridindie/wiki-fabric-corpus \
+            --title "Wiki site update $(date -u +%F)" \
+            --body "Automated wiki publish (export + deep dives + Quartz build). Review the generated docs." \
+            --head "$BR" --base main

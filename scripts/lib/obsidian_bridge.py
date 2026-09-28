@@ -178,9 +178,18 @@ def _hash_wiki(wiki_dir):
 
 
 def record_export(wiki_dir):
-    """Called after export completes: the manifest now reflects fresh output."""
-    write_manifest({"files": _hash_wiki(wiki_dir),
-                    "orphans": (load_manifest() or {}).get("orphans", [])})
+    """Called after export completes: the manifest now reflects fresh output.
+    content_hash (#146): a single digest over all wiki files — the CI no-op
+    gate compares it between runs; unchanged ⇒ clean no-op (zero commits)."""
+    files = _hash_wiki(wiki_dir)
+    content_hash = ""
+    if files:
+        from hashlib import sha256 as _sha
+        blob = "\n".join(f"{k}:{v}" for k, v in sorted(files.items()))
+        content_hash = _sha(blob.encode()).hexdigest()[:16]
+    write_manifest({"files": files,
+                    "orphans": (load_manifest() or {}).get("orphans", []),
+                    "content_hash": content_hash})
 
 
 # === REST write path (#112d) ==============================================
@@ -201,11 +210,16 @@ def push_note(rel_path, content, dry_run=False):
 
 def push_notes(notes, dry_run=False):
     """notes: [(rel_path, content)] — export's write path via REST.
+    rel_path is relative to the wiki output dir (fabric's vault:/wiki/), but
+    the Obsidian REST API resolves paths relative to the Obsidian vault root
+    (#147). When the vault root differs from the wiki dir, prefix the wiki
+    dir's name so pushed notes land beside the file-copy tree.
     Returns (written, failed)."""
+    prefix = _rest_prefix()
     written = failed = 0
     for rel, content in notes:
         try:
-            st = push_note(rel, content, dry_run=dry_run)
+            st = push_note(f"{prefix}/{rel}" if prefix else rel, content, dry_run=dry_run)
             if st in (204, 200):
                 written += 1
             else:
@@ -214,3 +228,28 @@ def push_notes(notes, dry_run=False):
             print(f"  REST write failed for {rel}: {e}", file=sys.stderr)
             failed += 1
     return written, failed
+
+
+def _rest_prefix(wiki_root=None):
+    """Path prefix (relative to the Obsidian vault root) for pushed notes.
+    The Obsidian vault root is the dir containing .obsidian (walk up from the
+    wiki output dir); if the wiki dir IS the vault root, no prefix. Falls back
+    to 'wiki' when fabric.yaml sets a vault: path."""
+    vault = get_vault_path()
+    wiki = Path(wiki_root) if wiki_root else None
+    if wiki is None:
+        return "wiki" if vault else ""
+    obsidian_ancestor = None
+    for anc in [wiki, *wiki.parents]:
+        if (anc / ".obsidian").is_dir():
+            obsidian_ancestor = anc
+            break
+    if obsidian_ancestor is None or obsidian_ancestor == wiki:
+        return ""  # wiki dir is the vault root — paths are already relative
+    return wiki.relative_to(obsidian_ancestor).as_posix()
+
+
+def get_vault_path(*a, **k):
+    """Module-level indirection (tests patch this)."""
+    import fabric_config
+    return fabric_config.get_vault_path(*a, **k)

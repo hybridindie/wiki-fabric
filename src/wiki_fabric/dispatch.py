@@ -184,6 +184,11 @@ def _utility(argv):
     return _run_script(find_fabric(), "scripts/cmd/utility.py", *argv)
 
 
+@verb("publish")
+def _publish(argv):
+    return _run_script(find_fabric(), "scripts/cmd/publish-wiki.py", *argv)
+
+
 @verb("log")
 def _log(argv):
     return _run_script(find_fabric(), "scripts/cmd/log-experience.py", *argv)
