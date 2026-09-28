@@ -73,8 +73,19 @@ def reject_candidate(qid, reason, dry_run=False):
     if dry_run:
         print(f"[dry-run] would reject {p.name}: {reason}")
         return True
+    # Tombstone first (#140): rejection becomes negative evidence, not deletion
+    try:
+        from wiki_lib import tombstones as T
+        from fabric_config import get_config, actor
+        _cfg = get_config()
+        fm_cand, _body = parse_frontmatter(p)
+        sig = T._sig_tokens(_body or "")
+        T.write_tombstone(CORPUS_ROOT, "chat-mined-pattern", fm_cand.get("id") or p.stem,
+                          reason, sig, actor(_cfg, "process", model="promote-patterns"))
+    except Exception as e:
+        print(f"warn: tombstone not written: {e}", file=sys.stderr)
     p.unlink()
-    print(f"rejected {qid}: {reason}")
+    print(f"rejected {qid}: {reason} (tombstone written to patterns/_rejected/)")
     return True
 
 

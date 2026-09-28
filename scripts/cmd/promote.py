@@ -168,6 +168,15 @@ def reject_dossier(dossier_path, reason, dry_run=False):
     fm["rejection_reason"] = reason.strip()
     body_new = body.rstrip("\n") + f"\n\n## Rejection\n\n- **When:** {_at}\n- **By:** {_human}\n- **Reason:** {reason.strip()}\n"
     write_frontmatter(dossier_path, fm, body_new)
+    # Tombstone (#140): the miner suppresses matching clusters from here on
+    try:
+        from wiki_lib import tombstones as T
+        sig = T._sig_tokens(body_new)
+        cid = str(fm.get("id") or dossier_path.stem).replace("promotion-", "")
+        T.write_tombstone(VAULT_ROOT, "promotion-dossier", cid, reason, sig, _human)
+        print(f"Tombstone written to patterns/_rejected/tombstone-{cid}.md")
+    except Exception as e:
+        print(f"warn: tombstone not written: {e}", file=sys.stderr)
     # registry timeline: the corpus log records the decision
     log = VAULT_ROOT / "registry" / "log.md"
     with open(log, "a") as f:

@@ -726,6 +726,7 @@ def main():
         return
     
     # Compiler-eval gate (policy: model swaps are compiler changes). Dry-run exempt.
+    suppressed = []
     from fabric_config import (get_config, compiler_eval_recorded,
                                get_stage_route, is_local_route, ensure_local_model)
     _cfg = get_config()
@@ -758,7 +759,27 @@ def main():
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
+    # Rejected-proposal buffer (#140): active tombstones suppress matching
+    # clusters — skipped with the tombstone named in the report (annotated,
+    # never erased; a human can review and overturn).
+    from wiki_lib import tombstones as _tb
+    _active = _tb.load_active(VAULT_ROOT)
+    if _active:
+        print(f"Tombstones: {len(_active)} active suppression(s) loaded")
+
     for cluster_key, events in clusters.items():
+        if _active:
+            ev_texts = [f"{ev.get('observed_problem', '')} {ev.get('intervention', '')} "
+                        f"{ev.get('outcomes', '')}" for ev in events]
+            tid, j = _tb.match_cluster(ev_texts, _active)
+            if tid:
+                tpath = dict((t[0], t[3]) for t in _active)[tid]
+                _tb.annotate_suppressed(tpath, cluster_key,
+                                        [ev.get("id", "") for ev in events])
+                print(f"Suppressed cluster {cluster_key} — matches tombstone-{tid} "
+                      f"(review: patterns/_rejected/)")
+                suppressed.append(cluster_key)
+                continue
         # Generate dossier (local when every contributing project routes local)
         route, model_for_cluster = _route_for_cluster(events)
         if route == "local":
@@ -786,6 +807,10 @@ def main():
         if is_integration_active(_cfg, "graphify"):
             print("\nNext (graphify active): python3 scripts/harness/graphify-bridge.py --enrich "
                   "— attaches code provenance to code-adjacent dossiers before review.")
+
+    if suppressed:
+        print(f"\nRejected-buffer: {len(suppressed)} cluster(s) suppressed by tombstones: "
+              f"{', '.join(suppressed)} — review/overturn in patterns/_rejected/")
 
 
 if __name__ == "__main__":

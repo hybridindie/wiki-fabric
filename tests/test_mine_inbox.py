@@ -100,7 +100,8 @@ class TestPromotePatterns:
 
     def test_reject_requires_reason(self, tmp_path):
         pages = self._staged(tmp_path)
-        with mock.patch.object(pp, "INBOX_DIR", tmp_path / "patterns" / "_inbox"):
+        with mock.patch.object(pp, "INBOX_DIR", tmp_path / "patterns" / "_inbox"), \
+                mock.patch.object(pp, "CORPUS_ROOT", tmp_path):  # tombstone must not hit the real fabric (#140)
             assert not pp.reject_candidate(pages[0].stem, "")
             assert pages[0].exists()
             assert pp.reject_candidate(pages[0].stem, "out of scope")

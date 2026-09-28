@@ -199,6 +199,21 @@ Same as `pattern` with `status: candidate\|recommended\|deprecated`.
 | `anti_pattern_ref` | optional |
 | `status` | `pending-review \| recommended \| rejected` |
 
+## `rejection-tombstone` (rejected-proposal buffer, #140)
+
+| Field | Notes |
+|---|---|
+| `id` | `tombstone-<source-id-without-type-prefix>` |
+| `source` | `chat-mined-pattern \| promotion-dossier` |
+| `rejected_at` / `rejected_by` | instant + actor (human or process) |
+| `reason` | required — a rejection without a reason is unusable evidence |
+| `signature` | space-separated token bag for deterministic cluster matching |
+| `status` | `active \| inactive` (inactive = overturned; the miner ignores it) |
+
+Written by `promote.py --reject` / `promote-patterns.py --reject`; consumed by
+`mine-promotions.py` (matching clusters suppressed, annotated on the
+tombstone's `## Suppressions` section). Lives in `patterns/_rejected/`.
+
 ## `ontology`, `registry`, `index`, `log`
 
 Metadata-only. `status` not required. Free structure inside.
