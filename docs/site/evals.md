@@ -123,6 +123,7 @@ python3 scripts/eval/eval-stability.py --record            # append metrics to r
 | G3 ingest stability | same model, same source, 2 runs | fuzzy word-coverage ≥ 0.7 (exact Jaccard reported — literal word-set overlap; paraphrase ≠ instability) |
 | G6 locator presence | every claim carries an L-locator | 1.0 |
 | G4 model sensitivity | two models on the same source | fuzzy ≥ 0.5 (target 0.8); a fail means model swap requires re-running compiler evals |
+| G4-J judged refinement | near-miss G4 pairs | judgment tier re-asks "same factual content?" — judged-SAME downgrades wording drift to a warning (`--judge`) |
 
 These runs produced findings worth knowing. First, the deterministic parts
 are exactly deterministic. Second, the same model re-extracting the same source

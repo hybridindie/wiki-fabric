@@ -3,7 +3,7 @@ type: index
 title: "Machine-Readable Contract"
 description: "Lint codes, catalog.json, CI consumption"
 created: 2026-09-19
-updated: 2026-09-25
+updated: 2026-09-27
 ---
 
 # Machine-Readable Contract
@@ -132,6 +132,23 @@ The manifest payload **plus**: `receipt_id` (filename must match),
 `manifest` (wrapped manifest schema), `fabric_root`, `namespace`
 (`projects/<p>` \| `registry`), `revision` (corpus git HEAD sha, `null`
 outside a repo). Enforced by lint's `RECEIPT` code.
+
+### `registry/threads.json` → `wiki-fabric/threads-v1`
+
+Captured chats/PRs are graph nodes (#102): `rebuild-index.py` derives
+`registry/threads.json` from `evidence/` alone — chat-session and
+pr-record nodes (session id, harness, project, files_touched, pr state)
++ claim→source provenance edges (`originated_in`/`decided_in`/
+`validated_in`) + session-continuation edges (`continues`). Rebuildable,
+never hand-edited. Consumers: `wf thread`, `wf query` lineage, mining
+thread signals.
+
+### `registry/wiki-export-manifest.json` → `wiki-fabric/wiki-export-manifest-v1`
+
+Written by `wf export wiki` (#112): path → sha256 for every wiki note at
+export time. The next export's harvest step diffs against it — human edits
+land as evidence before regeneration. Orphan files (nothing claims them)
+are tracked.
 
 ### `registry/catalog.json` → `wiki-fabric/registry-v1`
 

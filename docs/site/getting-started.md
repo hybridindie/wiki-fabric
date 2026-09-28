@@ -3,7 +3,7 @@ type: index
 title: "Getting Started — install, quickstart, first loop"
 description: "Install the wf CLI, see the demo proof, connect your first project"
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-27
 ---
 
 # Getting Started
@@ -30,10 +30,20 @@ manifest.
 
 ## 2. Install the `wf` CLI
 
+**Recommended (packaged, atomic):**
+
 ```bash
-# One-liner: installs uv if missing, clones the harness to ./wiki-fabric
-# (CWD), creates the fabric at ~/.local/share/wiki-fabric, installs the wf CLI
-# at ~/.local/bin/
+uv tool install wiki-fabric            # the tool + CLI
+uv tool install wiki-fabric --with mcp # + the wf-mcp MCP server
+```
+
+Install/update are owned by uv (`uv tool upgrade wiki-fabric`) — no CLI/harness drift, no script copies. Works on Windows (pure-python dispatch).
+
+**Alternative (one-liner, dev mode):**
+
+```bash
+# installs uv if missing, clones the harness to ./wiki-fabric (CWD), creates
+# the fabric at ~/.local/share/wiki-fabric, installs the wf CLI at ~/.local/bin/
 curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/scripts/wiki-fabric.sh | bash
 ```
 

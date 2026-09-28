@@ -3,7 +3,7 @@ type: index
 title: "Teams: sharing the vault"
 description: "Multi-machine and multi-person operation — corpus ownership, joining, syncing, and governance gates"
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
 ---
 
 # Teams: Sharing the Vault
@@ -27,7 +27,7 @@ The fabric separates two trees, and the team story lives in the split:
 
 The vault is git-native by design: the same primitives that govern code —
 branches, diffs, review, CI — govern knowledge. Teammates don't copy files
-or reconcile notes by hand; they pull a branch.
+or run the interactive resolver: `wf sync resolve <conflict>` shows a diff of both versions and prompts for ours/theirs/union/skip.
 
 ## Roles: lead machine and teammates
 
@@ -91,6 +91,14 @@ the fabric dir; the vault shell is the human-readable view.
 wf sync status        # ahead/behind + uncommitted corpus changes + conflicts
 wf sync push -m "ingested upstream docs"   # commit + push corpus changes
 wf sync pull          # fetch + merge; conflicts → review queue
+
+# PR-gated distribution (team mode):
+#   fabric.yaml → sync: {mode: team, evidence_prs: auto}
+# Every push opens one PR — the PR IS the change-set receipt (reviewable
+# diff, actor trail, CI verdict). Evidence-plane-only PRs auto-merge when
+# CI is green; anything touching atoms (claims, patterns, decisions)
+# always waits for human review. Solo machines keep direct pushes
+# (sticky default); --pr / --no-pr override per invocation.
 ```
 
 The freshness loop runs underneath on every machine: hooks capture doc and

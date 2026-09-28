@@ -3,7 +3,7 @@ type: index
 title: "Optional Integrations"
 description: "Graphify call-graph intelligence, embeddings, and the judgment tier (off by default)"
 created: 2026-09-19
-updated: 2026-09-25
+updated: 2026-09-27
 ---
 
 # Optional Integrations
@@ -19,8 +19,9 @@ Integrations add capabilities on top of the core loop. They are declared in `fab
 
 | Integration | When active | Cost |
 |-------------|-------------|------|
-| **graphify** | claims carry `code_symbols` + `graph_edges` (doc→code provenance); `graphify-bridge --diff` adds AST staleness detection after refactors; **`wf context` gains a `Code navigation` block** — task tokens → graph symbols → ranked file shortlist (0 tokens, deterministic); code-reachable claims surface first; optional tree-sitter language packs extend extraction to additional languages | 0 tokens (AST + community detection) |
-| **embeddings** | semantic re-ranking of retrieval results (planned — off by default) | local inference |
+| **graphify** | claims carry `code_symbols` + `graph_edges` (doc→code provenance); `graphify-bridge --diff` adds AST staleness detection after refactors; **`wf context` gains a `Code navigation` block** — task tokens → graph symbols → ranked file shortlist (0 tokens, deterministic); code-reachable claims surface first (query ranking boost + symbol-discovery tier); optional tree-sitter language packs extend extraction to additional languages | 0 tokens (AST + community detection) |
+| **obsidian** | the vault becomes **two-way**: `wf export wiki` harvests human edits to wiki notes as evidence *before* regenerating (an export manifest records path→hash at export time; human-changed notes land in `evidence/raw/<project>/obsidian/` with capture provenance); `--push` mirrors generated notes through the [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api). Requires the Obsidian Local REST API plugin; key from the env var (or the plugin's data.json — gitignored) | 0 tokens |
+| **embeddings** | semantic re-ranking of retrieval results (gated on the #115 benchmark — off by default) | local inference |
 | **judgment** | low-variance decision-model judging (System One models: [TypeSafe Jev](https://docs.typesafe.ai/introduction) cloud, [Laya-MLX](https://github.com/rbrus/laya-as-judge) local) for eval gates: `wf eval-behavior --judge` scores fixtures with calibrated probabilities instead of a generative LLM judge | ~$0.0004/call (cloud) or on-device (local) |
 
 ## The judgment tier
@@ -127,6 +128,33 @@ wf integrations                    # show what's active and what it changes
 wf install --with-graphify         # enable at install time
 wf update --with-graphify          # enable on an existing fabric
 ```
+
+### Obsidian two-way vault
+
+```yaml
+integrations:
+  obsidian:
+    enabled: true
+    api_url: https://127.0.0.1:27124
+    api_key_env: OBSIDIAN_REST_KEY
+```
+
+Requires the [Obsidian Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api) plugin (community plugin; install once into the vault). Then:
+
+- `wf export wiki` — harvests human edits as evidence before regenerating (0 tokens; the manifest baseline is established on first run)
+- `wf export wiki --push` — also mirrors the generated wiki through the REST API (Obsidian must be running)
+- `wf integrations` — shows server reachability, key source, manifest state, pending harvest
+
+Off by default; off = file-copy export exactly as the core docs describe.
+
+### MCP server
+
+```bash
+uv tool install wiki-fabric --with mcp
+wf-mcp    # stdio MCP server — any MCP client
+```
+
+Exposes `fabric_query` / `fabric_context` / `fabric_gate` / `fabric_thread` / `fabric_log` — the core surface as native tools, 0 tokens, subprocess-wrapped (never a reimplementation). Mutations beyond `log` stay CLI-gated.
 
 ## Skill deltas when graphify is active
 

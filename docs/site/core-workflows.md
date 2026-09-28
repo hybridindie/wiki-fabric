@@ -3,7 +3,7 @@ type: index
 title: "Core Workflows"
 description: "Ingest, query, experience, bootstrap, maintenance, hooks"
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-27
 ---
 
 # Core Workflows
@@ -194,6 +194,11 @@ wf log --list
 # Mine for cross-project patterns
 python3 scripts/cmd/mine-promotions.py --dry-run
 python3 scripts/cmd/mine-promotions.py
+
+# Chat-mined candidates (#89): stage durable takeaways as gated candidates
+wf mine chats <project> --propose
+wf promote-patterns --list    # wf gate surfaces them too
+wf promote-patterns --apply <id>
 
 # Review dossier, then promote
 python3 scripts/cmd/promote.py --list

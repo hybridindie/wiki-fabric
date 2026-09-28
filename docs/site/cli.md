@@ -3,7 +3,7 @@ type: index
 title: "CLI & Scripts Reference"
 description: "wf commands, note types, scripts, shared modules"
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-27
 ---
 
 # CLI & Scripts Reference
@@ -80,35 +80,61 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 
 | Command | Purpose |
 |---------|---------|
-| `wf install [--repo URL] [--dir DIR] [--vault PATH] [--corpus GIT-URL]` | Clone + set up the fabric; `--corpus` pulls the team corpus when joining (or publishes as lead); `--vault` pins the vault shell location |
-| `wf update` | Pull latest, rebuild entity index + catalog, lint, refresh installed CLI + project hooks |
+| `uv tool install wiki-fabric` | Install the tool (one line, atomic — the packaged mode; `--with mcp` adds the MCP server) |
+| `wf install [--dir DIR] [--with-graphify]` | Create the fabric content skeleton + starter `fabric.yaml` at `WIKI_FABRIC_DIR` (or cwd); the corpus is content — sync it with `wf sync setup/init` |
+| `wf update` | Dev mode: pull the harness + rebuild hooks/index/catalog. Packaged mode: hints `uv tool upgrade wiki-fabric` (content updates are `wf sync pull`, not tool updates) |
 | `wf status` | Fabric health + inventory counts |
 | `wf doctor [--json]` | Environment diagnosis: endpoint reachability, model resolution (phantom compiler_model), compiler-eval readiness, judgment-tier availability, vault drift, gate — each failure names its fix |
 | `wf vault [PATH]` | Scaffold/audit the Obsidian output vault |
 | `wf bootstrap <project-path>` | Connect a project to the fabric |
 | `wf capture <project-slug> [--repo PATH]` | Capture upstream repo docs → `evidence/raw/` |
-| `wf capture <project-slug> --git <owner/name-or-path>` | Capture PR/issue threads + high-signal commits → `evidence/raw/<slug>/git/` (add `--since 6m`, `--limit 30`, `--churn`) |
-| `wf ingest <source> [--extract-claims]` | Ingest a source (LLM claim extraction) |
-| `wf query "<question>"` | Ask the fabric a question |
+| `wf capture <project-slug> --git <owner/name-or-path>` | Capture PR/issue threads + high-signal commits → `evidence/raw/<slug>/git/` (add `--since 6m`, `--limit 30`, `--churn`, `--since-state` for incremental hook runs) |
+| `wf capture chat <project-slug>` | Capture agent chat sessions → `evidence/raw/<slug>/chats/` (harnesses: claude, opencode, codex, gemini — auto-detects; `--since 90d`, `--min-turns`, `--harness <name>`) |
+| `wf context --task "<task>" [--project <slug>] [--paths P] [--write-receipt] [--format json]` | Compile the task-scoped context manifest (0 tokens; `--write-receipt` persists a delivery receipt) |
+| `wf ingest <source> [--extract-claims]` | Ingest a source (LLM claim extraction; claims carry provenance edges from chat/PR captures) |
+| `wf ingest --changed <slug>` | Ingest only NEW/CHANGED raw files for a project (sha256 anti-loop) |
+| `wf ingest --pending <slug>` | Claim-extract recorded-but-unextracted sources (anti-loop safe) |
+| `wf ingest --reclaim <slug>` | Recover zero-claim ingested sources → back to pending (silent-orphan recovery, #93) |
+| `wf query "<question>"` | Ask the fabric a question (lexical + graph expansion; lineage-shaped queries gain an evidence-graph provenance section; graphify symbol discovery when enabled) |
+| `wf thread <session-or-claim-id> [--stats] [--json]` | Evidence-graph thread lookup: claims citing the session/PR, files touched, continuation edges |
 | `wf log --project <slug> ...` | Log an experience event |
 | `wf hook {install\|uninstall\|status}` | Git post-commit auto-capture+ingest (`--extract-claims` for LLM on drift) |
 | `wf claude legacy` | Pre-harness always-on installer (`always_on.py`; superseded by `wf harness install`) |
 | `wf okf export --out DIR [--scope S]` | Export the fabric as a deterministic portable OKF v0.2 bundle |
 | `wf okf import <bundle> [--scope S]` | Ingest an external OKF bundle as immutable evidence (trust recorded, not inherited) |
-| `wf sync {setup\|init\|status\|push\|pull}` | Share the corpus with a team — `setup` uses the gh CLI to create + publish the corpus repo (first-time step) |
+| `wf sync {setup\|init\|status\|push\|pull\|resolve}` | Share the corpus with a team — `setup` uses the gh CLI to create + publish the corpus repo; `resolve` without `--strategy` runs the interactive resolver (diff + pick ours/theirs/union/skip). Team mode (`sync.mode: team`) opens one PR per push — evidence auto-merges on green CI, atoms wait for human review; `sync push --pr` opts in per-invocation |
 | `wf skill [--list] [<name>]` | Print the procedure for a workflow (`ingest`, `promote`, `refresh`) — universal across all agent harnesses |
 | `wf harness {install\|status} [--all\|--only k1,k2] [--force]` | Install always-on + skills into detected agent harnesses (11 supported; `wf claude` is the legacy alias) |
 | `wf models ensure [--model ID] [--yes]` | Check `llm.local_model` is cached; offer human-gated download (`--check` exits 0/1 without prompting) |
 | `wf review --check [--project <slug>]` | Staleness report: current, due for review, overdue, stale |
 | `wf review --verify <claim-id>` | Re-verify a claim (stamps last_verified, rolls review_after forward by tier) |
 | `wf review --auto-reverify` | Mechanically re-verify all overdue claims (sha256 + quote check, 0 tokens) |
-| `wf gate [--quiet\|--json\|--write-manifest]` | Aggregate every pending human decision (overdue/stale claims, promotion dossiers, domain proposals) into one report. Exit 1 when anything is actionable. `--write-manifest` persists `registry/pending-gate.md` for the AI harness to read at session start. |
+| `wf review --verify-locators` | Re-check every claim's locator against its raw source: rewrite drifted locators, repair backtick-elision quotes, restore wrongly-contested claims, strip stamps + contest vanished quotes (0 tokens, #109) |
+| `wf gate [--quiet\|--json\|--write-manifest\|--deliveries]` | Aggregate every pending human decision (overdue/stale claims, promotion dossiers, domain proposals, pattern candidates, open questions) into one report. Exit 1 when anything is actionable. `--write-manifest` persists `registry/pending-gate.md`; `--deliveries` surfaces recent context receipts (was the manifest right?) |
 | `wf promote-domains {list\|--apply <dossier>}` | Human-gated merge of an approved domain proposal into `domains/ontology.md` |
+| `wf harvest-questions [--project <slug>] [--dry-run]` | Harvest concept open-questions → staged question pages (priority from claim confidence, 0 tokens) |
+| `wf promote-questions {--list\|--open\|--apply <id>\|--reject <id> --reason}` | Human-gated apply/reject of harvested questions (`--open` lists canonical open questions) |
+| `wf integrations` | Show optional-integration state (graphify, obsidian, judgment, embeddings) + what each changes |
 | `wf export wiki [--mode m\|llm\|hybrid] [--project <slug>]` | Generate the human-layer wiki: topic articles, project retrospectives, staleness dashboard. Writes OpenWiki-style pages (SUMMARY lead, Key Takeaways, Sources backtrace, provenance stamp), validates/repairs Mermaid diagrams, and emits the citation graph (`registry/wiki-graph.json`). Browse the [[wikilinks]] in Obsidian's native Graph view. |
-| `wf mine chats <project> [--llm] [--dry-run]` | Distill captured chat transcripts into durable takeaways (patterns, anti-patterns, workflows; transients filtered) |
+| `wf mine chats <project> [--llm] [--propose] [--dry-run]` | Distill captured chat transcripts into durable takeaways (transients filtered); `--propose` stages pattern/anti-pattern candidates in `patterns/_inbox/` (gated, provenance-cited, idempotent) |
+| `wf promote-patterns {--list\|--apply <id>\|--reject <id> --reason}` | Human-gated apply/reject of chat-mined pattern candidates |
 | `wf version` | Show wf version + CLI sync state (installed `~/.local/bin/wf` vs harness script) |
 | `wf repos migrate [--dry-run\|--apply\|--prune]` | Move per-repo routing from fabric.yaml into project overlays |
 | `wf lint [--okf] [--format json]` | Deterministic linter (full profile; `--okf` = OKF conformance floor; JSON for CI) |
+
+## MCP Server
+
+`wf-mcp` (installed with `uv tool install wiki-fabric --with mcp`) exposes the fabric's core surface as native MCP tools for any MCP client:
+
+| Tool | Wraps | Cost |
+|---|---|---|
+| `fabric_query` | `wf query` | 0 tokens |
+| `fabric_context` | `wf context` | 0 tokens |
+| `fabric_gate` | `wf gate` | 0 tokens |
+| `fabric_thread` | `wf thread` | 0 tokens |
+| `fabric_log` | `wf log` | the mining intake |
+
+Mutations beyond `log` stay CLI-gated — the MCP boundary is a protocol, not a behavior change. Claude Code: `claude mcp add wf-mcp wf-mcp`; Claude Desktop/Cursor: stdio-server config pointing at `wf-mcp`.
 
 Environment: `WIKI_FABRIC_REPO` overrides the source repo URL.
 

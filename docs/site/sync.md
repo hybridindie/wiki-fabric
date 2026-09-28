@@ -3,7 +3,7 @@ type: index
 title: "Team Sync — share the corpus"
 description: "One fabric per machine, one corpus shared via git"
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-27
 ---
 
 # Team Sync (Command Reference)
@@ -50,6 +50,14 @@ the corpus lacks it (a fresh fabric needs the marker to sync).
 wf sync status        # ahead/behind + uncommitted corpus changes + conflicts
 wf sync push -m "ingested upstream docs"   # commit + push corpus changes
 wf sync pull          # fetch + merge; conflicts → review queue
+
+# Team mode (PR-gated distribution):
+#   fabric.yaml → sync: {mode: team, evidence_prs: auto}
+# Every push opens one PR (branch sync/<machine>-<stamp>, body carries the
+# change-set receipts + files classified by plane). Evidence-plane-only PRs
+# auto-merge when CI is green; anything touching atoms (claims, patterns,
+# decisions, projects) waits for human review — never auto-merged.
+# Per-invocation: --pr opts in even solo; --no-pr opts out even team mode.
 
 # A teammate joins — one command (install pulls the corpus when the
 # remote already carries one; --vault pins where the vault shell lives):
@@ -106,3 +114,20 @@ never publishes your corpus to a public URL.
 ---
 
 Next: [How It Works: Staying in Sync (Hooks & CI)](./how-sync)
+
+## Resolving conflicts
+
+Conflicts land in `registry/conflicts/<date>/` with both versions preserved
+(nothing silently overwritten); unresolved conflicts fail lint and block
+`sync push`. Resolve:
+
+```bash
+wf sync resolve <conflict-file>                # interactive: diff + pick
+wf sync resolve <conflict-file> --strategy ours|theirs|union   # scripted
+```
+
+The interactive flow shows a unified diff of both versions and prompts —
+`ours` (keep this machine's), `theirs` (take the teammate's), `union` (keep
+both, marked for later dedup), `skip` (leave pending — the gate stays up).
+The conflict record is consumed on resolve; the resolution is committed so
+the next push carries it.

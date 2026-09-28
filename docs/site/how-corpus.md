@@ -3,7 +3,7 @@ type: index
 title: "How It Works: The Corpus & Connected Projects"
 description: "How the fabric relates to your code repos — namespaces, overlays, discovery, and who owns what"
 created: 2026-09-20
-updated: 2026-09-20
+updated: 2026-09-27
 ---
 
 # How It Works: The Corpus & Connected Projects
@@ -80,3 +80,26 @@ aborts and writes a conflict record — both versions side by side, lint fails
 until a human resolves it.
 
 Next: [How It Works: Staying in Sync (Hooks & CI)](./how-sync)
+
+## Captures are graph nodes (the thread index)
+
+Captured chats and PRs are not flat markdown — they carry structure:
+
+```yaml
+# a chat capture (evidence/raw/<slug>/chats/*.md)
+kind: chat-session
+harness: opencode          # claude | opencode | codex | gemini
+session: "ses_…"
+project: <slug>
+files_touched:             # from tool calls (bash never parsed)
+  - "scripts/a.py"
+related_sessions:          # explicit continuations
+  - "ses_other"
+```
+
+`rebuild-index.py` derives `registry/threads.json` from `evidence/` alone:
+nodes (sessions, PR records) + claim→source provenance edges (the
+`originated_in`/`decided_in`/`validated_in` relations on claims) +
+session→session continuity edges. `wf thread <id>` walks it; mining uses
+it as a clustering signal; query lineage displays it. Rebuildable, never
+hand-edited — evidence-plane structure, not a second truth layer.
