@@ -34,7 +34,9 @@ Integration shape (fabric.yaml):
 """
 
 import os
+import re
 import sys
+from pathlib import Path
 import json as _json
 import pathlib as _p
 
@@ -132,6 +134,11 @@ def _laya_engine(questions):
     key = _json.dumps(sorted(questions), sort_keys=True)
     if key in _LAYA_ENGINE:
         return _LAYA_ENGINE[key]
+    # validate question specs BEFORE the laya import — config errors surface
+    # even when the backend is missing (and tests can exercise this path)
+    for q in questions:
+        if q["kind"] == "choice" and not (q.get("options") or []):
+            raise JudgmentUnavailable(f"choice question {q['name']!r} needs non-empty criteria")
     try:
         from laya_as_judge import CustomJudge
     except ImportError as e:
@@ -146,7 +153,14 @@ def _laya_engine(questions):
         elif q["kind"] == "score":
             builder = builder.add_score(q["name"], q["question"], q.get("criteria", []))
         elif q["kind"] == "choice":
-            builder = builder.add_choice(q["name"], q["question"], q.get("options", []))
+            # laya's choice head takes criteria as {label: description} (or
+            # bare list of labels); options entries are dicts {name, description}
+            opts = q.get("options") or []
+            criteria = {o["name"]: o.get("description") for o in opts} \
+                if opts and isinstance(opts[0], dict) else list(opts)
+            if not criteria:
+                raise JudgmentUnavailable(f"choice question {q['name']!r} needs non-empty criteria")
+            builder = builder.add_choice(q["name"], q["question"], criteria)
         else:
             raise JudgmentUnavailable(f"unsupported question kind: {q['kind']}")
     judge = builder.build(backend="auto")
@@ -166,8 +180,10 @@ def _ask_laya(q):
     import time
     name = q.get("name") or "q"
     qs = [{"name": name, "kind": q["kind"], "question": q["question"]}]
+    if q["kind"] == "choice":
+        qs[0]["options"] = q.get("options") or []
     if q["kind"] == "score":
-        qs = [x for x in [qs[0]] if x]
+        qs[0]["criteria"] = q.get("criteria") or []
     judge, backend_name = _laya_engine(qs)
     t0 = time.monotonic()
     report = judge.evaluate(q.get("state") or "")
@@ -374,3 +390,56 @@ def same_recurrence(item_a, item_b, threshold=None, config=None, context=None):
     p = noul("Do these two records describe the same recurring problem and intervention?",
              state)
     return (p >= threshold, p)
+
+# ---- Effect verification (ingest, #29 wiring A) ----------------------------
+
+EFFECT_OPTIONS = {
+    "supports": "the new claim confirms or strengthens this claim",
+    "contradicts": "the new claim asserts something incompatible with this claim",
+    "supersedes": "the new claim is a newer version replacing this claim's content",
+    "no-action": "neither — they are about different aspects or facts",
+}
+
+
+def effect_verdict(new_statement, existing_statement):
+    """Judged effect classification for one (new, existing) claim pair.
+    Returns {effect, confidence, probabilities, backend, model}. Effects:
+    supports | contradicts | supersedes | no-action (the agent's draft is
+    verified, not replaced — the tier is the independent second opinion)."""
+    options = [{"name": k, "description": v} for k, v in EFFECT_OPTIONS.items()]
+    out = choice(
+        "Which relationship does the NEW claim have to the EXISTING claim?",
+        f"NEW claim:\n{new_statement}\n\nEXISTING claim:\n{existing_statement}",
+        options,
+    )
+    val = str(out.get("value", "")).strip().lower()
+    for k in EFFECT_OPTIONS:
+        if k in val:
+            return {"effect": k, "confidence": out.get("confidence"),
+                    "probabilities": out.get("probabilities")}
+    return {"effect": "no-action", "confidence": out.get("confidence"),
+            "probabilities": out.get("probabilities")}
+
+
+def related_claim_pool(new_claim_path, max_n=12):
+    """Candidate existing claims to compare against: same-source first, then
+    same-project claims (deterministic ordering, capped)."""
+    from fabric_config import CORPUS_ROOT
+    text = Path(new_claim_path).read_text(encoding="utf-8", errors="replace")
+    m = re.search(r'\[\[(src-[\w-]+)\]\]', text)
+    out = []
+    if m:
+        src_slug = m.group(1)
+        # claims citing the same source record (slug match on stem)
+        stem_prefix = src_slug.replace("-md", "")
+        for p in sorted((CORPUS_ROOT / "evidence" / "claims").glob(f"claim-{stem_prefix}-*.md")):
+            if p.resolve() != Path(new_claim_path).resolve():
+                out.append(p)
+    # topical neighbors: same project namespace
+    m2 = re.search(r"claim-([\w-]+?)-[\w-]+-md-\d+", Path(new_claim_path).stem)
+    if m2:
+        proj = m2.group(1)
+        for p in sorted((CORPUS_ROOT / "evidence" / "claims").glob(f"claim-{proj}-*.md")):
+            if p.resolve() != Path(new_claim_path).resolve() and p not in out:
+                out.append(p)
+    return out[:max_n]

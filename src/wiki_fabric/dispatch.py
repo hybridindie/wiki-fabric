@@ -189,6 +189,11 @@ def _publish(argv):
     return _run_script(find_fabric(), "scripts/cmd/publish-wiki.py", *argv)
 
 
+@verb("verify-effects")
+def _verify_effects(argv):
+    return _run_script(find_fabric(), "scripts/cmd/verify-effects.py", *argv)
+
+
 @verb("log")
 def _log(argv):
     return _run_script(find_fabric(), "scripts/cmd/log-experience.py", *argv)

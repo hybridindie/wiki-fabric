@@ -55,6 +55,20 @@ For each new claim, classify its effect on existing knowledge:
 `add | support | weaken | contradict | supersede | no-action`
 Add `relations` entries (`supports`/`contradicts`/`supersedes`/`depends_on`) where they apply.
 
+**4b. Independent verification (when the judgment tier is active).** Your own
+classification is a self-preference risk — the model that extracted the claim
+is grading its own work. Run:
+
+```bash
+python3 scripts/cmd/verify-effects.py <new-claim>.md ...
+# writes <claim>.effects.json (route, per-pair verdicts, confidence)
+```
+
+Reconcile: where the judged verdict agrees with your draft, keep it; where it
+disagrees (or confidence is low / near-band), re-read both claims before
+finalizing — you own the final relations edit, the tier is the second opinion,
+not the decision. When the tier is disabled, step 4 stands alone.
+
 ### 4a. If graphify is ACTIVE: enrich claims with code provenance
 When `fabric.yaml` has `integrations.graphify.enabled: true`, run
 `python3 scripts/harness/graphify-bridge.py --enrich` after writing claims — this
