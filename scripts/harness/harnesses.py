@@ -268,7 +268,7 @@ def main():
     args = parser.parse_args()
 
     project_root = Path(args.project_root).resolve()
-    harness_root = Path(__file__).parent.parent
+    harness_root = Path(__file__).parent.parent.parent
     block_path = Path(args.block_file) if args.block_file else harness_root / "system" / "always-on" / "wiki-fabric-block.md"
     body = body_from(block_path)
 
