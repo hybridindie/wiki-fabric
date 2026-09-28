@@ -319,36 +319,83 @@ def _is_apple_silicon():
 
 
 def _ask_local(q):
-    """On-device judging, platform-aware (#29):
+    """On-device judging, platform-aware with a cross-platform default (#29):
 
-      Apple Silicon: laya-as-judge (typed heads, MLX backend) — real calibrated
-      inference. Optional fallback to the generic route when laya is missing
-      (`local_fallback: generic`).
-      Other platforms (Windows/Linux/Intel): laya[mlx] cannot run there — the
-      generic route (any local GGUF/text model emitting JSON verdicts via
-      local_llm) is the supported path; laya's torch backend is an incomplete
-      scaffold (uniform probabilities) and is deliberately never selected.
+      1. laya-as-judge (MLX, Apple Silicon) — fastest path (7-14ms)
+      2. upstream laya (pip laya, torch/ONNX — macOS/Linux/Windows, CPU/GPU)
+         — same typed heads, calibrated; first load downloads ~430MB
+      3. generic route (any local GGUF/text model via local_llm, lowest
+         fidelity) — explicit only, opt-in
 
-    Config: local_backend: laya | generic; local_fallback: none | generic."""
+    Config: local_backend: laya (auto) | laya-mlx | laya-torch | generic."""
     cfg = judgment_config()
     backend = cfg.get("local_backend", "laya")
-    if backend == "laya":
-        if not _is_apple_silicon():
-            # laya[mlx] cannot run here — jump straight to the generic route
-            # rather than failing on an import that can never succeed.
-            if cfg.get("local_fallback", "generic") == "generic" or backend == "laya":
-                return _ask_generic(q)
-            raise JudgmentUnavailable(
-                "local route needs Apple Silicon for laya (MLX); set "
-                "local_backend: generic (GGUF via local_llm) on this platform")
-        try:
-            return _ask_laya(q)
-        except JudgmentUnavailable as e:
-            if ("EmulatorBackend" in str(e) or "not installed" in str(e)) \
-                    and cfg.get("local_fallback") == "generic":
-                return _ask_generic(q)
-            raise
-    return _ask_generic(q)
+    if backend == "generic":
+        return _ask_generic(q)
+    if backend == "laya-torch":
+        return _ask_laya_direct(q)
+    if backend in ("laya", "laya-mlx"):
+        if _is_apple_silicon():
+            try:
+                return _ask_laya(q)
+            except JudgmentUnavailable as e:
+                if ("EmulatorBackend" in str(e) or "not installed" in str(e)) \
+                        and cfg.get("local_fallback") == "generic":
+                    return _ask_generic(q)
+                # fall through to the cross-platform laya path
+        return _ask_laya_direct(q)
+    raise JudgmentUnavailable(f"unknown local_backend: {backend!r}")
+
+
+def _ask_laya_direct(q):
+    """Cross-platform on-device judgment via the upstream laya package
+    (pip laya — torch/ONNX; macOS/Linux/Windows, CPU/CUDA/MPS). Same typed
+    heads and calibrated probabilities as laya-as-judge's MLX path, without
+    the Apple requirement. First load downloads the checkpoint (~430MB)."""
+    try:
+        from laya import Router
+    except ImportError as e:
+        raise JudgmentUnavailable(
+            f"upstream laya not installed (pip install laya): {e}")
+    name = q.get("name") or "q"
+    question = {k: q[k] for k in ("type", "instructions", "criteria") if k in q}
+    question["type"] = question.get("type") or q.get("kind", "")
+    question["instructions"] = question.get("instructions") or q.get("question", "")
+    if q["kind"] == "choice":
+        opts = q.get("options") or []
+        question["criteria"] = question.get("criteria") or \
+            {o["name"]: o.get("description") for o in opts}
+    if q["kind"] == "noul" and q.get("false_desc"):
+        question["criteria"] = {"false": q.get("false_desc"), "true": q.get("true_desc")}
+    router = _laya_direct_router()
+    out = router.predict(q.get("state") or "", {name: question})
+    a = (out.get("answers") or {}).get(name) or {}
+    if q["kind"] == "noul":
+        value = a.get("noul")
+        return {"value": float(value) if value is not None else 0.0,
+                "confidence": (a.get("answer_confidence") or a.get("confidence")),
+                "backend": "laya-direct", "model": (out.get("routing") or {}).get("model", "laya")}
+    if q["kind"] == "choice":
+        return {"value": str(a.get("choice", "")),
+                "confidence": (a.get("answer_confidence") or a.get("confidence")),
+                "probabilities": a.get("probabilities"),
+                "backend": "laya-direct", "model": (out.get("routing") or {}).get("model", "laya")}
+    if q["kind"] == "score":
+        return {"value": a.get("score"),
+                "confidence": (a.get("answer_confidence") or a.get("confidence")),
+                "backend": "laya-direct", "model": (out.get("routing") or {}).get("model", "laya")}
+    raise JudgmentUnavailable(f"unsupported question kind: {q['kind']}")
+
+
+_LAYA_DIRECT = {}
+
+
+def _laya_direct_router():
+    from laya import Router
+    key = "router"
+    if key not in _LAYA_DIRECT:
+        _LAYA_DIRECT[key] = Router()
+    return _LAYA_DIRECT[key]
 
 
 def _ask_generic(q):

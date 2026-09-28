@@ -345,16 +345,27 @@ class TestPlatformSplit:
         import judgment as J
         return J
 
-    def test_non_apple_routes_generic(self, monkeypatch):
+    def test_non_apple_routes_laya_direct(self, monkeypatch):
+        """Cross-platform default (#29): non-Apple goes to upstream laya
+        (torch/ONNX), not the generic GGUF route."""
         J = _mk_j(monkeypatch)
         monkeypatch.setattr(J, "_is_apple_silicon", lambda: False)
         called = {}
         monkeypatch.setattr(J, "_ask_generic", lambda q: called.setdefault("generic", q))
-        monkeypatch.setattr(J, "_ask_laya", lambda q: called.setdefault("laya", q))
+        monkeypatch.setattr(J, "_ask_laya", lambda q: called.setdefault("laya-mlx", q))
+        monkeypatch.setattr(J, "_ask_laya_direct", lambda q: called.setdefault("laya-direct", q))
         monkeypatch.setattr(J, "judgment_config", lambda: {"enabled": True, "local_backend": "laya"})
         q = {"kind": "noul", "question": "x"}
         J._ask_local(q)
-        assert "generic" in called and "laya" not in called
+        assert "laya-direct" in called and "laya-mlx" not in called and "generic" not in called
+
+    def test_explicit_generic_stays_generic(self, monkeypatch):
+        J = _mk_j(monkeypatch)
+        called = {}
+        monkeypatch.setattr(J, "_ask_generic", lambda q: called.setdefault("generic", q))
+        monkeypatch.setattr(J, "judgment_config", lambda: {"enabled": True, "local_backend": "generic"})
+        J._ask_local({"kind": "noul", "question": "x"})
+        assert "generic" in called
 
     def test_apple_uses_laya(self, monkeypatch):
         J = _mk_j(monkeypatch)

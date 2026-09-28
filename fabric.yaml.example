@@ -99,11 +99,12 @@ integrations:
     enabled: false                       # true → low-variance decision-model judging (eval gates)
     route: cloud                         # "cloud" (TypeSafe Jev API) | "local" (on-device)
     cloud_model: jev-latest              # Jev model id (cloud route); local route uses llm.local_model
-    # Local route platform split:
-    #   Apple Silicon: local_backend: laya    → laya-as-judge[mlx] typed heads (calibrated)
-    #   other OS:      local_backend: generic → llm.local_model (GGUF/llama.cpp) JSON verdicts
-    #                                          (auto-selected; laya[mlx] cannot run off-Apple)
-    #   Mac laya-missing fallback: local_fallback: generic (lowest fidelity)
+    # Local route, platform split (auto unless you pin local_backend):
+    #   Apple Silicon: laya-as-judge[mlx] typed heads — fastest (7-14ms)
+    #   other OS:      upstream laya (pip laya, torch/ONNX) — same typed heads,
+    #                  ~1-3s/question CPU; first load downloads ~430MB
+    #   explicit:      local_backend: laya-mlx | laya-torch | generic
+    #                  (generic = llm.local_model GGUF JSON verdicts, lowest fidelity)
 
 # Tunable thresholds (defaults shown; provenance in machine-contract.md).
 # calibration-sensitive values (judgment.mining_threshold) carry their

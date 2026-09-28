@@ -34,7 +34,7 @@ conditions, measured where the claim is quantitative:
 | **graphify** | the repo's docs reference code symbols; you navigate a codebase you didn't write; refactors rename code (AST staleness catches what sha256 can't) | pure-ops repo with no code claims; docs-only fabric |
 | **obsidian** | you read/curate the wiki by hand in Obsidian (two-way harvest protects human edits) | the wiki is generated-read-only for you (agent-only consumption) |
 | **embeddings** | corpus > ~2k claims (lexical collisions multiply; embedding space still separates topics) or cross-project word divergence is common; re-benchmark (`exp-embeddings-spike-2026-09-28`) at scale — at ~500 claims the measured gain was thin (+3 rel@10, none @5) | small corpus; strictly within-topic queries; determinism audits that can't tolerate an ML component |
-| **judgment** | promotion mining gets real traffic (near-miss pairs decide dossiers); ingest volume is high enough that self-preference risk matters (verify-effects second opinion) | tiny fabric where keyword clustering suffices; no Jev key and no Mac for local |
+| **judgment** | promotion mining gets real traffic (near-miss pairs decide dossiers); ingest volume is high enough that self-preference risk matters (verify-effects second opinion). The local cross-platform path (upstream laya, torch/ONNX) removes the "no key and no Mac" limitation — only the lowest-fidelity skip case remains | tiny fabric where keyword clustering suffices |
 
 The deterministic core never depends on any of these — every gate, lint, and
 manifest works with all integrations off.
@@ -96,11 +96,12 @@ Local route dispatches through the on-device judgment stack (see below).
 ```bash
 git clone https://github.com/rbrus/laya-as-judge.git
 # or, for the packaged tool: uv tool install wiki-fabric --from dist/*.whl --force --with "~/path/to/laya-as-judge[mlx]"
-# Platform: laya real inference is Apple Silicon (MLX) only. On Windows/Linux the
-# local route auto-selects the generic backend — your llm.local_model (GGUF via
-# llama.cpp) emitting JSON verdicts (lower fidelity, no typed heads). Jev (cloud)
-# works everywhere. laya's torch backend is an incomplete scaffold and is never
-# auto-selected.
+# Platform: the local route auto-picks by platform —
+#   Apple Silicon: laya-as-judge[mlx] (7-14ms typed heads, calibrated)
+#   Windows/Linux/Intel: upstream laya (pip install laya; torch or ONNX INT8
+#   CPU) — the same typed heads, ~1-3s/question CPU, cross-platform, no key.
+#   Both stay on-device; Jev (cloud) is the third option, works everywhere.
+#   Explicit pin: local_backend: laya-mlx | laya-torch | generic.
 cd laya-as-judge && uv venv --python 3.12 && uv pip install -e '.[mlx]' --python .venv/bin/python
 ```
 
