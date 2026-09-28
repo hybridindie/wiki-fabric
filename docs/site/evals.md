@@ -199,7 +199,7 @@ Honest accounting from the runs:
 | Golden recall | 0.89 | 0.89 (ties) |
 | Cross-agreement (G4 vs deepseek) | — | 0.78 (bar 0.75, target 0.8) |
 | Latency | ~5–6s/fixture | ~6.1s/fixture (MLX/GGUF on Apple Silicon) |
-| Memory | — | ~6 GB (4-bit), one model at a time |
+| Memory | — | ~2.5 GB (MLX 4-bit on Apple Silicon; GGUF Q4_K_M is ~4 GB), one model at a time |
 | Privacy | raw docs leave the machine | zero egress |
 | Cost | tokens per document | zero |
 

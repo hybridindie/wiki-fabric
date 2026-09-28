@@ -28,7 +28,21 @@ flowchart LR
     G --> H["Merge → Log → Commit"]
 ```
 
-## 1a. Git History Capture: PRs, Issues, Commits → Raw Evidence
+```bash
+# Ingest a source with LLM claim extraction
+wf ingest evidence/raw/my-project/docs/readme.md --extract-claims
+
+# Dry run (no files written)
+wf ingest --extract-claims --dry-run evidence/raw/foo.md
+
+# Use a different model
+WIKI_LLM_MODEL="llama3.1:70b" wf ingest evidence/raw/foo.md --extract-claims
+```
+
+**LLM configuration:** any OpenAI-compatible endpoint works — full provider
+table, model tiers, and env-var overrides in [Configuration](./configuration).
+
+## 2. Git History Capture: PRs, Issues, Commits → Raw Evidence
 
 Code history is a second capture channel alongside docs. Two sources, one pipeline:
 
@@ -89,19 +103,6 @@ with a negative outcome — and months later, when a new session proposes "add a
 cache here", `wf query "have we tried caching X?"` returns the revert's history
 before anyone re-runs the same experiment.
 
-```bash
-# Ingest a source with LLM claim extraction
-wf ingest evidence/raw/my-project/docs/readme.md --extract-claims
-
-# Dry run (no files written)
-wf ingest --extract-claims --dry-run evidence/raw/foo.md
-
-# Use a different model
-WIKI_LLM_MODEL="llama3.1:70b" wf ingest evidence/raw/foo.md --extract-claims
-```
-
-**LLM configuration:** any OpenAI-compatible endpoint works — full provider
-table, model tiers, and env-var overrides in [Configuration](./configuration).
 
 **Scenario — onboarding onto an unfamiliar codebase.** Your project's docs are
 scattered across a README, `docs/`, and ADRs. Bootstrap the project, `wf capture`,
@@ -118,12 +119,12 @@ new version — so "we rely on their single-writer guarantee" gets re-verified
 against the new source text, not forgotten.
 
 **Scenario — bootstrapping from PR history.** Docs tell you what a system does;
-PR and issue history tells you why. See **Git History Capture** above: the
+PR and issue history tells you why. See **Git History Capture** (§2): the
 "problem → intervention" debates that never make it into docs, deterministically
 pre-filtered so LLM extraction stays cheap, with `--churn` pointing ingest
 budget at the highest-traffic areas.
 
-## 2. Query: Question → Evidence-Backed Answer
+## 3. Query: Question → Evidence-Backed Answer
 
 When the agent asks a question mid-task, it can't afford hallucinated summaries
 or token-billed retrieval. `wf query` routes the question by type, scores pages
@@ -166,7 +167,7 @@ relation, not a silently merged average. Querying the topic surfaces the conflic
 with both locators side by side, so a human settles it instead of a model
 averaging it.
 
-## 3. Experience → Pattern → Skill (Compounding Loop)
+## 4. Experience → Pattern → Skill (Compounding Loop)
 
 ```mermaid
 flowchart LR
@@ -219,7 +220,7 @@ failed interventions too. Mined clusters can produce anti-patterns
 ("parallel validation writes caused 3 separate incidents") that future sessions
 surface as warnings when they detect the setup.
 
-## 4. Bootstrapping: Connect a New Project
+## 5. Bootstrapping: Connect a New Project
 
 ```mermaid
 flowchart LR
@@ -256,7 +257,7 @@ project's overlay — and immediately knows about the three patterns promoted fr
 your other projects, the domain ontology, and which skills apply here. No copying
 of wiki folders, no "let me catch you up" prompt engineering.
 
-## 5. Maintenance
+## 6. Maintenance
 
 Keeping the fabric current is mostly deterministic. (Graphify — an optional integration, see [Integrations](./integrations) — builds a code call-graph so the fabric can detect when code changes invalidate stored claims.)
 
@@ -319,7 +320,7 @@ rename and flags the affected claims as stale. Refresh re-ingests only the
 changed source, and the claim either updates or is superseded — with the change
 recorded in the change-set manifest, never silently rewritten.
 
-## 6. Hooks: The Loop Runs Itself
+## 7. Hooks: The Loop Runs Itself
 
 **Hooks are a requirement, not a garnish** — the freshness guarantee in
 [Staying in Sync](./how-sync) rests on them. Without a hook, doc drift only

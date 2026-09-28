@@ -1,9 +1,9 @@
 ---
 type: index
-title: "Architecture — pipeline diagram and module map"
-description: "The wiki-fabric pipeline and module structure"
+title: "Architecture — pipeline and reading order"
+description: "The wiki-fabric pipeline, core vs. optional layers, and where to find layout details"
 created: 2026-09-19
-updated: 2026-09-27
+updated: 2026-09-28
 ---
 
 # Architecture
@@ -11,6 +11,25 @@ updated: 2026-09-27
 Wiki Fabric is a **fabric** (one knowledge corpus per machine or team) plus a
 **harness** (the deterministic tooling that compiles and governs it). Source
 repos connect as namespaces; knowledge flows through a one-way pipeline.
+
+## Glossary
+
+Terms used throughout the docs, defined once:
+
+| Term | Meaning |
+|------|---------|
+| **harness** | wiki-fabric's own tooling — the code in this repo (scripts, schemas, tests). Distinct from an *agent harness* (Claude Code, opencode, Codex — the coding tools the fabric installs into). |
+| **fabric** | your local knowledge base: content dirs (`evidence/`, `patterns/`, `projects/`, …) + `fabric.yaml`. Lives in the fabric dir (gitignored in the harness clone; separate location when installed). |
+| **corpus** | the shared subset of the fabric that syncs to a team remote — the *source of truth* for a team. |
+| **vault** | a generated *output*: the Obsidian-shaped view of the fabric (and of the generated wiki). Never a mirror, never the storage of record — see `cli.md`'s `wf vault` entry. |
+| **atom** | a knowledge unit with a promotion gate: claims, patterns, decisions, projects. Sync PRs touching atoms always wait for human review; evidence-plane files can auto-merge. |
+| **P1 / P2 / P3** | precedence layers at task time: P1 = project (decisions, commitments) > P2 = domain patterns > P3 = global. Contract codes in `schemas/frontmatter.md`. |
+| **receipt** | a persisted, content-addressed context manifest (`receipt-v1`) proving what knowledge was delivered to an agent before a task. |
+
+> **Where things live on disk:** the [Corpus & Connected Projects](./how-corpus)
+> page carries the three-tree layout (harness, fabric, connected code repos).
+> Full module tables are in the [CLI & Scripts Reference](./cli#scripts-reference).
+> This page keeps only the pipeline and the layering.
 
 ## The pipeline
 
@@ -44,57 +63,10 @@ graph TB
     EVENTS -->|"mine-promotions.py"| PATTERNS
 ```
 
-## Reading order
-
-1. [Why not just a wiki or RAG?](./why) — the failure modes this design answers, and the core bet.
-2. [Core Workflows](./core-workflows) — the loop in practice: ingest → query → learn.
-3. [Task Context](./context) — the payoff: what the agent receives at task time.
-4. [Configuration](./configuration) — providers, model tiers, routing.
-5. **How It Works** — narrative deep-dives into each component:
-   [the compiler](./how-compiler) · [retrieval & delivery](./how-retrieval) ·
-   [the compounding loop](./how-compounding) · [trust & governance](./how-trust) ·
-   [the corpus & connected projects](./how-corpus) ·
-   [staying in sync (hooks & CI)](./how-sync)
-6. The Reference section (CLI, OKF, governance) — for operating and extending the fabric.
-
-## Module map
-
-Pipeline scripts and shared modules — full tables in the
-[CLI & Scripts Reference](./cli#scripts-reference):
-
-```
-scripts/
-├── fabric_config.py      config (memoized) · stage routing · actors · local models
-├── extract_backends.py   prompt · 4 LLM backends · JSON repair · locator verify
-├── local_llm.py          on-device generation (GGUF / MLX dispatch)
-├── wf_common.py          frontmatter · norm · slugify · hashing
-├── eval_core.py          scoring primitives (concept_match, jaccard, coverage)
-├── ingest.py             source → record → claims (the compiler entry point)
-├── synthesize.py         claims → concept pages
-├── mine-promotions.py    experience events → dossiers (deterministic clustering)
-├── promote.py            dossier review/promotion (compiler-eval gated)
-├── query.py              0-token retrieval (lexical + graph expansion)
-├── context.py            0-token task-manifest compiler
-├── lint.py               deterministic contract enforcement (+ --okf floor)
-├── review.py              staleness scan + re-verify (the governance loop)
-├── export-wiki.py         human-layer wiki pipeline (harvest → generate → manifest)
-├── wiki_lib/
-│   ├── diagrams.py        mermaid fence validation/repair
-│   ├── edges.py           cross-page edges + citation graph
-│   └── generators.py      article generators + enrichment
-├── mine-chats.py          chat transcript distillation (durable takeaways)
-├── harnesses.py           multi-harness registry + installer (11 agent tools)
-├── capture-chat.py        agent chat session capture (claude/opencode/codex/gemini)
-├── skill.py               universal skill loader (all harnesses)
-├── repos-migrate.py       config-per-project migration
-└── ...                    capture, hooks, sync, okf export/import, evals
-```
-
 **Design rule:** every script runs standalone (`python3 scripts/x.py --help`);
-shared logic lives in the five modules above — import, don't copy
-(anti-loop rule 7 in [AGENTS.md](https://github.com/hybridindie/wiki-fabric/blob/main/AGENTS.md)).
-
-
+shared logic lives in five modules (`fabric_config`, `extract_backends`,
+`local_llm`, `wf_common`, `eval_core`) — import, don't copy (anti-loop rule 7
+in [AGENTS.md](https://github.com/hybridindie/wiki-fabric/blob/main/AGENTS.md)).
 
 ## Core vs. optional
 
@@ -111,42 +83,6 @@ shared logic lives in the five modules above — import, don't copy
 | Embeddings (semantic re-ranking) | optional — planned |
 | Git history capture, corpus team sync | integrations |
 | MCP server, multi-harness skill packs | roadmap |
-
-## On-disk layout
-
-Two trees: the **harness** (tooling, this repo) and the **fabric** (your
-knowledge — gitignored; lives in the corpus/vault, teammates pull it at
-install).
-
-| Harness path (this repo) | What it is |
-|------|-----------|
-| `README.md` `AGENTS.md` `CONTRIBUTING.md` `index.md` | entry points (index.md is the OKF root index) |
-| `pyproject.toml` `requirements.txt` `okf-base.yaml` | packaging, deps, okflint profile |
-| `scripts/` | the pipeline — `cmd/`, `lib/`, `eval/`, `harness/` |
-| `tests/` | unit tests (`-m "not live"` for the fast suite) |
-| `system/` | agent-facing assets: skills, always-on block, plugins, policy profiles |
-| `schemas/` | frontmatter contracts + ontology docs |
-| `templates/` | page scaffolds + examples |
-| `references/` | attesters (deterministic receipt checks) + executor skills |
-| `evaluations/` | golden corpus, behavior fixtures |
-| `global/computations/` | attested-computation contracts (OKF §10) |
-
-**The harness never holds your knowledge.** In dev mode the content dirs
-exist gitignored inside the clone; in installed mode they live in the
-**fabric dir** (`~/.local/share/wiki-fabric/` default, `WIKI_FABRIC_DIR` or
-`--vault`/`vault:` to relocate), created at install:
-
-| Fabric-dir path | What it is |
-|------|-----------|
-| `fabric.yaml` | config (see [Configuration](./configuration)) |
-| `corpus/evidence/` | captured sources, summaries, claims |
-| `corpus/projects/` | per-project namespaces, receipts, commitments |
-| `corpus/patterns/` `concepts/` `skills/` `anti-patterns/` `domains/` | canonical knowledge |
-| `corpus/registry/` | `log.md`, `catalog.json`, promotion queue, pending gate |
-| `wiki/` | generated human-layer wiki (Obsidian) |
-
-Your knowledge accumulates in the fabric dir and syncs via
-[Team Sync](./sync).
 
 ---
 
