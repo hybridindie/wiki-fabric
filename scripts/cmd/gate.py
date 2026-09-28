@@ -51,6 +51,15 @@ def _gate_domains():
     return dossiers, dossiers
 
 
+def _gate_pattern_candidates():
+    """#89: chat-mined pattern candidates awaiting human review
+    (patterns/_inbox/ staged by mine-chats --propose)."""
+    import importlib
+    promote_patterns = importlib.import_module("promote-patterns")
+    pending = promote_patterns.list_pending()
+    return pending, pending
+
+
 def _gate_questions():
     """#88: harvested open questions awaiting triage (staging proposals +
     canonical open questions). Returns (pending, open_qs)."""
@@ -108,6 +117,7 @@ def gate():
         "review": _safe(_gate_review),
         "promotions": _safe(_gate_promotions),
         "domains": _safe(_gate_domains),
+        "pattern-candidates": _safe(_gate_pattern_candidates),
         "questions": _safe(_gate_questions),
     }
     actionable = any(p for p, _, _ in sections.values())
@@ -138,6 +148,11 @@ def _emit(sections, actionable, quiet=False):
         print(f"  Pending domain proposals ({len(dom)}):")
         for path, fm in dom_list[:10]:
             print(f"    ▸ {path.name}  ({fm.get('domain')})")
+    pcand, pclist, pc_err = sections["pattern-candidates"]
+    if pcand:
+        print(f"  Chat-mined pattern candidates ({len(pcand)}):")
+        for path, fm in pclist[:10]:
+            print(f"    ◆ {path.stem}  ({fm.get('origin', 'chat-mined')})")
     qpending, qopen, q_err = sections["questions"]
     if qpending:
         print(f"  Open questions awaiting triage ({len(qpending)}):")
@@ -148,7 +163,8 @@ def _emit(sections, actionable, quiet=False):
             print(f"  [{section} skipped: {err}]")
     print("\n  Resolve:  wf review --auto-reverify | wf promote --promote <dossier> | "
           "python3 scripts/cmd/promote-domains.py --apply <dossier> | "
-          "python3 scripts/cmd/promote-questions.py --apply <id> --reject <id> --reason <why>")
+          "python3 scripts/cmd/promote-questions.py --apply <id> --reject <id> --reason <why> | "
+          "python3 scripts/cmd/promote-patterns.py --apply <id> --reject <id> --reason <why>")
 
 
 

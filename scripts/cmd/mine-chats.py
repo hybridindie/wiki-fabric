@@ -28,6 +28,7 @@ for _dir in (_HERE, _HERE.parent / "lib"):
         _s.path.insert(0, str(_dir))
 from pathlib import Path
 
+from wf_common import yaml_scalar
 from fabric_config import FABRIC_ROOT, CORPUS_ROOT, get_config
 
 # Transient signals: low durable value
@@ -173,6 +174,7 @@ def main():
     parser.add_argument("project", help="Project slug")
     parser.add_argument("--since", default="90d", help="Window for finding transcripts by date prefix")
     parser.add_argument("--llm", action="store_true", help="LLM distillation (1 call/session); default is heuristic, 0 tokens")
+    parser.add_argument("--propose", action="store_true", help="Also stage durable pattern/anti-pattern takeaways as gated candidates (patterns/_inbox/, #89)")
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -186,15 +188,79 @@ def main():
         print("No transcripts found.", file=sys.stderr)
         return 0
 
+def propose_candidates(transcript_path, takeaways, dry_run=False, project=None):
+    """#89: durable pattern/anti-pattern takeaways → staged candidates in
+    patterns/_inbox/ with provenance (source chat, session) in frontmatter.
+    NOTHING is auto-promoted: candidates wait for the human gate (surfaced
+    by wf gate via promote-patterns.list_pending)."""
+    import hashlib
+    from datetime import date, datetime, timezone
+    from fabric_config import get_config, actor
+    out_dir = CORPUS_ROOT / "patterns" / "_inbox"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    proposed = 0
+    for t in takeaways:
+        kind = str(t.get("kind", "")).lower()
+        if kind not in ("pattern", "anti-pattern"):
+            continue
+        statement = str(t.get("statement", "")).strip()
+        if not statement:
+            continue
+        chash = hashlib.sha256(statement.encode("utf-8")).hexdigest()[:10]
+        cid = f"{kind}-chat-{chash}"
+        dest = out_dir / f"{cid}.md"
+        if dest.exists():
+            continue  # idempotent: same statement never duplicated
+        if dry_run:
+            print(f"  [DRY] would propose {cid}")
+            proposed += 1
+            continue
+        try:
+            _actor = actor(get_config(), "agent")
+        except Exception:
+            _actor = "agent/unknown/unknown"
+        dest.write_text(f"""---
+type: pattern
+id: {cid}
+title: {yaml_scalar(statement[:140])}
+status: candidate
+maturity: 1
+origin: chat-mined
+source_chat: "[[{transcript_path.stem}]]"
+project: {project}
+provenance:
+  - source: "[[{transcript_path.stem}]]"
+    locator: "session transcript"
+    quote: {yaml_scalar(statement[:120])}
+tags: [chat-mined, inbox]
+created: {date.today().isoformat()}
+---
+
+# {cid}
+
+{statement}
+
+**Mined from:** [[{transcript_path.stem}]] — session-level durable takeaway
+(kind: {kind}). Review against the promotion checklist: independence,
+evidence, applicability. Apply via promote-patterns --apply.""")
+        proposed += 1
+    return proposed
+
+
     print(f"=== Mining {len(transcripts)} chat transcript(s) for {args.project} "
           f"({'LLM' if args.llm else 'heuristic, 0 tokens'}) ===")
     total_durable = 0
+    main._proposed = 0
     for tp in transcripts:
         if args.llm:
             raw = llm_takeaways(tp)
         else:
             raw = heuristic_takeaways(tp)
         out, nd, nm, nt = write_insight_page(tp, raw, dry_run=args.dry_run, project=args.project)
+        if args.propose:
+            proposed = propose_candidates(tp, raw, dry_run=args.dry_run, project=args.project)
+            total_proposed = getattr(main, "_proposed", 0) + proposed
+            main._proposed = total_proposed
         total_durable += nd
         print(f"  {tp.name}: {nd} durable, {nm} maybe, {nt} transient-filtered"
               + ("  [DRY]" if args.dry_run else ""))
@@ -202,6 +268,9 @@ def main():
     if not args.dry_run and total_durable:
         print(f"Insight pages: {CORPUS_ROOT / 'evidence' / 'insights'}/ — "
               f"review before feeding experience events or promotion.")
+    if args.propose:
+        print(f"Pattern candidates staged: {getattr(main, '_proposed', 0)} → "
+              f"{CORPUS_ROOT / 'patterns' / '_inbox'}/ (wf gate lists them)")
     return 0
 
 
