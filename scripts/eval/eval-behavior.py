@@ -275,6 +275,8 @@ def main():
     parser.add_argument("--llm", action="store_true", help="Also probe a real model (requires openai pkg + endpoint)")
     parser.add_argument("--judge", action="store_true",
                         help="Also judge via the judgment tier (integrations.judgment; Jev cloud / Laya local)")
+    parser.add_argument("--gate", action="store_true",
+                        help="Run ONLY the held-out gate set (PARTITION.md) — promote.py's pre-merge gate (#139)")
     parser.add_argument("--model", default=None, help="LLM model override")
     parser.add_argument("--record", action="store_true", help="Append metrics to registry/log.md")
     parser.add_argument("--json", action="store_true", help="JSON report")
@@ -285,6 +287,21 @@ def main():
         sys.exit(2)
 
     fixtures = sorted(EVAL_DIR.glob("be*.yaml"))
+    if args.gate:
+        partition = EVAL_DIR / "PARTITION.md"
+        if not partition.exists():
+            print("No partition contract (PARTITION.md) — cannot run held-out gate", file=sys.stderr)
+            sys.exit(2)
+        import re as _re
+        pm = _re.search(r"\|\s*\*\*held-out gate\*\*\s*\|\s*([^|]+)\|", partition.read_text(encoding="utf-8"))
+        gate_ids = set()
+        if pm:
+            gate_ids = {s.strip().strip("`") for s in pm.group(1).split(",")}
+        fixtures = [f for f in fixtures
+                    if f.stem in gate_ids or any(f.stem == g or f.stem.startswith(g + "-") for g in gate_ids)]
+        if not fixtures:
+            print("Gate set empty (partition lists no fixture) — refusing", file=sys.stderr)
+            sys.exit(2)
     if not fixtures:
         print(f"No behavior fixtures found in {EVAL_DIR}", file=sys.stderr)
         sys.exit(2)

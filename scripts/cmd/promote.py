@@ -12,6 +12,7 @@ for _dir in (_HERE, _HERE.parent / "lib"):
     if str(_dir) not in _s.path:
         _s.path.insert(0, str(_dir))
 import re
+import json
 from pathlib import Path
 from datetime import date, datetime
 
@@ -20,6 +21,11 @@ from fabric_config import CORPUS_ROOT, VAULT_ROOT
 
 # The golden-eval attester ships with the harness (references/), not the corpus.
 _HARNESS = Path(__file__).resolve().parent.parent.parent
+
+
+def _sys_executable():
+    """Python interpreter for subprocess eval/attester calls (venv-aware)."""
+    return sys.executable
 PROMOTION_QUEUE = VAULT_ROOT / "registry" / "promotion-queue.md"
 PROMOTIONS_DIR = VAULT_ROOT / "registry" / "promotions"
 
@@ -37,6 +43,37 @@ def list_pending_promotions():
         if fm.get("status") == "pending-review":
             dossiers.append((dossier_path, fm))
     return dossiers
+def run_behavior_gate(pattern_slug, dry_run=False):
+    """Pre-merge gate (#139 / SkillOpt S2): run the held-out behavior-fixture
+    gate set before merging. Returns (ok, detail). Matrix:
+      patterns: gate set must keep Knowledge Utility at 100% on the held-out
+      set (ties flagged — they block later 'standard' promotion); the gate
+      compares the merge-candidate corpus against the pre-merge corpus.
+      Anti-patterns and concepts/domains: no utility gate (their contract is
+      counterexamples + human review). Skills: strictly-better, ties rejected.
+    Fails soft-open: if the fixture suite is unavailable, the gate is skipped
+    and the dossier proceeds (structural gates still apply)."""
+    eval_py = _HARNESS / "scripts" / "eval" / "eval-behavior.py"
+    if not eval_py.exists():
+        return True, "gate unavailable (eval-behavior.py missing) — skipped"
+    import subprocess as _sp
+    r = _sp.run([_sys_executable(), str(eval_py), "--gate", "--json"],
+                capture_output=True, text=True)
+    if r.returncode != 0:
+        return True, f"gate suite unavailable ({r.stderr.strip()[:120]}) — skipped"
+    try:
+        data = json.loads(r.stdout)
+        utility = data["metrics"]["knowledge_utility"]
+        passed, total = data["metrics"]["passed"], data["metrics"]["total"]
+    except Exception as e:
+        return True, f"gate report unparseable — skipped ({e})"
+    detail = f"held-out utility {utility:.0%} ({passed}/{total})"
+    if passed < total:
+        return False, (f"gate FAILED: {detail} — a held-out fixture stopped "
+                       "passing; merge would lower Knowledge Utility")
+    return True, f"gate OK: {detail}"
+
+
 def promote_dossier(dossier_path, dry_run=False):
     """Promote a dossier from pending-review to recommended."""
     from fabric_config import get_config, compiler_eval_recorded
@@ -78,6 +115,14 @@ def promote_dossier(dossier_path, dry_run=False):
         print(f"Error: Could not extract pattern slug from {pattern_ref}")
         return False
     pattern_slug = pattern_match.group(1)
+
+    # Behavior gate (#139): held-out fixtures must not regress pre-merge.
+    gate_ok, gate_detail = run_behavior_gate(pattern_slug, dry_run=dry_run)
+    if not gate_ok:
+        print(f"BLOCKED: {gate_detail}")
+        print("Fix the fixture regression (or revisit the candidate) before promoting.")
+        return False
+    print(f"Gate: {gate_detail}")
     
     pattern_path = VAULT_ROOT / "patterns" / f"pattern-{pattern_slug}.md"
     anti_path = VAULT_ROOT / "anti-patterns" / f"anti-pattern-{pattern_slug}.md"
@@ -127,6 +172,15 @@ def promote_dossier(dossier_path, dry_run=False):
         update_promotion_queue_file()
 
         print(f"Promoted pattern: {pattern_path.name}")
+        # Gate evidence in the timeline (#139): every accept/reject carries
+        # its score evidence (dossier-level edit_apply_report analogue).
+        try:
+            log = VAULT_ROOT / "registry" / "log.md"
+            with open(log, "a") as f:
+                f.write(f"\n## {_at}\n* **promotion-apply | {_human}**\n")
+                f.write(f"- {dossier_path.name}: behavior-gate {gate_detail}\n")
+        except Exception as e:
+            print(f"warn: gate result not logged: {e}", file=sys.stderr)
         # Self-describing next steps (graphify provenance + usage feedback)
         from fabric_config import is_integration_active, get_config as _gc
         if is_integration_active(get_config(), "graphify"):

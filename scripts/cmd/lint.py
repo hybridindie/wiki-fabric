@@ -41,6 +41,7 @@ VALID_TYPES = {
      "change-set", "change-set-diff", "promotion-dossier", "ontology", "registry", "index", "log",
      "skill", "commitment",
      "attested-computation", "wiki-article", "rejection-tombstone",
+     "eval-fixture",
 }
 PATTERN_STATUSES = {"candidate", "recommended", "standard", "deprecated"}
 # Claim relation types: synthesis semantics (supports/contradicts/...) plus
