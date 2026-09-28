@@ -134,6 +134,10 @@ def main():
         print(f"  kept:      {r['kept']} (quote found at locator)")
         print(f"  fixed:     {r['fixed']} (locator rewritten to the true span)")
         print(f"  contested: {r['contested']} (quote NOT in source — stamp stripped, status contested)")
+        if r.get("restored"):
+            print(f"  restored:  {r['restored']} (previously-contested quote now verifies)")
+            for name in r["restored_files"][:10]:
+                print(f"    ✓ {name}")
         for name in r["contested_files"][:10]:
             print(f"    ⚠ {name}")
         return 0
@@ -203,8 +207,9 @@ def verify_locators(dry_run=False, project=None, limit=None):
     0 tokens, deterministic. Returns dict of counts."""
     from wf_common import parse_frontmatter, sha256_file
     claims_dir = CORPUS_ROOT / "evidence" / "claims"
-    checked = fixed = kept = contested = skipped = 0
+    checked = fixed = kept = contested = skipped = restored = 0
     contested_files = []
+    restored_files = []
     for cp in sorted(claims_dir.glob("claim-*.md")):
         if project and project not in cp.name:
             continue
@@ -248,6 +253,21 @@ def verify_locators(dry_run=False, project=None, limit=None):
         # the q_span extension is only a search-phase allowance, never a pass
         if q_norm and q_norm in span_text(a, b):
             kept += 1
+            # a previously-contested claim whose quote now verifies at its
+            # locator restores status + stamp (session audit finding: the
+            # backtick repair updated the quote but the status stayed
+            # contested, demoting the claim forever)
+            if not dry_run and str(fm.get("status")) == "contested":
+                s = cp.read_text(encoding="utf-8", errors="replace")
+                s = re.sub(r"^status: contested$", "status: supported",
+                           s, count=1, flags=re.MULTILINE)
+                if "process:locator-verification" not in s:
+                    s = s.replace("status: supported",
+                                  "verified:\n  - by: \"process:locator-verification\"\n"
+                                  f"    at: \"{date.today().isoformat()}\"\nstatus: supported", 1)
+                cp.write_text(s, encoding="utf-8")
+                restored += 1
+                restored_files.append(cp.name)
             continue
         # locator drifted — find the true span: head locates the start line,
         # then grow from ONE line upward until the full quote fits (the tightest
@@ -256,10 +276,20 @@ def verify_locators(dry_run=False, project=None, limit=None):
         found = None
         if head:
             for i in range(len(lines)):
-                if head in span_text(i + 1, i + 1):
-                    for ext in range(1, q_span + 5):
-                        if q_norm in span_text(i + 1, i + ext):
-                            found = (i + 1, i + ext)
+                if head in span_text(i + 1, i + max(1, q_span)):
+                    # the quote's true start line: the first line whose own
+                    # text contains the quote's first 2 words (the head window
+                    # may start before the quote's actual first line)
+                    qwords = q_norm.split()[:2]
+                    start_line = i + 1
+                    for fwd in range(i, min(i + max(3, q_span), len(lines))):
+                        own = _norm(lines[fwd])
+                        if own and all(w in own for w in qwords):
+                            start_line = fwd + 1
+                            break
+                    for ext in range(1, q_span + 10):
+                        if q_norm in span_text(start_line, start_line + ext - 1):
+                            found = (start_line, start_line + ext - 1)
                             break
                     if found:
                         break
@@ -286,6 +316,17 @@ def verify_locators(dry_run=False, project=None, limit=None):
                     if f'quote: "{repaired}"' not in s:
                         print(f"  warn: could not rewrite quote (escaping mismatch): {cp.name}", file=sys.stderr)
                     else:
+                        # a previously-contested claim whose quote now verifies
+                        # restores its status + verification stamp (session audit
+                        # finding: repair updated the quote but left status
+                        # contested, so the claim stayed demoted forever)
+                        s = re.sub(r"^status: contested$", "status: supported",
+                                   s, count=1, flags=re.MULTILINE)
+                        if "process:locator-verification" not in s:
+                            s = s.replace("status: supported",
+                                          "verified:\n  - by: \"process:locator-verification\"\n"
+                                          f"    at: \"{date.today().isoformat()}\"\nstatus: supported",
+                                          1)
                         cp.write_text(s, encoding="utf-8")
                 fixed += 1
                 continue
@@ -301,7 +342,8 @@ def verify_locators(dry_run=False, project=None, limit=None):
                 cp.write_text(s, encoding="utf-8")
     return {"checked": checked, "kept": kept, "fixed": fixed,
             "contested": contested, "skipped": skipped,
-            "contested_files": contested_files}
+            "contested_files": contested_files,
+            "restored": restored, "restored_files": restored_files}
 
 
 def auto_reverify(dry_run=False, project=None):

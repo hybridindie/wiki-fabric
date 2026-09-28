@@ -233,3 +233,46 @@ class TestBacktickElisionRepair(unittest.TestCase):
                 rv.CORPUS_ROOT = old
             assert r["contested"] == 1
             assert "a quote with status: supported inside" in text
+
+
+class TestContestRestore(unittest.TestCase):
+    """Session audit: a repaired quote left status contested forever — the kept
+    path must restore status + stamp when a previously-contested quote verifies."""
+
+    @staticmethod
+    def _load():
+        import importlib.util as ilu
+        spec = ilu.spec_from_file_location("rv", REPO / "scripts" / "cmd/review.py")
+        rv = ilu.module_from_spec(spec); spec.loader.exec_module(rv)
+        return rv
+
+    def test_contested_restored_when_quote_verifies(self, tmp_path=None):
+        import tempfile
+        rv = self._load()
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "evidence" / "claims").mkdir(parents=True)
+            (Path(td) / "evidence" / "sources").mkdir(parents=True)
+            rawdir = Path(td) / "evidence" / "raw" / "proj"
+            rawdir.mkdir(parents=True)
+            (rawdir / "doc.md").write_text("intro line\nthe quote is here\n")
+            (Path(td) / "evidence" / "sources" / "src-proj-doc-md.md").write_text(
+                "---\ntype: source\nsource_path: evidence/raw/proj/doc.md\n---\n\n# s\n")
+            cp = Path(td) / "evidence" / "claims" / "claim-proj-doc-md-000.md"
+            # the repaired quote (backtick-elision repaired earlier) with status
+            # still contested — the exact post-repair state the audit found
+            cp.write_text(
+                "---\ntype: claim\nstatus: contested\n"
+                "source_refs:\n  - source: \"[[src-proj-doc-md]]\"\n"
+                "    locator: \"L2\"\n"
+                "    quote: \"the quote is here\"\n"
+                "    supports: true\n---\n\n# c\n")
+            old = rv.CORPUS_ROOT
+            rv.CORPUS_ROOT = Path(td)
+            try:
+                r = rv.verify_locators(dry_run=False)
+                text = cp.read_text()
+            finally:
+                rv.CORPUS_ROOT = old
+            assert r["kept"] == 1
+            assert "status: supported" in text
+            assert "process:locator-verification" in text
