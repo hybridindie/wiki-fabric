@@ -295,3 +295,43 @@ class TestJudgmentAutoWiring:
     def test_no_judge_overrides_active(self, monkeypatch):
         called = self._run_main(["--no-judge", "--dry-run"], True, monkeypatch)
         assert called.get("plain") and not called.get("judged")
+
+
+class TestJudgmentMidRunDegradation:
+    """Tier degrading mid-run (key missing, backend gone) must fall back to
+    keyword clusters, not crash the miner."""
+
+    def test_merger_pass_falls_back_on_unavailable(self, tmp_path, monkeypatch):
+        mp = _load("mine_promotions_degrade", REPO / "scripts" / "cmd" / "mine-promotions.py")
+        events = [
+            {"_file": "a.md", "project": "p1", "observed_problem": "cache drift",
+             "intervention": "serialize", "outcomes": {"happy_path": "PASS"}},
+            {"_file": "b.md", "project": "q", "observed_problem": "cache drift too",
+             "intervention": "serialize writes", "outcomes": {"happy_path": "PASS"}},
+        ]
+        import judgment as J
+        from judgment import JudgmentUnavailable
+
+        def exploding_same(*a, **k):
+            raise JudgmentUnavailable("key vanished mid-run")
+        monkeypatch.setattr(J, "same_recurrence", exploding_same)
+        monkeypatch.setattr(mp, "is_judgment_active" if hasattr(mp, "is_judgment_active") else "_x", None, raising=False)
+        # route() must say active so the judged path is taken, then degrade
+        monkeypatch.setattr(J, "judgment_route", lambda *a, **k: "local")
+        monkeypatch.setattr(J, "is_judgment_active", lambda *a, **k: True)
+        out = mp.cluster_events_judged(events, min_projects=2)
+        # graceful: keyword clusters returned (a+b merged by keyword? either way, no crash)
+        assert isinstance(out, dict)
+
+    def test_split_pass_degrades_gracefully(self, tmp_path, monkeypatch):
+        mp = _load("mine_promotions_degrade2", REPO / "scripts" / "cmd" / "mine-promotions.py")
+        import judgment as J
+        from judgment import JudgmentUnavailable
+        ev = {"_file": "a.md", "project": "p", "observed_problem": "x",
+              "intervention": "y", "outcomes": {}}
+        base = {"c1": [ev, dict(ev, _file="b.md")]}
+        def exploding_same(*a, **k):
+            raise JudgmentUnavailable("gone")
+        monkeypatch.setattr(J, "same_recurrence", exploding_same)
+        out = mp._split_incoherent_clusters(base, lambda e: "text", 0.8, "local")
+        assert out == base  # untouched on degradation

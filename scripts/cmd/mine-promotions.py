@@ -312,7 +312,14 @@ def cluster_events_judged(events, min_projects=2, threshold=None):
             if assigned.get(ea.get("_file")) == assigned.get(eb.get("_file")) and \
                     assigned.get(ea.get("_file")) is not None:
                 continue
-            same, p = same_recurrence(_text(ea), _text(eb), threshold=threshold, context=_judged(ea, eb))
+            try:
+                same, p = same_recurrence(_text(ea), _text(eb), threshold=threshold, context=_judged(ea, eb))
+            except JudgmentUnavailable as e:
+                # Tier degraded mid-run (missing key, backend gone): fall back
+                # to the deterministic keyword result rather than crashing —
+                # the keyword pass already produced the base clusters.
+                print(f"Judgment tier degraded mid-run ({str(e)[:80]}) — keeping keyword clusters")
+                return base
             mark = "MERGE" if same else "keep-split"
             print(f"  judged {ea.get('project','?')}+{eb.get('project','?')}: p={p:.3f} -> {mark}")
             if same:
@@ -358,8 +365,9 @@ def _cluster_representative(evs, keyword_sets=None):
 def _split_incoherent_clusters(base, _text, threshold, route):
     """Demote members judged DIFFERENT from their cluster's representative.
     Singletons left behind are simply unassigned (available for later merges
-    but not part of any dossier)."""
-    from judgment import same_recurrence
+    but not part of any dossier). A mid-run tier degradation keeps the
+    keyword clusters intact (returns them un-split rather than crashing)."""
+    from judgment import same_recurrence, JudgmentUnavailable
     for ck in list(base.keys()):
         evs = base[ck]
         if len(evs) <= 1:
@@ -370,7 +378,11 @@ def _split_incoherent_clusters(base, _text, threshold, route):
             if ev is rep:
                 keep.append(ev)
                 continue
-            same, p = same_recurrence(_text(rep), _text(ev), threshold=threshold, context=_judged_context(rep, ev))
+            try:
+                same, p = same_recurrence(_text(rep), _text(ev), threshold=threshold, context=_judged_context(rep, ev))
+            except JudgmentUnavailable as e:
+                print(f"Judgment tier degraded mid-split ({str(e)[:80]}) — keeping cluster as-is")
+                return base
             (keep if same else demote).append(ev)
             print(f"  judged split {ck[:18]}: rep+{ev.get('project','?')} p={p:.3f} -> "
                   f"{'keep' if same else 'DEMOTE'}")
