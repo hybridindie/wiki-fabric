@@ -30,7 +30,7 @@ Integration shape (fabric.yaml):
         enabled: true
         route: local           # "cloud" | "local"
         local_backend: laya    # "laya" (auto: MLX when installed) | "generic"
-        cloud_model: jev-1     # cloud route only
+        cloud_model: jev-latest # cloud route only
 """
 
 import os
@@ -49,7 +49,7 @@ for _dir in (_HERE, _HERE.parent / "lib"):
 
 from fabric_config import get_config, get_integrations, is_integration_active, get_tuning
 
-CLOUD_MODEL_DEFAULT = "jev-1"
+CLOUD_MODEL_DEFAULT = "jev-latest"
 MINING_THRESHOLD_DEFAULT = 0.8  # live-calibrated: unrelated pairs score ~0.75
 NEAR_BAND = 0.1                 # |p - threshold| <= band => escalate, don't auto-decide
 
@@ -68,7 +68,7 @@ def judgment_config(config=None):
     cfg.setdefault("enabled", False)
     cfg.setdefault("route", "cloud")
     cfg.setdefault("local_backend", "laya")
-    cfg.setdefault("cloud_model", CLOUD_MODEL_DEFAULT)
+    cfg.setdefault("cloud_model", CLOUD_MODEL_DEFAULT)  # fabric_config default also updated
     return cfg
 
 
@@ -93,14 +93,14 @@ def _typesafe_endpoint():
     Endpoint overridable for self-hosted/compatible judges."""
     env_key = os.environ.get("TYPESAFE_API_KEY", "")
     if env_key:
-        base = os.environ.get("TYPESAFE_BASE_URL", "https://api.typesafe.ai/v1")
+        base = os.environ.get("TYPESAFE_BASE_URL", "https://api.typesafe.ai")
         return base, env_key
     cfg = judgment_config()
     cfg_key = str(cfg.get("api_key", "")).strip()
     if cfg_key:
-        base = cfg.get("base_url") or os.environ.get("TYPESAFE_BASE_URL", "https://api.typesafe.ai/v1")
+        base = cfg.get("base_url") or os.environ.get("TYPESAFE_BASE_URL", "https://api.typesafe.ai")
         return base, cfg_key
-    return os.environ.get("TYPESAFE_BASE_URL", "https://api.typesafe.ai/v1"), ""
+    return os.environ.get("TYPESAFE_BASE_URL", "https://api.typesafe.ai"), ""
 
 
 def cloud_key_ready(config=None):
@@ -239,32 +239,72 @@ def noul(question, state, false_desc=None, true_desc=None):
 
 
 def _ask_cloud(q):
-    """TypeSafe Jev (or any OpenAI-compatible decision endpoint)."""
+    """TypeSafe Jev — the real System One wire protocol (POST /v1/systemone).
+    One question per request (our tier's usage is pairwise, so batching adds
+    no value). Answer payload: answers.<name>.<type> with calibrated values."""
     base, key = _typesafe_endpoint()
     if not key:
         raise JudgmentUnavailable("TYPESAFE_API_KEY not set (judgment cloud route)")
+    import urllib.request
+    name = q.get("name") or "q"
+    question = {k: q[k] for k in ("type", "instructions", "criteria") if k in q}
+    question["type"] = question.get("type") or q.get("kind", "")
+    question["instructions"] = question.get("instructions") or q.get("question", "")
+    if q["kind"] == "choice":
+        # options entries are dicts {name, description} → Jev criteria map
+        opts = q.get("options") or []
+        question["criteria"] = question.get("criteria") or             {o["name"]: o.get("description") for o in opts}
+    if q["kind"] == "noul" and q.get("false_desc"):
+        question["criteria"] = {"false": q.get("false_desc"), "true": q.get("true_desc")}
+    body = {
+        "model": judgment_config().get("cloud_model", CLOUD_MODEL_DEFAULT),
+        "state": q.get("state") or "",
+        "questions": {name: question},
+    }
+    req = urllib.request.Request(
+        f"{base}/v1/systemone",
+        data=_json.dumps(body).encode(),
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {key}"},
+    )
     try:
-        import urllib.request
-        cfg = judgment_config()
-        body = _json.dumps({
-            "model": cfg.get("cloud_model", CLOUD_MODEL_DEFAULT),
-            "question": q["question"],
-            "state": q.get("state"),
-            "kind": q["kind"],
-        }).encode()
-        req = urllib.request.Request(
-            f"{base}/judge",
-            data=body,
-            headers={"Content-Type": "application/json",
-                     "Authorization": f"Bearer {key}"},
-        )
         with urllib.request.urlopen(req, timeout=30) as resp:
             out = _json.loads(resp.read().decode())
-    except JudgmentUnavailable:
-        raise
+    except urllib.error.HTTPError as e:
+        detail = ""
+        try:
+            detail = e.read().decode()[:200]
+        except Exception:
+            pass
+        raise JudgmentUnavailable(f"cloud judge HTTP {e.code}: {detail}")
     except Exception as e:
         raise JudgmentUnavailable(f"cloud judge unreachable: {e}")
-    return _normalize(out)
+    return _normalize_jev(out, name, q)
+
+
+def _normalize_jev(out, name, q):
+    """Map Jev's answers.<name>.<type> to our internal shape."""
+    cfg = judgment_config()
+    cfg.setdefault("cloud_model", CLOUD_MODEL_DEFAULT)  # fabric_config default also updated
+    answers = out.get("answers") or {}
+    a = answers.get(name) or {}
+    kind = q["kind"]
+    if kind == "noul":
+        value = a.get("noul")
+        return {"value": float(value) if value is not None else 0.0,
+                "confidence": a.get("answer_confidence") or a.get("confidence"),
+                "backend": "jev", "model": out.get("model", "jev")}
+    if kind == "choice":
+        # laya-style options dicts vs our option list: Jev returns the label
+        return {"value": str(a.get("choice", "")),
+                "confidence": a.get("answer_confidence") or a.get("confidence"),
+                "probabilities": a.get("probabilities"),
+                "backend": "jev", "model": out.get("model", "jev")}
+    if kind == "score":
+        return {"value": a.get("score"),
+                "confidence": a.get("answer_confidence") or a.get("confidence"),
+                "backend": "jev", "model": out.get("model", "jev")}
+    raise JudgmentUnavailable(f"unsupported question kind: {kind}")
 
 
 def _is_apple_silicon():

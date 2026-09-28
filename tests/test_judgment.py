@@ -133,13 +133,21 @@ class _fake_module:
 
 
 class TestCloudRoute:
-    def test_missing_key_raises_unavailable(self, monkeypatch):
+    def _isolated(self, monkeypatch):
+        """No env key, no fabric.yaml key — tests must not see the user's key."""
+        import fabric_config
         monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+        monkeypatch.setattr(judgment, "judgment_config",
+                            lambda: {"enabled": True, "route": "cloud"})
+
+    def test_missing_key_raises_unavailable(self, monkeypatch):
         import pytest
-        with pytest.raises(judgment.JudgmentUnavailable):
+        self._isolated(monkeypatch)
+        with pytest.raises(judgment.JudgmentUnavailable, match="TYPESAFE_API_KEY"):
             judgment._ask_cloud({"kind": "noul", "question": "q", "state": "s"})
 
-    def test_cloud_call_posts_typed_question(self, monkeypatch):
+    def test_cloud_call_posts_jev_protocol(self, monkeypatch):
+        self._isolated(monkeypatch)
         monkeypatch.setenv("TYPESAFE_API_KEY", "test-key")
         captured = {}
 
@@ -151,7 +159,8 @@ class TestCloudRoute:
                 return False
 
             def read(self):
-                return json.dumps({"value": 0.97, "confidence": 0.9}).encode()
+                return json.dumps({"model": "jev-1.13.0",
+                                   "answers": {"q": {"type": "noul", "noul": 0.97}}}).encode()
 
         def fake_urlopen(req, timeout=None):
             captured["url"] = req.full_url
@@ -162,8 +171,11 @@ class TestCloudRoute:
         with mock.patch.object(urllib.request, "urlopen", fake_urlopen):
             out = judgment._ask_cloud({"kind": "noul", "question": "q", "state": "s"})
         assert out["value"] == 0.97
-        assert captured["url"].endswith("/judge")
-        assert captured["body"]["kind"] == "noul"
+        assert out["model"] == "jev-1.13.0"
+        assert captured["url"].endswith("/v1/systemone")
+        body = captured["body"]
+        assert body["model"] == judgment.CLOUD_MODEL_DEFAULT
+        assert body["questions"]["q"]["type"] == "noul"
         assert captured["auth"] == "Bearer test-key"
 
 

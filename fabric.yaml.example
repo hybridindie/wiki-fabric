@@ -98,7 +98,7 @@ integrations:
   judgment:
     enabled: false                       # true → low-variance decision-model judging (eval gates)
     route: cloud                         # "cloud" (TypeSafe Jev API) | "local" (on-device)
-    cloud_model: jev-1                   # Jev model id (cloud route); local route uses llm.local_model
+    cloud_model: jev-latest              # Jev model id (cloud route); local route uses llm.local_model
     # Local route platform split:
     #   Apple Silicon: local_backend: laya    → laya-as-judge[mlx] typed heads (calibrated)
     #   other OS:      local_backend: generic → llm.local_model (GGUF/llama.cpp) JSON verdicts

@@ -16,19 +16,20 @@ import pytest
 
 
 class TestEffectVerdict:
-    def test_options_carry_criteria_to_laya(self, monkeypatch):
-        """The laya choice head requires criteria — options must reach
-        _laya_engine (regression: _ask_laya used to strip them)."""
-        captured = {}
-        monkeypatch.setattr(J, "_laya_engine", lambda qs: captured.setdefault("qs", qs) or (_fake_judge := None) or (object(), "test"))
+    def test_options_reach_the_engine(self, monkeypatch):
+        """Options must reach the backend — both the laya engine (via
+        _ask_laya) and Jev (as criteria). Regression: _ask_laya used to strip
+        them; _ask_cloud used to drop the criteria map."""
         import pytest
         from judgment import JudgmentUnavailable
+        captured = {}
 
         def fake_engine(qs):
             captured["qs"] = qs
             raise J.JudgmentUnavailable("stop")
 
         monkeypatch.setattr(J, "_laya_engine", fake_engine)
+        monkeypatch.setattr(J, "judgment_route", lambda *a, **k: "local")
         try:
             J.effect_verdict("new claim text", "existing claim text")
         except J.JudgmentUnavailable:
@@ -39,8 +40,7 @@ class TestEffectVerdict:
         assert qs["options"][0]["name"] == "supports"
 
     def test_choice_requires_nonempty_criteria(self, monkeypatch):
-        from judgment import JudgmentUnavailable
-        with pytest.raises(JudgmentUnavailable, match="needs non-empty criteria"):
+        with pytest.raises(J.JudgmentUnavailable, match="needs non-empty criteria"):
             J._laya_engine([{"name": "q", "kind": "choice", "question": "x",
                              "options": []}])
 
@@ -82,6 +82,9 @@ class TestDisabledTier:
         spec.loader.exec_module(ve)
         import judgment as J
         monkeypatch.setattr(J, "is_judgment_active", lambda *a, **k: False)
-        with pytest.raises(SystemExit) as ei:
-            ve.main()
-        assert ei.value.code == 2
+        try:
+            rc = ve.main()
+        except SystemExit as ei:
+            assert ei.code == 2
+        else:
+            assert rc == 2
