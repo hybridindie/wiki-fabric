@@ -172,6 +172,78 @@ def _staleness(review_after, stale_after):
         return 2, f"review overdue {overdue}d", overdue
     return 1, None, 0
 
+
+# --- Evidence-version freshness (#143 / living-wiki S1) ----------------------
+# A claim's tier is mechanical: current while the raw source it quotes still
+# carries the sha256 recorded at ingest; drifted the moment that hash changes
+# (the evidence moved, even if the calendar review date hasn't arrived).
+
+_src_cache = {}
+
+
+def _source_hash(src_ref):
+    """sha256 recorded on the source record for [[src-...]] (None if absent)."""
+    if src_ref in _src_cache:
+        return _src_cache[src_ref]
+    out = None
+    try:
+        src_dir = fabric_config.CORPUS_ROOT / "evidence" / "sources"
+        p = src_dir / f"{src_ref}.md"
+        if p.exists():
+            m = re.search(r"^sha256:\s*(\S+)", p.read_text(encoding="utf-8", errors="replace"), re.M)
+            if m:
+                out = m.group(1)
+    except Exception:
+        out = None
+    _src_cache[src_ref] = out
+    return out
+
+
+def _raw_current_hash(src_ref):
+    """sha256 of the raw file behind a source record right now (None = missing)."""
+    try:
+        src_dir = fabric_config.CORPUS_ROOT / "evidence" / "sources"
+        p = src_dir / f"{src_ref}.md"
+        s = p.read_text(encoding="utf-8", errors="replace")
+        sp_m = re.search(r"^source_path:\s*(\S+)", s, re.M)
+        if not sp_m:
+            return None
+        sp = sp_m.group(1).strip('"')
+        from wf_common import sha256_file as _hash
+        rp = fabric_config.CORPUS_ROOT / sp
+        if not rp.exists():
+            return None
+        return _hash(rp)
+    except Exception:
+        return None
+
+
+def _evidence_drift(src_ref):
+    """True when the raw file's hash differs from the recorded one. Missing
+    source record or unresolvable raw → False (calendar tiers still apply)."""
+    recorded = _source_hash(src_ref)
+    if not recorded:
+        return False
+    actual = _raw_current_hash(src_ref)
+    if not actual:
+        return False
+    return actual[:12] != str(recorded)[:12]
+
+
+def _claim_evidence_tier(claim_path):
+    """Combined tier for a claim: max(calendar tier, evidence-drift tier).
+    Drift is tier 2 ('drifted' — evidence changed, claim needs re-verify)."""
+    s = claim_path.read_text(encoding="utf-8", errors="replace")
+    ra = re.search(r"review_after: (\S+)", s)
+    sa = re.search(r"stale_after: (\S+)", s)
+    tier, label, days = _staleness(ra.group(1) if ra else None, sa.group(1) if sa else None)
+    if tier == 3:
+        return 3, label or "stale", days
+    for m in re.finditer(r'\[\[(src-[\w-]+)\]\]', s):
+        if _evidence_drift(m.group(1)):
+            return 2, "evidence drifted", 0
+    return tier, label, days
+
 def _cite_claim(claim_path, idx):
     """Format a footnote citation for a claim. Returns (inline_ref, footnote)."""
     s = claim_path.read_text(encoding="utf-8", errors="replace")
@@ -318,14 +390,11 @@ def _generate_topic_article(topic, mode="mechanical", dry_run=False):
             claims.append(cp)
     if not claims:
         return None, 0
-    # staleness tiers
+    # staleness tiers (calendar + evidence-version drift, #143)
     current, flagged, stale = [], [], []
     for cp in claims:
-        s = cp.read_text(encoding="utf-8", errors="replace")
-        ra = re.search(r"review_after: (\S+)", s)
-        sa = re.search(r"stale_after: (\S+)", s)
-        tier, _, _ = _staleness(ra.group(1) if ra else None, sa.group(1) if sa else None)
-        statement = re.search(r'statement: "?([^\n]+)', s)
+        tier, _, _ = _claim_evidence_tier(cp)
+        statement = re.search(r'statement: "?([^\n]+)', s := cp.read_text(encoding="utf-8", errors="replace"))
         st = statement.group(1) if statement else ""
         if tier == 3:
             stale.append((cp, st))
@@ -450,13 +519,11 @@ def _generate_project_article(project, config, dry_run=False, mode=None):
     claims = [c for c in claims if not (c.stem in seen or seen.add(c.stem))]
     if not claims:
         return None, 0
-    # staleness
+    # staleness (calendar + evidence-version drift, #143)
     current, flagged, stale = [], [], []
     for cp in claims:
         s = cp.read_text(encoding="utf-8", errors="replace")
-        ra = re.search(r"review_after: (\S+)", s)
-        sa = re.search(r"stale_after: (\S+)", s)
-        tier, _, _ = _staleness(ra.group(1) if ra else None, sa.group(1) if sa else None)
+        tier, label, _ = _claim_evidence_tier(cp)
         statement = re.search(r'statement: "?([^\n]+)', s)
         st = statement.group(1) if statement else ""
         if tier == 3:

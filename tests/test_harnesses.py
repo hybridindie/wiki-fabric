@@ -13,7 +13,7 @@ for _rel in ("cmd", "lib", "eval", "harness"):
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from harnesses import (SPECS, body_from, detect_installed, install_instructions,
-                       install_skills, marker_for, spec_by_key)
+                       install_skills, install_skills_paths, marker_for, spec_by_key)
 
 REPO = Path(__file__).parent.parent
 BLOCK = body_from(REPO / "system" / "always-on" / "wiki-fabric-block.md")
@@ -101,6 +101,51 @@ class TestInstall(unittest.TestCase):
         spec = spec_by_key("cursor")
         install_instructions(spec, self.tmp, BLOCK)
         assert (self.tmp / ".cursor" / "rules" / "wiki-fabric.mdc").exists()
+
+
+class TestSkillsPathsMerge(unittest.TestCase):
+    """#148: opencode skills must be wired via user-config skills.paths."""
+
+    def setUp(self):
+        import tempfile, os
+        self.tmp = Path(tempfile.mkdtemp())
+        self._old_home = os.environ.get("HOME")
+        os.environ["HOME"] = str(self.tmp)
+        self.ocdir = self.tmp / ".config" / "opencode"
+        self.ocdir.mkdir(parents=True)
+        self.cfg = self.ocdir / "opencode.jsonc"
+        self.cfg.write_text('{\n  "skills": {"paths": ["~/.claude/skills"]}\n}\n')
+
+    def tearDown(self):
+        import shutil, os
+        shutil.rmtree(self.tmp, ignore_errors=True)
+        if self._old_home:
+            os.environ["HOME"] = self._old_home
+
+    def test_merges_paths_additively(self):
+        spec = spec_by_key("opencode")
+        written = install_skills_paths(spec, self.tmp)
+        assert written
+        import json, re
+        cfg = json.loads(re.sub(r"//.*", "", self.cfg.read_text()))
+        paths = cfg["skills"]["paths"]
+        assert "~/.claude/skills" in paths  # user entries preserved
+        assert "~/.config/opencode/skills" in paths
+        assert ".opencode/skill" in paths
+
+    def test_idempotent(self):
+        spec = spec_by_key("opencode")
+        assert install_skills_paths(spec, self.tmp)
+        assert install_skills_paths(spec, self.tmp) == []
+
+    def test_missing_user_config_skips(self):
+        spec = spec_by_key("opencode")
+        self.cfg.unlink()
+        assert install_skills_paths(spec, self.tmp) == []
+
+    def test_non_opencode_has_no_paths_merge(self):
+        spec = spec_by_key("claude")
+        assert install_skills_paths(spec, self.tmp) == []
 
 
 if __name__ == "__main__":

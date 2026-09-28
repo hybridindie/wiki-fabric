@@ -43,6 +43,8 @@ SPECS = [
         "config": "opencode.json",              # additive merge (bootstrap)
         "plugin": "system/opencode/plugins/wiki-fabric.js",
         "skills_dir": ".opencode/skill",        # .opencode/skill/<name>/SKILL.md
+        "skills_paths": ["~/.config/opencode/skills", ".opencode/skill"],
+        "user_config": "~/.config/opencode/opencode.jsonc",
         "detect": ["opencode.json", ".opencode"],
     },
     {
@@ -256,6 +258,45 @@ def install_plugin(spec, project_root, harness_root, force=False):
     return [dst]
 
 
+def install_skills_paths(spec, project_root, force=False):
+    """Merge the harness's skill dirs into its user config's skills.paths
+    (#148): opencode loads skills ONLY through skills.paths — installing the
+    SKILL.md files alone never wires them. Additive; dedups; never removes
+    user entries. Idempotent via JSON read-modify-write."""
+    paths = spec.get("skills_paths")
+    cfg_rel = spec.get("user_config")
+    if not paths or not cfg_rel:
+        return []
+    cfg_path = Path(os.path.expanduser(cfg_rel))
+    if not cfg_path.exists():
+        return []  # harness not configured at user level — skip silently
+    try:
+        import json as json_mod
+        import re as re_mod
+        raw = cfg_path.read_text(encoding="utf-8")
+        # JSONC: strip // comments and trailing commas for parsing; rewrite
+        # preserves the user's file as parsed-JSON (comment loss documented).
+        stripped = re_mod.sub(r'^\s*//.*$', '', raw, flags=re_mod.M)
+        stripped = re_mod.sub(r',\s*([}\]])', r'\1', stripped)
+        cfg = json_mod.loads(stripped)
+    except Exception:
+        return []
+    skills = cfg.setdefault("skills", {})
+    existing = skills.setdefault("paths", [])
+    added = []
+    for p in paths:
+        if p not in existing:
+            existing.append(p)
+            added.append(p)
+    if not added or cfg_path.read_text(encoding="utf-8") == raw:
+        if not added:
+            return []
+    if added:
+        cfg_path.write_text(json_mod.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+        return [f"{cfg_path}: +skills.paths {added}"]
+    return []
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Install wiki-fabric into detected agent harnesses")
@@ -301,15 +342,25 @@ def main():
         written = install_instructions(spec, project_root, body, force=args.force)
         written += install_skills(spec, project_root, harness_root, force=args.force)
         written += install_plugin(spec, project_root, harness_root, force=args.force)
+        written += install_skills_paths(spec, project_root, force=args.force)
         if written:
             print(f"  {spec['name']}:")
             for w in written:
-                print(f"    wrote {w.relative_to(project_root)}")
+                rel = _rel_or_abs(w, project_root)
+                print(f"    {'wrote ' + str(rel) if rel else str(w)}")
             total += len(written)
         else:
             print(f"  {spec['name']}: already installed (use --force to rewrite)")
     print(f"\n{total} file(s) written across {len(targets)} harness(es)")
     return 0
+
+
+def _rel_or_abs(w, project_root):
+    from pathlib import Path as _P
+    try:
+        return _P(w).relative_to(project_root)
+    except (ValueError, TypeError):
+        return None
 
 
 def body_from(block_path):

@@ -205,17 +205,17 @@ def main():
             print(f"  topic: {out.name} ({n} claims)")
 
     n_projects = 0
-    for proj in get_all_repo_names(config):
-        if proj == "wiki-fabric":
-            continue
+    project_counts = []
+    for proj in projects:
         out, n = _generate_project_article(proj, config, dry_run=args.dry_run, mode=mode)
+        project_counts.append((proj, n))
         if out:
             n_projects += 1
             if not args.dry_run:
                 _enrich_page(out, config, mode, related_links=page_edges.get(proj, []))
             print(f"  project: {out.name} ({n} current claims)")
 
-    index = _generate_index(topics, [(p, 0) for p in get_all_repo_names(config)], dry_run=args.dry_run)
+    index = _generate_index(topics, project_counts, dry_run=args.dry_run)
 
     # Domain hub pages: navigational structure grouping topics by domain.
     n_domains = 0

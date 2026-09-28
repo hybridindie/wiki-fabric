@@ -179,6 +179,11 @@ def _rebuild_index(argv):
     return _run_script(find_fabric(), "scripts/cmd/rebuild-index.py", *argv)
 
 
+@verb("utility")
+def _utility(argv):
+    return _run_script(find_fabric(), "scripts/cmd/utility.py", *argv)
+
+
 @verb("log")
 def _log(argv):
     return _run_script(find_fabric(), "scripts/cmd/log-experience.py", *argv)

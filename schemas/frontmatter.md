@@ -157,6 +157,7 @@ trigger condition plausibly matches a task (see [Task Context](../docs/site/cont
 | `counterexamples` | list |
 | `related` | list |
 | `review_after` | `YYYY-MM-DD` |
+| `usage` | machine-written by `wf utility` (#138): `{retrieved_count, applied_count, successful_outcomes, last_validated}` — receipt↔outcome join output; do not hand-edit |
 
 **Maturity gate**:
 - `status: candidate` may have any maturity.

@@ -166,11 +166,48 @@ class TestPushNotes:
                 mock.patch.object(br, "_integration_cfg", lambda: {"enabled": True,
                                                                    "api_url": "https://x",
                                                                    "api_key_env": "K"}), \
-                mock.patch.object(br, "_resolve_key", lambda cfg: ("key123", "env")):
+                mock.patch.object(br, "_resolve_key", lambda cfg: ("key123", "env")), \
+                mock.patch.object(br, "_rest_prefix", lambda wiki_root=None: ""):
             w, f = br.push_notes([("a.md", "content"), ("sub/b.md", "more")])
         assert (w, f) == (2, 0)
         assert calls[0] == ("PUT", "a.md", "content")
         assert calls[1] == ("PUT", "sub/b.md", "more")
+
+    def test_push_prefixes_wiki_when_nested_in_vault(self):
+        """#147: REST resolves paths at the Obsidian vault root; notes pushed
+        from a wiki dir nested inside the vault must carry the wiki prefix."""
+        br = br_module()
+        calls = []
+
+        def fake_request(method, path, api_url, key, body=None, content_type="text/markdown"):
+            calls.append(path)
+            return 204, ""
+
+        with mock.patch.object(br, "_request", fake_request), \
+                mock.patch.object(br, "_integration_cfg", lambda: {"enabled": True,
+                                                                   "api_url": "https://x",
+                                                                   "api_key_env": "K"}), \
+                mock.patch.object(br, "_resolve_key", lambda cfg: ("k", "env")), \
+                mock.patch.object(br, "_rest_prefix", lambda wiki_root=None: "wiki"):
+            w, f = br.push_notes([("projects/g.md", "x")])
+        assert (w, f) == (1, 0)
+        assert calls[0] == "wiki/projects/g.md"
+
+    def test_rest_prefix_detects_nested_wiki(self, tmp_path):
+        br = br_module()
+        vault = tmp_path / "vault"
+        wiki = vault / "wiki"
+        wiki.mkdir(parents=True)
+        (vault / ".obsidian").mkdir()
+        with mock.patch.object(br, "get_vault_path", lambda: vault):
+            assert br._rest_prefix(wiki) == "wiki"
+
+    def test_rest_prefix_empty_when_wiki_is_vault_root(self, tmp_path):
+        br = br_module()
+        vault = tmp_path / "vault"
+        (vault / ".obsidian").mkdir(parents=True)
+        with mock.patch.object(br, "get_vault_path", lambda: vault):
+            assert br._rest_prefix(vault) == ""
 
     def test_push_failure_counted(self, capsys):
         br = br_module()
@@ -182,7 +219,8 @@ class TestPushNotes:
                 mock.patch.object(br, "_integration_cfg", lambda: {"enabled": True,
                                                                    "api_url": "https://x",
                                                                    "api_key_env": "K"}), \
-                mock.patch.object(br, "_resolve_key", lambda cfg: ("k", "env")):
+                mock.patch.object(br, "_resolve_key", lambda cfg: ("k", "env")), \
+                mock.patch.object(br, "_rest_prefix", lambda wiki_root=None: ""):
             w, f = br.push_notes([("a.md", "x")])
         assert (w, f) == (0, 1)
 
