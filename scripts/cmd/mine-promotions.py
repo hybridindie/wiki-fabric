@@ -696,7 +696,9 @@ def main():
     parser.add_argument("--output-dir", default=str(PROMOTIONS_DIR), help="Output directory for dossiers")
     parser.add_argument("--use-embeddings", action="store_true", help="Use semantic embeddings for clustering")
     parser.add_argument("--judge", action="store_true",
-                        help="Refine near-miss cluster pairs with the judgment tier (integrations.judgment)")
+                        help="Force judgment refinement even if integrations.judgment is disabled")
+    parser.add_argument("--no-judge", action="store_true",
+                        help="Skip judgment refinement even if integrations.judgment is enabled")
     parser.add_argument("--model", default="all-MiniLM-L6-v2", help="Embedding model (sentence-transformers)")
     parser.add_argument("--dry-run", action="store_true", help="Don't write files, just show what would be done")
     args = parser.parse_args()
@@ -710,7 +712,21 @@ def main():
     events = extract_experience_events()
     print(f"Found {len(events)} experience events")
 
+    # Judgment tier selection (#29): automatic when integrations.judgment is
+    # enabled in fabric.yaml (the tier is ON → the miner uses it for near-miss
+    # pairs); --judge forces it on, --no-judge opts out explicitly.
     if args.judge:
+        use_judged = True
+    elif args.no_judge:
+        use_judged = False
+    else:
+        from judgment import is_judgment_active
+        try:
+            use_judged = is_judgment_active()
+        except Exception:
+            use_judged = False
+    if use_judged:
+        print("Judgment tier: active — near-miss pairs will be refined by the decision model")
         clusters = cluster_events_judged(events, MIN_PROJECTS)
     else:
         clusters = cluster_events(events, MIN_PROJECTS, use_embeddings=args.use_embeddings)

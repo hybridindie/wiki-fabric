@@ -7,6 +7,7 @@ Run: python3 -m pytest tests/test_judgment_refinement.py -v
 """
 
 import contextlib
+import io
 import importlib.util
 import sys
 from pathlib import Path
@@ -245,3 +246,52 @@ class TestLayaLive:
             assert "EmulatorBackend" in str(e) or "not installed" in str(e)
             ok = True
         assert ok
+
+
+class TestJudgmentAutoWiring:
+    """#29 wiring: judgment refinement runs automatically when the tier is
+    enabled; --judge forces on; --no-judge opts out."""
+
+    def _load_mp(self):
+        return self.mp if (mp := globals().get("MP")) else _load(
+            "mine_promotions", REPO / "scripts" / "cmd" / "mine-promotions.py")
+
+    def _run_main(self, argv, active, monkeypatch):
+        import sys as _sys
+        mp = _load("mine_promotions_" + str(abs(hash(tuple(argv)))), REPO / "scripts" / "cmd" / "mine-promotions.py")
+        called = {}
+        # patch the tier-selection source: main imports judgment.is_judgment_active
+        import judgment as J
+        monkeypatch.setattr(J, "is_judgment_active", lambda *a, **k: active)
+        def fake_judged(events, mp_n, threshold=None):
+            called["judged"] = True
+            return {}
+        def fake_plain(events, mp_n, use_embeddings=False):
+            called["plain"] = True
+            return {}
+        monkeypatch.setattr(mp, "cluster_events_judged", fake_judged)
+        monkeypatch.setattr(mp, "cluster_events", fake_plain)
+        monkeypatch.setattr(mp, "extract_experience_events", lambda: [])
+        monkeypatch.setattr(_sys, "argv", ["mine-promotions"] + argv)
+        with contextlib.redirect_stdout(io.StringIO()):
+            try:
+                mp.main()
+            except SystemExit:
+                pass
+        return called
+
+    def test_auto_enables_when_tier_active(self, monkeypatch):
+        called = self._run_main(["--dry-run"], True, monkeypatch)
+        assert called.get("judged") and not called.get("plain")
+
+    def test_auto_skips_when_tier_inactive(self, monkeypatch):
+        called = self._run_main(["--dry-run"], False, monkeypatch)
+        assert called.get("plain") and not called.get("judged")
+
+    def test_judge_flag_forces_when_inactive(self, monkeypatch):
+        called = self._run_main(["--judge", "--dry-run"], False, monkeypatch)
+        assert called.get("judged") and not called.get("plain")
+
+    def test_no_judge_overrides_active(self, monkeypatch):
+        called = self._run_main(["--no-judge", "--dry-run"], True, monkeypatch)
+        assert called.get("plain") and not called.get("judged")
