@@ -84,12 +84,28 @@ def judgment_route(config=None):
 
 
 def _typesafe_endpoint():
-    """TypeSafe Jev endpoint + key. Endpoint overridable for self-hosted/
-    compatible judges; key from env TYPESAFE_API_KEY (never committed)."""
-    return (
-        os.environ.get("TYPESAFE_BASE_URL", "https://api.typesafe.ai/v1"),
-        os.environ.get("TYPESAFE_API_KEY", ""),
-    )
+    """TypeSafe Jev endpoint + key. Resolution order (key):
+    1. TYPESAFE_API_KEY env var
+    2. integrations.judgment.api_key in fabric.yaml (gitignored file — same
+       trust model as llm.api_key)
+    Endpoint overridable for self-hosted/compatible judges."""
+    env_key = os.environ.get("TYPESAFE_API_KEY", "")
+    if env_key:
+        base = os.environ.get("TYPESAFE_BASE_URL", "https://api.typesafe.ai/v1")
+        return base, env_key
+    cfg = judgment_config()
+    cfg_key = str(cfg.get("api_key", "")).strip()
+    if cfg_key:
+        base = cfg.get("base_url") or os.environ.get("TYPESAFE_BASE_URL", "https://api.typesafe.ai/v1")
+        return base, cfg_key
+    return os.environ.get("TYPESAFE_BASE_URL", "https://api.typesafe.ai/v1"), ""
+
+
+def cloud_key_ready(config=None):
+    """True when the cloud route has a key (env or config). Pre-flight check —
+    surfaces the missing-key condition BEFORE a run burns work it can't finish."""
+    _, key = _typesafe_endpoint()
+    return bool(key)
 
 
 # ---- Laya backend (real on-device inference; optional import) ----

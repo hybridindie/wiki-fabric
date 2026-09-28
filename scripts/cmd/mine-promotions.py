@@ -738,6 +738,17 @@ def main():
         except Exception:
             use_judged = False
     if use_judged:
+        # Cloud-route pre-flight: a missing key shouldn't be discovered mid-run
+        from judgment import judgment_route, cloud_key_ready
+        try:
+            if judgment_route() == "cloud" and not cloud_key_ready():
+                print("Judgment tier: cloud route has no key (TYPESAFE_API_KEY env, or "
+                      "integrations.judgment.api_key in fabric.yaml) — falling back to "
+                      "keyword clusters for this run")
+                use_judged = False
+        except Exception:
+            pass
+    if use_judged:
         print("Judgment tier: active — near-miss pairs will be refined by the decision model")
         clusters = cluster_events_judged(events, MIN_PROJECTS)
     else:

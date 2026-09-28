@@ -286,7 +286,7 @@ class TestJudgmentAutoWiring:
 
     def test_auto_skips_when_tier_inactive(self, monkeypatch):
         called = self._run_main(["--dry-run"], False, monkeypatch)
-        assert called.get("plain") and not called.get("judged")
+        assert "plain" in called and "judged" not in called
 
     def test_judge_flag_forces_when_inactive(self, monkeypatch):
         called = self._run_main(["--judge", "--dry-run"], False, monkeypatch)
@@ -294,7 +294,7 @@ class TestJudgmentAutoWiring:
 
     def test_no_judge_overrides_active(self, monkeypatch):
         called = self._run_main(["--no-judge", "--dry-run"], True, monkeypatch)
-        assert called.get("plain") and not called.get("judged")
+        assert "plain" in called and "judged" not in called
 
 
 class TestJudgmentMidRunDegradation:
@@ -342,12 +342,11 @@ class TestPlatformSplit:
     local_llm) anywhere else; torch scaffold never selected."""
 
     def _mk(self, monkeypatch):
-        mp = _load("mine_promotions_platform", REPO / "scripts" / "cmd" / "mine-promotions.py")
         import judgment as J
         return J
 
     def test_non_apple_routes_generic(self, monkeypatch):
-        J = self._mk(monkeypatch)
+        J = _mk_j(monkeypatch)
         monkeypatch.setattr(J, "_is_apple_silicon", lambda: False)
         called = {}
         monkeypatch.setattr(J, "_ask_generic", lambda q: called.setdefault("generic", q))
@@ -358,7 +357,7 @@ class TestPlatformSplit:
         assert "generic" in called and "laya" not in called
 
     def test_apple_uses_laya(self, monkeypatch):
-        J = self._mk(monkeypatch)
+        J = _mk_j(monkeypatch)
         monkeypatch.setattr(J, "_is_apple_silicon", lambda: True)
         called = {}
         monkeypatch.setattr(J, "_ask_generic", lambda q: called.setdefault("generic", q))
@@ -368,7 +367,7 @@ class TestPlatformSplit:
         assert "laya" in called and "generic" not in called
 
     def test_laya_missing_with_fallback_uses_generic(self, monkeypatch):
-        J = self._mk(monkeypatch)
+        J = _mk_j(monkeypatch)
         monkeypatch.setattr(J, "_is_apple_silicon", lambda: True)
         monkeypatch.setattr(J, "judgment_config", lambda: {"local_backend": "laya",
                                                            "local_fallback": "generic"})
@@ -381,7 +380,7 @@ class TestPlatformSplit:
         assert out["value"] == 0.9
 
     def test_explicit_generic_backend_skips_laya(self, monkeypatch):
-        J = self._mk(monkeypatch)
+        J = _mk_j(monkeypatch)
         monkeypatch.setattr(J, "_is_apple_silicon", lambda: True)
         monkeypatch.setattr(J, "judgment_config", lambda: {"local_backend": "generic"})
         called = {}
@@ -389,3 +388,54 @@ class TestPlatformSplit:
         monkeypatch.setattr(J, "_ask_laya", lambda q: called.setdefault("l", True))
         J._ask_local({"kind": "noul", "question": "q"})
         assert called == {"g": True}
+
+
+def _mk_j(monkeypatch):
+    import judgment as J
+    return J
+
+
+class TestCloudKeyHandling:
+    """Jev cloud route: key from env OR config; pre-flight surfaces missing keys."""
+
+    def test_env_key_wins(self, monkeypatch):
+        J = _mk_j(monkeypatch)
+        monkeypatch.setenv("TYPESAFE_API_KEY", "env-key")
+        monkeypatch.setattr(J, "judgment_config",
+                            lambda: {"enabled": True, "api_key": "cfg-key"})
+        base, key = J._typesafe_endpoint()
+        assert key == "env-key"
+
+    def test_config_key_used_when_no_env(self, monkeypatch):
+        J = _mk_j(monkeypatch)
+        monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+        monkeypatch.setattr(J, "judgment_config",
+                            lambda: {"enabled": True, "api_key": "cfg-key"})
+        base, key = J._typesafe_endpoint()
+        assert key == "cfg-key"
+
+    def test_no_key_anywhere(self, monkeypatch):
+        J = _mk_j(monkeypatch)
+        monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+        monkeypatch.setattr(J, "judgment_config", lambda: {"enabled": True})
+        assert J.cloud_key_ready() is False
+
+    def test_cloud_without_key_falls_back_to_keyword(self, tmp_path, monkeypatch):
+        """route:cloud + no key ⇒ pre-flight detects and this run uses keyword clusters."""
+        mp = _load("mine_promotions_nokey", REPO / "scripts" / "cmd" / "mine-promotions.py")
+        import judgment as J
+        monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+        monkeypatch.setattr(J, "is_judgment_active", lambda *a, **k: True)
+        monkeypatch.setattr(J, "judgment_route", lambda *a, **k: "cloud")
+        monkeypatch.setattr(J, "cloud_key_ready", lambda *a, **k: False)
+        called = {}
+        monkeypatch.setattr(mp, "cluster_events_judged",
+                            lambda *a, **k: called.setdefault("judged", True))
+        monkeypatch.setattr(mp, "cluster_events",
+                            lambda *a, **k: called.setdefault("plain", {}) or {})
+        monkeypatch.setattr(mp, "extract_experience_events", lambda: [])
+        import sys as _sys, io, contextlib
+        monkeypatch.setattr(_sys, "argv", ["mine-promotions", "--dry-run"])
+        with contextlib.redirect_stdout(io.StringIO()):
+            mp.main()
+        assert "plain" in called and "judged" not in called

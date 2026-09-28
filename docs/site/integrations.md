@@ -68,7 +68,11 @@ integrations:
 ```
 
 
-Cloud route reads `TYPESAFE_API_KEY` from the environment (never committed).
+Cloud route key resolution: `TYPESAFE_API_KEY` env var first, then
+`integrations.judgment.api_key` in fabric.yaml (gitignored — same trust model
+as `llm.api_key`). The miner pre-flights before running: `route: cloud` with
+no key falls back to keyword clusters for that run, with a one-line message —
+never a mid-run crash.
 Local route dispatches through the on-device judgment stack (see below).
 
 
