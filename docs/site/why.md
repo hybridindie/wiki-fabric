@@ -3,10 +3,50 @@ type: index
 title: "Why not just a wiki, notes app, or RAG?"
 description: "Failure modes of alternatives and the core bet"
 created: 2026-09-19
-updated: 2026-09-25
+updated: 2026-09-27
 ---
 
-# Why Not Just a Wiki, Notes App, or RAG (Retrieval-Augmented Generation)?
+# Why Wiki Fabric Exists
+
+## The motivation
+
+Every session with an AI coding agent starts the same way: the agent knows
+nothing about *your* project. Not the decision your team made eight months ago
+to rotate refresh tokens. Not the incident that banned shared token caches.
+Not which conventions are rules and which are loose suggestions. So it re-derives
+everything — confidently — and every session is an opportunity to quietly redo
+the mistake someone already paid for.
+
+The obvious fixes all fail the same way:
+
+- **Write it down** (wiki, Notion, ADRs) — capture happens, *reading doesn't*.
+  Nothing forces the agent to consult the document before acting, nothing notices
+  when the document goes stale, and nothing can tell you whether reading it
+  changed anything.
+- **Retrieve it** (RAG, vector stores) — now the reading is automatic but opaque:
+  what was retrieved, why *that* chunk, and whether it was true *as of now* are
+  all invisible. Stale chunks poison answers silently, and every question is a
+  paid API call.
+- **Remember it** (memory tools, session summaries) — unstructured prose that
+  contradicts itself over time; no way to distinguish what was *measured* from
+  what was *guessed*.
+
+The failure isn't documentation or retrieval or memory. It's that none of these
+systems treat knowledge as **operational infrastructure** — something with
+contracts, verification, and failure modes you can test.
+
+## The bet
+
+**An LLM is a good compiler but an unreliable memory.** So Wiki Fabric stores
+structured, source-anchored claims instead of prose; does all retrieval
+deterministically (0 tokens, byte-identical re-runs, explainable by
+construction); and spends LLM tokens only where judgment is needed — extraction
+and synthesis. Humans review at defined gates. The machine does the
+bookkeeping. And the governance claims are not documentation: a deterministic
+linter enforces them, CI proves them on every push, and behavior evals measure
+whether the knowledge actually changed the agent's decision.
+
+## Why not just a wiki, notes app, or RAG
 
 Most knowledge systems fail agents (and humans) in the same ways. Wiki Fabric is designed against those failure modes — and, critically, the governance claims are **executable**: a deterministic linter enforces them (it flags out-of-scope pages, overdue reviews, unresolved sync conflicts, and sources that changed under their claims), CI proves them, and behavior evals measure delivery.
 
@@ -31,7 +71,7 @@ Wiki Fabric is a governance layer and reference implementation for coding-agent 
 2. **Promotes cross-project patterns with measured maturity** — experience events are deterministically clustered into promotion dossiers; promotion requires ≥2 independent projects and human review.
 3. **Enforces scope precedence at task time** — `wf context` compiles project decisions > domain patterns > global policies into a manifest where every inclusion/exclusion carries a reason, and stale/superseded knowledge is filtered before it can mislead.
 4. **Measures behavior, not vibes** — behavior evals verify the knowledge actually changes agent decisions (avoids banned approaches, honors constraints, escalates gaps); the compiler has its own golden-corpus eval; CI fails on regression.
-Everything else — the `wf` CLI, uv installer, Obsidian vault, git-history capture, corpus sync — is reference implementation and integrations around that core.
+Everything else — the packaged `wf` CLI (`uv tool install wiki-fabric`), the MCP server, the Obsidian two-way vault, git-history capture, corpus sync — is reference implementation and integrations around that core.
 
 ---
 
