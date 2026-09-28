@@ -4,6 +4,7 @@ Run: python3 -m pytest tests/test_sync.py -v
 """
 
 import sys
+import unittest.mock as mock
 import importlib.util
 from pathlib import Path
 
@@ -183,3 +184,51 @@ class TestPrBody:
         import socket, re
         name = sync.machine_name()
         assert re.match(r"^[a-z0-9-]{1,30}$", name)
+
+class TestResolveInteractive:
+    """#14: the resolver flow when no strategy is given."""
+
+    @staticmethod
+    def _conflict(tmp_path, monkeypatch):
+        monkeypatch.setattr(sync, "VAULT_ROOT", tmp_path)
+        cdir = tmp_path / "registry" / "conflicts" / "2026-09-27"
+        cdir.mkdir(parents=True)
+        (cdir / "c1.md").write_text(
+            "---\ntype: sync-conflict\npath: evidence/claims/claim-x.md\ndate: 2026-09-27\nstatus: unresolved\n---\n\n"
+            "# Sync conflict: evidence/claims/claim-x.md\n\n"
+            "## Ours (this machine)\n\n```\nA version\n```\n\n"
+            "## Theirs (remote)\n\n```\nB version\n```\n")
+        (tmp_path / "evidence" / "claims").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "evidence" / "claims" / "claim-x.md").write_text("A version\n")
+        return cdir / "c1.md"
+
+    def test_interactive_picks_ours(self, tmp_path, monkeypatch, capsys):
+        conflict = self._conflict(tmp_path, monkeypatch)
+        monkeypatch.setattr("builtins.input", lambda _: "ours")
+        sync.cmd_resolve(str(conflict), None)
+        out = capsys.readouterr().out
+        assert "Resolved [ours]" in out
+        assert not conflict.exists()  # record consumed
+
+    def test_interactive_skip_leaves_pending(self, tmp_path, monkeypatch, capsys):
+        conflict = self._conflict(tmp_path, monkeypatch)
+        monkeypatch.setattr("builtins.input", lambda _: "skip")
+        with mock.patch("builtins.input", lambda _: "skip"):
+            try:
+                sync.cmd_resolve(str(conflict), None)
+            except SystemExit as e:
+                assert e.code == 0
+        assert conflict.exists()  # left pending
+        out = capsys.readouterr().out
+        assert "SYNC-CONFLICT gate stays up" in out
+
+    def test_interactive_shows_diff(self, tmp_path, monkeypatch, capsys):
+        conflict = self._conflict(tmp_path, monkeypatch)
+        answers = iter(["skip"])
+        monkeypatch.setattr("builtins.input", lambda _: next(answers))
+        try:
+            sync.cmd_resolve(str(conflict), None)
+        except SystemExit:
+            pass
+        out = capsys.readouterr().out
+        assert "ours (this machine)" in out and "theirs (remote)" in out

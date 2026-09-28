@@ -484,6 +484,43 @@ def _parse_conflict(conflict_file):
     return path, ours, theirs, fm
 
 
+def _show_conflict(path, ours, theirs):
+    """#14: side-by-side display of both versions for the interactive flow."""
+    import difflib
+    print("")
+    print(f"════ Sync conflict: {path} ══")
+    print("")
+    diff = list(difflib.unified_diff(
+        ours.splitlines(), theirs.splitlines(),
+        fromfile="ours (this machine)", tofile="theirs (remote)", lineterm=""))
+    if diff:
+        print("\n".join(diff[:40]))
+        if len(diff) > 40:
+            print(f"  … and {len(diff) - 40} more diff line(s)")
+    else:
+        print("  (ours) :", ours[:200])
+        print("  (theirs):", theirs[:200])
+    print("")
+
+
+def _resolve_interactively(conflict, path, ours, theirs):
+    """#14: the human resolver flow — show both versions, choose a strategy."""
+    _show_conflict(path, ours, theirs)
+    print("  Resolution options:")
+    print("    ours   — keep this machine's version")
+    print("    theirs — take the teammate's version")
+    print("    union  — keep both (marked, dedup later)")
+    print("    skip   — leave the conflict pending")
+    while True:
+        choice = input("  Resolve with [ours/theirs/union/skip]: ").strip().lower()
+        if choice == "skip":
+            print("Conflict left unresolved — the SYNC-CONFLICT gate stays up.")
+            sys.exit(0)
+        if choice in ("ours", "theirs", "union"):
+            return choice
+        print("  (pick ours, theirs, union, or skip)")
+
+
 def cmd_resolve(conflict, strategy, message=None):
     """Resolution policy for sync conflicts (#'s team-sync hardening).
 
@@ -495,8 +532,33 @@ def cmd_resolve(conflict, strategy, message=None):
       union  — keep both: the incoming content is APPENDED as a new section
                (claims: both extractions survive; dedup is a later judgment)
     The conflict record is deleted on resolve; lint's SYNC-CONFLICT gate
-    unblocks; the resolution is committed so the push carries the decision."""
+    unblocks; the resolution is committed so the push carries the decision.
+    Interactive flow (#14): with no strategy given, show both versions and
+    prompt for the choice (requires a TTY)."""
     validate_fabric()
+    conflict_file = VAULT_ROOT / conflict
+    if not conflict_file.exists() and conflict.startswith("corpus/"):
+        # conflict paths are recorded relative to the VAULT root; VAULT_ROOT
+        # is the corpus dir (nested layout) — the join doubles. Resolve
+        # corpus/-prefixed paths against the vault shell.
+        conflict_file = VAULT_ROOT.parent / conflict
+    if not conflict_file.exists():
+        print(f"Error: conflict file not found: {conflict}", file=sys.stderr)
+        print("List conflicts with: wf sync status", file=sys.stderr)
+        sys.exit(1)
+
+    path, ours, theirs, fm = _parse_conflict(conflict_file)
+    if not path:
+        print("Error: conflict record has no target path", file=sys.stderr)
+        sys.exit(1)
+
+    # #14: interactive when no strategy — display + prompt
+    if strategy is None:
+        strategy = _resolve_interactively(conflict, path, ours, theirs)
+
+    if strategy not in ("ours", "theirs", "union"):
+        print(f"Error: strategy must be ours|theirs|union (got {strategy!r})", file=sys.stderr)
+        sys.exit(1)
     conflict_file = VAULT_ROOT / conflict
     if not conflict_file.exists() and conflict.startswith("corpus/"):
         # conflict paths are recorded relative to the VAULT root; VAULT_ROOT
@@ -642,7 +704,7 @@ def main():
     parser.add_argument("name", nargs="?", help="Corpus repo name for `setup` (default: wiki-fabric-corpus)")
     parser.add_argument("-m", "--message", help="Commit message for push")
     parser.add_argument("--public", action="store_true", help="setup: create the corpus repo public (default private)")
-    parser.add_argument("--strategy", choices=["ours", "theirs", "union"], default=None, help="resolve: how to resolve the conflict")
+    parser.add_argument("--strategy", choices=["ours", "theirs", "union"], default=None, help="resolve: how to resolve the conflict (omit for the interactive flow, #14)")
     parser.add_argument("conflict_file", nargs="?", help="Conflict file (from registry/conflicts/) for `resolve`")
     parser.add_argument("--yes", "-y", action="store_true", help="setup: skip the creation prompt")
     parser.add_argument("--pr", action="store_true",
