@@ -494,11 +494,18 @@ def _generate_project_article(project, config, dry_run=False, mode=None):
                     for line in ins_text.splitlines():
                         if line.startswith("- **[") and "— " in line:
                             insight_takeaways.append(line.strip("- ").strip("*").strip())
-            # gather promoted patterns
+            # gather promoted patterns — with known boundaries (#90c): the
+            # article's pattern links carry the pattern's counterexamples so
+            # the agent sees where the rule does NOT apply
             promoted = []
             for pf in sorted(Path("patterns").glob("pattern-*.md")):
-                pt = re.search(r"^title: (.+)$", pf.read_text(), re.MULTILINE)
-                promoted.append((pf.stem, pt.group(1).strip() if pt else pf.stem))
+                text = pf.read_text()
+                pt = re.search(r"^title: (.+)$", text, re.MULTILINE)
+                label = pt.group(1).strip() if pt else pf.stem
+                ces = re.findall(r'^  - "?([^"\n]+)', text[text.find("## Counterexamples"):] if "## Counterexamples" in text else "")
+                if ces:
+                    label += f" (⚠ does not apply: {ces[0][:80]})"
+                promoted.append((pf.stem, label))
             body = _llm_project_article(project, [cp for cp, st in current[:30]], topic_links,
                                         insight_takeaways[:15], promoted, dry_run=dry_run)
             if body:

@@ -296,6 +296,12 @@ def select_context(pages, task, paths, project, today, max_items=20):
                     break
         if s["stale"]:
             item["warning"] = f"review_after overdue {s['stale']} day(s)"
+        # #90b: delivered patterns carry their known boundaries — the agent
+        # sees where the pattern does NOT apply before following it
+        if pg["type"] in ("pattern", "anti-pattern"):
+            ces = pg["fm"].get("counterexamples") or []
+            if isinstance(ces, list) and ces:
+                item["counterexamples"] = [str(c).strip('"') for c in ces][:3]
         if pg["type"] == "commitment":
             item["trigger"] = str(pg["fm"].get("trigger") or "")
             if pg["fm"].get("owner"):
@@ -456,6 +462,8 @@ def render_markdown(task, paths, project, selected, excluded, nav=None):
                 verb = {"originated_in": "discussed in", "decided_in": "decided in",
                         "validated_in": "validated in"}.get(p.get("type"), p.get("type"))
                 lines.append(f"  *{verb}: {p.get('target', '')}*")
+            for ce in it.get("counterexamples") or []:
+                lines.append(f"  ⚠ does not apply: {ce}")
         lines.append("")
 
     lines.append("## Excluded")
