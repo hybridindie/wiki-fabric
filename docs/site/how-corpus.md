@@ -79,8 +79,6 @@ configure on their side. When two machines changed the same file, the pull
 aborts and writes a conflict record — both versions side by side, lint fails
 until a human resolves it.
 
-Next: [Staying in Sync (Hooks & CI)](./how-sync)
-
 ## Captures are graph nodes (the thread index)
 
 Captured chats and PRs are not flat markdown — they carry structure:
@@ -103,3 +101,7 @@ nodes (sessions, PR records) + claim→source provenance edges (the
 session→session continuity edges. `wf thread <id>` walks it; mining uses
 it as a clustering signal; query lineage displays it. Rebuildable, never
 hand-edited — evidence-plane structure, not a second truth layer.
+
+---
+
+Next: [Staying in Sync (Hooks & CI)](./how-sync)

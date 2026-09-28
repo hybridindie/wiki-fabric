@@ -3,7 +3,7 @@ type: index
 title: "How It Works: Staying in Sync (Hooks & CI)"
 description: "How doc drift becomes claims automatically, and what CI proves on every push"
 created: 2026-09-20
-updated: 2026-09-27
+updated: 2026-09-28
 ---
 
 # How It Works: Staying in Sync
@@ -13,26 +13,6 @@ machines that keep the fabric current without anyone remembering to:
 **hooks** (per-project, event-driven) and **CI** (per-push, assertion-driven).
 
 ## The hook loop: drift → capture → compile
-
-(Also: `wf capture chat <slug>` captures agent-harness chat sessions —
-claude/opencode/codex/gemini session stores — with thread frontmatter
-(session id, files touched); `capture <slug> --git` captures PR narratives
-at merge time via the post-merge hook (#85), and those PR captures carry
-`kind: pr-record` structure. The post-merge hook also runs capture-git
-automatically — merge is when the *why* exists; it lands as evidence
-without anyone remembering. PRs/issues capture the why for shipped work;
-chats capture the why for everything else: debugging dead ends, rejected
-approaches, environment
-quirks. sha256 anti-loop means re-running is free.)
-
-Then `wf mine chats <slug> [--llm]` distills transcripts into **durable
-takeaways** — patterns (e.g. "red-check every regression test by confirming it
-fails against the pre-fix code"), anti-patterns, workflows, constraints —
-with explicit transient filtering (CI states, PR counts, "as of today"
-snapshots are excluded as low-value). Output lands in
-`evidence/insights/<project>/` for human review before anything enters the
-promotion pipeline.
-
 
 A project's docs change through normal development — a commit renames a
 feature, updates a README, deletes a doc that had claims pointing at it. The
@@ -66,6 +46,29 @@ Four design choices make this safe to leave on:
    (1 call per changed file).
 
 `WIKI_SKIP_HOOK=1 git commit ...` skips once; `wf hook status` shows state.
+
+## Other capture channels
+
+The hook handles doc drift; two more channels feed the fabric, both
+sha256-anti-looped:
+
+- **Git history** (`wf capture <slug> --git`, and the post-merge hook which
+  runs it automatically — merge is when the *why* exists): PR narratives,
+  issue threads, and commits land as `kind: pr-record` evidence. PRs/issues
+  capture the why for shipped work. Setup and scenarios live in
+  [Core Workflows §2](./core-workflows#2-git-history-capture-prs-issues-commits-raw-evidence).
+- **Agent chats** (`wf capture chat <slug>`): claude/opencode/codex/gemini
+  session stores, with thread frontmatter (session id, files touched) feeding
+  the thread index. Chats capture the why for everything else: debugging
+  dead ends, rejected approaches, environment quirks.
+
+Then `wf mine chats <slug> [--llm]` distills transcripts into **durable
+takeaways** — patterns (e.g. "red-check every regression test by confirming it
+fails against the pre-fix code"), anti-patterns, workflows, constraints —
+with explicit transient filtering (CI states, PR counts, "as of today"
+snapshots are excluded as low-value). Output lands in
+`evidence/insights/<project>/` for human review before anything enters the
+promotion pipeline.
 
 ## CI: the fabric checks its own homework
 

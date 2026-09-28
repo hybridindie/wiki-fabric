@@ -59,8 +59,6 @@ Most knowledge systems fail agents (and humans) in the same ways. Wiki Fabric is
 | **Prompt/skill libraries** | Copied between projects by hand; drift apart; no evidence of what works | Skills and patterns live in one global fabric. Promotion requires replication in ≥2 independent projects. Projects inherit them automatically at session start |
 | **Second-brain tools** | Capture is cheap, retrieval and trust are expensive; nothing compounds | Structure from day one: capture → claim → concept → pattern. Each layer is machine-checkable, so the fabric stays queryable as it grows to thousands of pages |
 
-The core bet: **an LLM is a good compiler but an unreliable memory.** So the fabric stores structured, source-anchored claims (not prose summaries), does all retrieval deterministically, and spends LLM tokens only where judgment is needed — extraction and synthesis. You review at defined gates; the machine handles the bookkeeping.
-
 ---
 
 ## What Is This?
@@ -104,10 +102,6 @@ Mapping the fabric's asset types to the standard agent-memory taxonomy
 A wiki page, a claim, a skill are storage formats — not memory types. What
 matters is that each asset carries its own retrieval and trust policy, which
 is why provenance, scope, and maturity are first-class fields.
-
----
-
-Next: [getting-started](./getting-started)
 
 ---
 
@@ -224,3 +218,7 @@ wiki's claims, and the memory taxonomy meet an agent's finite window.
 - **vs memory tools**: contradictions are represented (`contested`), not collapsed; confidence is a field, not a vibe.
 - **vs ADR collections**: decisions connect to experience events; a pattern read but never applied gets flagged.
 - **vs prompt/skill libraries**: promotion requires replication in ≥2 independent projects with measured maturity.
+
+---
+
+Next: [Getting Started](./getting-started)

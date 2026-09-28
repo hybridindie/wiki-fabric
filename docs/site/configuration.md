@@ -266,9 +266,9 @@ repos:
     path: .                               # the fabric itself
 ```
 
-Stages: `extract` (sees raw docs — highest sensitivity), `synthesize`
-(sanitized statements), `dossier` (experience events). Values: `"cloud"`
-(default) · `"local"` (on-device via `llm.local_model`) · any explicit model id.
+Stage and value semantics are the same as [On-device routes](#on-device-local-routes-privacy-tiering) above:
+stages `extract` / `synthesize` / `dossier`; values `"cloud"` (default),
+`"local"`, or an explicit model id.
 
 Migrating an existing fabric: `wf repos migrate --dry-run` shows which
 per-repo keys would move into overlays; `--apply --prune` writes them **and**

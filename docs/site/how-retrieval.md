@@ -3,7 +3,7 @@ type: index
 title: "How It Works: Retrieval & Delivery (query + context)"
 description: "How the fabric answers questions and compiles task context — without spending tokens"
 created: 2026-09-20
-updated: 2026-09-27
+updated: 2026-09-28
 ---
 
 # How It Works: Retrieval & Delivery
@@ -47,18 +47,11 @@ the query result promoted to a citable page.
 
 ## Context compilation: precedence at work
 
-`wf context` is the delivery end of the same machinery. Given a task, it:
-
-1. Scores every page against the task's concepts (same deterministic scoring)
-2. Applies **scope precedence**: project decisions > domain patterns > global
-   policies — when artifacts conflict, the higher-precedence one wins
-3. Filters by **status and freshness**: superseded pages are dropped, pages
-   with an overdue `review_after` are dropped
-4. Emits every inclusion *and* exclusion with its reason
-
-The output is what the LLM receives — not a filesystem dump, not a RAG
-pipeline's best guess, but a bounded manifest where the agent can cite the
-artifact it followed.
+`wf context` is the delivery end of the same machinery — scoring, scope
+precedence (project > domain > global), status/freshness filtering, and
+per-item reasons. The full contract — manifest guarantees, receipts,
+commitments surfacing, code navigation — has its own deep-dive:
+[Task Context](./context).
 
 ## Why deterministic matters
 

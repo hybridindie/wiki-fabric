@@ -156,9 +156,6 @@ and merge.
 - `registry/log.md` — the fabric's own operation timeline
 - stderr: every extraction/backend fallback prints why it fell back
 
----
-
-Next: [Back to Configuration](./configuration)
 
 ## Source says "ingested" but has no claims
 
@@ -192,3 +189,7 @@ It shouldn't: packaged installs carry their own orchestrator (install ≡
 behavior). If you see `CLI: STALE`, you're running a dev-mode checkout copy —
 `wf update` pulls the harness; `uv tool upgrade wiki-fabric` upgrades the
 packaged tool.
+
+---
+
+Next: [Troubleshooting ends the reference — back to Configuration](./configuration)
