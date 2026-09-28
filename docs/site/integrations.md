@@ -76,6 +76,7 @@ Local route dispatches through the on-device judgment stack (see below).
 
 ```bash
 git clone https://github.com/rbrus/laya-as-judge.git
+# or, for the packaged tool: uv tool install wiki-fabric --from dist/*.whl --force --with "~/path/to/laya-as-judge[mlx]"
 cd laya-as-judge && uv venv --python 3.12 && uv pip install -e '.[mlx]' --python .venv/bin/python
 ```
 
