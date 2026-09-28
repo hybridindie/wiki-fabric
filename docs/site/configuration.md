@@ -3,7 +3,7 @@ type: index
 title: "Configuration — LLM providers, routing, and fabric.yaml"
 description: "Every knob: OpenAI-compatible providers, model tiers, per-stage routing, ignores, integrations"
 created: 2026-09-19
-updated: 2026-09-25
+updated: 2026-09-27
 ---
 
 # Configuration
@@ -342,6 +342,18 @@ integrations:
     enabled: false       # decision-model judging for eval gates (Jev / Laya)
     route: cloud         # "cloud" | "local"
     cloud_model: jev-1
+  obsidian:
+    enabled: false       # two-way vault (Local REST API plugin required)
+    api_url: https://127.0.0.1:27124
+    api_key_env: OBSIDIAN_REST_KEY
+```
+
+### Sync distribution
+
+```yaml
+sync:
+  mode: solo             # "solo" (default, sticky: direct push) | "team" (one PR per push)
+  evidence_prs: auto     # team mode: evidence-only PRs auto-merge on green CI | "review"
 ```
 
 ### Judgment tier

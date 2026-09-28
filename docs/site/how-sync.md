@@ -3,7 +3,7 @@ type: index
 title: "How It Works: Staying in Sync (Hooks & CI)"
 description: "How doc drift becomes claims automatically, and what CI proves on every push"
 created: 2026-09-20
-updated: 2026-09-20
+updated: 2026-09-27
 ---
 
 # How It Works: Staying in Sync
@@ -14,10 +14,15 @@ machines that keep the fabric current without anyone remembering to:
 
 ## The hook loop: drift → capture → compile
 
-(Also new: `wf capture chat <slug>` captures agent-harness chat sessions —
-opencode's SQLite, Claude Code's JSONL transcripts — as `kind: chat-transcript`
-evidence. PRs/issues capture the why for shipped work; chats capture the why
-for everything else: debugging dead ends, rejected approaches, environment
+(Also: `wf capture chat <slug>` captures agent-harness chat sessions —
+claude/opencode/codex/gemini session stores — with thread frontmatter
+(session id, files touched); `capture <slug> --git` captures PR narratives
+at merge time via the post-merge hook (#85), and those PR captures carry
+`kind: pr-record` structure. The post-merge hook also runs capture-git
+automatically — merge is when the *why* exists; it lands as evidence
+without anyone remembering. PRs/issues capture the why for shipped work;
+chats capture the why for everything else: debugging dead ends, rejected
+approaches, environment
 quirks. sha256 anti-loop means re-running is free.)
 
 Then `wf mine chats <slug> [--llm]` distills transcripts into **durable

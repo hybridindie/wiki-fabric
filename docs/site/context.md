@@ -3,7 +3,7 @@ type: index
 title: "Task Context — deterministic context assembly"
 description: "How wf context compiles scoped, reasoned manifests"
 created: 2026-09-19
-updated: 2026-09-25
+updated: 2026-09-27
 ---
 
 # Task Context: Deterministic Context Assembly
@@ -80,7 +80,7 @@ Open **commitments** (type `commitment`, `status: open` — a deferred
 obligation like "after the schema migration passes, update the contract
 test") surface in the manifest when their `trigger` plausibly matches the
 task, at **P1-project** precedence: a pending obligation binds the current
-task like a decision does. The reason reads `prospective match: <tokens>`,
+task like a decision does. The reason reads `prospective match: tokens…` (the matching token list),
 and an overdue `due` date adds a warning. `done`/`cancelled` commitments are
 excluded — completed obligations don't bind future work. Activation is
 time-based (`due`) or dependency-based (`depends_on`, list of wikilinks).
@@ -96,6 +96,20 @@ manifest gains a **Code navigation** block: task tokens → graph symbols →
 files ranked by matching-symbol count ("open these first"). 0 tokens, pure
 graph lookups, deterministic. Without the integration the block is absent —
 never load-bearing.
+
+## Provenance + boundaries on delivered items
+
+Delivered items carry two kinds of extra lines when the data exists:
+
+- **Provenance** (the evidence graph, #104): a decision/claim whose capture
+  has a thread edge renders *discussed in / decided in / validated in* —
+  the agent can open the actual conversation or PR that produced it.
+  Lineage-shaped questions (`wf query "where did this come from"`) surface
+  the same neighborhood as a dedicated section in the answer; `wf thread <id>`
+  is the audit surface.
+- **Boundaries** (#90): delivered patterns render a `⚠ does not apply:` line per counterexample
+  for each recorded counterexample — the agent sees where the rule breaks
+  before following it.
 
 ## Receipts: make delivery auditable
 

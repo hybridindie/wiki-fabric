@@ -3,7 +3,7 @@ type: index
 title: "How It Works: Retrieval & Delivery (query + context)"
 description: "How the fabric answers questions and compiles task context — without spending tokens"
 created: 2026-09-20
-updated: 2026-09-20
+updated: 2026-09-27
 ---
 
 # How It Works: Retrieval & Delivery
@@ -27,7 +27,16 @@ variants still match. Pure string operations.
 
 **3. Graph expansion.** Pages aren't scored in isolation: a claim that
 `supports` or `contradicts` another claim pulls its neighbor in; with the
-graphify integration, call/import edges also surface code-reachable claims.
+graphify integration, call/import edges also surface code-reachable claims
+(ranking boost + a symbol-discovery tier for lexically-invisible claims).
+
+**3b. Provenance (the evidence graph).** With a thread index present
+(`registry/threads.json`, derived at rebuild), lineage-shaped queries
+("where did this come from?") gain a **Lineage** section: which session or
+PR each top claim came from, with the files those sessions touched.
+`wf thread <session-or-claim-id>` is the deterministic audit surface —
+claims citing the node, files touched, continuation edges. Provenance is
+display only: never ranked above lexical evidence, never scored into truth.
 
 **4. Structured answer.** The result isn't prose soup — it's
 `bottom line / evidence / caveats / confidence / next action`, and every

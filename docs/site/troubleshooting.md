@@ -3,7 +3,7 @@ type: index
 title: "Troubleshooting"
 description: "Common failure modes and fixes — backends, downloads, providers, hooks"
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-27
 ---
 
 # Troubleshooting
@@ -159,3 +159,36 @@ and merge.
 ---
 
 Next: [Back to Configuration](./configuration)
+
+## Source says "ingested" but has no claims
+
+A pre-fix bug (#93) flipped pending→ingested even with 0 claims extracted
+(LLM outage, malformed JSON). Recover:
+
+```bash
+wf ingest --reclaim <project>     # flips zero-claim records back to pending
+wf ingest --pending <project> --extract-claims
+```
+
+Lint's `SOURCE-EMPTY` warning names any stranded source.
+
+## A claim's locator doesn't match the source anymore
+
+Sources get re-captured and edited; locators drift.
+
+```bash
+wf review --verify-locators       # rewrite/repair/restore/contest — 0 tokens
+```
+
+## Lint is slow on a big corpus
+
+The shared frontmatter cache makes lint parse each file once (#108).
+If lint is still slow, check for enormous `evidence/raw/` subtrees (excluded
+by default) or run `wf lint --orphans` scoped checks.
+
+## The packaged wf shows STALE
+
+It shouldn't: packaged installs carry their own orchestrator (install ≡
+behavior). If you see `CLI: STALE`, you're running a dev-mode checkout copy —
+`wf update` pulls the harness; `uv tool upgrade wiki-fabric` upgrades the
+packaged tool.

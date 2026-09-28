@@ -3,7 +3,7 @@ type: index
 title: "Governance — the answers, enforced"
 description: "The hard questions for agent-maintained knowledge and where the fabric answers them"
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-27
 ---
 
 # Governance: The Answers, Enforced
@@ -25,6 +25,9 @@ they touch canonical pages.
 | How does an agent propose a knowledge mutation? | Change-sets (manifest + diff), staging→canonical flow, human gate before canonical writes | ingest workflow; `apply-changeset.sh` |
 | Which artifacts require human review? | Pattern promotion (7-point checklist), canonical merges, corpus conflicts (`SYNC-CONFLICT` blocks push) | promotion-queue; sync protocol |
 | How do we find stale pages after a dependency upgrade? | `review_after` dates lint-checked, sha256 staleness from capture drift, graphify AST diff flags code changes | lint `REVIEW-AFTER`; `graphify-bridge --diff` |
+| Do patterns know where they fail? | `recommended`/`standard` patterns without `counterexamples` warn (boundaries expected); delivered patterns render "does not apply" | lint `PATTERN`; `wf context` |
+| Are the locators still true? | `wf review --verify-locators` re-checks every claim's quote against its raw source: rewrite/repair/restore/contest — the verification stamp means something | #111/#130 pass |
+| What does the fabric NOT know? | Concept open-questions harvest into gated question pages (open → answered via `answers` relations); surfaced by the gate + query | #88 loop; lint `QUESTION` |
 
 None of these are promises in a README — each is a lint check or workflow gate in CI right now.
 

@@ -3,7 +3,7 @@ type: index
 title: "How It Works: The Compounding Loop (experience → pattern)"
 description: "How one project's failure becomes every project's guardrail"
 created: 2026-09-20
-updated: 2026-09-20
+updated: 2026-09-27
 ---
 
 # How It Works: The Compounding Loop
@@ -28,6 +28,14 @@ the entire ceremony — and it's deliberately cheap, because capture that costs
 effort doesn't happen.
 
 ## Step 2: Deterministic mining
+
+**Chat-mined candidates (second intake, #89):** `wf mine chats <slug> --propose` stages
+durable pattern/anti-pattern takeaways from captured chat sessions as gated candidates
+(`patterns/_inbox/`, provenance-cited to the conversation, idempotent hashed ids). They
+surface in `wf gate`; `wf promote-patterns --apply <id> --reject <id> --reason` is the
+human decision. Apply moves them to canonical `patterns/` — the maturity gates govern
+from there. Mining with thread signals (#103) means clusters are informed by graph
+structure (shared sessions, file overlap, continuations), not just text overlap.
 
 `mine-promotions.py` clusters experience events across projects by concept
 overlap — keyword Jaccard, no LLM. When the same pattern of

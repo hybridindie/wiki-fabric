@@ -3,7 +3,7 @@ type: index
 title: "How It Works: Trust, Freshness & Governance"
 description: "How the fabric stays trustworthy when agents write most of it"
 created: 2026-09-20
-updated: 2026-09-20
+updated: 2026-09-27
 ---
 
 # How It Works: Trust & Governance
@@ -63,6 +63,24 @@ attester. A run produces a receipt; the attester — deterministic, no LLM —
 confirms the run was produced the declared way. This is how "recall 0.89
 PASS" becomes checkable: the receipt proves the value was produced the
 sanctioned way, per call, never stored in the bundle.
+
+## Locator verification: the stamp means something
+
+The `process:locator-verification` stamp is applied at extraction (quote
+verified against the raw source) and re-checked mechanically:
+
+```bash
+wf review --verify-locators   # 0 tokens, deterministic
+```
+
+For every claim: the full quote must sit inside the recorded locator's
+span. Outcomes: **kept** (stamp stays), **fixed** (locator rewritten to the
+tightest containing span), **repaired** (backtick-elision quotes refilled
+from the source), **restored** (a previously-contested quote now verifies →
+status + stamp back), **contested** (quote vanished from the source → stamp
+stripped, status `contested` — the evidence no longer supports it as
+written). Each outcome prints; the corpus's grounding is auditable with one
+command.
 
 ## What happens when trust fails
 

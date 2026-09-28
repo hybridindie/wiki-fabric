@@ -3,7 +3,7 @@ type: index
 title: "Architecture — pipeline diagram and module map"
 description: "The wiki-fabric pipeline and module structure"
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-27
 ---
 
 # Architecture
@@ -77,10 +77,14 @@ scripts/
 ├── context.py            0-token task-manifest compiler
 ├── lint.py               deterministic contract enforcement (+ --okf floor)
 ├── review.py              staleness scan + re-verify (the governance loop)
-├── export-wiki.py         human-layer wiki renderer (topics, projects, staleness)
+├── export-wiki.py         human-layer wiki pipeline (harvest → generate → manifest)
+├── wiki_lib/
+│   ├── diagrams.py        mermaid fence validation/repair
+│   ├── edges.py           cross-page edges + citation graph
+│   └── generators.py      article generators + enrichment
 ├── mine-chats.py          chat transcript distillation (durable takeaways)
 ├── harnesses.py           multi-harness registry + installer (11 agent tools)
-├── capture-chat.py        agent chat session capture (opencode/claude)
+├── capture-chat.py        agent chat session capture (claude/opencode/codex/gemini)
 ├── skill.py               universal skill loader (all harnesses)
 ├── repos-migrate.py       config-per-project migration
 └── ...                    capture, hooks, sync, okf export/import, evals
