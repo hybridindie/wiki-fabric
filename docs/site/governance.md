@@ -30,7 +30,3 @@ they touch canonical pages.
 | What does the fabric NOT know? | Concept open-questions harvest into gated question pages (open → answered via `answers` relations); surfaced by the gate + query | #88 loop; lint `QUESTION` |
 
 None of these are promises in a README — each is a lint check or workflow gate in CI right now.
-
----
-
-Next: [Machine-Readable Contract](./machine-contract)

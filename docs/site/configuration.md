@@ -436,7 +436,3 @@ fabric. Trust tiers are recorded, never inherited — see
 
 **Team sync** pushes knowledge content to a git remote you own. Use a private
 repo for anything sensitive; the harness (scripts/schemas) never syncs.
-
----
-
-Next: [Optional Integrations](./integrations)

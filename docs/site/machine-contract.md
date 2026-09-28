@@ -248,7 +248,3 @@ compiler model.
 * **eval-stability | gemma4:e4b-fixed** — Claim recall: 0.89 (threshold 0.8) — PASS
 * **okf-import | team-a** — bundle ext-bundle: 12 concepts (quarantine 1), tiers {...}
 ```
-
----
-
-Next: [Troubleshooting](./troubleshooting)

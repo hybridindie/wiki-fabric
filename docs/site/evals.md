@@ -265,7 +265,3 @@ model format runs identically on every platform.
 model. This enforces the G4 lesson — model swaps are compiler changes, and
 compiler changes require re-evaluation — as a hard gate instead of a docs
 sentence. `wf status` shows all three models (ops, compiler, local).
-
----
-
-Next: [OKF v0.2 Conformance](./okf)

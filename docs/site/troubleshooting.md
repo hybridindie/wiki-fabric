@@ -189,7 +189,3 @@ It shouldn't: packaged installs carry their own orchestrator (install ≡
 behavior). If you see `CLI: STALE`, you're running a dev-mode checkout copy —
 `wf update` pulls the harness; `uv tool upgrade wiki-fabric` upgrades the
 packaged tool.
-
----
-
-Next: [Troubleshooting ends the reference — back to Configuration](./configuration)

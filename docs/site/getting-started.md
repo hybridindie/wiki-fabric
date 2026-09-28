@@ -210,7 +210,3 @@ next step when it matters.
 - [Core Workflows](./core-workflows) — the full loop with scenarios
 - [Task Context](./context) — what the agent receives at task time
 - [Team Sync](./sync) — share the corpus with a team
-
----
-
-Next: [Core Workflows](./core-workflows)

@@ -177,7 +177,3 @@ The fabric carries its own graph: `graphify-out/` is a code+docs graph of
 real module structure — god nodes (`get_config()`), communities, cross-module
 coupling — and is what the bridge diff/expand steps consult for claims about
 wiki-fabric itself. Refresh after refactors with `graphify --update`.
-
----
-
-Next: [Teams: Sharing the Vault](./teams)

@@ -109,7 +109,3 @@ reality:
 None of these require remembering to run something. The hooks run on commits;
 the lint runs in CI and on every command that could be affected; `wf status`
 surfaces whatever needs attention.
-
----
-
-Next: [Configuration](./configuration)

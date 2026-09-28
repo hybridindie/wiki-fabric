@@ -78,5 +78,3 @@ Re-running ingest on an unchanged file would re-spend tokens for identical
 output. So the sha256 is checked first: matching hash = skip. Files recorded
 but never extracted (`status: pending`) resume cleanly. One capture, one
 compile, one review — then it's free forever.
-
-Next: [Retrieval & Delivery](./how-retrieval)

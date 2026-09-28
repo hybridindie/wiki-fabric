@@ -75,5 +75,3 @@ anything. Session forty on project nine inherits all of it. That's the bet:
 **an LLM is a good compiler but an unreliable memory** — so the fabric stores
 structured, source-anchored claims and spends tokens only where judgment is
 needed.
-
-Next: [Trust & Governance](./how-trust)

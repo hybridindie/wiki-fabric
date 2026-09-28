@@ -124,7 +124,3 @@ the next push carries it.
 This repo is the public harness; your corpus is your private knowledge.
 Keeping them on different remotes means `wf update` (harness) never touches
 team content, and `wf sync` never publishes your corpus to a public URL.
-
----
-
-Next: [CLI & Scripts](./cli)

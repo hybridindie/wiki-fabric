@@ -122,7 +122,3 @@ wf okf import ~/bundles/team-a --scope team-a --extract-claims
 Use cases: consuming another team's curated fabric, archiving a fabric snapshot,
 feeding a curated external corpus (e.g. vendor docs someone exported) through
 your governance instead of around it.
-
----
-
-Next: [Governance](./governance)

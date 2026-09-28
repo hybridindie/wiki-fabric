@@ -260,7 +260,3 @@ Lists optional integrations with their state and effect:
 Inactive integrations print their enable command and what they'd change —
 so the dashboard doubles as documentation of the delta (full table in
 [Integrations](./integrations)).
-
----
-
-Next: [Model Policy & Evals](./evals)

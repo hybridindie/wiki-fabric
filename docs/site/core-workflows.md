@@ -370,7 +370,3 @@ harness even if not yet detected.
 Bootstrap also installs `.opencode/plugins/wiki-fabric.js` — a session-start
 nudge (modeled on graphify's plugin) reminding the agent to prefer
 `wf context` / `wf query` over grep.
-
----
-
-Next: [Task Context (wf context)](./context)

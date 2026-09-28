@@ -218,7 +218,3 @@ wiki's claims, and the memory taxonomy meet an agent's finite window.
 - **vs memory tools**: contradictions are represented (`contested`), not collapsed; confidence is a field, not a vibe.
 - **vs ADR collections**: decisions connect to experience events; a pattern read but never applied gets flagged.
 - **vs prompt/skill libraries**: promotion requires replication in ≥2 independent projects with measured maturity.
-
----
-
-Next: [Getting Started](./getting-started)

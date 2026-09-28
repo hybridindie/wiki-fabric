@@ -83,7 +83,3 @@ in [AGENTS.md](https://github.com/hybridindie/wiki-fabric/blob/main/AGENTS.md)).
 | Embeddings (semantic re-ranking) | optional — planned |
 | Git history capture, corpus team sync | integrations |
 | MCP server, multi-harness skill packs | roadmap |
-
----
-
-Next: [The Compiler (capture → claims)](./how-compiler)

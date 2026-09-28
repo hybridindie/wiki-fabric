@@ -128,7 +128,3 @@ wf context --task "Add token rotation to the OAuth service" --write-receipt
 - The receipt path goes to stderr; the manifest on stdout is unchanged.
 - `wf lint` validates the envelope (`RECEIPT` code); behavior eval `be5`
   proves delivery through a persisted receipt.
-
----
-
-Next: [Architecture Overview](./architecture)
