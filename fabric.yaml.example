@@ -87,8 +87,14 @@ integrations:
     enabled: false                       # true → call-graph staleness, claim enrichment, graph expansion
     graph_dir: graphify-out
   embeddings:
-    enabled: false                       # true → semantic re-ranking (optional ML, planned)
-    model: all-MiniLM-L6-v2
+    enabled: false                       # true → semantic re-rank boost on wf query (optional ML)
+    model: all-MiniLM-L6-v2              # fastembed ONNX, offline, ~30MB, ~5ms/query
+    # Value conditions (exp-embeddings-spike-2026-09-28): at ~500 claims the
+    # gain is thin (+3 rel@10 over lexical+graph, no rel@5 change). Ship-worth
+    # grows with corpus scale (lexical collisions multiply, embedding space
+    # doesn't) and with cross-project queries (word divergence between
+    # projects). Re-run the benchmark at ~2k claims / after a logged
+    # retrieval miss. Off by default — the deterministic retriever stands alone.
   judgment:
     enabled: false                       # true → low-variance decision-model judging (eval gates)
     route: cloud                         # "cloud" (TypeSafe Jev API) | "local" (on-device)

@@ -211,6 +211,64 @@ def thread_lineage(query, expanded, query_type, index=None, pages=None):
     return hits
 
 
+EMBED_INFO = None  # set by embed_boost: {"source", "n_vectors"} — answer reports it
+
+
+def _embed_active():
+    """Gate for the embeddings re-rank tier (#12): integrations.embeddings.enabled
+    AND fastembed importable. Never fatal — the lexical+graph ranker stands alone."""
+    try:
+        from fabric_config import get_config, is_integration_active
+        if not is_integration_active(get_config(), "embeddings"):
+            return False
+        import importlib.util as _u
+        return _u.find_spec("fastembed") is not None
+    except Exception:
+        return False
+
+
+def embed_boost(scores, pages, query):
+    """Semantic re-rank signal (#12): cosine(query, claim) fused into the
+    lexical score (0.5/0.5 min-max on the top-40 candidates). Off by default
+    (integrations.embeddings); recorded in the answer when it ran."""
+    from embed_index import load_or_build, embed_query
+    from fabric_config import CORPUS_ROOT
+    model, vectors, src = load_or_build(CORPUS_ROOT)
+    if not vectors:
+        return scores, None
+    qe = embed_query(query)
+    if qe is None:
+        return scores, None
+    import numpy as np
+    from embed_index import cosine_top
+    # rank ONLY the top-40 lexical candidates (query-time re-rank of top-K)
+    top = scores[:40]
+    if not top:
+        return scores, None
+    lex = np.array([s for s, _ in top], dtype=float)
+    lex = (lex - lex.min()) / (lex.max() - lex.min() + 1e-9)
+    sem = []
+    id_set = {}
+    for i, (_, pg) in enumerate(top):
+        stem = Path(pg["path"]).stem if pg.get("path") else ""
+        id_set[stem] = i
+        v = vectors.get(stem)
+        if v is None:
+            sem.append(0.0)
+            continue
+        denom = (np.linalg.norm(qe) * np.linalg.norm(v)) or 1e-9
+        sem.append(float(np.dot(np.asarray(qe), v) / denom))
+    sem = np.array(sem, dtype=float)
+    sem = (sem - sem.min()) / (sem.max() - sem.min() + 1e-9)
+    fused = 0.5 * lex + 0.5 * sem
+    order = np.argsort(-fused)
+    reranked = [top[i] for i in order]
+    reranked += scores[40:]
+    global EMBED_INFO
+    EMBED_INFO = {"source": src, "n_vectors": len(vectors)}
+    return reranked, EMBED_INFO
+
+
 def graphify_boost(pg, q_tokens, q_words):
     """Graph-proximity ranking signal (#48): a claim enriched with a symbol
     the query names is code-reachable — boost it modestly. Zero when the
@@ -311,6 +369,8 @@ def score_pages(pages, query, query_type):
         scored.append((final_score, pg))
 
     scored.sort(key=lambda x: -x[0])
+    if _embed_active():
+        scored, _info = embed_boost(scored, pages, query)
     return scored
 
 
@@ -528,6 +588,10 @@ def generate_answer(query, scored, pages, query_type, symbol_hits=None, thread_h
 
     # Confidence assessment
     lines.append("## Confidence")
+    if EMBED_INFO:
+        lines.append("")
+        lines.append(f"_(semantic re-rank active: {EMBED_INFO['n_vectors']} vectors, "
+                     f"index {EMBED_INFO['source']})_")
     lines.append("")
     if evidence_claims:
         n_high = sum(1 for ec in evidence_claims if ec["confidence"] == "high")

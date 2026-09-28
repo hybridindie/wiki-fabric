@@ -21,8 +21,23 @@ Integrations add capabilities on top of the core loop. They are declared in `fab
 |-------------|-------------|------|
 | **graphify** | claims carry `code_symbols` + `graph_edges` (doc→code provenance); `graphify-bridge --diff` adds AST staleness detection after refactors; **`wf context` gains a `Code navigation` block** — task tokens → graph symbols → ranked file shortlist (0 tokens, deterministic); code-reachable claims surface first (query ranking boost + symbol-discovery tier); optional tree-sitter language packs extend extraction to additional languages | 0 tokens (AST + community detection) |
 | **obsidian** | the vault becomes **two-way**: `wf export wiki` harvests human edits to wiki notes as evidence *before* regenerating (an export manifest records path→hash at export time; human-changed notes land in `evidence/raw/<project>/obsidian/` with capture provenance); `--push` mirrors generated notes through the [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api). Requires the Obsidian Local REST API plugin; key from the env var (or the plugin's data.json — gitignored) | 0 tokens |
-| **embeddings** | semantic re-ranking of retrieval results (gated on the #115 benchmark — off by default) | local inference |
-| **judgment** | low-variance decision-model judging (System One models: [TypeSafe Jev](https://docs.typesafe.ai/introduction) cloud, [Laya-MLX](https://github.com/rbrus/laya-as-judge) local) for eval gates: `python3 scripts/eval/eval-behavior.py --judge` scores fixtures with calibrated probabilities instead of a generative LLM judge | ~$0.0004/call (cloud) or on-device (local) |
+| **embeddings** | `wf query` gains a semantic re-rank boost (fusion with lexical+graph, top-40 candidates, ~5 ms/query offline). **Ships off by default** — see "when each integration earns its keep" below | local inference (fastembed ONNX, ~30 MB, no network) |
+| **judgment** | low-variance decision-model judging: promotion-mining near-miss refinement (automatic when enabled), `python3 scripts/eval/eval-behavior.py --judge` fixture scoring, and `wf verify-effects` — the independent second opinion on ingest effect classification (no more extractor-grades-own-homework) | ~$0.0004/call (cloud Jev) or on-device (local Laya) |
+
+## When each integration earns its keep
+
+All integrations are **off by default** — each ships value only under specific
+conditions, measured where the claim is quantitative:
+
+| Integration | Ship it when… | Skip it when… |
+|---|---|---|
+| **graphify** | the repo's docs reference code symbols; you navigate a codebase you didn't write; refactors rename code (AST staleness catches what sha256 can't) | pure-ops repo with no code claims; docs-only fabric |
+| **obsidian** | you read/curate the wiki by hand in Obsidian (two-way harvest protects human edits) | the wiki is generated-read-only for you (agent-only consumption) |
+| **embeddings** | corpus > ~2k claims (lexical collisions multiply; embedding space still separates topics) or cross-project word divergence is common; re-benchmark (`exp-embeddings-spike-2026-09-28`) at scale — at ~500 claims the measured gain was thin (+3 rel@10, none @5) | small corpus; strictly within-topic queries; determinism audits that can't tolerate an ML component |
+| **judgment** | promotion mining gets real traffic (near-miss pairs decide dossiers); ingest volume is high enough that self-preference risk matters (verify-effects second opinion) | tiny fabric where keyword clustering suffices; no Jev key and no Mac for local |
+
+The deterministic core never depends on any of these — every gate, lint, and
+manifest works with all integrations off.
 
 ## The judgment tier
 

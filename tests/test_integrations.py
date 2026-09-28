@@ -90,9 +90,13 @@ class TestGraphifyGate:
         # (prepends scripts/, cmd/, lib/, ... to sys.path) resolves deps.
         import shutil as _sh
         _sh.copytree(REPO / "scripts", tmp_path / "scripts", dirs_exist_ok=True)
+        import os as _os
+        env = dict(_os.environ)
+        env.pop("WIKI_FABRIC_DIR", None)          # isolate from the user's fabric
+        env["HOME"] = str(tmp_path)               # no ~/.wiki-fabric/fabric.yaml
         out = subprocess.run(
             [sys.executable, str(tmp_path / "scripts" / "cmd/context.py"), "--task", "t", "--format", "json"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, env=env, cwd=str(tmp_path),
         )
         data = _json.loads(out.stdout)
         assert "integrations" in data
