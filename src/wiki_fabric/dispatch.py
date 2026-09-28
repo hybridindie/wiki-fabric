@@ -194,6 +194,11 @@ def _verify_effects(argv):
     return _run_script(find_fabric(), "scripts/cmd/verify-effects.py", *argv)
 
 
+@verb("wiki-generate")
+def _wiki_generate(argv):
+    return _run_script(find_fabric(), "scripts/cmd/wiki_generate.py", *argv)
+
+
 @verb("log")
 def _log(argv):
     return _run_script(find_fabric(), "scripts/cmd/log-experience.py", *argv)

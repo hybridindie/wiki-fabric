@@ -11,7 +11,10 @@ Tool classes:
   status tools      — gate (pending HITL), integrations (0 tokens)
   log tool          — log-experience (the mining intake; same validation
                       as wf log — the one mutation, gated by schema)
-Mutations beyond `log` stay CLI-gated: no promote/ingest/sync tools.
+Wiki generation tools (#144): the writer/bookkeeper split — the host agent
+writes prose via wiki_begin/next/submit/finish; the bookkeeper (wiki_generate)
+owns the durable queue, claim reconciliation, and citation validation.
+State is on disk (run checkpoint), never in the server process.
 
 Launch: wf-mcp (console script, [project.scripts], the `mcp` extra).
 """
@@ -100,6 +103,46 @@ TOOLS = [
         },
     ),
     types.Tool(
+        name="wiki_begin",
+        description="Open a wiki-generation run: build the deterministic outline (0 tokens) from the claim graph — pages, sections, assigned claims. Resumes an open run if one exists.",
+        inputSchema={"type": "object", "properties": {
+            "project": {"type": "string"},
+            "task": {"type": "string"},
+            "min_claims": {"type": "integer", "default": 6},
+        }},
+    ),
+    types.Tool(
+        name="wiki_next",
+        description="Get the next pending page job (JSON): outline sections + the claims each section must cite. Write the cited prose, then wiki_submit_page.",
+        inputSchema={"type": "object", "properties": {}},
+    ),
+    types.Tool(
+        name="wiki_submit_page",
+        description="Submit a written page. Citation-validated (every assigned claim must be cited), claim deltas reconciled (confirm/retract/add), durable boundary crossed on acceptance.",
+        inputSchema={"type": "object", "properties": {
+            "page": {"type": "string", "description": "Page id from wiki_next"},
+            "file": {"type": "string", "description": "Path to the written draft (.md)"},
+            "confirm": {"type": "array", "items": {"type": "string"}},
+            "retract": {"type": "array", "items": {"type": "string", "description": "claim ids you verified should NOT cite this page"}},
+            "add": {"type": "array", "items": {"type": "string"}},
+        }, "required": ["page", "file"]},
+    ),
+    types.Tool(
+        name="wiki_finish",
+        description="Finish the wiki run. Refuses while any page lacks durable claim state; staged pages then go through the change-set flow.",
+        inputSchema={"type": "object", "properties": {}},
+    ),
+    types.Tool(
+        name="wiki_status",
+        description="Wiki-generation run status: which pages are durable, which pending.",
+        inputSchema={"type": "object", "properties": {"json": {"type": "boolean"}}},
+    ),
+    types.Tool(
+        name="wiki_inspect_page_claims",
+        description="The full claim set assigned to a page (for broad rewrites) plus applied deltas.",
+        inputSchema={"type": "object", "properties": {"page": {"type": "string"}}, "required": ["page"]},
+    ),
+    types.Tool(
         name="fabric_log",
         description="Log an experience event (the mining intake). Records what went wrong, what was done, outcomes. The one mutating tool — same schema validation as `wf log`.",
         inputSchema={
@@ -157,6 +200,29 @@ def _call_tool(name: str, arguments: dict) -> str:
         if len(argv) % 2 == 0:  # no --project/--problem pair
             return "error: project and problem are required"
         return _run_script(*argv)
+    if name == "wiki_begin":
+        argv = ["scripts/cmd/wiki_generate.py", "begin"]
+        if args.get("project"):
+            argv += ["--project", args["project"]]
+        if args.get("task"):
+            argv += ["--task", args["task"]]
+        if args.get("min_claims"):
+            argv += ["--min-claims", str(args["min_claims"])]
+        return _run_script(*argv)
+    if name == "wiki_next":
+        return _run_script("scripts/cmd/wiki_generate.py", "next")
+    if name == "wiki_submit_page":
+        argv = ["scripts/cmd/wiki_generate.py", "submit", "--page", args["page"], "--file", args["file"]]
+        for k in ("confirm", "retract", "add"):
+            for v in args.get(k) or []:
+                argv += [f"--{k}", v]
+        return _run_script(*argv)
+    if name == "wiki_finish":
+        return _run_script("scripts/cmd/wiki_generate.py", "finish")
+    if name == "wiki_status":
+        return _run_script("scripts/cmd/wiki_generate.py", "status", *( ["--json"] if args.get("json") else [] ))
+    if name == "wiki_inspect_page_claims":
+        return _run_script("scripts/cmd/wiki_generate.py", "inspect", "--page", args["page"])
     raise ValueError(f"unknown tool: {name}")
 
 

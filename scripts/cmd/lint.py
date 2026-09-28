@@ -384,6 +384,26 @@ _LIFECYCLE_STATUS_TYPES = {"pattern", "anti-pattern", "source", "source-summary"
 ACTOR_RE = re.compile(r"^(agent/[\w.@-]+/[\w.@:-]+|human:[\w.@-]+|process:[\w.@-]+)$")
 
 
+def check_citations(fm, rel, body):
+    """Living-wiki S2 (#144): generated wiki pages must cite their claims —
+    a zero-citation generated page ships untrustworthy prose. Applies to
+    pages under wiki/ (generated layer); claims-as-citations are the contract."""
+    p = str(rel)
+    if not p.startswith("wiki/") or p.startswith("wiki/staged/"):
+        return []
+    if fm.get("type") not in (None, "index"):
+        return []
+    if not isinstance(fm.get("generated"), dict):
+        return []  # not a generated page (human note files carry no stamp)
+    if "[[claim-" in body or "[[claim-" in str(fm.get("summary", "")):
+        return []
+    # sources section lists claims in backtrace tables — count those too
+    if re.search(r"claim-[\w-]+", body):
+        return []
+    return [f"GENERATED {p}: generated wiki page with zero claim citations "
+            f"(every claim statement needs a [[claim-...]] citation)"]
+
+
 def check_actors(fm, rel):
     """OKF §7 actor convention + §5.2 trust fields (best-effort, warning-level)."""
     problems = []
@@ -559,6 +579,11 @@ def _section_invariants(state):
                 state.warnings.append(w2)
             for prob in check_actors(fm, rel):
                 (state.errors if prob.startswith(("TRUST-TIER", "VERIFIED")) else state.warnings).append(prob)
+            if str(rel).startswith("wiki/"):
+                _, body2, _ = parse_frontmatter(p, _cache=state._fm_cache)
+                for prob in check_citations(fm, rel, body2):
+                    state.errors.append(prob)
+                state.errors.append(prob)
         t = fm.get("type")
         if t == "claim":
             if not fm.get("id"):

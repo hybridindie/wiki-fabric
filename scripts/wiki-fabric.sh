@@ -1017,6 +1017,11 @@ case "${1:-help}" in
         fdir=$(find_fabric)
         run_script "${fdir}" "scripts/cmd/verify-effects.py" "$@"
         ;;
+    wiki-generate)
+        shift
+        fdir=$(find_fabric)
+        run_script "${fdir}" "scripts/cmd/wiki_generate.py" "$@"
+        ;;
     bootstrap)
         shift
         cmd_bootstrap "$@"
@@ -1301,6 +1306,7 @@ case "${1:-help}" in
         echo "  utility [--dry-run|--json]        Receipt↔outcome join → usage counts on pattern pages (0 tokens)"
         echo "  publish [--out DIR]               Publish the wiki as a static site (Quartz v4, pinned)"
         echo "  verify-effects <claim.md>...      Judged effect verification at ingest (independent second opinion)"
+        echo "  wiki-generate {begin|next|submit|finish|status}  Wiki-generation bookkeeper (writer/bookkeeper split)"
         echo "  promote-domains {list|--apply <dossier>} Merge a human-approved domain proposal into the ontology"
         echo "  promote-patterns {--list|--apply <id>|--reject <id> --reason} Apply/reject chat-mined pattern candidates"
         echo "  propose-domains [--dry-run]       Propose new domains from corpus clusters (0 tokens)"
