@@ -197,3 +197,24 @@ class TestAlwaysOn:
 
     def test_no_frontmatter_in_block(self):
         assert not always_on._BLOCK_TEMPLATE.startswith("---")
+
+class TestHookBodyFiles:
+    """#128: hook bodies ship as real python files — lintable, testable,
+    syntax-checked at import (the bare-else bug class can't ship silently)."""
+
+    REPO = Path(__file__).parent.parent
+
+    def test_body_files_exist_and_compile(self):
+        hooks_dir = self.REPO / "system" / "hooks"
+        for name in ("commit-body.py", "merge-body.py", "checkout-body.py"):
+            f = self.REPO / "system" / "hooks" / name
+            assert f.exists(), f"missing {f}"
+            import ast
+            ast.parse(f.read_text())
+
+    def test_loaded_bodies_match_files(self):
+        import ast
+        assert hooks._REBUILD_BODY_COMMIT == (self.REPO / "system" / "hooks" / "commit-body.py").read_text()
+        assert hooks._REBUILD_BODY_MERGE == (self.REPO / "system" / "hooks" / "merge-body.py").read_text()
+        assert hooks._REBUILD_BODY_CHECKOUT == (self.REPO / "system" / "hooks" / "checkout-body.py").read_text()
+        ast.parse(hooks._REBUILD_BODY_MERGE)  # regression: bare-else class
