@@ -77,6 +77,11 @@ Local route dispatches through the on-device judgment stack (see below).
 ```bash
 git clone https://github.com/rbrus/laya-as-judge.git
 # or, for the packaged tool: uv tool install wiki-fabric --from dist/*.whl --force --with "~/path/to/laya-as-judge[mlx]"
+# Platform: laya real inference is Apple Silicon (MLX) only. On Windows/Linux the
+# local route auto-selects the generic backend — your llm.local_model (GGUF via
+# llama.cpp) emitting JSON verdicts (lower fidelity, no typed heads). Jev (cloud)
+# works everywhere. laya's torch backend is an incomplete scaffold and is never
+# auto-selected.
 cd laya-as-judge && uv venv --python 3.12 && uv pip install -e '.[mlx]' --python .venv/bin/python
 ```
 

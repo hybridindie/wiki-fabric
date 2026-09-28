@@ -235,22 +235,56 @@ def _ask_cloud(q):
     return _normalize(out)
 
 
+def _is_apple_silicon():
+    """True on macOS arm64 — the only platform laya's MLX backend supports."""
+    if sys.platform != "darwin":
+        return False
+    try:
+        import platform
+        return platform.machine() == "arm64"
+    except Exception:
+        return False
+
+
 def _ask_local(q):
-    """On-device judging. Primary: laya-as-judge (typed heads, MLX). Fallback:
-    generic local-model JSON emission (lowest fidelity, opt-in explicitly)."""
+    """On-device judging, platform-aware (#29):
+
+      Apple Silicon: laya-as-judge (typed heads, MLX backend) — real calibrated
+      inference. Optional fallback to the generic route when laya is missing
+      (`local_fallback: generic`).
+      Other platforms (Windows/Linux/Intel): laya[mlx] cannot run there — the
+      generic route (any local GGUF/text model emitting JSON verdicts via
+      local_llm) is the supported path; laya's torch backend is an incomplete
+      scaffold (uniform probabilities) and is deliberately never selected.
+
+    Config: local_backend: laya | generic; local_fallback: none | generic."""
     cfg = judgment_config()
     backend = cfg.get("local_backend", "laya")
     if backend == "laya":
+        if not _is_apple_silicon():
+            # laya[mlx] cannot run here — jump straight to the generic route
+            # rather than failing on an import that can never succeed.
+            if cfg.get("local_fallback", "generic") == "generic" or backend == "laya":
+                return _ask_generic(q)
+            raise JudgmentUnavailable(
+                "local route needs Apple Silicon for laya (MLX); set "
+                "local_backend: generic (GGUF via local_llm) on this platform")
         try:
             return _ask_laya(q)
         except JudgmentUnavailable as e:
-            if "EmulatorBackend" in str(e) or "not installed" in str(e):
-                if backend == "laya" and cfg.get("local_fallback") != "generic":
-                    raise
+            if ("EmulatorBackend" in str(e) or "not installed" in str(e)) \
+                    and cfg.get("local_fallback") == "generic":
+                return _ask_generic(q)
             raise
-    # generic route: any local text model emitting JSON verdicts
+    return _ask_generic(q)
+
+
+def _ask_generic(q):
+    """Generic route: any local text model emitting JSON verdicts (GGUF via
+    llama.cpp on any platform; MLX on Apple Silicon — same model set as the
+    local generation tier). Lowest fidelity: no typed heads, no calibration."""
     from fabric_config import get_local_model
-    model_id = cfg.get("local_model") or get_local_model()
+    model_id = judgment_config().get("local_model") or get_local_model()
     prompt = (f"Question: {q['question']}\n\nState:\n{q.get('state') or ''}\n\n"
               f"Answer with a JSON object: "
               + ('{"value": <probability 0..1>}' if q["kind"] == "noul"

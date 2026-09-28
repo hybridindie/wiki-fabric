@@ -335,3 +335,57 @@ class TestJudgmentMidRunDegradation:
         monkeypatch.setattr(J, "same_recurrence", exploding_same)
         out = mp._split_incoherent_clusters(base, lambda e: "text", 0.8, "local")
         assert out == base  # untouched on degradation
+
+
+class TestPlatformSplit:
+    """#29 platform story: laya[mlx] on Apple Silicon; generic (GGUF via
+    local_llm) anywhere else; torch scaffold never selected."""
+
+    def _mk(self, monkeypatch):
+        mp = _load("mine_promotions_platform", REPO / "scripts" / "cmd" / "mine-promotions.py")
+        import judgment as J
+        return J
+
+    def test_non_apple_routes_generic(self, monkeypatch):
+        J = self._mk(monkeypatch)
+        monkeypatch.setattr(J, "_is_apple_silicon", lambda: False)
+        called = {}
+        monkeypatch.setattr(J, "_ask_generic", lambda q: called.setdefault("generic", q))
+        monkeypatch.setattr(J, "_ask_laya", lambda q: called.setdefault("laya", q))
+        monkeypatch.setattr(J, "judgment_config", lambda: {"enabled": True, "local_backend": "laya"})
+        q = {"kind": "noul", "question": "x"}
+        J._ask_local(q)
+        assert "generic" in called and "laya" not in called
+
+    def test_apple_uses_laya(self, monkeypatch):
+        J = self._mk(monkeypatch)
+        monkeypatch.setattr(J, "_is_apple_silicon", lambda: True)
+        called = {}
+        monkeypatch.setattr(J, "_ask_generic", lambda q: called.setdefault("generic", q))
+        monkeypatch.setattr(J, "_ask_laya", lambda q: called.setdefault("laya", q))
+        monkeypatch.setattr(J, "judgment_config", lambda: {"local_backend": "laya"})
+        J._ask_local({"kind": "noul", "question": "q"})
+        assert "laya" in called and "generic" not in called
+
+    def test_laya_missing_with_fallback_uses_generic(self, monkeypatch):
+        J = self._mk(monkeypatch)
+        monkeypatch.setattr(J, "_is_apple_silicon", lambda: True)
+        monkeypatch.setattr(J, "judgment_config", lambda: {"local_backend": "laya",
+                                                           "local_fallback": "generic"})
+
+        def explode(q):
+            raise J.JudgmentUnavailable("laya-as-judge not installed")
+        monkeypatch.setattr(J, "_ask_laya", explode)
+        monkeypatch.setattr(J, "_ask_generic", lambda q: {"value": 0.9})
+        out = J._ask_local({"kind": "noul", "question": "q"})
+        assert out["value"] == 0.9
+
+    def test_explicit_generic_backend_skips_laya(self, monkeypatch):
+        J = self._mk(monkeypatch)
+        monkeypatch.setattr(J, "_is_apple_silicon", lambda: True)
+        monkeypatch.setattr(J, "judgment_config", lambda: {"local_backend": "generic"})
+        called = {}
+        monkeypatch.setattr(J, "_ask_generic", lambda q: called.setdefault("g", True))
+        monkeypatch.setattr(J, "_ask_laya", lambda q: called.setdefault("l", True))
+        J._ask_local({"kind": "noul", "question": "q"})
+        assert called == {"g": True}

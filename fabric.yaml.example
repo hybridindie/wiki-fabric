@@ -91,8 +91,13 @@ integrations:
     model: all-MiniLM-L6-v2
   judgment:
     enabled: false                       # true → low-variance decision-model judging (eval gates)
-    route: cloud                         # "cloud" (TypeSafe Jev API) | "local" (Laya-MLX on-device)
+    route: cloud                         # "cloud" (TypeSafe Jev API) | "local" (on-device)
     cloud_model: jev-1                   # Jev model id (cloud route); local route uses llm.local_model
+    # Local route platform split:
+    #   Apple Silicon: local_backend: laya    → laya-as-judge[mlx] typed heads (calibrated)
+    #   other OS:      local_backend: generic → llm.local_model (GGUF/llama.cpp) JSON verdicts
+    #                                          (auto-selected; laya[mlx] cannot run off-Apple)
+    #   Mac laya-missing fallback: local_fallback: generic (lowest fidelity)
 
 # Tunable thresholds (defaults shown; provenance in machine-contract.md).
 # calibration-sensitive values (judgment.mining_threshold) carry their
