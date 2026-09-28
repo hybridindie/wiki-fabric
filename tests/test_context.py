@@ -894,3 +894,50 @@ class TestMermaidValidation:
     def test_unbalanced_still_caught(self):
         m = self._mod()
         assert not m._mermaid_valid("flowchart TD\n    A --> B{\"unbalanced")
+
+
+class TestPatternCounterexamples:
+    """#90: delivered patterns surface their known boundaries."""
+
+    def test_lint_warns_mature_pattern_without_counterexamples(self, tmp_path):
+        import importlib.util as _ilu
+        spec = _ilu.spec_from_file_location('lint_mod', str(REPO / "scripts" / "cmd/lint.py"))
+        lm = _ilu.module_from_spec(spec); spec.loader.exec_module(lm)
+        import datetime as dt
+        state = lm.LintState(tmp_path, dt.date.today())
+        (tmp_path / "patterns").mkdir(parents=True)
+        (tmp_path / "patterns" / "pattern-x.md").write_text(
+            "---\ntype: pattern\nid: pattern-x\nstatus: recommended\nmaturity: 2\n"
+            "counterexamples: []\n---\n\n# p\n")
+        lm._section_invariants(state)
+        assert any("without counterexamples" in w for w in state.warnings)
+
+    def test_lint_no_warning_when_counterexamples_present(self, tmp_path):
+        import importlib.util as _ilu
+        spec = _ilu.spec_from_file_location('lint_mod', str(REPO / "scripts" / "cmd/lint.py"))
+        lm = _ilu.module_from_spec(spec); spec.loader.exec_module(lm)
+        import datetime as dt
+        state = lm.LintState(tmp_path, dt.date.today())
+        (tmp_path / "patterns").mkdir(parents=True)
+        (tmp_path / "patterns" / "pattern-x.md").write_text(
+            "---\ntype: pattern\nid: pattern-x\nstatus: recommended\nmaturity: 2\n"
+            "counterexamples:\n  - \"read-only pipelines\"\n---\n\n# p\n")
+        lm._section_invariants(state)
+        assert not any("without counterexamples" in w for w in state.warnings)
+
+    def test_context_delivers_counterexample_line(self, tmp_path):
+        ctx = _load_module("ctx_ce", REPO / "scripts" / "cmd/context.py")
+        pages = [{
+            "fm": {"type": "pattern", "id": "pattern-x", "title": "P",
+                   "status": "recommended", "maturity": 2,
+                   "counterexamples": ["read-only pipelines"]},
+            "type": "pattern", "stem": "pattern-x", "body": "pattern body",
+            "scope": "global", "posix": "patterns/pattern-x.md",
+        }]
+        selected, excluded = ctx.select_context(
+            pages, "pattern-x guidance", [], None, __import__("datetime").date.today())
+        assert selected
+        item = selected[0]
+        assert item.get("counterexamples") == ["read-only pipelines"]
+        md = ctx.render_markdown("t", [], None, selected, excluded)
+        assert "does not apply: read-only pipelines" in md
