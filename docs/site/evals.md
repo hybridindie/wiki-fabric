@@ -3,7 +3,7 @@ type: index
 title: "Behavior Evals"
 description: "Golden corpus, behavior fixtures, stability, PR replay, real-repo evals"
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-28
 ---
 
 # Behavior Evals & Model Policy
@@ -40,9 +40,11 @@ Current fixtures:
 | `be2-project-over-global` | project constraint (rotating tokens) beats the general preference (session store) |
 | `be3-stale-demoted` | stale pattern excluded from the manifest, fresh pattern delivered |
 | `be4-escalate-gap` | no billing knowledge exists → agent escalates rather than inventing policy |
+| `be5-receipt-proves-delivery` | a persisted context receipt proves the manifest was actually delivered |
+| `be6-commitment-triggered` | an open commitment whose `trigger` matches the task surfaces at P1 precedence |
 
 ```text
-Knowledge Utility: 100% (4/4)
+Knowledge Utility: 100% (6/6)
 ```
 
 **Knowledge Utility** = fixtures whose required knowledge was delivered ÷ total.
@@ -266,6 +268,4 @@ sentence. `wf status` shows all three models (ops, compiler, local).
 
 ---
 
----
-
-Next: [How CI consumes these verdicts](./machine-contract)
+Next: [OKF v0.2 Conformance](./okf)

@@ -90,4 +90,4 @@ external content arrives via `wf okf import`, a deterministic screen checks
 for injection patterns and quarantines suspicion to `evidence/_inbox/` —
 external knowledge enters as evidence to compile, never directly as truth.
 
-Next: [How It Works: The Corpus & Connected Projects](./how-corpus)
+Next: [The Corpus & Connected Projects](./how-corpus)

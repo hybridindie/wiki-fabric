@@ -144,3 +144,7 @@ push — a disagreement can't sneak into the shared truth.
   [Model splits](./why#model-splits-different-models-for-different-cognitive-tasks)).
 - Fully-local fabrics work entirely offline before and after sync — the
   corpus sync is for teams, not for the loop.
+
+---
+
+Next: [Team Sync (commands)](./sync)

@@ -150,4 +150,4 @@ Your knowledge accumulates in the fabric dir and syncs via
 
 ---
 
-Next: [Walk the core workflows](./core-workflows)
+Next: [The Compiler (capture → claims)](./how-compiler)

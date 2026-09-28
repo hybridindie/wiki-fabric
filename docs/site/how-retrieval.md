@@ -89,4 +89,4 @@ content. Prose is read by people; edges are read by machines.
 For people, `wf export wiki` enriches every generated page with consistent,
 OpenWiki-style anatomy — a `SUMMARY:` lead, a deterministic `## Key Takeaways` (from the page's own top-tier claims, never hallucinated), a `## Sources` backtrace to the cited claims, a `generated: {by, at}` provenance stamp, and validated/auto-repaired Mermaid diagrams. Explore the resulting `[[wikilinks]]` in Obsidian's native Graph view — it renders the topic↔topic↔project network. No separate HTML viewer is shipped; Obsidian is the human graph surface.
 
-Next: [How It Works: The Compounding Loop](./how-compounding)
+Next: [The Compounding Loop](./how-compounding)

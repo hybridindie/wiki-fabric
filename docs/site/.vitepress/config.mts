@@ -54,6 +54,7 @@ export default withMermaid(defineConfig({
       {
         text: 'How It Works',
         items: [
+          { text: 'Architecture Overview', link: '/architecture' },
           { text: 'The Compiler (capture → claims)', link: '/how-compiler' },
           { text: 'Retrieval & Delivery', link: '/how-retrieval' },
           { text: 'The Compounding Loop', link: '/how-compounding' },

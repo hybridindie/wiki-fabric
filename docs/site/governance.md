@@ -33,4 +33,4 @@ None of these are promises in a README — each is a lint check or workflow gate
 
 ---
 
-Next: [The machine-readable surface for these answers](./machine-contract)
+Next: [Machine-Readable Contract](./machine-contract)

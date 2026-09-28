@@ -372,6 +372,4 @@ nudge (modeled on graphify's plugin) reminding the agent to prefer
 
 ---
 
----
-
-Next: [Go deep on the payoff: task context](./context)
+Next: [Task Context (wf context)](./context)

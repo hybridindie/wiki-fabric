@@ -76,4 +76,4 @@ anything. Session forty on project nine inherits all of it. That's the bet:
 structured, source-anchored claims and spends tokens only where judgment is
 needed.
 
-Next: [How It Works: Trust & Governance](./how-trust)
+Next: [Trust & Governance](./how-trust)

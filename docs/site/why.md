@@ -107,9 +107,7 @@ is why provenance, scope, and maturity are first-class fields.
 
 ---
 
-Next: [See the architecture that implements this bet](./architecture)
-
----
+Next: [getting-started](./getting-started)
 
 ---
 

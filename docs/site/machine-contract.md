@@ -19,9 +19,10 @@ python3 scripts/cmd/rebuild-index.py # writes registry/catalog.json (catalog wit
 ```
 
 The lint report codes are stable: `FRONTMATTER`, `BROKEN-LINK`, `SCOPE`,
-`REVIEW-AFTER`, `CLAIM`, `CONCEPT`, `PATTERN`, `DUP-ID`, `SOURCE`,
-`SOURCE-DRIFT`, `SYNC-CONFLICT`, `ORPHAN`, `LLM-CONFIG`, `GENERATED`,
-`STALE-AFTER`, `TRUST-TIER`, `IGNORE-CONFIG`, `VERIFIED`, plus the OKF-floor
+`REVIEW-AFTER`, `CLAIM`, `CONCEPT`, `PATTERN`, `COMMITMENT`, `DUP-ID`, `SOURCE`,
+`SOURCE-DRIFT`, `SOURCE-EMPTY`, `SYNC-CONFLICT`, `ORPHAN`, `LLM-CONFIG`, `GENERATED`,
+`STALE-AFTER`, `TRUST-TIER`, `IGNORE-CONFIG`, `VERIFIED`, `TYPE`, `PROPOSED-TYPE`,
+`RECEIPT`, plus the OKF-floor
 `OKF-*` codes (`--okf` mode). The rest are structural — `FRONTMATTER`
 (malformed metadata), `BROKEN-LINK`, `DUP-ID`, `SOURCE` — and each message
 names the offending page and field. `registry/catalog.json` carries every
@@ -42,7 +43,7 @@ cataloged page with its `id`, `type`, `scope`, `status`, `maturity`,
 
 ## The registry
 
-Two files, two jobs — both machine-written, human-readable:
+The machine surfaces — each machine-written, human-readable:
 
 ### `registry/wiki-graph.json` — the wiki's edges (not its prose)
 
@@ -250,4 +251,4 @@ compiler model.
 
 ---
 
-Next: [When the contract fails: troubleshooting](./troubleshooting)
+Next: [Troubleshooting](./troubleshooting)

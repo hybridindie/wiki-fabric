@@ -37,7 +37,7 @@ uv tool install wiki-fabric            # the tool + CLI
 uv tool install wiki-fabric --with mcp # + the wf-mcp MCP server
 ```
 
-Install/update are owned by uv (`uv tool upgrade wiki-fabric`) — no CLI/harness drift, no script copies. Works on Windows (pure-python dispatch).
+Install/update are owned by uv (`uv tool upgrade wiki-fabric`) — no CLI/harness drift, no script copies. The packaged CLI works on Windows (pure-python dispatch); git hooks are POSIX-only — see [Requirements](#requirements).
 
 **Alternative (one-liner, dev mode):**
 
@@ -105,15 +105,15 @@ wf status                            # fabric health + inventory
 python3 -m pytest tests/ -m "not live" -q   # fast test suite
 bash scripts/smoke-test.sh           # end-to-end CLI checks in a throwaway fabric
 wf lint                              # fabric self-lint (0-error gate)
-
-## PR review agent
-
-The repo carries a `pr-agent.toml` that configures [PR-Agent](https://github.com/Codium-ai/pr-agent) to review only Python and shell scripts. Once the app is installed on the repo, every PR gets a scored review targeting anti-loop guards, path resolution safety, actor conventions, staleness gates, and local model routing — the things that matter in this codebase.
 ```
 
 Tests marked `live` (run with plain `pytest tests/ -q`) exercise real on-device
 models and self-skip when the model isn't cached or the platform lacks the
 backend.
+
+### PR review agent
+
+The repo carries a `pr-agent.toml` that configures [PR-Agent](https://github.com/Codium-ai/pr-agent) to review only Python and shell scripts. Once the app is installed on the repo, every PR gets a scored review targeting anti-loop guards, path resolution safety, actor conventions, staleness gates, and local model routing — the things that matter in this codebase.
 
 ## 4. Connect your first project
 
@@ -213,4 +213,4 @@ next step when it matters.
 
 ---
 
-Next: [Once installed, walk the core workflows](./core-workflows)
+Next: [Core Workflows](./core-workflows)

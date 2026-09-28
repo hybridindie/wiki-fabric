@@ -359,7 +359,7 @@ sync:
 ### Judgment tier
 
 The judgment tier (`integrations.judgment`) enables low-variance
-decision-model judging for evaluation surfaces — `wf eval-behavior --judge`.
+decision-model judging for evaluation surfaces — `python3 scripts/eval/eval-behavior.py --judge`.
 It is **never** used by `wf context`, `wf query`, or `lint` (the 0-token
 core); a test enforces that isolation. `route: cloud` uses the TypeSafe Jev
 API (`TYPESAFE_API_KEY` env var, key never committed); `route: local` runs an
@@ -439,4 +439,4 @@ repo for anything sensitive; the harness (scripts/schemas) never syncs.
 
 ---
 
-Next: [See the workflows this config drives](./core-workflows)
+Next: [Optional Integrations](./integrations)

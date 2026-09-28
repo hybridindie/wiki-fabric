@@ -131,6 +131,4 @@ wf context --task "Add token rotation to the OAuth service" --write-receipt
 
 ---
 
----
-
-Next: [Full command reference](./cli)
+Next: [Architecture Overview](./architecture)

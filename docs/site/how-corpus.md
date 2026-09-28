@@ -79,7 +79,7 @@ configure on their side. When two machines changed the same file, the pull
 aborts and writes a conflict record — both versions side by side, lint fails
 until a human resolves it.
 
-Next: [How It Works: Staying in Sync (Hooks & CI)](./how-sync)
+Next: [Staying in Sync (Hooks & CI)](./how-sync)
 
 ## Captures are graph nodes (the thread index)
 

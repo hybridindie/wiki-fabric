@@ -3,7 +3,7 @@ type: index
 title: "How It Works: The Compiler (capture → ingest → claims)"
 description: "The narrative path from a raw file on disk to governance-grade claims"
 created: 2026-09-20
-updated: 2026-09-20
+updated: 2026-09-28
 ---
 
 # How It Works: The Compiler
@@ -79,4 +79,4 @@ output. So the sha256 is checked first: matching hash = skip. Files recorded
 but never extracted (`status: pending`) resume cleanly. One capture, one
 compile, one review — then it's free forever.
 
-Next: [How It Works: Retrieval & Delivery](./how-retrieval)
+Next: [Retrieval & Delivery](./how-retrieval)

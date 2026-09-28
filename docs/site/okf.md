@@ -3,7 +3,7 @@ type: index
 title: "OKF v0.2 conformance"
 description: "The portable knowledge-bundle standard, trust tiers, attested computations"
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-28
 ---
 
 # OKF v0.2: The Fabric Speaks the Standard
@@ -125,6 +125,4 @@ your governance instead of around it.
 
 ---
 
----
-
-Next: [The contract surface CI consumes](./machine-contract)
+Next: [Governance](./governance)
