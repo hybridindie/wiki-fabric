@@ -1147,6 +1147,21 @@ case "${1:-help}" in
         fdir=$(find_fabric)
         run_script "${fdir}" "scripts/cmd/promote-patterns.py" "$@"
         ;;
+    propose-domains)
+        shift
+        fdir=$(find_fabric)
+        run_script "${fdir}" "scripts/cmd/propose-domains.py" "$@"
+        ;;
+    harvest-questions)
+        shift
+        fdir=$(find_fabric)
+        run_script "${fdir}" "scripts/cmd/harvest-questions.py" "$@"
+        ;;
+    promote-questions)
+        shift
+        fdir=$(find_fabric)
+        run_script "${fdir}" "scripts/cmd/promote-questions.py" "$@"
+        ;;
     mine)
         shift
         fdir=$(find_fabric)
@@ -1156,8 +1171,11 @@ case "${1:-help}" in
             chats)
                 run_script "${fdir}" "scripts/cmd/mine-chats.py" "$@"
                 ;;
+            promotions)
+                run_script "${fdir}" "scripts/cmd/mine-promotions.py" "$@"
+                ;;
             *)
-                err "Usage: ${SCRIPT_NAME} mine chats <project> [--since 90d] [--llm] [--dry-run]"
+                err "Usage: ${SCRIPT_NAME} mine {chats <project>|promotions} [--llm|--judge] [--dry-run]"
                 exit 1
                 ;;
         esac
@@ -1260,13 +1278,17 @@ case "${1:-help}" in
         echo "                                    (--extract-claims: LLM runs on drift)"
         echo "  skill [--list] [<name>]           Print the procedure for a workflow (ingest, promote, ..."
         echo "                                    refresh) — universal across agent harnesses"
-        echo "  export wiki [--mode m|l|hybrid]   Generate the human-layer wiki (topics, projects, staleness)"
+        echo "  export wiki [--mode mechanical|llm|hybrid]   Generate the human-layer wiki (topics, projects, staleness)"
         echo "  review --check [--project <slug>] Staleness report: what's due, overdue, stale"
         echo "  review --verify <claim>           Re-verify a claim (rolls review_after forward)"
         echo "  review --auto-reverify            Mechanically re-verify all overdue (sha256-gated, 0 tokens)"
         echo "  gate [--quiet|--json]                Aggregate pending HITL: stale claims, promotion dossiers, domain proposals"
         echo "  promote-domains {list|--apply <dossier>} Merge a human-approved domain proposal into the ontology"
-        echo "  mine chats <project>              Distill captured chats into durable takeaways"
+        echo "  promote-patterns {--list|--apply <id>|--reject <id> --reason} Apply/reject chat-mined pattern candidates"
+        echo "  propose-domains [--dry-run]       Propose new domains from corpus clusters (0 tokens)"
+        echo "  harvest-questions [--project <slug> [--dry-run]] Harvest concept open-questions → staged pages"
+        echo "  promote-questions {--list|--open|--apply <id>|--reject <id>} Human-gated question apply/reject"
+        echo "  mine {chats <project>|promotions} Distill chats into takeaways / cluster events → dossiers"
         echo "                                    (patterns, anti-patterns, workflows; transients filtered)"
         echo "  harness {install|status}          Install always-on + procedures into detected agent"
         echo "                                    harnesses (--all|--only claude,copilot| --force)"

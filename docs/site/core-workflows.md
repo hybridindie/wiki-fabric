@@ -193,8 +193,8 @@ wf log --project my-project \
 wf log --list
 
 # Mine for cross-project patterns
-python3 scripts/cmd/mine-promotions.py --dry-run
-python3 scripts/cmd/mine-promotions.py
+wf mine promotions --dry-run
+wf mine promotions
 
 # Chat-mined candidates (#89): stage durable takeaways as gated candidates
 wf mine chats <project> --propose
@@ -202,8 +202,8 @@ wf promote-patterns --list    # wf gate surfaces them too
 wf promote-patterns --apply <id>
 
 # Review dossier, then promote
-python3 scripts/cmd/promote.py --list
-python3 scripts/cmd/promote.py --promote <dossier-file>.md
+wf promote --list
+wf promote --promote <dossier-file>.md
 ```
 
 **Scenario — the same bug bites twice.** Project A hits a deadlock from
@@ -284,8 +284,8 @@ flowchart TD
 
 ```bash
 # Rebuild index from actual files (writes registry/catalog.json)
-python3 scripts/cmd/rebuild-index.py
-python3 scripts/cmd/rebuild-index.py --json   # print machine-readable registry to stdout
+wf rebuild-index
+wf rebuild-index --json   # print machine-readable registry to stdout
 
 # Verify health (human-readable)
 wf lint

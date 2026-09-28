@@ -136,6 +136,14 @@ def _review(argv): return _simple_script("scripts/cmd/review.py", argv)
 def _gate(argv): return _simple_script("scripts/cmd/gate.py", argv)
 @verb("promote-domains")
 def _promote_domains(argv): return _simple_script("scripts/cmd/promote-domains.py", argv)
+@verb("promote-patterns")
+def _promote_patterns(argv): return _simple_script("scripts/cmd/promote-patterns.py", argv)
+@verb("propose-domains")
+def _propose_domains(argv): return _simple_script("scripts/cmd/propose-domains.py", argv)
+@verb("harvest-questions")
+def _harvest_questions(argv): return _simple_script("scripts/cmd/harvest-questions.py", argv)
+@verb("promote-questions")
+def _promote_questions(argv): return _simple_script("scripts/cmd/promote-questions.py", argv)
 @verb("sync")
 def _sync(argv): return _simple_script("scripts/cmd/sync.py", argv)
 
@@ -252,7 +260,9 @@ def _promote(argv):
 def _mine(argv):
     if argv and argv[0] == "chats":
         return _run_script(find_fabric(), "scripts/cmd/mine-chats.py", *argv[1:])
-    print("Usage: wf mine chats <project> [--llm] [--dry-run]", file=sys.stderr)
+    if argv and argv[0] == "promotions":
+        return _run_script(find_fabric(), "scripts/cmd/mine-promotions.py", *argv[1:])
+    print("Usage: wf mine chats <project> [--llm] [--dry-run] | wf mine promotions [--judge] [--min-projects N]", file=sys.stderr)
     return 1
 
 

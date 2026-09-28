@@ -112,11 +112,13 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 | `wf review --verify-locators` | Re-check every claim's locator against its raw source: rewrite drifted locators, repair backtick-elision quotes, restore wrongly-contested claims, strip stamps + contest vanished quotes (0 tokens, #109) |
 | `wf gate [--quiet\|--json\|--write-manifest\|--deliveries]` | Aggregate every pending human decision (overdue/stale claims, promotion dossiers, domain proposals, pattern candidates, open questions) into one report. Exit 1 when anything is actionable. `--write-manifest` persists `registry/pending-gate.md`; `--deliveries` surfaces recent context receipts (was the manifest right?) |
 | `wf promote-domains {list\|--apply <dossier>}` | Human-gated merge of an approved domain proposal into `domains/ontology.md` |
-| `python3 scripts/cmd/harvest-questions.py [--project <slug>] [--dry-run]` | Harvest concept open-questions → staged question pages (priority from claim confidence, 0 tokens) — script-only, no CLI dispatch |
-| `python3 scripts/cmd/promote-questions.py {--list\|--open\|--apply <id>\|--reject <id> --reason}` | Human-gated apply/reject of harvested questions (`--open` lists canonical open questions) — script-only |
+| `wf propose-domains [--dry-run]` | Propose new domains from corpus clusters (0 tokens; staged for human review) |
+| `wf harvest-questions [--project <slug>] [--dry-run]` | Harvest concept open-questions → staged question pages (priority from claim confidence, 0 tokens) |
+| `wf promote-questions {--list\|--open\|--apply <id>\|--reject <id> --reason}` | Human-gated apply/reject of harvested questions (`--open` lists canonical open questions) |
 | `wf integrations` | Show optional-integration state (graphify, obsidian, judgment, embeddings) + what each changes |
 | `wf export wiki [--mode mechanical\|llm\|hybrid] [--project <slug>]` | Generate the human-layer wiki: topic articles, project retrospectives, staleness dashboard. Writes OpenWiki-style pages (SUMMARY lead, Key Takeaways, Sources backtrace, provenance stamp), validates/repairs Mermaid diagrams, and emits the citation graph (`registry/wiki-graph.json`). Browse the [[wikilinks]] in Obsidian's native Graph view. |
 | `wf mine chats <project> [--llm] [--propose] [--dry-run]` | Distill captured chat transcripts into durable takeaways (transients filtered); `--propose` stages pattern/anti-pattern candidates in `patterns/_inbox/` (gated, provenance-cited, idempotent) |
+| `wf mine promotions [--judge] [--min-projects N]` | Cluster experience events → promotion dossiers (deterministic, 0 tokens; `--judge` for the near-miss judgment tier) |
 | `wf promote-patterns {--list\|--apply <id>\|--reject <id> --reason}` | Human-gated apply/reject of chat-mined pattern candidates |
 | `wf version` | Show wf version + CLI sync state (installed `~/.local/bin/wf` vs harness script) |
 | `wf repos migrate [--dry-run\|--apply\|--prune]` | Move per-repo routing from fabric.yaml into project overlays |
