@@ -9,12 +9,13 @@
 **Positioning in one line:** Wiki Fabric treats repository knowledge as operational infrastructure for agents — a governed context layer, not a note vault. Where generic "LLM wiki" projects stop at self-maintaining Markdown, Wiki Fabric adds the three things that make knowledge *trustworthy at task time*: scope with precedence, provenance with staleness gates, and behavior evaluations that measure whether the knowledge changed the agent's decision. It is one substrate of agent memory — the durable, Git-governed one — not the whole capability: the agent's context window and working state remain the harness's to manage. And it is **local-first, cloud-optional**: the daily loop runs on-device with zero tokens; LLM stages route per-repo, per-stage (privacy tiering) when you want them.
 
 > [!WARNING]
-> **Very early alpha — expect breaking changes.** The core loop works end-to-end
-> (capture → ingest → query → promote, verified on real projects), but schemas
-> move without migration scripts, claim-extraction quality varies by model,
-> team sync is single-node-first, and nothing is packaged yet (clone-and-run
-> with `uv`; Windows untested). Useful today if you want to shape the
-> direction — not yet load-bearing team infrastructure.
+> **Early alpha — expect breaking changes.** The core loop works end-to-end
+> (capture → ingest → query → promote, verified on real projects), and the tool
+> now packages cleanly (`uv tool install wiki-fabric`, pure-python dispatch,
+> Windows-first-class). But schemas still move without migration scripts,
+> claim-extraction quality varies by model, and the corpus CI/freshness job is
+> still manual. Useful today if you want to shape the direction — not yet
+> load-bearing team infrastructure.
 
 ## Quick start
 
@@ -22,8 +23,9 @@
 # See the value in 5 seconds (no install):
 bash scripts/demo.sh
 
-# Install (installs uv if missing, then the `wf` CLI at ~/.local/bin/):
-curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/scripts/wiki-fabric.sh | bash
+# Install (packaged, atomic):
+uv tool install wiki-fabric            # the wf CLI
+uv tool install wiki-fabric --with mcp # + the wf-mcp MCP server
 
 # Teammate: pulls the team corpus automatically when the remote carries one
 # (--vault <path> pins where the vault shell lives):
@@ -45,7 +47,7 @@ The daily loop — connect → capture → ingest → validate → context → w
 
 ## What it is
 
-Two trees: the **harness** (tooling, this repo) and the **fabric** (your knowledge — gitignored, lives in the corpus/vault; teammates pull it at install — see [Teams](docs/site/teams.md)). The harness ships: the knowledge format (claims with locators, patterns, decisions, commitments), the deterministic context compiler (`wf context` — every inclusion/exclusion carries a reason, persisted receipts), contract enforcement (lint + CI gate), behavior evaluations, and the self-building domain vocabulary. Optional integrations: graphify (call-graph staleness + code navigation), judgment tier (decision-model eval gates), embeddings (planned), team sync. See [Architecture](docs/site/architecture.md) for the pipeline and [Core Workflows](docs/site/core-workflows.md) for the loop with scenarios.
+Two trees: the **harness** (tooling, this repo) and the **fabric** (your knowledge — gitignored, lives in the corpus/vault; teammates pull it at install — see [Teams](docs/site/teams.md)). The harness ships: the knowledge format (claims with locators, patterns, decisions, commitments), the deterministic context compiler (`wf context` — every inclusion/exclusion carries a reason, persisted receipts), contract enforcement (lint + CI gate), behavior evaluations, and the self-building domain vocabulary. Optional integrations: graphify (call-graph staleness + code navigation), obsidian (two-way vault: human wiki edits flow back as evidence), judgment tier (decision-model eval gates), embeddings (planned), team sync (solo direct-push or PR-gated distribution). The fabric also serves its core surface as **MCP tools** (`wf-mcp`) for any MCP client. See [Architecture](docs/site/architecture.md) for the pipeline and [Core Workflows](docs/site/core-workflows.md) for the loop with scenarios.
 
 ## Documentation
 
@@ -59,8 +61,8 @@ Full docs at **[hybridindie.github.io/wiki-fabric](https://hybridindie.github.io
 
 ## Status
 
-- **Works today:** capture → ingest → query → promote loop; deterministic context compiler; persisted context receipts; prospective-memory commitments; judgment tier (`--judge` eval gates); git-hooks automation; team sync with teammate corpus pull; OKF v0.2 export/import.
-- **Next:** judgment-informed context re-ranking, compiler-eval judged mode in eval.py, MCP server, multi-harness skill packs, embeddings re-ranking.
+- **Works today:** capture → ingest → query → promote loop (claims carry provenance edges from chats/PRs); deterministic context compiler + lineage/provenance lines at task time; persisted context receipts + delivery/outcome linkage; locator re-verification (rewrite/repair/restore/contest); chat-mined gated pattern candidates; harvested open-questions loop; prospective-memory commitments; judgment tier (G4-J + mining refinement); git-hooks automation incl. merge-time capture; team sync with teammate corpus pull + PR mode; Obsidian two-way vault; MCP server; OKF v0.2 export/import.
+- **Next:** judgment-informed context re-ranking (blocked by the 0-token core contract — design note first), scheduled upstream-freshness CI, embeddings re-ranking (gated on the benchmark), multi-harness skill packs.
 - **Contributing:** see [CONTRIBUTING.md](CONTRIBUTING.md). The fabric self-documents — if something isn't clear, that's a bug in the fabric; issues welcome.
 
 ## License
