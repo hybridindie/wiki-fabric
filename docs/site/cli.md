@@ -219,7 +219,7 @@ Scripts live in four subdirectories of `scripts/` — `cmd/` (entrypoints), `eva
 | `deepdives.py` | Graphify-rendered project deep dives (architecture/components/tour, 0 tokens) |
 | `obsidian_bridge.py` | Two-way vault bridge: harvest/push/export manifest |
 
-Shell scripts stay at `scripts/` root: `wiki-fabric.sh`, `demo.sh`, `smoke-test.sh`, `setup-vault.sh`, `apply-changeset.sh`.
+Shell scripts remain at `scripts/` root only where shell is the right tool — `wiki-fabric.sh` (the curl-piped installer + dev dispatch), `demo.sh`, and `smoke-test.sh`. The change-set merge (`wf apply-changeset`) and vault scaffold are python now — cross-platform, testable in pytest.
 
 ---
 

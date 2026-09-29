@@ -4,6 +4,27 @@
 
 ---
 
+## Dev Setup (uv-only, cross-platform)
+
+```bash
+gh repo clone hybridindie/wiki-fabric
+cd wiki-fabric
+uv venv && uv pip install -r pyproject.toml -e .[local]   # or uv sync
+uv run pytest tests/ -m "not live" -q
+uv run python scripts/cmd/lint.py .        # fabric self-check
+```
+
+Run the CLI straight from source — no shell scripts, no symlink needed:
+
+```bash
+uv run python -m wiki_fabric.cli status   # any verb works this way
+uv run wf status --help                   # if the console script resolves
+```
+
+Everything a contributor runs (tests, lint, CLI, change-set merges, vault
+scaffold) is python — the same code path the packaged tool ships. No
+*inx-only steps.
+
 ## How to Contribute
 
 > Prefer the CLI over the manual recipe below: `wf bootstrap`, `wf capture`,
@@ -130,7 +151,7 @@ anchors). The `--okf` mode is the OKF v0.2 §11 conformance floor; external
 Run before changing any script:
 
 ```bash
-python3 -m pytest tests/ -q                # full suite
+uv run pytest tests/ -q — full suite (or: python3 -m pytest tests/ -q)
 python3 -m pytest tests/ -m "not live" -q  # fast: skips on-device model tests
 bash scripts/smoke-test.sh                 # end-to-end CLI checks (isolated temp fabric)
 ```

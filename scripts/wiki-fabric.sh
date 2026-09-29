@@ -1003,6 +1003,11 @@ case "${1:-help}" in
         fdir=$(find_fabric)
         run_script "${fdir}" "scripts/cmd/rebuild-index.py" "$@"
         ;;
+    apply-changeset)
+        shift
+        fdir=$(find_fabric)
+        run_script "${fdir}" "scripts/cmd/apply_changeset.py" "$@"
+        ;;
     utility)
         shift
         fdir=$(find_fabric)
@@ -1305,6 +1310,7 @@ case "${1:-help}" in
         echo "  gate [--quiet|--json]                Aggregate pending HITL: stale claims, promotion dossiers, domain proposals"
         echo "  utility [--dry-run|--json]        Receipt↔outcome join → usage counts on pattern pages (0 tokens)"
         echo "  publish [--out DIR]               Publish the wiki as a static site (Quartz v4, pinned)"
+        echo "  apply-changeset <slug> [--override-slow]  Apply a change-set (human-gate merge)"
         echo "  verify-effects <claim.md>...      Judged effect verification at ingest (independent second opinion)"
         echo "  wiki-generate {begin|next|submit|finish|status}  Wiki-generation bookkeeper (writer/bookkeeper split)"
         echo "  promote-domains {list|--apply <dossier>} Merge a human-approved domain proposal into the ontology"

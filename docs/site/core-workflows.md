@@ -431,6 +431,6 @@ overwrites protected content — it proposes `pattern-<id>.revision.md` for
 re-review instead.
 
 ```bash
-SLOW_OVERRIDE=1 bash scripts/apply-changeset.sh <slug>   # explicit escape hatch
+wf apply-changeset <slug> --override-slow   # explicit escape hatch
 
 
