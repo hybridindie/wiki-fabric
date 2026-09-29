@@ -76,14 +76,28 @@ def sibling_vault_of(harness_dir):
     return None
 
 
+_HAS_CONTENT = ("*.md", "*.json", "*.yaml")
+
+
+def _dir_has_files(d):
+    """A directory holding real content (not a gitkeeped skeleton)."""
+    d = Path(d)
+    if not d.is_dir():
+        return False
+    return any(tuple(d.rglob(pat)) for pat in _HAS_CONTENT)
+
+
 def find_corpus_root(fabric_dir):
     """CORPUS_ROOT resolution: nested corpus/ when it holds content, the
-    fabric root itself for the pre-corpus layout, else the fresh nested path."""
+    fabric root itself for the pre-corpus layout (real page files, not an
+    empty skeleton — #e2e finding: the harness's gitkeeped evidence/raw made
+    the legacy branch match and detached the catalog), else the fresh nested
+    path."""
     fabric_dir = Path(fabric_dir)
     corpus = fabric_dir / "corpus"
-    if (corpus / "evidence").exists() or (corpus / "fabric.yaml").exists():
+    if (corpus / "fabric.yaml").exists() or _dir_has_files(corpus / "evidence"):
         return corpus.resolve()
-    if (fabric_dir / "evidence").exists() or (fabric_dir / "projects").exists():
+    if _dir_has_files(fabric_dir / "evidence") or _dir_has_files(fabric_dir / "projects"):
         return fabric_dir.resolve()
     return corpus.resolve()
 

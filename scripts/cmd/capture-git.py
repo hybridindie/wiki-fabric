@@ -106,8 +106,18 @@ def commit_is_interesting(message):
 
 
 def write_capture(dest, title, header_lines, body_sections, dry_run=False):
-    """Write a captured markdown file if content is new or changed."""
-    if title:
+    """Write a captured markdown file if content is new or changed.
+    header_lines may carry a frontmatter block (PR/issue records) — it MUST
+    stay at the top of the file: parse_frontmatter requires the fence at
+    byte 0 (#e2e finding: '# title' first made every pr-record kind-less and
+    detached the thread graph)."""
+    if header_lines and header_lines[0].strip() == "---":
+        fm = "\n".join(header_lines).rstrip()
+        content = fm + "\n\n"
+        if title:
+            content += f"# {title}\n\n"
+        content += "\n".join(body_sections).strip() + "\n"
+    elif title:
         content = f"# {title}\n\n" + "\n".join(header_lines).rstrip() + "\n\n" + "\n".join(body_sections).strip() + "\n"
     else:
         content = "\n".join(header_lines).rstrip() + "\n\n" + "\n".join(body_sections).strip() + "\n"

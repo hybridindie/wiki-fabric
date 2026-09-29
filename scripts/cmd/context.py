@@ -233,10 +233,14 @@ def select_context(pages, task, paths, project, today, max_items=20):
                     reason = f"task text match: {', '.join(sorted(overlap)[:4])}"
                     priority = "P1-project"
         elif scope == "global" and pg["type"] == "claim":
-            # direct task evidence: a claim whose statement matches the task
+            # direct task evidence: a claim whose statement matches the task.
+            # Stopword guard: "the, tool" is not evidence of relevance —
+            # require at least one CONTENT token (>=5 chars) in the overlap
+            # (#e2e finding: every claim listed on generic tasks otherwise).
             overlap = task_toks & body_tokens(pg)
-            if len(overlap) >= 2:
-                reason = f"task evidence (claim): {', '.join(sorted(overlap)[:4])}"
+            _content = [t for t in overlap if len(t) >= 5]
+            if len(overlap) >= 2 and _content:
+                reason = f"task evidence (claim): {', '.join(sorted(_content)[:4])}"
                 priority = "P1-project"
         elif scope == "domain":
             toks = task_toks & (body_tokens(pg) | tokens(pg["stem"]))
@@ -440,6 +444,17 @@ def code_navigation(task, project=None, max_files=None):
                     if n.get("source_file") and n.get("_callable")
                     and any(t in str(n.get("id", "")).lower() for t in toks)]
             if not hits:
+                continue
+            # Cross-project noise guard (#e2e finding): generic task tokens
+            # (tool, add, test) match symbols in EVERY repo's graph. A repo
+            # earns a nav section only when the task names it (slug token)
+            # or the caller pinned it — unless its hits are dense enough to
+            # be genuinely task-specific (>=15% of its callable nodes).
+            task_names_repo = repo.lower() in toks or repo.replace("_", "-") in toks
+            total_callable = sum(1 for n in g.get("nodes", []) if n.get("_callable") and n.get("source_file"))
+            dense = total_callable and (len(hits) / total_callable) >= 0.15
+            pinned_or_named = pinned == repo.lower() or task_names_repo
+            if not pinned_or_named and not dense:
                 continue
             files = {}
             for n in hits:

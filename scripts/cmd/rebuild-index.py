@@ -27,16 +27,16 @@ from wf_common import parse_frontmatter, SKIP_PARTS
 
 
 def _default_root():
-    """Root to index — delegates to paths.py (#152), then keeps the
-    isolated-fabric heuristic (eval-stability copies this script into a flat
-    temp fabric) on top. --root / WIKI_FABRIC_ROOT still override in main()."""
-    from paths import find_corpus_root
+    """Root to index — paths.py (#152). The harness tree is NEVER a fabric
+    (its patterns/evidence dirs are gitkeeped skeletons): the veto comes
+    first, then the isolated-fabric heuristic for eval-stability's flat
+    temp fabrics. --root / WIKI_FABRIC_ROOT still override in main()."""
+    from paths import find_corpus_root, is_harness_tree
     own = (Path(__file__).resolve().parent).parent.parent  # scripts/cmd -> scripts -> fabric root
+    if is_harness_tree(own):
+        return find_corpus_root(own)
     # Isolated-fabric heuristic (eval-stability copies the script into a flat
-    # temp fabric): content dirs at the root AND no corpus/ subdir. The harness
-    # repo itself carries a patterns/ skeleton + corpus/, so the presence of
-    # corpus/ is the discriminating signal — never index the harness root
-    # (that would write the catalog outside the corpus).
+    # temp fabric): content dirs at the root AND no corpus/ subdir.
     if (own / "patterns").is_dir() or (own / "evidence").is_dir():
         if not (own / "corpus").is_dir():
             return own  # isolated fabric (content at its root)
@@ -283,7 +283,14 @@ def main():
     args = parser.parse_args()
 
     global VAULT_ROOT, INDEX_PATH
-    VAULT_ROOT = Path(args.root or os.environ.get("WIKI_FABRIC_ROOT", VAULT_ROOT)).resolve()
+    import os as _os
+    root_arg = args.root or _os.environ.get("WIKI_FABRIC_ROOT")
+    if not root_arg:
+        # canonical resolution (fabric_config chain) — the module default can
+        # land on the harness when run from the toolbox repo (#e2e finding)
+        from fabric_config import CORPUS_ROOT
+        root_arg = str(CORPUS_ROOT)
+    VAULT_ROOT = Path(root_arg).resolve()
     INDEX_PATH = VAULT_ROOT / "registry" / "catalog.json"
 
     categories = scan_vault()
