@@ -853,7 +853,7 @@ def main():
         pattern_path.parent.mkdir(parents=True, exist_ok=True)
         if pattern_path.exists():
             from wf_common import parse_frontmatter
-            from lint import protected_fingerprint
+            from contracts import protected_fingerprint
             existing_fm, _ = parse_frontmatter(pattern_path)
             new_fm, _ = parse_frontmatter_str(pattern_content)
             if (protected_fingerprint(existing_fm) is not None

@@ -384,7 +384,9 @@ _LIFECYCLE_STATUS_TYPES = {"pattern", "anti-pattern", "source", "source-summary"
 ACTOR_RE = re.compile(r"^(agent/[\w.@-]+/[\w.@:-]+|human:[\w.@-]+|process:[\w.@-]+)$")
 
 
-PROTECTED_FIELDS = ("applicability", "counterexamples")  # SkillOpt S4 slow lane
+# SkillOpt S4 slow-lane contract lives in scripts/lib/contracts.py (#151) —
+# single truth shared with the change-set apply gate + the miner.
+from contracts import PROTECTED_FIELDS, protected_fingerprint  # noqa: F401 (re-export)
 
 
 def _sys_exec():
@@ -426,7 +428,9 @@ def check_slow_regions(state, fm, rel, path):
     counterexamples) are the durable negative knowledge a pattern accumulates.
     If they changed relative to the git HEAD version, the change must carry a
     slow-update justification: a 'slow-update' approval in the page's own
-    verified list. Fast-lane bulk edits are refused here."""
+    verified list. Fast-lane bulk edits are refused here. The rule itself
+    (fingerprint + justification) lives in contracts.py — the apply gate
+    enforces the same rule (#151)."""
     import subprocess as _sp
     fp_new = protected_fingerprint(fm)
 
@@ -443,16 +447,11 @@ def check_slow_regions(state, fm, rel, path):
         if old.returncode != 0:
             return []  # untracked/new page — nothing committed to compare
         ofm = _fm_from_text(old.stdout)
-        fp_old = protected_fingerprint(ofm)
-        if fp_old is None or fp_old == fp_new:
+        from contracts import protected_content_changed_and_unjustified
+        if not protected_content_changed_and_unjustified(ofm, fm):
             return []
     except Exception:
         return []
-    # protected content changed — look for justification
-    if isinstance(fm.get("verified"), list):
-        for v in fm["verified"]:
-            if isinstance(v, dict) and "slow-update" in str(v.get("reason", "")):
-                return []
     return [f"SLOW-REGION {rel}: protected slow-lane content (applicability/"
             f"counterexamples) changed vs committed version without a slow-update "
             f"justification — re-review the negative knowledge or pass the "

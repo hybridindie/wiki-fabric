@@ -95,3 +95,20 @@ class TestExport:
         out = self._export(tmp_path, scope="global", fabric_root=fabric)
         refs = out / "references"
         assert refs.exists() and any(refs.rglob("*.md"))
+
+    def test_ignore_config_governs_export(self, tmp_path):
+        """#151: a page the fabric's ignore: config excludes (invisible to
+        lint) must never leak into the portable OKF bundle."""
+        import shutil
+        fabric = self._seeded_fabric(tmp_path)
+        # seed an ignored claim + the ignore rule
+        ig_dir = fabric / "evidence" / "claims" / "_secret"
+        ig_dir.mkdir(parents=True, exist_ok=True)
+        (ig_dir / "claim-secret-000.md").write_text(
+            "---\ntype: claim\nid: claim-secret-000\n"
+            'statement: "Sensitive internal claim."\n---\n\nbody\n')
+        (fabric / "fabric.yaml").write_text(
+            "owner: test\nignore:\n  globs: [\"evidence/claims/_secret/**\"]\n")
+        out = self._export(tmp_path, scope="global", fabric_root=fabric)
+        leaked = list(out.rglob("*claim-secret*")) + list(out.rglob("*_secret*"))
+        assert not leaked, f"ignored page leaked into bundle: {leaked}"
