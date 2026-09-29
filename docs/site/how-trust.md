@@ -89,3 +89,19 @@ orphans and overdue reviews are warnings that surface in `wf status`. When
 external content arrives via `wf okf import`, a deterministic screen checks
 for injection patterns and quarantines suspicion to `evidence/_inbox/` —
 external knowledge enters as evidence to compile, never directly as truth.
+
+---
+
+## Slow-lane protection: negative knowledge is durable
+
+Pattern pages accumulate the hard-won "this does NOT apply" boundaries —
+`applicability.excludes` and `counterexamples`. Those fields are **protected
+slow-lane content**: lint fails (`SLOW-REGION`) any change to them that
+arrives without a slow-update justification, the way ingest-driven rewrites
+would. Only the human review path records the justification. Mining respects
+the same gate — when its new pattern content differs from an existing
+pattern's protected content, it proposes a revision for re-review rather than
+overwriting. This is the fabric's content-level analogue to trust tiers:
+trust is *who verified*, slow-lane is *what may not silently change*.
+
+Next: [Staying in Sync (Hooks & CI)](./how-sync)

@@ -49,7 +49,7 @@ probabilities** — no text generation. LangChain's benchmark of Jev as a judge
 found 100% binary accuracy vs a human oracle with 92–913× lower variance than
 GPT-5.6/Claude LLM judges, at ~1/80th Claude's cost.
 
-**Where it may run (today):**
+**Where it may run (all live):**
 - `python3 scripts/eval/eval-behavior.py --judge` — the `--llm` probe of behavior evals becomes a
   `noul` judgment ("does the prompt deliver the binding decision?"), stable
   enough to gate CI.
@@ -61,7 +61,44 @@ GPT-5.6/Claude LLM judges, at ~1/80th Claude's cost.
   (merge), **and** an incoherence sweep demotes members judged DIFFERENT from
   their cluster's representative (split) — a keyword cluster that judgment
   says is incoherent can no longer reach a dossier intact.
-- Planned: borderline-context re-ranking (each judgment recorded).
+- `wf verify-effects <claim.md>...` — the **independent second opinion on
+  ingest effect classification**: each new claim is judged against its
+  related pool (same-source, then same-project). Verdicts land in
+  `<claim>.effects.json`; your draft classification stays yours — the tier
+  kills the extractor-grades-its-own-homework self-preference risk.
+- `wf context --judge-borderline` — **opt-in judged re-rank**: candidates in
+  the same priority tier just past `--max` get one `noul` relevance judgment
+  each (max +2 promotions). Promoted items carry
+  `judged-relevant (judged p=0.66)` in the manifest and the receipt; the
+  default path without the flag is byte-identical (0-token core preserved).
+
+**Wire protocol (Jev cloud route):** `POST {base}/v1/systemone` with
+`{model, state, questions}` and Bearer auth — one question per request; the
+answer comes back schema-identical to the local laya shape
+(`answers.<name>.<type>` with calibrated values) plus a usage block.
+`base` defaults to `https://api.typesafe.ai`; override with
+`TYPESAFE_BASE_URL` (env) or `integrations.judgment.base_url` (config) for
+self-hosted judges. Model discovery: `GET /v1/models` (ships `jev-latest`,
+`jev-preview`; served model reported in the response, e.g. `jev-1.13.0`).
+Model ids: `cloud_model: jev-latest`. Live-measured: ~0.4 s/call.
+
+Worked example (cloud route, from a live run):
+
+```
+$ wf verify-effects corpus/evidence/claims/claim-godot-mcp-...-003.md
+claim-godot-mcp-godot-mcp-agents-md-003: 12 pair(s) judged → no non-trivial effects
+```
+
+`<claim>.effects.json` beside the claim:
+
+```json
+{"claim": "claim-godot-mcp-godot-mcp-agents-md-003", "route": "cloud",
+ "pairs": [{"against": "claim-...-007", "effect": "contradicts", "confidence": 0.35},
+           {"against": "claim-...-006", "effect": "no-action", "confidence": 0.91}]}
+```
+
+A low-confidence verdict (0.35, in the near-band) is the escalation case —
+the agent re-reads both claims before finalizing relations.
 
 **Hard contract:**
 - **Never the 0-token core.** `wf context`, `wf query`, `lint` stay pure

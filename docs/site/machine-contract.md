@@ -22,7 +22,7 @@ The lint report codes are stable: `FRONTMATTER`, `BROKEN-LINK`, `SCOPE`,
 `REVIEW-AFTER`, `CLAIM`, `CONCEPT`, `PATTERN`, `COMMITMENT`, `DUP-ID`, `SOURCE`,
 `SOURCE-DRIFT`, `SOURCE-EMPTY`, `SYNC-CONFLICT`, `ORPHAN`, `LLM-CONFIG`, `GENERATED`,
 `STALE-AFTER`, `TRUST-TIER`, `IGNORE-CONFIG`, `VERIFIED`, `TYPE`, `PROPOSED-TYPE`,
-`RECEIPT`, plus the OKF-floor
+`RECEIPT`, `QUESTION`, `SLOW-REGION`, plus the OKF-floor
 `OKF-*` codes (`--okf` mode). The rest are structural — `FRONTMATTER`
 (malformed metadata), `BROKEN-LINK`, `DUP-ID`, `SOURCE` — and each message
 names the offending page and field. `registry/catalog.json` carries every
@@ -53,6 +53,24 @@ re-ingest generated narrative (context bloat + drift). The wiki's machine value
 is its derived citation graph: topic/project → claim edges with staleness
 tiers + claim provenance — emitted as deterministic JSON. A model consumes the
 edges and cites a claim for content.
+
+### `registry/embed-index.json` — the optional semantic re-rank index
+
+Written by `scripts/lib/embed_index.py` when `integrations.embeddings.enabled`
+and a query needs re-ranking: `{content_hash, model, n, vectors}` — a digest
+over all claim statements plus one vector per claim. Rebuilt only when the
+corpus fingerprint changes (the same no-op discipline as the export
+manifest). Cache hit ≈0.2 s for 500 claims; build ≈1 s. Consumers never
+require it: `wf query` ranks lexically + graph-expanded, the tier adds a
+top-40 fusion boost when active and self-reports in the answer.
+
+### `evidence/traces/wiki-runs/<id>/.run.json` — generation run checkpoint
+
+The wiki-generation writer protocol (`wf wiki-generate`) checkpoints each run:
+`{id, status, task, total, pages: [{page, title, sections, claims, status,
+deltas, file, cited, verified}]}`. Page completion is the durability boundary —
+markdown + reconciled claim deltas + citation verification + manifest entry. An
+interrupted run resumes from this file; completed pages are never redone.
 
 ### `registry/catalog.json` — what knowledge exists
 

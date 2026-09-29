@@ -3,7 +3,7 @@ type: index
 title: "Task Context — deterministic context assembly"
 description: "How wf context compiles scoped, reasoned manifests"
 created: 2026-09-19
-updated: 2026-09-27
+updated: 2026-09-28
 ---
 
 # Task Context: Deterministic Context Assembly
@@ -110,6 +110,23 @@ Delivered items carry two kinds of extra lines when the data exists:
 - **Boundaries** (#90): delivered patterns render a `⚠ does not apply:` line per counterexample
   for each recorded counterexample — the agent sees where the rule breaks
   before following it.
+
+## Borderline re-rank (opt-in: `--judge-borderline`)
+
+`--max` is a hard cut on a tier-ordered list — but the items just past the
+cut in the *same priority tier* are genuinely borderline. With
+`--judge-borderline` and the judgment tier enabled, each borderline candidate
+gets one `noul` relevance judgment ("is this artifact relevant to the stated
+task?", max +2 promotions). Promoted items appear in `selected` with:
+
+```
+- [[claim-...]] — *judged-relevant (judged p=0.66)*
+```
+
+not-promoted borderline items stay in `excluded` with
+`beyond --max 2 (judged: p=0.42, not promoted)`. Every judgment is recorded
+per-item in the receipt. The default path without the flag is byte-identical
+to the pre-flag manifest (0-token core preserved — the flag gates the import).
 
 ## Receipts: make delivery auditable
 

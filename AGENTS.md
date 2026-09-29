@@ -115,7 +115,7 @@ content; fresh clones carry `.gitkeep`ed skeletons of the content dirs).
   guarantee depends on them
 - **Shared modules**: `scripts/lib/fabric_config.py`, `scripts/lib/extract_backends.py`,
   `scripts/lib/local_llm.py`, `scripts/lib/wf_common.py`, `scripts/lib/eval_core.py`
-  (see README Scripts Reference for the map)
+  plus `judgment.py` (judgment tier) and `embed_index.py` (embedding index) — a local copy of one of these helpers is a bug waiting to drift; lint/tests guard the import shape.
 
 ## Tests
 

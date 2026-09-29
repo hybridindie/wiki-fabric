@@ -61,6 +61,14 @@ agents ask constantly, and every answer is auditable after the fact — the same
 input always produces the same manifest, which is exactly what a regression
 gate needs.
 
+## Optional layers (off by default)
+
+Two optional additions sit on top of this deterministic base — see
+[Integrations](./integrations): the semantic re-rank boost
+(integrations.embeddings, top-40 fusion) and the judged borderline re-rank
+(wf context --judge-borderline). Both self-report in the output when active;
+the deterministic base never requires them.
+
 ## The human layer stays out of the machine context
 
 `wf query` and `wf context` retrieve only **atoms** — claims, patterns,

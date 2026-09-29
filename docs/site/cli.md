@@ -90,7 +90,7 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 | `wf capture <project-slug> [--repo PATH]` | Capture upstream repo docs → `evidence/raw/` |
 | `wf capture <project-slug> --git <owner/name-or-path>` | Capture PR/issue threads + high-signal commits → `evidence/raw/<slug>/git/` (add `--since 6m`, `--limit 30`, `--churn`, `--since-state` for incremental hook runs) |
 | `wf capture chat <project-slug>` | Capture agent chat sessions → `evidence/raw/<slug>/chats/` (harnesses: claude, opencode, codex, gemini — auto-detects; `--since 90d`, `--min-turns`, `--harness <name>`) |
-| `wf context --task "<task>" [--project <slug>] [--paths P] [--write-receipt] [--format json]` | Compile the task-scoped context manifest (0 tokens; `--write-receipt` persists a delivery receipt) |
+| `wf context --task "<task>" [--project <slug>] [--paths P] [--write-receipt] [--format json] [--judge-borderline]` | Compile the task-scoped context manifest (0 tokens; `--write-receipt` persists a delivery receipt). `--judge-borderline`: opt-in judged re-rank of borderline beyond-`--max` candidates (needs `integrations.judgment`; per-item receipt record) |
 | `wf ingest <source> [--extract-claims]` | Ingest a source (LLM claim extraction; claims carry provenance edges from chat/PR captures) |
 | `wf ingest --changed <slug>` | Ingest only NEW/CHANGED raw files for a project (sha256 anti-loop) |
 | `wf ingest --pending <slug>` | Claim-extract recorded-but-unextracted sources (anti-loop safe) |
@@ -115,6 +115,10 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 | `wf propose-domains [--dry-run]` | Propose new domains from corpus clusters (0 tokens; staged for human review) |
 | `wf harvest-questions [--project <slug>] [--dry-run]` | Harvest concept open-questions → staged question pages (priority from claim confidence, 0 tokens) |
 | `wf promote-questions {--list\|--open\|--apply <id>\|--reject <id> --reason}` | Human-gated apply/reject of harvested questions (`--open` lists canonical open questions) |
+| `wf verify-effects <claim.md>... [--source <slug>] [--max-pairs N]` | Judged effect verification at ingest (independent second opinion; writes `<claim>.effects.json`) |
+| `wf wiki-generate {begin\|next\|submit\|finish\|status\|inspect}` | Wiki-generation bookkeeper (writer/bookkeeper split): durable page queue, sparse claim deltas, citation validation, run checkpoints |
+| `wf publish [--out DIR]` | Publish the wiki as a static site (Quartz v4, pinned revision; graph view + search) |
+| `wf utility [--dry-run\|--json]` | Receipt↔outcome join → usage counts on pattern pages (0 tokens) |
 | `wf integrations` | Show optional-integration state (graphify, obsidian, judgment, embeddings) + what each changes |
 | `wf export wiki [--mode mechanical\|llm\|hybrid] [--project <slug>]` | Generate the human-layer wiki: topic articles, project retrospectives, staleness dashboard. Writes OpenWiki-style pages (SUMMARY lead, Key Takeaways, Sources backtrace, provenance stamp), validates/repairs Mermaid diagrams, and emits the citation graph (`registry/wiki-graph.json`). Browse the [[wikilinks]] in Obsidian's native Graph view. |
 | `wf mine chats <project> [--llm] [--propose] [--dry-run]` | Distill captured chat transcripts into durable takeaways (transients filtered); `--propose` stages pattern/anti-pattern candidates in `patterns/_inbox/` (gated, provenance-cited, idempotent) |
@@ -135,8 +139,15 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 | `fabric_gate` | `wf gate` | 0 tokens |
 | `fabric_thread` | `wf thread` | 0 tokens |
 | `fabric_log` | `wf log` | the mining intake |
+| `wiki_begin` | `wf wiki-generate begin` | 0 tokens (deterministic outline) |
+| `wiki_next` | `wf wiki-generate next` | 0 tokens (next page job) |
+| `wiki_submit_page` | `wf wiki-generate submit` | 0 tokens (validates + persists) |
+| `wiki_finish` / `wiki_status` / `wiki_inspect_page_claims` | `wf wiki-generate …` | 0 tokens |
 
-Mutations beyond `log` stay CLI-gated — the MCP boundary is a protocol, not a behavior change. Claude Code: `claude mcp add wf-mcp wf-mcp`; Claude Desktop/Cursor: stdio-server config pointing at `wf-mcp`.
+Mutations beyond `log` used to stay CLI-gated; the wiki-generation tools are
+the one deliberate extension — the writer/bookkeeper split (`#144`): the host
+agent writes prose, the MCP tool validates citations and reconciles claim
+deltas deterministically (the bookkeeper makes no model calls). Claude Code: `claude mcp add wf-mcp wf-mcp`; Claude Desktop/Cursor: stdio-server config pointing at `wf-mcp`.
 
 Environment: `WIKI_FABRIC_REPO` overrides the source repo URL.
 
@@ -170,7 +181,11 @@ Scripts live in four subdirectories of `scripts/` — `cmd/` (entrypoints), `eva
 | `bootstrap-project.py` | Connect a new project to the fabric | 0 |
 | `ensure-local-model.py` | Check/download `llm.local_model` (`wf models ensure`) | 0 |
 | `review.py` | Staleness scan + re-verify loop (`wf review`) | 0 |
-| `export-wiki.py` | Human-layer wiki renderer (topics, projects, staleness) | 0–1 per topic |
+| `export-wiki.py` | Human-layer wiki renderer (topics, projects, staleness, deep dives) | 0–1 per topic |
+| `wiki_generate.py` | Wiki-generation bookkeeper — durable queue, claim deltas, citation validation (`wf wiki-generate`) | 0 |
+| `verify-effects.py` | Judged effect verification at ingest (`wf verify-effects`) | n judgment calls |
+| `publish-wiki.py` | Static-site publisher (Quartz v4, `wf publish`) | 0 |
+| `utility.py` | Receipt↔outcome join → usage counts (`wf utility`) | 0 |
 | `mine-chats.py` | Distill chat transcripts into durable takeaways | 0 or 1/session |
 | `repos-migrate.py` | Move per-repo routing from fabric.yaml into overlays | 0 |
 | `okf_export.py` / `okf_import.py` | OKF bundle export / import (`wf okf`) | 0 |
@@ -198,6 +213,11 @@ Scripts live in four subdirectories of `scripts/` — `cmd/` (entrypoints), `eva
 | `local_llm.py` | On-device generation (GGUF/MLX), serialized model cache |
 | `wf_common.py` | Shared helpers: `parse_frontmatter`, `norm`, `slugify`, hashing |
 | `eval_core.py` | Eval scoring primitives: `concept_match`, `jaccard`, `fuzzy_coverage` |
+| `judgment.py` | Judgment tier backends (Jev cloud / Laya-MLX / upstream laya / generic), typed questions, graceful degradation |
+| `embed_index.py` | Hash-gated offline embedding index (`registry/embed-index.json`) + query-side embedding |
+| `tombstones.py` | Rejected-proposal buffer (SkillOpt S3): tombstones + cluster matching for the miner |
+| `deepdives.py` | Graphify-rendered project deep dives (architecture/components/tour, 0 tokens) |
+| `obsidian_bridge.py` | Two-way vault bridge: harvest/push/export manifest |
 
 Shell scripts stay at `scripts/` root: `wiki-fabric.sh`, `demo.sh`, `smoke-test.sh`, `setup-vault.sh`, `apply-changeset.sh`.
 

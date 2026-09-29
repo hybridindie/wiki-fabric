@@ -38,7 +38,7 @@ from there. Mining with thread signals (#103) means clusters are informed by gra
 structure (shared sessions, file overlap, continuations), not just text overlap.
 
 `mine-promotions.py` clusters experience events across projects by concept
-overlap — keyword Jaccard, no LLM. When the same pattern of
+overlap — keyword Jaccard by default; near-miss pairs get judged refinement only when integrations.judgment is enabled (0-LLM otherwise). Protected slow-lane content survives mining: conflicting protected changes propose `.revision.md` re-review instead of overwriting. When the same pattern of
 problem → intervention → outcome shows up in **two or more independent
 projects**, it stops being one team's anecdote and becomes a candidate rule.
 

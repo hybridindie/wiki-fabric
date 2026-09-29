@@ -61,11 +61,14 @@ graph TB
     R1 & R2 & R3 -->|"build-entity-index.py (AST)"| ENTITIES
     R1 -->|"graphify-bridge.py (AST, 0 tokens)"| GRAPHS
     EVENTS -->|"mine-promotions.py"| PATTERNS
+    CLAIMS -->|"wiki_generate.py (writer/bookkeeper, 0 tokens)"| WIKI["wiki/<br/>(staged pages → change-set flow)"]
+    WIKI -->|"publish-wiki.py"| SITE["static site<br/>(Quartz, graph view)"]
 ```
 
 **Design rule:** every script runs standalone (`python3 scripts/x.py --help`);
-shared logic lives in five modules (`fabric_config`, `extract_backends`,
-`local_llm`, `wf_common`, `eval_core`) — import, don't copy (anti-loop rule 7
+shared logic lives in the `scripts/lib/` modules (`fabric_config`,
+`extract_backends`, `local_llm`, `wf_common`, `eval_core`, `judgment`,
+`embed_index`, `tombstones`) — import, don't copy (anti-loop rule 7
 in [AGENTS.md](https://github.com/hybridindie/wiki-fabric/blob/main/AGENTS.md)).
 
 ## Core vs. optional
@@ -79,7 +82,7 @@ in [AGENTS.md](https://github.com/hybridindie/wiki-fabric/blob/main/AGENTS.md)).
 | Self-building domain vocabulary | **core** |
 | `wf` CLI, uv install | reference implementation |
 | Graphify (call-graph staleness, enrichment, code navigation) | optional integration — off by default |
-| Judgment tier (decision-model eval gates) | optional integration — off by default |
-| Embeddings (semantic re-ranking) | optional — planned |
+| Judgment tier (mining refinement, eval gates, ingest effect verification, opt-in context re-rank — Jev cloud / Laya local) | optional integration — off by default |
+| Embeddings (semantic re-rank boost, `wf query`) | optional integration — off by default |
 | Git history capture, corpus team sync | integrations |
-| MCP server, multi-harness skill packs | roadmap |
+| MCP server (`wf-mcp`, incl. wiki-generation tools), multi-harness skill packs | reference implementation |

@@ -98,7 +98,10 @@ integrations:
   judgment:
     enabled: false                       # true → low-variance decision-model judging (eval gates)
     route: cloud                         # "cloud" (TypeSafe Jev API) | "local" (on-device)
-    cloud_model: jev-latest              # Jev model id (cloud route); local route uses llm.local_model
+    cloud_model: jev-latest              # Jev model id (cloud route)
+    # optional: key/endpoint in config (env TYPESAFE_API_KEY wins)
+    # api_key: <jev key>            # gitignored file — ok for secrets
+    # base_url: http://localhost:8000  # self-hosted judge (stuntd/laya-serve)
     # Local route, platform split (auto unless you pin local_backend):
     #   Apple Silicon: laya-as-judge[mlx] typed heads — fastest (7-14ms)
     #   other OS:      upstream laya (pip laya, torch/ONNX) — same typed heads,

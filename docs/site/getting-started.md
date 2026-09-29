@@ -3,7 +3,7 @@ type: index
 title: "Getting Started — install, quickstart, first loop"
 description: "Install the wf CLI, see the demo proof, connect your first project"
 created: 2026-09-19
-updated: 2026-09-27
+updated: 2026-09-28
 ---
 
 # Getting Started
@@ -129,8 +129,12 @@ wf ingest evidence/raw/my-project/docs/readme.md --extract-claims
 wf query "Why does my code batch writes?"
 wf log --project my-project --problem "..." --intervention "..." --outcomes "..."   # log an experience event: problem → what you did → measured outcome
 
+wf context --task "..." --write-receipt   # what the agent receives before a task
+wf gate                              # session-start: pending human decisions
 wf review --auto-reverify            # clear the mechanical review debt (0 tokens)
 wf export wiki                       # generate the human wiki (topics, projects, staleness)
+wf wiki-generate begin --project my-project   # writer/bookkeeper narrative generation
+wf publish                           # publish the wiki as a static site
 wf mine chats my-project             # distill chat transcripts into patterns/anti-patterns
 ```
 

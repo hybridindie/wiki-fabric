@@ -3,7 +3,7 @@ type: index
 title: "Core Workflows"
 description: "Ingest, query, experience, bootstrap, maintenance, hooks"
 created: 2026-09-19
-updated: 2026-09-27
+updated: 2026-09-28
 ---
 
 # Core Workflows
@@ -41,6 +41,23 @@ WIKI_LLM_MODEL="llama3.1:70b" wf ingest evidence/raw/foo.md --extract-claims
 
 **LLM configuration:** any OpenAI-compatible endpoint works — full provider
 table, model tiers, and env-var overrides in [Configuration](./configuration).
+
+### Optional step 4b: judged effect verification
+
+The ingest agent classifies each claim's effect (`add | support | weaken |
+contradict | supersede`). That classification is a self-preference risk — the
+model that extracted the claim grades its own homework. When the judgment
+tier is enabled, run the independent second opinion:
+
+```bash
+wf verify-effects evidence/claims/claim-my-project-*.md
+# claim-...: 12 pair(s) judged → contradicts: claim-...-007 (conf=0.35)
+# writes <claim>.effects.json beside each claim
+```
+
+Reconcile: where the judged verdict agrees with your draft, keep it; where it
+disagrees or lands in the near-band, re-read both claims before finalizing
+relations. The tier verifies; you own the edit; the human gate still applies.
 
 ## 2. Git History Capture: PRs, Issues, Commits → Raw Evidence
 
@@ -364,9 +381,56 @@ wf harness install         # always-on block + procedures in every detected harn
 wf harness status          # per-harness state: detected / installed / —
 ```
 
-Bootstrap runs this automatically; `wf harness install --all` covers every
-harness even if not yet detected.
-
 Bootstrap also installs `.opencode/plugins/wiki-fabric.js` — a session-start
 nudge (modeled on graphify's plugin) reminding the agent to prefer
 `wf context` / `wf query` over grep.
+
+## 8. Generating the Wiki (writer/bookkeeper)
+
+The wiki has two producers: the deterministic renderer (`wf export wiki` —
+topics, projects, deep dives, staleness) and the **generation protocol** —
+for narrative articles that go beyond mechanical assembly, a writer/bookkeeper
+split keeps token accounting honest and survives interruptions:
+
+```bash
+wf wiki-generate begin --project my-project   # deterministic outline (0 tokens)
+wf wiki-generate next                          # next page job: sections + claims-to-cite
+# ...your agent writes the cited prose...
+wf wiki-generate submit --page token-rotation --file draft.md --confirm a b
+wf wiki-generate finish                        # refuses if any page lacks durable state
+```
+
+- `begin` checkpoints the run at `evidence/traces/wiki-runs/<id>/.run.json`;
+  re-begin resumes, completed pages are never redone.
+- `submit` **validates citations**: every assigned claim must appear as
+  `[[claim-id]]` — a zero-citation page is rejected with the missing list
+  (or retract it via `--retract`). Accepted = durable boundary:
+  markdown + reconciled claim deltas + verification entry.
+- The same lifecycle is exposed as MCP tools (`wiki_begin` → `wiki_finish`)
+  so your coding agent runs it mid-session.
+- Finished pages land under `wiki/staged/` → the change-set flow takes over.
+- Generated pages with zero claim citations fail lint (`GENERATED`).
+
+## 9. Publish the wiki
+
+```bash
+wf publish                     # Quartz v4 (pinned), static site with graph view + search
+```
+
+No-op-clean: the export records a `content_hash`; unchanged wiki content
+produces a zero-diff run. See [Integrations › publish](./integrations).
+
+### Slow-lane protection (maintenance)
+
+Pattern pages accumulate **negative knowledge** — `applicability.excludes`
+and `counterexamples`. These are protected slow-lane content: bulk
+ingest-driven edits that change them fail lint (`SLOW-REGION`) unless the
+change carries a slow-update justification (`verified[].reason:
+"slow-update: …"`), which only the human review path records. Mining never
+overwrites protected content — it proposes `pattern-<id>.revision.md` for
+re-review instead.
+
+```bash
+SLOW_OVERRIDE=1 bash scripts/apply-changeset.sh <slug>   # explicit escape hatch
+
+

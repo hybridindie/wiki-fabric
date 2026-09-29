@@ -341,7 +341,7 @@ integrations:
   judgment:
     enabled: false       # decision-model judging for eval gates (Jev / Laya)
     route: cloud         # "cloud" | "local"
-    cloud_model: jev-1
+    cloud_model: jev-latest
   obsidian:
     enabled: false       # two-way vault (Local REST API plugin required)
     api_url: https://127.0.0.1:27124
@@ -358,13 +358,29 @@ sync:
 
 ### Judgment tier
 
+```yaml
+integrations:
+  judgment:
+    enabled: true
+    route: cloud          # "cloud" (TypeSafe Jev) | "local" (on-device)
+    cloud_model: jev-latest
+    api_key: <jev key>    # or TYPESAFE_API_KEY env; gitignored file OK
+    # base_url: http://localhost:8000   # self-hosted judge (stuntd/laya-serve)
+    local_backend: laya   # laya (auto) | laya-mlx | laya-torch | generic
+```
+
 The judgment tier (`integrations.judgment`) enables low-variance
 decision-model judging for evaluation surfaces — `python3 scripts/eval/eval-behavior.py --judge`.
-It is **never** used by `wf context`, `wf query`, or `lint` (the 0-token
-core); a test enforces that isolation. `route: cloud` uses the TypeSafe Jev
-API (`TYPESAFE_API_KEY` env var, key never committed); `route: local` runs an
-on-device judge (Laya-MLX) through the same local-model stack as
-`extract: local`. Every judgment records backend, model, and probability —
+It is **never** used by `wf query` or `lint` (0-token core);
+`wf context` gains it only behind the explicit `--judge-borderline` flag
+(a test enforces the gate). `route: cloud` uses the TypeSafe Jev
+API — `POST /v1/systemone`, key via `TYPESAFE_API_KEY` env or
+`integrations.judgment.api_key` (gitignored file), endpoint overridable
+(`base_url` / `TYPESAFE_BASE_URL`, e.g. a self-hosted stuntd/laya-serve).
+`route: local` runs an on-device judge — Laya-MLX typed heads on Apple
+Silicon, upstream laya (torch/ONNX) on Linux/Windows, or the generic GGUF
+route via `llm.local_model` — auto-picked by platform unless you pin
+`local_backend`. Every judgment records backend, model, and probability —
 low-variance judgment, not determinism; near-threshold values escalate to
 human review. See [Optional Integrations](./integrations#the-judgment-tier).
 
