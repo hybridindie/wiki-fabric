@@ -168,34 +168,13 @@ def write_insight_page(transcript_path, takeaways, dry_run=False, project=None):
     return out, len(durable), len(maybe), len(transient)
 
 
-def main():
-    import argparse
-    parser = argparse.ArgumentParser(description="Distill chat transcripts into durable knowledge (transients filtered)")
-    parser.add_argument("project", help="Project slug")
-    parser.add_argument("--since", default="90d", help="Window for finding transcripts by date prefix")
-    parser.add_argument("--llm", action="store_true", help="LLM distillation (1 call/session); default is heuristic, 0 tokens")
-    parser.add_argument("--propose", action="store_true", help="Also stage durable pattern/anti-pattern takeaways as gated candidates (patterns/_inbox/, #89)")
-    parser.add_argument("--limit", type=int, default=20)
-    parser.add_argument("--dry-run", action="store_true")
-    args = parser.parse_args()
-
-    chats_dir = CORPUS_ROOT / "evidence" / "raw" / args.project / "chats"
-    if not chats_dir.is_dir():
-        print(f"No chats captured for {args.project} — run: wf capture chat {args.project}", file=sys.stderr)
-        return 2
-    transcripts = sorted(chats_dir.glob("*.md"))[: args.limit]
-    if not transcripts:
-        print("No transcripts found.", file=sys.stderr)
-        return 0
-
 def propose_candidates(transcript_path, takeaways, dry_run=False, project=None):
     """#89: durable pattern/anti-pattern takeaways → staged candidates in
     patterns/_inbox/ with provenance (source chat, session) in frontmatter.
     NOTHING is auto-promoted: candidates wait for the human gate (surfaced
     by wf gate via promote-patterns.list_pending)."""
     import hashlib
-    from datetime import date, datetime, timezone
-    from fabric_config import get_config, actor
+    from datetime import date
     out_dir = CORPUS_ROOT / "patterns" / "_inbox"
     out_dir.mkdir(parents=True, exist_ok=True)
     proposed = 0
@@ -215,10 +194,6 @@ def propose_candidates(transcript_path, takeaways, dry_run=False, project=None):
             print(f"  [DRY] would propose {cid}")
             proposed += 1
             continue
-        try:
-            _actor = actor(get_config(), "agent")
-        except Exception:
-            _actor = "agent/unknown/unknown"
         dest.write_text(f"""---
 type: pattern
 id: {cid}
@@ -247,10 +222,32 @@ evidence, applicability. Apply via promote-patterns --apply.""")
     return proposed
 
 
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Distill chat transcripts into durable knowledge (transients filtered)")
+    parser.add_argument("project", help="Project slug")
+    parser.add_argument("--since", default="90d", help="Window for finding transcripts by date prefix")
+    parser.add_argument("--llm", action="store_true", help="LLM distillation (1 call/session); default is heuristic, 0 tokens")
+    parser.add_argument("--propose", action="store_true", help="Also stage durable pattern/anti-pattern takeaways as gated candidates (patterns/_inbox/, #89)")
+    parser.add_argument("--limit", type=int, default=20)
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+
+    chats_dir = CORPUS_ROOT / "evidence" / "raw" / args.project / "chats"
+    if not chats_dir.is_dir():
+        print(f"No chats captured for {args.project} — run: wf capture chat {args.project}", file=sys.stderr)
+        return 2
+    transcripts = sorted(chats_dir.glob("*.md"))[: args.limit]
+    if not transcripts:
+        print("No transcripts found.", file=sys.stderr)
+        return 0
+
+    total_proposed = 0
+
+
     print(f"=== Mining {len(transcripts)} chat transcript(s) for {args.project} "
           f"({'LLM' if args.llm else 'heuristic, 0 tokens'}) ===")
     total_durable = 0
-    main._proposed = 0
     for tp in transcripts:
         if args.llm:
             raw = llm_takeaways(tp)
@@ -259,8 +256,7 @@ evidence, applicability. Apply via promote-patterns --apply.""")
         out, nd, nm, nt = write_insight_page(tp, raw, dry_run=args.dry_run, project=args.project)
         if args.propose:
             proposed = propose_candidates(tp, raw, dry_run=args.dry_run, project=args.project)
-            total_proposed = getattr(main, "_proposed", 0) + proposed
-            main._proposed = total_proposed
+            total_proposed += proposed
         total_durable += nd
         print(f"  {tp.name}: {nd} durable, {nm} maybe, {nt} transient-filtered"
               + ("  [DRY]" if args.dry_run else ""))
@@ -269,7 +265,7 @@ evidence, applicability. Apply via promote-patterns --apply.""")
         print(f"Insight pages: {CORPUS_ROOT / 'evidence' / 'insights'}/ — "
               f"review before feeding experience events or promotion.")
     if args.propose:
-        print(f"Pattern candidates staged: {getattr(main, '_proposed', 0)} → "
+        print(f"Pattern candidates staged: {total_proposed} → "
               f"{CORPUS_ROOT / 'patterns' / '_inbox'}/ (wf gate lists them)")
     return 0
 
