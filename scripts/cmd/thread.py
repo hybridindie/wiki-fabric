@@ -19,6 +19,7 @@ for _dir in (_HERE, _HERE.parent / "lib"):
         _s.path.insert(0, str(_dir))
 import json
 import argparse
+import re
 from pathlib import Path
 from wf_common import parse_frontmatter
 from fabric_config import CORPUS_ROOT
@@ -35,12 +36,16 @@ def load_index():
 
 
 def resolve_node(index, needle):
-    """The node matching a session id, pr number, or file stem (case-insensitive)."""
+    """The node matching a session id, pr number, or file stem
+    (case-insensitive). PR forms: 597 / pr 597 / pr-597 / #597 (#e2e: the
+    natural two-word form never matched)."""
     n = str(needle).strip().lower()
+    m = re.match(r"^(?:pr[ -]?|#)(\d+)$", n)
+    pr_num = m.group(1) if m else (n if n.isdigit() else None)
     for node in index.get("nodes", []):
         if str(node.get("session", "")).lower() == n:
             return node
-        if str(node.get("pr")) == str(needle).strip():
+        if pr_num is not None and str(node.get("pr")) == pr_num:
             return node
         stem = Path(node.get("file", "")).stem.lower()
         if stem == n:
