@@ -21,7 +21,7 @@ import argparse
 from pathlib import Path
 from datetime import date
 
-from fabric_config import CORPUS_ROOT, VAULT_ROOT
+from fabric_config import CORPUS_ROOT, VAULT_ROOT, get_export_excludes
 
 # Corpus is the export source root; the bundle's harness dirs (schemas/,
 # system/, references/) are appended by scope from the harness, not here.
@@ -123,7 +123,17 @@ def export(out_dir, scope="all", dry_run=False, root=None):
         for p in root.rglob("*.md"):
             rel = p.relative_to(VAULT_ROOT)
             parts = rel.parts
+            posix_str = rel.as_posix()
+            user_excludes = tuple(x.lstrip("./") for x in get_export_excludes())
             if any(x in parts for x in (".git", ".venv", "node_modules", "__pycache__", ".okflint", ".pytest_cache", ".obsidian", ".opencode")):
+                continue
+            excluded_by_user = False
+            for pat in user_excludes:
+                pat = str(pat).rstrip("*").rstrip("/")
+                if pat and posix_str.startswith(pat):
+                    excluded_by_user = True
+                    break
+            if excluded_by_user:
                 continue
             if rel.name in ("AGENTS.md", "CLAUDE.md", "README.md", "CONTRIBUTING.md", "LICENSE", "index.md", "log.md"):
                 continue

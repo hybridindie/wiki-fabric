@@ -40,6 +40,11 @@ llm:
   # pre-fetch with: wf models ensure [--yes]
   # local_model: mlx-community/gemma-4-e4b-it-4bit
 
+# okf: per-fabric excludes for export/okflint (see machine-contract.md)
+# okf:
+#   export_exclude: ["my-docs/**"]
+#   okflint_exclude: ["my-docs/**"]
+
 repos:
   # my-project:
   #   path: ../my-project               # relative to fabric root, or absolute

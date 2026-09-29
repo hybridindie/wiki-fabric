@@ -858,3 +858,30 @@ def get_tuning(config=None, section=None, key=None, default=None):
         return default
     val = sec.get(key, default)
     return default if val is None else val
+
+def get_export_excludes(config=None):
+    """Per-fabric excludes for wf okf export (merged over built-in defaults).
+    Read from fabric.yaml -> okf.export_exclude: [paths]. Users add their own
+    non-concept dirs without editing okf-base.yaml (which stays the shipped
+    okflint CI profile)."""
+    config = config or get_config()
+    out = []
+    okf = (config.get("okf") or {}) if isinstance(config, dict) else {}
+    extra = okf.get("export_exclude") or []
+    if isinstance(extra, str):
+        extra = [extra]
+    out.extend(extra)
+    return out
+
+
+def get_okflint_excludes(config=None):
+    """Per-fabric excludes for the external okflint validator (merged into the
+    base manifest at validate time). Read from fabric.yaml -> okf.okflint_exclude."""
+    config = config or get_config()
+    out = []
+    okf = (config.get("okf") or {}) if isinstance(config, dict) else {}
+    extra = okf.get("okflint_exclude") or []
+    if isinstance(extra, str):
+        extra = [extra]
+    out.extend(extra)
+    return out

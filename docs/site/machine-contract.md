@@ -176,6 +176,25 @@ are tracked.
 `description` + freshness/lifecycle fields). Rebuilt by `rebuild-index.py`;
 never hand-edited.
 
+## Two linters, two roles
+
+The fabric self-enforces with **`wf lint`** — deterministic python rules
+(SCOPE, CLAIM, SLOW-REGION, source drift, …) that run on every command and
+locally. Separately, CI cross-checks with **okflint** — the external
+OKF validator — using the shipped manifest **`okf-base.yaml`** (repo root;
+packaged into every install). The floor rules agree by design; the external
+check exists so the fabric's own linter can't drift from the published spec.
+
+What belongs where:
+- `okf-base.yaml` — the **shipped okflint profile** for any bundle; lives in
+  the harness repo, packaged into the tool. Fabric-agnostic.
+- Per-fabric excludes — two config keys in fabric.yaml, read by code:
+  `okf.export_exclude` (paths skipped by `wf okf export`) and
+  `okf.okflint_exclude` (extra paths merged into the okflint manifest at
+  validate time). Edit your fabric.yaml — never the shipped base.
+- `lint.py` — the fabric's own rules, including SLOW-REGION and trust gates
+  that okflint knows nothing about.
+
 ### Compatibility policy
 
 - **Additive within a version:** new fields may appear; existing fields are
