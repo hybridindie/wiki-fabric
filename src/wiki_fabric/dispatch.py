@@ -179,6 +179,11 @@ def _rebuild_index(argv):
     return _run_script(find_fabric(), "scripts/cmd/rebuild-index.py", *argv)
 
 
+@verb("apply-changeset")
+def _apply_changeset(argv):
+    return _run_script(find_fabric(), "scripts/cmd/apply_changeset.py", *argv)
+
+
 @verb("utility")
 def _utility(argv):
     return _run_script(find_fabric(), "scripts/cmd/utility.py", *argv)
@@ -610,9 +615,12 @@ def _vault(argv):
         if _check:
             return _run_script(_require_fabric(), "scripts/cmd/vault-refresh.py",
                                vault_path, "--check", *rest)
-        # scaffold: setup-vault.sh + refresh
-        subprocess.run(["bash", str(_harness("scripts/setup-vault.sh")), vault_path],
-                       capture_output=True)
+        # scaffold the vault output dir (python — cross-platform)
+        vp = Path(vault_path)
+        vp.mkdir(parents=True, exist_ok=True)
+        (vp / ".obsidian").mkdir(parents=True, exist_ok=True)
+        print(f"Vault ready: {vp}")
+        print("Generate its content with: wf export wiki")
         return _run_script(_require_fabric(), "scripts/cmd/vault-refresh.py", vault_path, *rest)
     fdir = _require_fabric()
     vault = _vault_dir(fdir)
