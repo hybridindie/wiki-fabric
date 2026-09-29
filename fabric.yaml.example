@@ -18,7 +18,9 @@ llm:
   # Any OpenAI-compatible endpoint works: Ollama, LM Studio, vLLM,
   # llama.cpp server, MLX-VM, OpenRouter, Together AI, etc.
   base_url: http://localhost:11434/v1   # Ollama default (see presets below)
-  api_key: ollama                        # Ollama ignores this; cloud providers need a real key
+  # api_key: real-key                     # simple path, but preferred: put keys in
+                                          # <fabric>/secrets.env (gitignored) as WIKI_LLM_API_KEY=…
+                                          # — env/secrets.env win over this literal
   model: qwen2.5-coder:7b               # ops model: cheap queries, capture, status
 
   # Other tested endpoints:
@@ -40,6 +42,11 @@ llm:
   # pre-fetch with: wf models ensure [--yes]
   # local_model: mlx-community/gemma-4-e4b-it-4bit
 
+# Secrets live in <fabric>/secrets.env (KEY=VALUE, gitignored):
+#   WIKI_LLM_API_KEY=…     cloud LLM key
+#   TYPESAFE_API_KEY=…     Jev cloud judge
+#   OBSIDIAN_REST_KEY=…    obsidian push
+# Real env vars win over the file. fabric.yaml stays shareable (references only).
 # okf: per-fabric excludes for export/okflint (see machine-contract.md)
 # okf:
 #   export_exclude: ["my-docs/**"]
@@ -105,7 +112,8 @@ integrations:
     route: cloud                         # "cloud" (TypeSafe Jev API) | "local" (on-device)
     cloud_model: jev-latest              # Jev model id (cloud route)
     # optional: key/endpoint in config (env TYPESAFE_API_KEY wins)
-    # api_key: <jev key>            # gitignored file — ok for secrets
+    # key: TYPESAFE_API_KEY in <fabric>/secrets.env (or env) — prefer secrets.env
+    # api_key: <legacy literal>       # still read, but keep secrets out of yaml
     # base_url: http://localhost:8000  # self-hosted judge (stuntd/laya-serve)
     # Local route, platform split (auto unless you pin local_backend):
     #   Apple Silicon: laya-as-judge[mlx] typed heads — fastest (7-14ms)

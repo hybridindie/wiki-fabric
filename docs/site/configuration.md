@@ -374,8 +374,8 @@ decision-model judging for evaluation surfaces — `python3 scripts/eval/eval-be
 It is **never** used by `wf query` or `lint` (0-token core);
 `wf context` gains it only behind the explicit `--judge-borderline` flag
 (a test enforces the gate). `route: cloud` uses the TypeSafe Jev
-API — `POST /v1/systemone`, key via `TYPESAFE_API_KEY` env or
-`integrations.judgment.api_key` (gitignored file), endpoint overridable
+API — `POST /v1/systemone`, key via `TYPESAFE_API_KEY` (env or the
+machine-local `secrets.env`), endpoint overridable
 (`base_url` / `TYPESAFE_BASE_URL`, e.g. a self-hosted stuntd/laya-serve).
 `route: local` runs an on-device judge — Laya-MLX typed heads on Apple
 Silicon, upstream laya (torch/ONNX) on Linux/Windows, or the generic GGUF

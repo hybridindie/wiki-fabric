@@ -151,7 +151,8 @@ push — a disagreement can't sneak into the shared truth.
 
 | Layer | Lives in | Teammates get it? |
 |---|---|---|
-| **Identity & keys** (`owner`, API keys, `TYPESAFE_API_KEY`, `llm.api_key`) | `fabric.yaml` — **gitignored, machine-local** | never — every teammate has their own |
+| **Identity & keys** (`owner`, API keys) | `secrets.env` (machine-local, gitignored) + shell env / `fabric.yaml` | never — every teammate has their own |
+| **API key references** (`api_key_env:` names, no literals) | `fabric.yaml` — shareable | structure yes, secrets no |
 | **Shared project routing** (decided stage routing for a repo) | the project's `.wiki-overlay.md` — **versioned with the project repo** | yes — inherited on clone |
 | **Machine routing overrides** (privacy tiering that differs per teammate) | `fabric.yaml` `repos.<slug>.*` — machine-local overrides | no — personal only |
 | **Knowledge** (claims, patterns, decisions, relationships) | the **corpus** — synchronized | yes — via `wf sync` |
