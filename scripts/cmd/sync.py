@@ -47,6 +47,7 @@ def sh(*args, cwd=None, timeout=120):
     return _git_sh(*args, cwd=str(cwd or VAULT_ROOT), timeout=timeout)
 from fabric_config import FABRIC_ROOT
 from fabric_config import CORPUS_ROOT, VAULT_ROOT
+import paths  # scripts/lib — single resolver home (#152)
 
 CONTENT_REMOTE_NAME = "corpus"
 SYNC_BRANCH = "main"
@@ -153,10 +154,10 @@ def validate_fabric():
     AGENTS.md marker — scaffold it from the harness rather than failing
     (same gap install-time teammate onboarding hit; the corpus needs the
     marker for git validation, the harness clone has the source)."""
+    harness = paths.find_harness_root()
     registry = VAULT_ROOT / "registry"
     registry.mkdir(parents=True, exist_ok=True)
     if not (VAULT_ROOT / "AGENTS.md").exists():
-        harness = Path(__file__).resolve().parent.parent.parent
         src_ag = harness / "AGENTS.md"
         if src_ag.exists():
             shutil.copy(src_ag, VAULT_ROOT / "AGENTS.md")

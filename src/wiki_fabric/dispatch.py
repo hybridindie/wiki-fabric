@@ -29,39 +29,28 @@ def harness_root() -> Path:
 
 
 def find_fabric() -> Path | None:
-    """Fabric root (content + config) — mirrors fabric_config's chain and the
-    bash find_fabric, ordered the same way:
-      1. $WIKI_FABRIC_DIR  2. cwd-sibling vault (dev)  3. XDG default.
-    Returns None when no fabric exists (commands needing content fail cleanly)."""
-    env = os.environ.get("WIKI_FABRIC_DIR")
-    if env and Path(env).expanduser().is_dir():
-        return Path(env).expanduser().resolve()
-    cwd = Path.cwd()
-    for d in (cwd, *cwd.parents):
-        if (d / "scripts" / "wiki-fabric.sh").exists() and (d / "scripts" / "cmd").is_dir():
-            break  # harness tree: not a fabric
-        if (d / "fabric.yaml").exists() or (d / "evidence").exists() or (d / "projects").exists():
-            return d.resolve()
-    # dev sibling vault
-    sibling = harness_root().parent / "vault"
-    if (sibling / "corpus").exists() or (sibling / "evidence").exists():
-        return sibling
-    xdg = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
-    default = Path(xdg) / "wiki-fabric"
-    if default.is_dir():
-        return default
-    return None
+    """Fabric root (content + config). Chain (paths.py #152, single truth):
+      1. $WIKI_FABRIC_DIR  2. cwd walk (harness trees skipped)  3. dev
+      sibling vault  4. XDG default. Returns None when no fabric exists
+      (commands needing content fail cleanly)."""
+    from paths import (
+        env_fabric_root, walk_for_fabric, sibling_vault_of, xdg_fabric_root,
+    )
+    found = env_fabric_root() or walk_for_fabric(Path.cwd())
+    if found:
+        return found
+    # dev sibling vault (anchored at THIS dispatcher's harness root — tests
+    # and packaged mode monkeypatch harness_root())
+    found = sibling_vault_of(harness_root())
+    if found:
+        return found.resolve()
+    return xdg_fabric_root()
 
 
 def corpus_root(fabric_dir: Path) -> Path:
-    """CORPUS_ROOT resolution (mirrors fabric_config): nested corpus/ when
-    present, else the fabric root itself (pre-corpus layout)."""
-    corpus = fabric_dir / "corpus"
-    if (corpus / "evidence").exists() or (corpus / "fabric.yaml").exists():
-        return corpus
-    if (fabric_dir / "evidence").exists() or (fabric_dir / "projects").exists():
-        return fabric_dir
-    return corpus
+    """CORPUS_ROOT resolution (delegates to paths.py, #152)."""
+    from paths import find_corpus_root
+    return find_corpus_root(fabric_dir)
 
 
 def _python(fabric_dir: Path | None) -> str:
@@ -329,16 +318,11 @@ def _info(msg):
 
 
 def _vault_dir(fabric_dir: Path) -> Path:
-    try:
-        import yaml
-        cfg = yaml.safe_load((fabric_dir / "fabric.yaml").read_text()) or {}
-        vp = (cfg.get("vault") or {}).get("path")
-        if vp:
-            p = Path(vp)
-            return p if p.is_absolute() else (fabric_dir / p).resolve()
-    except Exception:
-        pass
-    return fabric_dir.parent / "vault"
+    """Vault for the status report — paths.py is the single resolver home
+    (#152). Honors WIKI_FABRIC_VAULT (dispatch's copy silently ignored it)
+    then fabric.yaml vault.path, then "the vault IS the fabric"."""
+    from paths import find_vault_dir_for_fabric
+    return find_vault_dir_for_fabric(fabric_dir)
 
 
 @verb("status")

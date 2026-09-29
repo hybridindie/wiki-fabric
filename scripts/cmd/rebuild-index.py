@@ -27,14 +27,10 @@ from wf_common import parse_frontmatter
 
 
 def _default_root():
-    """Root to index.
-    - If this script's own parent is an isolated fabric holding content dirs
-      directly (patterns/, evidence/, registry/ are at its root — e.g.
-      eval-stability copies the script into a flat temp fabric), index there
-      so the tool is cwd-agnostic.
-    - Else index the canonical corpus (the harness root itself holds no content;
-      its atoms live under corpus/).
-    --root / WIKI_FABRIC_ROOT still override in main()."""
+    """Root to index — delegates to paths.py (#152), then keeps the
+    isolated-fabric heuristic (eval-stability copies this script into a flat
+    temp fabric) on top. --root / WIKI_FABRIC_ROOT still override in main()."""
+    from paths import find_corpus_root
     own = (Path(__file__).resolve().parent).parent.parent  # scripts/cmd -> scripts -> fabric root
     # Isolated-fabric heuristic (eval-stability copies the script into a flat
     # temp fabric): content dirs at the root AND no corpus/ subdir. The harness
@@ -44,7 +40,7 @@ def _default_root():
     if (own / "patterns").is_dir() or (own / "evidence").is_dir():
         if not (own / "corpus").is_dir():
             return own  # isolated fabric (content at its root)
-    return CORPUS_ROOT
+    return find_corpus_root(own)
 
 
 # The catalog is a corpus artifact; the old harness-root default detached it

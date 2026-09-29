@@ -49,12 +49,15 @@ _FABRIC_OUTPUT_DIRS = (
 _PYTHON_DETECT = """\
 # Resolve the fabric root + venv python at hook time (not install time):
 # the fabric can be re-installed or updated after the hook is installed.
+# Candidate chain mirrors scripts/lib/paths.py (#152) — the single resolver
+# home; kept inline because the hook runs before any wf import is possible.
 _WF_FABRIC=""
 for _wf_cand in "${WIKI_FABRIC_DIR:-}" "${XDG_DATA_HOME:-$HOME/.local/share}/wiki-fabric" "$HOME/Development/wiki-fabric" "$HOME/wiki-fabric" "$(dirname "$(pwd)")/wiki-fabric"; do
     [ -n "$_wf_cand" ] || continue
     [ -d "$_wf_cand/scripts" ] || continue
     _WF_FABRIC="$_wf_cand"
     break
+done
 done
 if [ -z "$_WF_FABRIC" ]; then
     echo "[wf hook] fabric not found (set WIKI_FABRIC_DIR)" >&2
@@ -341,6 +344,12 @@ def _uninstall_hook(hooks_dir: Path, name: str, marker: str, marker_end: str) ->
 
 
 def _find_fabric_dir():
+    """Harness-tree locator for hook install — delegates to paths.py (#152)."""
+    from paths import find_harness_root
+    try:
+        return find_harness_root()
+    except Exception:
+        pass
     candidates = [
         os.environ.get("WIKI_FABRIC_DIR", ""),
         str(Path.home() / "Development" / "wiki-fabric"),

@@ -158,7 +158,8 @@ cli_sync_state() {
 
 # === Helper: resolve the vault dir (the content root). The vault IS the fabric:
 # corpora under vault/corpus/, generated wiki under vault/wiki/. Config key /
-# env override, else the fabric dir itself. ===
+# env override, else the fabric dir itself. Order mirrors scripts/lib/paths.py
+# find_vault_dir_for_fabric (#152): env → vault.path → the fabric root.
 vault_dir() {
     local fabric_dir="${1:-$(pwd)}"
     # env override
@@ -194,6 +195,10 @@ run_script() {
 }
 
 # === Helper: find fabric root ===
+# Chain mirrors scripts/lib/paths.py (#152, single truth): env override →
+# harness-sibling vault → cwd walk → XDG. The python-only fallbacks
+# ($HOME/wiki-fabric, bare clones, cwd-parent sibling harnesses) are gone:
+# they produced verdicts about a DIFFERENT tree than `wf status` audited.
 find_fabric() {
     # 1. Env override
     if [[ -n "${WIKI_FABRIC_DIR:-}" ]] && [[ -d "${WIKI_FABRIC_DIR}" ]]; then
@@ -208,39 +213,31 @@ find_fabric() {
         echo "${sibling_vault}"
         return 0
     fi
-    # 2b. Dev layout from any cwd: sibling vault of a sibling harness clone.
-    # The installed CLI is a copy — its BASH_SOURCE can't see the harness
-    # checkout, so also look for <cwd-sibling>/vault (the documented dev
-    # layout: wiki-fabric/ + vault/ side by side).
-    local cwd_parent="$(dirname "$(pwd)")"
-    if [[ -d "${cwd_parent}/wiki-fabric/scripts" && ( -d "${cwd_parent}/vault/corpus" || -d "${cwd_parent}/vault/evidence" ) ]]; then
-        echo "${cwd_parent}/vault"
-        return 0
-    fi
-    # 3. XDG default fabric (the vault)
+    # 3. cwd walk: nearest ancestor with a fabric marker (fabric.yaml at the
+    # root, flat content, or the nested corpus/ layout). A harness tree
+    # (runner + cmd/) stops the walk — its dev fabric.yaml is not a fabric.
+    local d="${PWD}"
+    while true; do
+        if [[ -f "${d}/scripts/wiki-fabric.sh" && -d "${d}/scripts/cmd" ]]; then
+            break
+        fi
+        if [[ -f "${d}/fabric.yaml" || -d "${d}/evidence" || -d "${d}/projects" || -d "${d}/corpus" ]]; then
+            echo "${d}"
+            return 0
+        fi
+        local parent="$(dirname "${d}")"
+        [[ "${parent}" == "${d}" ]] && break
+        d="${parent}"
+    done
+    # 4. XDG default fabric (the vault)
     local fh; fh="$(fabric_home)"
-    if [[ -f "${fh}/fabric.yaml" ]] || [[ -d "${fh}/evidence" ]] || [[ -d "${fh}/projects" ]]; then
+    if [[ -f "${fh}/fabric.yaml" || -d "${fh}/evidence" || -d "${fh}/projects" || -d "${fh}/corpus" ]]; then
         echo "${fh}"
         return 0
     fi
-    # 4. Dev fallback: a configured harness clone (fabric.yaml present)
-    for cand in "${DEFAULT_DIR}" "${HOME}/wiki-fabric"; do
-        if [[ -f "${cand}/fabric.yaml" ]]; then
-            echo "${cand}"
-            return 0
-        fi
-    done
-    # 5. Bare harness clone: scripts still runnable, commands needing content fail cleanly
-    for cand in "${DEFAULT_DIR}" "${HOME}/wiki-fabric"; do
-        if [[ -d "${cand}/scripts" ]]; then
-            echo "${cand}"
-            return 0
-        fi
-    done
-    # 6. Sibling of current directory (dev checkouts)
-    local parent="$(dirname "$(pwd)")"
-    if [[ -d "${parent}/wiki-fabric/scripts" ]]; then
-        echo "${parent}/wiki-fabric"
+    # 5. Bare harness clone (scripts still runnable; content commands fail cleanly)
+    if [[ -d "${script_dir}/scripts" ]]; then
+        echo "${script_dir}"
         return 0
     fi
     return 1

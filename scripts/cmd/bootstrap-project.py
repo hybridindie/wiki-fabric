@@ -36,23 +36,16 @@ def slugify(text):
 
 
 def find_fabric_root():
-    # Content root: honors WIKI_FABRIC_DIR via fabric_config; falls back to the
-    # harness parent in dev mode.
-    try:
-        from fabric_config import FABRIC_ROOT
-        return FABRIC_ROOT
-    except Exception:
-        return Path(__file__).parent.resolve().parent
+    # Content root — paths.py is the single resolver home (#152).
+    import paths
+    return paths.find_fabric_root() or FABRIC_ROOT
 
 
 def find_harness_root():
     # Code root: where the scripts live (may differ from the fabric in
-    # installed mode).
-    try:
-        from fabric_config import HARNESS_ROOT
-        return HARNESS_ROOT
-    except Exception:
-        return Path(__file__).parent.resolve().parent
+    # installed mode) — paths.py (#152).
+    import paths
+    return paths.find_harness_root()
 
 
 def run_cmd(cmd, cwd=None, check=True):

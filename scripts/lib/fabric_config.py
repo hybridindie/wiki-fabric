@@ -41,22 +41,28 @@ try:
 except ImportError:
     HAVE_YAML = False
 
+from paths import (  # scripts/lib/paths.py — single resolver home (#152)
+    env_fabric_root, walk_for_fabric, sibling_vault_of, xdg_fabric_root,
+    find_corpus_root as _paths_find_corpus_root,
+)
+
 HARNESS_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def _looks_like_fabric(d):
     """A directory that can serve as the fabric root: holds fabric.yaml, or
-    content at its root, or the nested corpus layout."""
-    return ((d / "fabric.yaml").exists()
-            or (d / "evidence").exists()
-            or (d / "projects").exists()
-            or (d / "corpus").exists())
+    content at its root, or the nested corpus layout. Single truth in
+    paths.py (#152) — this is a thin alias."""
+    from paths import is_fabric_dir
+    return is_fabric_dir(d)
 
 
 def _is_harness_tree(d):
     """A harness checkout (the tool): has the runner + cmd scripts. Never a
-    fabric — its fabric.yaml is a dev convenience resolved by rule 3."""
-    return (d / "scripts" / "wiki-fabric.sh").exists() and (d / "scripts" / "cmd").is_dir()
+    fabric — its fabric.yaml is a dev convenience resolved by rule 3.
+    Single truth in paths.py (#152) — this is a thin alias."""
+    from paths import is_harness_tree
+    return is_harness_tree(d)
 
 
 def _resolve_fabric_root():
@@ -67,7 +73,7 @@ def _resolve_fabric_root():
     vault/corpus/ and the generated wiki under vault/wiki/. Configs live in
     the bootstrapped projects, not the harness.
 
-    Resolution chain:
+    Resolution chain (primitives from paths.py — #152 single truth):
       1. $WIKI_FABRIC_DIR  — explicit override (the vault dir)
       2. cwd or a cwd ancestor that looks like a fabric (sim finding: scripts
          run from inside a non-standard fabric layout resolved to the wrong
@@ -75,34 +81,23 @@ def _resolve_fabric_root():
       3. A vault/ sibling of this harness repo (dev mode) — the vault IS the fabric
       4. $XDG_DATA_HOME/wiki-fabric  — default install target (the vault)
     """
-    env = os.environ.get("WIKI_FABRIC_DIR")
-    if env and Path(env).expanduser().is_dir():
-        return Path(env).expanduser().resolve()
-
-    # cwd-based discovery: scripts invoked from inside a fabric should find
-    # THAT fabric — walk up from cwd, stop at the filesystem root. Harness
-    # trees (tool code) are skipped by signature, not by identity: their
-    # dev-mode fabric.yaml must not hijack resolution (sim finding #11).
-    cwd = Path.cwd()
-    for d in (cwd, *cwd.parents):
-        if _is_harness_tree(d):
-            break
-        if _looks_like_fabric(d):
-            return d.resolve()
+    found = env_fabric_root() or walk_for_fabric(Path.cwd())
+    if found:
+        return found
 
     # dev: the harness repo lives with a sibling vault/ that holds all content
-    sibling_vault = HARNESS_ROOT.parent / "vault"
-    if (sibling_vault / "corpus").exists() or (sibling_vault / "evidence").exists():
+    sibling_vault = sibling_vault_of(HARNESS_ROOT)
+    if sibling_vault:
         return sibling_vault
 
-    xdg_data = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
-    default = Path(xdg_data) / "wiki-fabric"
-    if default.is_dir():
-        return default
-
     # bare harness clone: no fabric — scripts still run (lint/help), commands
-    # needing content point at a still-absent vault.
-    return sibling_vault
+    # needing content point at a still-absent vault. (xdg_fabric_root() was
+    # checked eagerly above the sibling only when the walk found nothing —
+    # original semantics: sibling vault wins over XDG, XDG over the bare
+    # fallback path.)
+    return (sibling_vault_of(HARNESS_ROOT)
+            or xdg_fabric_root()
+            or (HARNESS_ROOT.parent / "vault"))
 
 
 FABRIC_ROOT = _resolve_fabric_root()
@@ -113,18 +108,7 @@ FABRIC_ROOT = _resolve_fabric_root()
 # at FABRIC_ROOT (pre-corpus layout), use FABRIC_ROOT as the corpus root.
 _CORPUS_SUBDIR = "corpus"
 
-def _resolve_corpus_root():
-    corpus = FABRIC_ROOT / _CORPUS_SUBDIR
-    # already nested?
-    if (corpus / "evidence").exists() or (corpus / "fabric.yaml").exists():
-        return corpus.resolve()
-    # legacy: content at fabric root?
-    if (FABRIC_ROOT / "evidence").exists() or (FABRIC_ROOT / "projects").exists():
-        return FABRIC_ROOT.resolve()
-    # fresh: use corpus/
-    return corpus.resolve()
-
-CORPUS_ROOT = _resolve_corpus_root()
+CORPUS_ROOT = _paths_find_corpus_root(FABRIC_ROOT)
 
 
 def get_CORPUS_ROOT_or_none():
