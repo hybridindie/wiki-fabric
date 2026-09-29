@@ -15,6 +15,7 @@ base:
         - ".venv/**"
         - "evidence/raw/**"
         - "evaluations/fixtures/**"
+        - "evaluations/behavior/PARTITION.md"
         - "evaluations/okf/fixtures/violations/**"
         - "evaluations/okf/fixtures/conformant/**"
         - ".okflint/**"
