@@ -701,6 +701,19 @@ def generate_pattern_file(cluster_key, events):
     return "\n".join(lines)
 
 
+def parse_frontmatter_str(text):
+    """Parse frontmatter from raw text (for slow-region revision comparisons)."""
+    import yaml as _yaml
+    import re as _re
+    m = _re.match(r"\A---\n(.*?)\n---\n", text, _re.S)
+    if not m:
+        return {}, text
+    try:
+        return (_yaml.safe_load(m.group(1)) or {}), text
+    except Exception:
+        return {}, text
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Mine promotion candidates from experience events")
@@ -830,15 +843,29 @@ def main():
         dossier_path.write_text(dossier)
         print(f"Created dossier: {dossier_path} (route: {route or 'cloud'})")
         
-        # Generate pattern file
+        # Generate pattern file — but never overwrite a pattern's protected
+        # slow-lane content (SkillOpt S4): if the pattern already exists and
+        # its applicability/counterexamples differ, the miner writes the new
+        # content as a revision proposal, not an overwrite (human review
+        # records the slow-update justification).
         pattern_content = generate_pattern_file(cluster_key, events)
         pattern_path = VAULT_ROOT / "patterns" / f"pattern-{cluster_key}.md"
         pattern_path.parent.mkdir(parents=True, exist_ok=True)
-        pattern_path.write_text(pattern_content)
-        print(f"Created pattern: {pattern_path}")
-        
-        print(f"  → Created promotion dossier and pattern for '{cluster_key}'")
-
+        if pattern_path.exists():
+            from wf_common import parse_frontmatter
+            from lint import protected_fingerprint
+            existing_fm, _ = parse_frontmatter(pattern_path)
+            new_fm, _ = parse_frontmatter_str(pattern_content)
+            if (protected_fingerprint(existing_fm) is not None
+                    and protected_fingerprint(existing_fm) != protected_fingerprint(new_fm)):
+                rev_path = pattern_path.with_suffix(".revision.md")
+                rev_path.write_text(pattern_content)
+                print(f"SLOW-REGION: pattern {pattern_path.name} exists with protected "
+                      f"content — revision proposed at {rev_path.name} (apply via the "
+                      f"slow-update review path)")
+            else:
+                pattern_path.write_text(pattern_content)
+                print(f"Created pattern: {pattern_path}")
     # Self-describing next step: graphify enrichment (when active) belongs in
     # the command flow, not just skill prose.
     if _local_model is None or True:

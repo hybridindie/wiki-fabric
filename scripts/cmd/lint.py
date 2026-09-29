@@ -384,6 +384,81 @@ _LIFECYCLE_STATUS_TYPES = {"pattern", "anti-pattern", "source", "source-summary"
 ACTOR_RE = re.compile(r"^(agent/[\w.@-]+/[\w.@:-]+|human:[\w.@-]+|process:[\w.@-]+)$")
 
 
+PROTECTED_FIELDS = ("applicability", "counterexamples")  # SkillOpt S4 slow lane
+
+
+def _sys_exec():
+    return sys.executable
+
+
+def _fm_from_text(text):
+    """Parse frontmatter from raw text (git show output)."""
+    m = _FM_RE.match(text) if (r := globals()).get("_FM_RE") else None
+    fm_re = re.compile(r"\A---\n(.*?)\n---\n", re.S)
+    m = fm_re.match(text)
+    if not m:
+        return {}
+    try:
+        import yaml as _yaml
+        return (_yaml.safe_load(m.group(1)) or {})
+    except Exception:
+        return {}
+
+
+def protected_fingerprint(fm):
+    """Deterministic fingerprint of a pattern's slow-lane content.
+    None when the page carries no protected content."""
+    import json as _json
+    payload = {}
+    for f in PROTECTED_FIELDS:
+        v = fm.get(f)
+        if v not in (None, [], {}):
+            payload[f] = v
+    if not payload:
+        return None
+    return hashlib.sha256(
+        _json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()
+    ).hexdigest()[:16]
+
+
+def check_slow_regions(state, fm, rel, path):
+    """SkillOpt S4 (#137/#141): protected slow-lane regions (applicability,
+    counterexamples) are the durable negative knowledge a pattern accumulates.
+    If they changed relative to the git HEAD version, the change must carry a
+    slow-update justification: a 'slow-update' approval in the page's own
+    verified list. Fast-lane bulk edits are refused here."""
+    import subprocess as _sp
+    fp_new = protected_fingerprint(fm)
+
+    if fp_new is None:
+        return []
+    def _git_show(git_path):
+        return _sp.run(["git", "-C", str(state.vault), "show", f"HEAD:{git_path}"],
+                       capture_output=True, text=True)
+    try:
+        # corpus repo prefixes paths with corpus/; plain fabric repo is bare
+        old = _git_show(f"corpus/{path}")
+        if old.returncode != 0:
+            old = _git_show(str(path))
+        if old.returncode != 0:
+            return []  # untracked/new page — nothing committed to compare
+        ofm = _fm_from_text(old.stdout)
+        fp_old = protected_fingerprint(ofm)
+        if fp_old is None or fp_old == fp_new:
+            return []
+    except Exception:
+        return []
+    # protected content changed — look for justification
+    if isinstance(fm.get("verified"), list):
+        for v in fm["verified"]:
+            if isinstance(v, dict) and "slow-update" in str(v.get("reason", "")):
+                return []
+    return [f"SLOW-REGION {rel}: protected slow-lane content (applicability/"
+            f"counterexamples) changed vs committed version without a slow-update "
+            f"justification — re-review the negative knowledge or pass the "
+            f"slow-update gate (reason recorded in verified)"]
+
+
 def check_citations(fm, rel, body):
     """Living-wiki S2 (#144): generated wiki pages must cite their claims —
     a zero-citation generated page ships untrustworthy prose. Applies to
@@ -579,11 +654,12 @@ def _section_invariants(state):
                 state.warnings.append(w2)
             for prob in check_actors(fm, rel):
                 (state.errors if prob.startswith(("TRUST-TIER", "VERIFIED")) else state.warnings).append(prob)
+            for prob in check_slow_regions(state, fm, rel, str(rel)):
+                state.errors.append(prob)
             if str(rel).startswith("wiki/"):
                 _, body2, _ = parse_frontmatter(p, _cache=state._fm_cache)
                 for prob in check_citations(fm, rel, body2):
                     state.errors.append(prob)
-                state.errors.append(prob)
         t = fm.get("type")
         if t == "claim":
             if not fm.get("id"):

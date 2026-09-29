@@ -13,6 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VAULT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 DRY_RUN=false
+SLOW_OVERRIDE=0
 CHANGESET_SLUG=""
 
 # Parse args
@@ -22,9 +23,15 @@ while [[ $# -gt 0 ]]; do
             DRY_RUN=true
             shift
             ;;
+        --override-slow)
+            SLOW_OVERRIDE=1
+            shift
+            ;;
         -h|--help)
-            echo "Usage: $0 [--dry-run] <change-set-slug>"
+            echo "Usage: $0 [--dry-run] [--override-slow] <change-set-slug>"
             echo "  Applies a change-set from evidence/traces/change-sets/<slug>/"
+            echo "  --override-slow: allow edits to protected slow-lane content (pattern" 
+            echo "                   applicability/counterexamples) — record a slow-update reason in verified"
             exit 0
             ;;
         *)
@@ -106,6 +113,21 @@ if [[ -f "${DIFF_FILE}" ]]; then
     if [[ "${DRY_RUN}" == true ]]; then
         echo "[DRY RUN] Would apply: git apply ${DIFF_FILE}"
     else
+        # SLOW-REGION gate (SkillOpt S4): a change-set diff that edits
+        # protected slow-lane content (applicability/counterexamples) on
+        # pattern pages must carry an explicit --override-slow. The durable
+        # negative knowledge is never silently overwritten by the fast lane.
+        if grep -qE '^[+-](applicability:|counterexamples:|  excludes:|    - )' \
+                "${DIFF_FILE}" 2>/dev/null; then
+            pattern_diffs=$(grep -cE '^(diff --git a/corpus/patterns/|diff --git a/patterns/)' "${DIFF_FILE}" || true)
+            if [[ "${pattern_diffs}" -gt 0 ]] && [[ "${SLOW_OVERRIDE:-0}" != "1" ]]; then
+                if grep -qE '^(applicability:|  excludes:|    - ")|^\+.*excludes:|^\+.*counterexamples' "${DIFF_FILE}" >/dev/null 2>&1; then
+                    echo "BLOCKED: diff touches protected slow-lane content (applicability/counterexamples) on pattern pages" >&2
+                    echo "Re-run with --override-slow (or SLOW_OVERRIDE=1) and record a slow-update reason in verified." >&2
+                    exit 1
+                fi
+            fi
+        fi
         if git apply "${DIFF_FILE}"; then
             echo "Diff applied successfully"
         else

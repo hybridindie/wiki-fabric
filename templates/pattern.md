@@ -33,6 +33,10 @@ evidence:
     kind: direct-experience
     outcome: positive
 counterexamples: []
+# SLOW-REGION (SkillOpt S4): `applicability.excludes` and `counterexamples`
+# are protected slow-lane content — bulk ingest/synthesis edits to them fail
+# lint unless the change records a slow-update justification in `verified`.
+# Only the human review path edits them.
 related:
   - "[[pattern-<related-slug>]]"
   - "[[anti-pattern-<related-slug>]]"

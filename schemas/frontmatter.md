@@ -159,6 +159,14 @@ trigger condition plausibly matches a task (see [Task Context](../docs/site/cont
 | `review_after` | `YYYY-MM-DD` |
 | `usage` | machine-written by `wf utility` (#138): `{retrieved_count, applied_count, successful_outcomes, last_validated}` — receipt↔outcome join output; do not hand-edit |
 
+**Slow-lane protection (SkillOpt S4)**:
+- `applicability` (esp. `excludes`) and `counterexamples` are **protected slow-lane content**.
+- Any change to them vs the committed version requires a slow-update justification:
+  a `verified` entry with `reason: "slow-update: …"` — recorded by the human-gated
+  review path (`wf review`, promote apply). Bulk ingest-driven edits fail lint
+  (`SLOW-REGION`) without it — the durable negative knowledge is never overwritten
+  by fast-lane rewrites.
+
 **Maturity gate**:
 - `status: candidate` may have any maturity.
 - `status: recommended` ⇒ `maturity >= 2` (two **independent** evidence lineages).
