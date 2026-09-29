@@ -113,9 +113,10 @@ class TestLocalRoute:
         assert out["value"] == 0.95
 
     def test_local_route_primary_is_laya(self, monkeypatch):
-        # default local_backend=laya; when laya is installed it serves the verdict
+        # default local_backend=laya; on Apple Silicon laya-mlx serves the verdict
         monkeypatch.setenv("TYPESAFE_API_KEY", "")
         with mock.patch.object(judgment, "judgment_route", return_value="local"), \
+             mock.patch.object(judgment, "_is_apple_silicon", return_value=True), \
              mock.patch.object(judgment, "judgment_config",
                                return_value={"enabled": True, "route": "local",
                                              "local_backend": "laya"}), \

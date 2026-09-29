@@ -29,6 +29,7 @@ class TestEffectVerdict:
             raise J.JudgmentUnavailable("stop")
 
         monkeypatch.setattr(J, "_laya_engine", fake_engine)
+        monkeypatch.setattr(J, "_is_apple_silicon", lambda: True)
         monkeypatch.setattr(J, "judgment_route", lambda *a, **k: "local")
         try:
             J.effect_verdict("new claim text", "existing claim text")

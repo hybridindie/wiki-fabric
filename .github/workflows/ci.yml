@@ -21,7 +21,7 @@ jobs:
       - name: Create venv + install deps
         run: |
           uv venv
-          uv pip install .
+          uv pip install ".[mcp]"
           uv pip install pytest
 
       - name: Unit tests (pytest)
