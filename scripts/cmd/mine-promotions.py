@@ -8,7 +8,7 @@ import sys as _s, pathlib as _p
 _HERE = _p.Path(__file__).resolve().parent
 # Explicit import bootstrap: this script's own dir (same-dir siblings)
 # + scripts/lib (shared modules). No shotgun path injection.
-for _dir in (_HERE, _HERE.parent / "lib"):
+for _dir in (_HERE, _HERE.parent / "lib", _HERE.parent):
     if str(_dir) not in _s.path:
         _s.path.insert(0, str(_dir))
 import re
@@ -415,6 +415,9 @@ def _merge_clusters(base, ea, eb, assigned):
     base[ca].extend(base[cb])
     del base[cb]
     return base
+
+
+def _mine_actor(model=None):
     """Actor for dossier generation: agent/<owner>/<dossier-model>."""
     from fabric_config import get_config, actor
     return actor(get_config(), "agent", model=model)
