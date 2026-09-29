@@ -29,34 +29,41 @@ for _dir in (_HERE, _HERE.parent / "lib"):
 import os
 from pathlib import Path
 
-from fabric_config import FABRIC_ROOT, get_config, get_vault_path
+from fabric_config import FABRIC_ROOT, CORPUS_ROOT, get_config, get_vault_path
 
 # Top-level entries the utility is responsible for generating into the vault.
 # These are written by export-wiki.py (`wf export wiki`); vault-refresh only
 # verifies their presence, never copies them.
 EXPECTED_OUTPUT = [
-    "wiki/index.md",
+    "index.md",  # the wiki front page (at the vault/output root; #e2e fix —
+                 # was 'wiki/index.md', doubling when vault = corpus/wiki)
 ]
 
-# Top-level names that should never appear in the vault: they are corpus content
-# (mirrored in the old symlink/copy vault model) or harness files. Their presence
-# signals a stale vault that should be regenerated, not a fresh one. The wiki/
-# tree is NOT here — it is the generated output and is expected.
+# Top-level names that should never appear in the vault OUTPUT: corpus content
+# atoms (mirrored in the old symlink/copy vault model) or harness files. Their
+# presence signals a stale vault that should be regenerated, not a fresh one.
+# NOTE the wiki generator's OWN output subdirs (topics/, projects/<slug>/ deep
+# dives, domains/ hubs — living-wiki S3) are GENERATED now and expected (#e2e
+# finding: the old mirror-era list flagged real output as stale).
 SIGNALS_STALE = [
     "AGENTS.md",
     "README.md",
     "patterns",
     "anti-patterns",
     "skills",
-    "domains",
     "syntheses",
     "evidence",
     "registry",
-    "projects",
 ]
 
 
 def default_vault_path():
+    # corpus-nested layout: the generated wiki lives at corpus/wiki (the
+    # fabric root is the content corpus, not the output). Legacy flat layout
+    # (content at fabric root, wiki/ generated at root) keeps the old default.
+    from fabric_config import CORPUS_ROOT, FABRIC_ROOT
+    if CORPUS_ROOT.name == "corpus":
+        return CORPUS_ROOT / "wiki"
     return FABRIC_ROOT.parent / "vault"
 
 
@@ -116,6 +123,14 @@ def main():
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
     vault = args.vault_path or get_vault_path() or default_vault_path()
+    # vault.path unset (None) means "the vault IS the fabric" — but with the
+    # corpus-nested layout the OUTPUT root is corpus/wiki, not the fabric root
+    # (audit there; #e2e finding: refresh audited the wrong tree).
+    from fabric_config import get_config, is_integration_active
+    if get_vault_path() is None or not Path(str(get_vault_path())).is_relative_to(CORPUS_ROOT / "wiki"):
+        vp = str(get_vault_path())
+        if vp in (str(FABRIC_ROOT), "None"):
+            vault = default_vault_path()
     return refresh(vault, check_only=args.check, quiet=args.quiet)
 
 

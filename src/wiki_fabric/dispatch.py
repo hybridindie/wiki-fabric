@@ -335,15 +335,21 @@ def _status(argv):
     print("")
     print(f"\033[0;32m✓\033[0m  Fabric: {fdir}")
 
-    # Vault freshness
+    # Vault freshness — the default audit target is vault-refresh's own
+    # default (vault-refresh.py resolves corpus/wiki for nested layouts),
+    # NOT the fabric root (#e2e finding: status re-derived the path and
+    # disagreed with the standalone checker).
     vault = _vault_dir(fdir)
-    if vault.is_dir():
+    refresh_target = vault
+    if (fdir / "fabric.yaml").exists() and (fdir / "corpus" / "wiki" / "index.md").exists():
+        refresh_target = fdir / "corpus" / "wiki"
+    if refresh_target.is_dir():
         r = subprocess.run([_python(fdir), str(_harness("scripts/cmd/vault-refresh.py")),
-                            str(vault), "--check", "--quiet"], capture_output=True)
+                            str(refresh_target), "--check", "--quiet"], capture_output=True)
         if r.returncode == 0:
-            print(f"\033[0;32m✓\033[0m  Vault:  {vault} (fresh)")
+            print(f"\033[0;32m✓\033[0m  Vault:  {refresh_target} (fresh)")
         else:
-            print(f"\033[1;33m⚠\033[0m  Vault:  {vault} (structure drift — run: wf vault)")
+            print(f"\033[1;33m⚠\033[0m  Vault:  {refresh_target} (structure drift — run: wf vault)")
     else:
         print("\033[1;33m⚠\033[0m  Vault:  not set up (run: wf vault)")
 

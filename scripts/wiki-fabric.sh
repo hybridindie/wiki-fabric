@@ -827,8 +827,14 @@ cmd_status() {
     # Location
     ok "Fabric: ${fabric_dir}"
 
-    # Vault
-    local vault_path="$(vault_dir "${fabric_dir}")"
+    # Vault — audit the OUTPUT root: corpus/wiki for the nested layout, the
+    # fabric root for legacy (= vault_dir). Mirrors vault-refresh's default
+    # resolution so status and the standalone checker audit the same tree
+    # (#152/#e2e: separate derivations audited different trees).
+    local vault_path="${fabric_dir}/corpus/wiki"
+    if [[ ! -d "${vault_path}" ]]; then
+        vault_path="$(vault_dir "${fabric_dir}")"
+    fi
     if [[ -d "${vault_path}" ]]; then
         local vault_state
         vault_state=$(run_script "${fabric_dir}" "scripts/cmd/vault-refresh.py" "${vault_path}" --check --quiet 2>/dev/null; echo "exit=$?")
