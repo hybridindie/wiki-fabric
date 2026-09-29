@@ -103,7 +103,7 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 | `wf okf export --out DIR [--scope S]` | Export the fabric as a deterministic portable OKF v0.2 bundle |
 | `wf okf import <bundle> [--scope S]` | Ingest an external OKF bundle as immutable evidence (trust recorded, not inherited) |
 | `wf sync {setup\|init\|status\|push\|pull\|resolve}` | Share the corpus with a team — `setup` uses the gh CLI to create + publish the corpus repo; `resolve` without `--strategy` runs the interactive resolver (diff + pick ours/theirs/union/skip). Team mode (`sync.mode: team`) opens one PR per push — evidence auto-merges on green CI, atoms wait for human review; `sync push --pr` opts in per-invocation |
-| `wf skill [--list] [<name>]` | Print the procedure for a workflow (`ingest`, `promote`, `refresh`) — universal across all agent harnesses |
+| `wf skill [--list] [<name>]` | Print the procedure for a workflow (`ingest`, `promote`) — universal across all agent harnesses |
 | `wf harness {install\|status} [--all\|--only k1,k2] [--force]` | Install always-on + skills into detected agent harnesses (11 supported; `wf claude` is the legacy alias) |
 | `wf models ensure [--model ID] [--yes]` | Check `llm.local_model` is cached; offer human-gated download (`--check` exits 0/1 without prompting) |
 | `wf review --check [--project <slug>]` | Staleness report: current, due for review, overdue, stale |

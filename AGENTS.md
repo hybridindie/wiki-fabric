@@ -140,7 +140,7 @@ Rules:
 - Never re-ingest a source whose sha256 is already recorded — the CLI skips it and tells you.
 - Promotion is human-gated: `wf` proposes dossiers, only you promote.
 - At session start, run `wf gate` — it aggregates every pending human decision (overdue/stale claims, promotion dossiers awaiting review, newly-proposed domains, open questions awaiting triage) into one report; `wf gate --deliveries` surfaces recent context receipts for delivery-vs-outcome review. Surface whichever are actionable to the user before proceeding. Resolve with: `wf review --auto-reverify`, `wf promote --promote <dossier>`, `python3 scripts/cmd/promote-domains.py --apply <dossier>`, `python3 scripts/cmd/promote-questions.py --apply <id>`. If the git hook ran, it already persisted these to `registry/pending-gate.md` — read that instead of running commands (0 tokens).
-- **Procedures on demand:** run `wf skill <name>` before these workflows — `ingest`, `promote`, `refresh`. `wf skill --list` summarizes them. Read the procedure before running the workflow the first time in a session.
+- **Procedures on demand:** run `wf skill <name>` before these workflows — `ingest`, `promote` (`wf skill --list` shows the current set). Read the procedure before running the workflow the first time in a session.
 
 CLI: `wf help` | When graphify is also installed: graphify owns code-symbol/call-graph questions; wiki-fabric owns evidence-backed knowledge (`wf query` — claims with doc locators). Prefer `wf context` for task scoping. They complement — neither replaces the other.
 <!-- /wiki-fabric:opencode -->

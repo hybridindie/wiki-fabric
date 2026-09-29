@@ -7,7 +7,7 @@ Tools wrap the REAL scripts via subprocess — never a reimplementation
 tool call runs exactly what `wf` runs.
 
 Tool classes:
-  read/query tools  — query, context, thread, doctor (0 tokens)
+  read/query tools  — query, context, thread, doctor, gate (0 tokens)
   status tools      — gate (pending HITL), integrations (0 tokens)
   log tool          — log-experience (the mining intake; same validation
                       as wf log — the one mutation, gated by schema)
@@ -85,7 +85,7 @@ TOOLS = [
     ),
     types.Tool(
         name="fabric_gate",
-        description="Aggregate pending human-in-the-loop decisions (0 tokens): stale claims, promotion dossiers, domain proposals, open questions. Exit semantics: report content returned regardless; empty means nothing pending.",
+        description="Aggregate pending human-in-the-loop decisions (0 tokens): stale/contested claims, promotion dossiers, domain proposals, pattern candidates, open questions. Exit semantics: report content returned regardless; empty means nothing pending.",
         inputSchema={
             "type": "object",
             "properties": {"json": {"type": "boolean", "description": "Machine-readable output"}},
@@ -143,6 +143,11 @@ TOOLS = [
         inputSchema={"type": "object", "properties": {"page": {"type": "string"}}, "required": ["page"]},
     ),
     types.Tool(
+        name="fabric_doctor",
+        description="Fabric health check (0 tokens): config, integrations, hooks, judgment tier reachability. Read-only.",
+        inputSchema={"type": "object", "properties": {}},
+    ),
+    types.Tool(
         name="fabric_log",
         description="Log an experience event (the mining intake). Records what went wrong, what was done, outcomes. The one mutating tool — same schema validation as `wf log`.",
         inputSchema={
@@ -191,6 +196,8 @@ def _call_tool(name: str, arguments: dict) -> str:
         elif args.get("id"):
             argv += [args["id"]]
         return _run_script(*argv)
+    if name == "fabric_doctor":
+        return _run_script("scripts/cmd/doctor.py")
     if name == "fabric_log":
         argv = ["scripts/cmd/log-experience.py"]
         for k in ("project", "problem", "intervention", "conditions",

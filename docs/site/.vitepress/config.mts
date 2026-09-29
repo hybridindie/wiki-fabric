@@ -75,6 +75,7 @@ export default withMermaid(defineConfig({
       {
         text: 'Reference',
         items: [
+          { text: 'Skills (on-demand procedures)', link: '/skills' },
           { text: 'CLI & Scripts', link: '/cli' },
           { text: 'Model Policy & Evals', link: '/evals' },
           { text: 'OKF v0.2 Conformance', link: '/okf' },

@@ -47,6 +47,15 @@ Four design choices make this safe to leave on:
 
 `WIKI_SKIP_HOOK=1 git commit ...` skips once; `wf hook status` shows state.
 
+The hook cycle also runs (`graphify-bridge.py
+--import → --enrich → --diff`) after code commits when the integration is
+active, and (4) writes the pending-decision manifest
+(`registry/pending-gate.md` via `gate.py --write-manifest`) so any harness's
+session-start can read pending human decisions without running commands.
+The harness fabric itself also self-captures in CI — an opt-in workflow
+(`fabric-refresh.yml`, gated on the `WIKI_FABRIC_REFRESH=1` repo variable)
+runs the same sha256-gated capture + lint on every push to main.
+
 ## Other capture channels
 
 The hook handles doc drift; two more channels feed the fabric, both

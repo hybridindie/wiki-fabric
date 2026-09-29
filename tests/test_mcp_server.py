@@ -80,7 +80,8 @@ class TestMcpServer:
                     tools = await session.list_tools()
                     names = [t.name for t in tools.tools]
                     assert set(names) == {"fabric_query", "fabric_context",
-                                          "fabric_gate", "fabric_thread", "fabric_log",
+                                          "fabric_gate", "fabric_thread", "fabric_doctor",
+                                          "fabric_log",
                                           "wiki_begin", "wiki_next", "wiki_submit_page",
                                           "wiki_finish", "wiki_status",
                                           "wiki_inspect_page_claims"}
