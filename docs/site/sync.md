@@ -74,6 +74,11 @@ git remote add corpus git@github.com:your-org/wiki-fabric-corpus.git
 wf sync pull
 ```
 
+> Config layering (who gets routing vs keys vs knowledge): see
+> [Teams › Config layering](./teams#config-layering-who-gets-what).
+> Short version: routing travels with the project overlay, keys/owner stay
+> machine-local, knowledge syncs with the corpus.
+
 ## How bootstrap meets the corpus
 
 When you `wf bootstrap` a project into a fabric with a corpus remote, the

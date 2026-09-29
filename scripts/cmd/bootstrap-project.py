@@ -157,9 +157,10 @@ def register_in_fabric_yaml(project_slug, project_root, owner="", args=None):
     }
     if owner:
         entry["owner"] = owner
-    # carry the decided routing (explicit fabric.yaml entry wins over the
-    # overlay — get_repo_config merge semantics) so the project is fully
-    # declared in the fabric config, not just discovered by path
+    # Explicit routing flags are personal machine overrides (privacy tiering
+    # may legitimately differ per teammate) — carried here, machine-local.
+    # The SHARED routing comes from the overlay. get_repo_config: explicit
+    # fabric.yaml keys win over the overlay.
     for k in ("extract", "synthesize", "dossier"):
         val = getattr(args, k, None) if args else None
         if val:
@@ -432,13 +433,18 @@ def _execute_bootstrap(args, project_root_str, project_name, project_slug, domai
             print(f"  Updated fabric.yaml llm → compiler {_compiler}")
         except Exception as _e:
             print(f"  warn: could not write model to fabric.yaml: {_e}", file=sys.stderr)
-    routing_yaml = ""
-    if any(v for v in routing_keys.values()):
-        routing_yaml = "# LLM stage routing + integration (per-project; overrides fabric defaults)\nrouting:\n"
-        for k, v in routing_keys.items():
-            if v:
-                routing_yaml += f"  {k}: {v}\n"
-        routing_yaml += "\n"
+    # Routing lives in the OVERLAY (versioned with the project repo) so
+    # teammates inherit the decided config on clone. fabric.yaml repos entries
+    # are registration + MACHINE-LOCAL overrides only (privacy tiering differs
+    # per person). Keys never move — they live in fabric.yaml only.
+    decided = {k: v for k, v in routing_keys.items() if v}
+    if not decided:
+        # derive from the fabric's decided llm config (cloud default)
+        decided = {"extract": "cloud", "synthesize": "cloud", "dossier": "cloud"}
+    routing_yaml = "# Decided routing (fabric llm config; per-repo overrides in machine fabric.yaml)\nrouting:\n"
+    for k, v in decided.items():
+        routing_yaml += f"  {k}: {v}\n"
+    routing_yaml += "\n"
 
     overlay_content = f"""---
 project: {project_name}

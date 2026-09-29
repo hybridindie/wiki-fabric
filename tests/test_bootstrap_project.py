@@ -24,7 +24,10 @@ def _load():
 
 
 class TestRepoEntry:
-    def test_entry_carries_owner_and_routing(self, tmp_path, monkeypatch):
+    def test_entry_registration_and_personal_overrides(self, tmp_path, monkeypatch):
+        """fabric.yaml repos entries = registration + machine-local routing
+        overrides. The SHARED routing lives in the overlay (versioned with the
+        project repo) so teammates inherit decisions on clone."""
         bp = _load()
         froot = tmp_path / "fabric"
         froot.mkdir()
@@ -44,6 +47,6 @@ class TestRepoEntry:
         e = cfg["repos"]["proj"]
         assert e["path"].endswith("proj")
         assert e["owner"] == "t"
-        assert e["extract"] == "cloud"
+        assert e["extract"] == "cloud"          # machine-local override
         assert e["dossier"] == "local"
         assert cfg["llm"]["compiler_model"] == "glm-x:cloud"

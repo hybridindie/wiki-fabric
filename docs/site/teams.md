@@ -144,3 +144,20 @@ push — a disagreement can't sneak into the shared truth.
   [Model splits](./why#model-splits-different-models-for-different-cognitive-tasks)).
 - Fully-local fabrics work entirely offline before and after sync — the
   corpus sync is for teams, not for the loop.
+
+---
+
+## Config layering: who gets what
+
+| Layer | Lives in | Teammates get it? |
+|---|---|---|
+| **Identity & keys** (`owner`, API keys, `TYPESAFE_API_KEY`, `llm.api_key`) | `fabric.yaml` — **gitignored, machine-local** | never — every teammate has their own |
+| **Shared project routing** (decided stage routing for a repo) | the project's `.wiki-overlay.md` — **versioned with the project repo** | yes — inherited on clone |
+| **Machine routing overrides** (privacy tiering that differs per teammate) | `fabric.yaml` `repos.<slug>.*` — machine-local overrides | no — personal only |
+| **Knowledge** (claims, patterns, decisions, relationships) | the **corpus** — synchronized | yes — via `wf sync` |
+
+The merge rule: explicit `fabric.yaml` keys win over the overlay, so a
+teammate can differ locally without touching shared config. The model decision
+is made once in the owner's `fabric.yaml`, written into the overlay by
+`wf bootstrap`, and travels with the project — nothing re-asks on another
+machine. Keys never leave the machine.
