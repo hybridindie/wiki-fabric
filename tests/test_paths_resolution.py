@@ -131,3 +131,23 @@ class TestBashChainParity(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestBootstrapImports(unittest.TestCase):
+    """#150 regression class: bootstrap-project imports lib helpers by exact
+    name — a refactor that drops a lib symbol breaks the shipped command
+    (caught live: paths.find_fabric_root renamed to chain primitives)."""
+
+    def test_bootstrap_resolver_callable(self):
+        import subprocess
+        r = subprocess.run([sys.executable, str(_SCRIPTS / "cmd" / "bootstrap-project.py"),
+                            "/nonexistent", "--non-interactive"],
+                           capture_output=True, text=True, timeout=60)
+        # a clean "not found" failure beats an AttributeError at import
+        self.assertNotIn("AttributeError", r.stderr)
+
+    def test_lib_symbols_exist(self):
+        import paths
+        for name in ("find_harness_root", "find_harness_asset", "find_corpus_root",
+                     "find_vault_dir_for_fabric", "env_fabric_root", "walk_for_fabric",
+                     "sibling_vault_of", "xdg_fabric_root", "is_fabric_dir", "is_harness_tree"):
+            self.assertTrue(hasattr(paths, name), f"paths.{name} missing")

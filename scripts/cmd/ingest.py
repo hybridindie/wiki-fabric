@@ -109,6 +109,13 @@ def provenance_relations(source_slug, source_path):
     return [rel]
 
 
+def sanitize_wikilinks(text):
+    """LLM text may contain shell/code fragments like [[ "$x" == "y" ]] which
+    lint parses as wikilinks (broken → error, gates the commit). Body prose
+    in claim pages is NOT a link; escape the double bracket."""
+    return text.replace("[[", "\\[\\[")
+
+
 def claim_frontmatter(claim, source_slug, idx, provenance=None):
     quote = clean_quote(claim.get('quote', ''))
     statement = claim.get('statement', '')
@@ -143,7 +150,7 @@ last_verified: {date.today().isoformat()}
 
 # claim-{source_slug}-{idx:03d}
 
-{statement}
+{sanitize_wikilinks(statement)}
 """
 
 
