@@ -23,7 +23,7 @@ except ImportError:
     HAVE_YAML = False
 
 from fabric_config import get_config, get_ignores, is_ignored, CORPUS_ROOT
-from wf_common import parse_frontmatter
+from wf_common import parse_frontmatter, SKIP_PARTS
 
 
 def _default_root():
@@ -48,7 +48,9 @@ def _default_root():
 VAULT_ROOT = _default_root()
 INDEX_PATH = VAULT_ROOT / "registry" / "catalog.json"
 
-SKIP_PARTS = {".git", ".obsidian", ".opencode", "__pycache__", ".venv", "venv", "node_modules", "templates", "schemas", "evaluations", "system", "examples", "scripts", "tests"}
+# SKIP_PARTS: shared corpus-walk exclusion set (wf_common, #155-C) — the
+# catalog should see the same corpus the retrievers see. Extra, index-only
+# skips live in scan_vault below.
 SKIP_DIRS_IN_EVIDENCE = {"raw", "traces"}
 
 LINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]")

@@ -524,9 +524,33 @@ def get_domain_signals(config):
     return result
 
 
+def detect_owner_fallback():
+    """Git-config owner — the shared fallback of every owner chain (#155-B).
+    The four chains (bootstrap git>yaml>prompt, bash git-only, skeleton
+    git>you, sync gh>you) were one chain in four dialects; this is the one
+    git step, and the sentinel 'you' is the single documented default."""
+    try:
+        import subprocess
+        out = subprocess.run(["git", "config", "--global", "user.name"],
+                             capture_output=True, text=True, timeout=5)
+        val = out.stdout.strip()
+        if out.returncode == 0 and val:
+            return val
+    except Exception:
+        pass
+    return None
+
+
+OWNER_SENTINEL = "you"
+
+
 def get_owner(config):
-    """Return the configured owner name."""
-    return config.get("owner", "you")
+    """Return the configured owner name. Chain (documented once, #155-B):
+    fabric.yaml owner → git config user.name → the OWNER_SENTINEL."""
+    owner = config.get("owner")
+    if owner and owner != OWNER_SENTINEL:
+        return owner
+    return detect_owner_fallback() or OWNER_SENTINEL
 
 
 

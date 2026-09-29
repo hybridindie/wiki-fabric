@@ -136,6 +136,33 @@ def yaml_scalar(value):
 _STATEMENT_KEY_RE = re.compile(r"^statement:[ \t]*(.*)$", re.MULTILINE)
 _FM_BLOCK_RE = re.compile(r"\A---\n(.*?)\n---", re.DOTALL)
 
+# Corpus walk exclusions, one truth (#155-C: context/query/rebuild-index kept
+# private copies that drifted — query's omitted .venv/venv/node_modules).
+# SKIPPED are machine-irrelevant or human-facing layers; SKIP_FILES are
+# top-level markers. Callers layer extra filtering (traces, fixtures, ignores).
+SKIP_PARTS = {".git", ".obsidian", ".opencode", "__pycache__", ".venv", "venv",
+              "node_modules", "templates", "schemas", "evaluations", "raw",
+              "traces", "system", "tests", "examples", "wiki", "syntheses",
+              "scripts"}
+SKIP_FILES = {"index.md", "log.md", "catalog.json", "README.md",
+              "CONTRIBUTING.md", "AGENTS.md"}
+
+
+def corpus_walk(root):
+    """Deterministic corpus walk yielding (path, rel parts, rel posix) for
+    catalogable corpus pages. Shared by context / query / rebuild-index."""
+    root = Path(root)
+    for p in sorted(root.rglob("*.md")):
+        rel = p.relative_to(root)
+        parts = rel.parts
+        if any(x in SKIP_PARTS for x in parts):
+            continue
+        if rel.name in SKIP_FILES or rel.name.endswith("README.md"):
+            continue
+        if "traces" in parts:  # evidence/traces: run artifacts, not pages
+            continue
+        yield p, parts, rel
+
 def claim_statement(text_or_path):
     """The claim's statement, parsed from `statement:` frontmatter — the one
     parser for all consumers (#154: 12 drifted regex copies, two incompatible

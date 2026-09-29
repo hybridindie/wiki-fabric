@@ -53,29 +53,15 @@ from fabric_config import get_config, get_ignores, is_ignored, get_tuning
 from wf_common import parse_frontmatter
 
 
-# wiki/ is the OpenWiki-style human-facing layer: its prose is a paraphrase of
-# claims (drift risk + context bloat if fed back to a model). The machine
-# consumes its *edges* via the citation graph (registry/wiki-graph.json),
-# never the prose. syntheses/ is similarly human-facing generated prose.
-SKIP_PARTS = {".git", ".obsidian", ".opencode", "__pycache__", ".venv", "venv",
-              "templates", "schemas", "evaluations", "raw", "traces", "system", "tests",
-              "examples", "wiki", "syntheses"}
-SKIP_FILES = {"index.md", "log.md", "catalog.json", "README.md", "CONTRIBUTING.md", "AGENTS.md"}
+# corpus walk exclusions are shared (wf_common.SKIP_PARTS/corpus_walk, #155-C)
 
 
 def load_corpus():
     """Load all catalogable corpus pages with derived scope."""
+    from wf_common import corpus_walk
     pages = []
-    for p in VAULT_ROOT.rglob("*.md"):
-        rel = p.relative_to(VAULT_ROOT)
-        parts = rel.parts
-        if any(x in SKIP_PARTS for x in parts):
-            continue
-        if rel.name in SKIP_FILES or rel.name.endswith("README.md"):
-            continue
+    for p, parts, rel in corpus_walk(VAULT_ROOT):
         posix = rel.as_posix()
-        if posix.startswith("evidence/traces"):
-            continue
         if "raw" in parts:
             continue
         fm, body = parse_frontmatter(p)

@@ -259,6 +259,8 @@ def cmd_setup(name=None, private=True, yes=False):
         print("gh is installed but not authenticated. Run: gh auth login", file=sys.stderr)
         sys.exit(1)
     who = _run(["gh", "api", "user", "--jq", ".login"])
+    who = _run(["gh", "api", "user", "--jq", ".login"])
+    # sentinel shared with get_owner (#155-B: one 'you' default)
     owner = (who.stdout.strip() if who and who.returncode == 0 else "") or "you"
     print(f"gh CLI detected (authenticated as {owner})")
 

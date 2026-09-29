@@ -69,18 +69,12 @@ def concept_match(query_norm, text_norm):
 def load_pages():
     """Load all wiki pages into memory with their frontmatter and body."""
     # wiki/ + syntheses/ are the human-facing generated layer: prose paraphrase
-    # that shouldn't be fed back to a model. The machine consumes the wiki's
+    # that shouldn't be fed back to a model (skipped by the shared walk,
+    # wf_common.corpus_walk — #155-C). The machine consumes the wiki's
     # edges via registry/wiki-graph.json, not the prose.
-    SKIP_PARTS = {".git", ".obsidian", ".opencode", "__pycache__", "templates",
-                  "schemas", "evaluations", "raw", "traces", "wiki", "syntheses"}
+    from wf_common import corpus_walk
     pages = []
-    for p in VAULT_ROOT.rglob("*.md"):
-        rel = p.relative_to(VAULT_ROOT)
-        parts = rel.parts
-        if any(x in SKIP_PARTS for x in parts):
-            continue
-        if rel.name in ("index.md", "log.md", "README.md", "CONTRIBUTING.md", "AGENTS.md"):
-            continue
+    for p, parts, rel in corpus_walk(VAULT_ROOT):
         fm, body = parse_frontmatter(p)
         pages.append({
             "path": p,

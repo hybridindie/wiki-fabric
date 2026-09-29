@@ -427,19 +427,27 @@ def _status(argv):
 
 @verb("integrations")
 def _integrations(argv):
+    """Integration report — single truth is fabric_config.is_integration_active
+    (#155-A: an inner yaml-parse copy was shadowed and a module-level regex
+    grep re-implemented the same check, disagreeing with the config layer)."""
     fdir = _require_fabric()
-    yaml_text = (fdir / "fabric.yaml").read_text()
+    try:
+        sys.path.insert(0, str(harness_root() / "scripts" / "lib"))
+        from fabric_config import get_config, is_integration_active
+        cfg = get_config()
+        enabled = lambda name: is_integration_active(cfg, name)  # noqa: E731
+    except Exception:
+        try:
+            import yaml
+            cfg = yaml.safe_load((fdir / "fabric.yaml").read_text()) or {}
+        except Exception:
+            cfg = {}
+        enabled = lambda name: bool(  # noqa: E731
+            ((cfg.get("integrations") or {}).get(name) or {}).get("enabled"))
     print("")
     print(f"Optional integrations (config: {fdir}/fabric.yaml → integrations:)")
     print("")
-    def _enabled(name):
-        try:
-            import yaml
-            cfg = yaml.safe_load(yaml_text) or {}
-            return bool(((cfg.get("integrations") or {}).get(name) or {}).get("enabled"))
-        except Exception:
-            return False
-    if _enabled("graphify", yaml_text):
+    if enabled("graphify"):
         print("\033[0;32m✓\033[0m  graphify: ENABLED (call-graph staleness, claim enrichment, graph expansion)")
         print("     commands: graphify-bridge.py --all | --diff | --status")
     else:
@@ -447,7 +455,7 @@ def _integrations(argv):
         print("     enable: wf update --with-graphify (or fabric.yaml integrations.graphify.enabled: true)")
         print("     effect when active: skills gain graph staleness/enrichment steps; query gains call-graph expansion")
     print("")
-    if _enabled("obsidian", yaml_text):
+    if enabled("obsidian"):
         print("\033[0;32m✓\033[0m  obsidian: ENABLED (two-way vault: harvest-before-export, REST export via --push)")
         try:
             _run_script(fdir, "scripts/cmd/obsidian_status.py")
@@ -459,12 +467,6 @@ def _integrations(argv):
         print("     effect when active: export harvests human wiki edits as evidence before regenerating; --push writes via REST")
     print("")
     return 0
-
-
-def _enabled(name: str, yaml_text: str) -> bool:
-    import re
-    m = re.search(rf"^\s+{name}:.*?enabled: true", yaml_text, re.MULTILINE | re.DOTALL)
-    return m is not None
 
 
 @verb("version")

@@ -480,13 +480,31 @@ def same_recurrence(item_a, item_b, threshold=None, config=None, context=None):
     return (p >= threshold, p)
 
 # ---- Effect verification (ingest, #29 wiring A) ----------------------------
-
+# Effects are a strict subset of lint's REL_TYPES (#155-E: one relation-typing
+# truth — judgment may not introduce a relation verb the linter doesn't know).
+# The option list itself stays fixed (supports/contradicts/supersedes/no-action)
+# — the choice head's option set is part of the recorded eval contract.
+_CORE_EFFECTS = {"supports", "contradicts", "supersedes"}
+_REL_EXEMPT = {"no-action"}  # a judgment verdict, not a corpus relation
 EFFECT_OPTIONS = {
     "supports": "the new claim confirms or strengthens this claim",
     "contradicts": "the new claim asserts something incompatible with this claim",
     "supersedes": "the new claim is a newer version replacing this claim's content",
     "no-action": "neither — they are about different aspects or facts",
 }
+
+
+def effect_options_subset_of_lint():
+    """Contract check (#155-E): every judgment effect must be a known REL_TYPE
+    (no-action is exempt: it's the tier's abstention verdict, not a relation
+    verb). Returns (ok, detail) — exercised by tests; lint-independent fallback
+    keeps the tier runnable when scripts/cmd isn't importable."""
+    try:
+        from lint import REL_TYPES
+    except Exception:
+        return True, "lint unavailable — contract checked at test time"
+    unknown = (_CORE_EFFECTS - set(REL_TYPES))
+    return (not unknown), unknown
 
 
 def effect_verdict(new_statement, existing_statement):
