@@ -140,7 +140,8 @@ The repo carries a `pr-agent.toml` that configures [PR-Agent](https://github.com
 # One-time: pick your LLM provider if Ollama isn't your choice
 # (see Configuration — or run `wf install --interactive` to be prompted)
 
-wf bootstrap /path/to/my-project      # connect a project (auto-discovered; --extract local for privacy)
+wf bootstrap /path/to/my-project      # connect a project (copies the decided model config
+                                      # from fabric.yaml; routing via --extract/--synthesize/--dossier)
                                        # (hook installed automatically by bootstrap; --no-hook skips)
 wf capture my-project                 # pull docs from upstream repos → evidence/raw/
 wf capture chat my-project            # capture agent chat sessions → evidence/raw/my-project/chats/

@@ -131,7 +131,7 @@ def prompt_yes_no(prompt_text, default=False):
     return val in ("y", "yes")
 
 
-def register_in_fabric_yaml(project_slug, project_root):
+def register_in_fabric_yaml(project_slug, project_root, owner="", args=None):
     """Add the project to fabric.yaml so all scripts can find it."""
     config_path = FABRIC_ROOT / "fabric.yaml"
     if not config_path.exists():
@@ -151,10 +151,23 @@ def register_in_fabric_yaml(project_slug, project_root):
         repos = {}
     config["repos"] = repos
     rel_path = os.path.relpath(project_root, FABRIC_ROOT)
-    repos[project_slug] = {
+    entry = {
         "path": rel_path,
         "graph_dir": "graphify-out",
     }
+    if owner:
+        entry["owner"] = owner
+    # carry the decided routing (explicit fabric.yaml entry wins over the
+    # overlay — get_repo_config merge semantics) so the project is fully
+    # declared in the fabric config, not just discovered by path
+    for k in ("extract", "synthesize", "dossier"):
+        val = getattr(args, k, None) if args else None
+        if val:
+            entry[k] = val
+            entry.setdefault("routing", {})[k] = val
+    graph_dir = (getattr(args, "graph_dir", None) if args else None) or "graphify-out"
+    entry["graph_dir"] = graph_dir
+    repos[project_slug] = entry
 
     config_path.write_text(yaml.dump(config, default_flow_style=False, sort_keys=False))
     print(f"Registered {project_slug} in fabric.yaml (path: {rel_path})")
@@ -288,9 +301,16 @@ def _collect_config(args, env):
     # Domains
     domains = args.domain
     if not domains and not args.non_interactive and sys.stdin.isatty():
-        domains = prompt_multi("Domains to load", available_domains, default=["agent-systems"])
+        # Default NONE: a new project starts clean — domains are self-building
+        # (the ontology grows from this project's own evidence), and seeding
+        # another repo's domains here would mix unrelated signals. Suggest
+        # nothing; the owner opts in deliberately.
+        domains = prompt_multi("Domains to load (none recommended — ontology self-builds)",
+                               available_domains, default=[])
+        if not domains:
+            print("  (no domains — ontology will build from this project's evidence)")
     if not domains:
-        domains = ["agent-systems"]
+        domains = []
 
     # Skills
     skills = args.skill
@@ -389,19 +409,29 @@ def _execute_bootstrap(args, project_root_str, project_name, project_slug, domai
     # versions with the project repo; fabric.yaml stays fabric-global).
     routing_keys = {"extract": args.extract, "synthesize": args.synthesize,
                     "dossier": args.dossier, "graph_dir": args.graph_dir}
-    if (not args.non_interactive and not any(v for v in routing_keys.values())
-            and not everything_flagged and sys.stdin.isatty()):
-        # Interactive routing prompt (privacy tiering) unless flags given
+    # Model is DECIDED already — the fabric owner's llm config (fabric.yaml)
+    # is the source of truth; bootstrap copies it into the project instead of
+    # re-asking. Only ask when the fabric itself has no compiler model.
+    from fabric_config import get_config as _get_config
+    _llm = (get_config() or {}).get("llm") or {}
+    _compiler = _llm.get("compiler_model") or _llm.get("model") or ""
+    if not _compiler and not args.non_interactive and sys.stdin.isatty():
         print()
-        print("  LLM routing for this project (stage: where raw docs / claims /")
-        print("  experience events are compiled — privacy + quality tiering):")
-        print("    1) cloud — compiler model, fastest [default]")
-        print("    2) local — on-device (GGUF/MLX), zero egress")
-        for stage in ("extract", "synthesize", "dossier"):
-            choice = input(f"    {stage} [1]: ").strip()
-            if choice == "2":
-                routing_keys[stage] = "local"
-        print()
+        print("  No model decided in fabric.yaml yet — choose the compiler model")
+        print("  (OpenAI-compatible id; local ids need llm.local_model too):")
+        _compiler = input("    compiler model [deepseek-v4.1-flash:cloud]: ").strip() \
+            or "deepseek-v4.1-flash:cloud"
+        try:
+            import yaml as yaml_mod
+            _cfg = yaml_mod.safe_load(fabric_yaml_path.read_text()) if fabric_yaml_path.exists() else {}
+            _cfg.setdefault("llm", {})["compiler_model"] = _compiler
+            local_model = input("    local model id (blank to skip): ").strip()
+            if local_model:
+                _cfg["llm"]["local_model"] = local_model
+            fabric_yaml_path.write_text(yaml_mod.dump(_cfg, default_flow_style=False, sort_keys=False))
+            print(f"  Updated fabric.yaml llm → compiler {_compiler}")
+        except Exception as _e:
+            print(f"  warn: could not write model to fabric.yaml: {_e}", file=sys.stderr)
     routing_yaml = ""
     if any(v for v in routing_keys.values()):
         routing_yaml = "# LLM stage routing + integration (per-project; overrides fabric defaults)\nrouting:\n"
@@ -611,7 +641,7 @@ config; the fabric discovers it (see fabric.yaml repos.auto_discover).
     write_namespace_readme(namespace_dir, project_slug, project_name, owner, args.source_repo or [])
 
     # 6. Register in fabric.yaml
-    register_in_fabric_yaml(project_slug, str(project_root))
+    register_in_fabric_yaml(project_slug, str(project_root), owner=owner, args=args)
 
     # 7. Create LLM config file for the project
     llm_env_path = project_root / ".env.wiki-fabric"
