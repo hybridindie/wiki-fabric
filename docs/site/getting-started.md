@@ -67,8 +67,8 @@ another spot), creates the **fabric** (your content
 the harness, and symlinks `wf` into `~/.local/bin/`. Everything Python runs
 inside that venv — no system pip pollution, no version drift. If uv can't be
 installed, `wf` falls back to plain `python3` (core CLI works; LLM features
-need `pip install -r requirements.txt`). `wf update` re-syncs deps when
-`requirements.txt` changes.
+need the one-time `pip install -r requirements.txt` in the harness venv).
+`wf update` re-syncs deps when `requirements.txt` changes.
 
 **Harness vs fabric:** the harness clone never holds your knowledge — it's a
 git clone of this public repo, refreshed by `wf update` (git pull). Your
@@ -80,7 +80,23 @@ All `wf` commands also work without any install — the scripts in `scripts/`
 run with plain `python3` from a clone (dev mode: a clone holding a
 `fabric.yaml` doubles as its own fabric).
 
-### Manual install (equivalent)
+### Manual installs
+
+**Packaged (same as the recommended path — pick your extras):**
+
+```bash
+uv tool install wiki-fabric                 # CLI only
+uv tool install wiki-fabric --with mcp      # + wf-mcp server
+uv tool install wiki-fabric --with mcp --with fastembed --with laya
+                                            # + semantic re-rank + local judgment
+```
+
+Extras compose per machine: `mcp` (the MCP server), `fastembed` (the
+embeddings tier), `laya` (upstream laya — cross-platform local judgment),
+and on Apple Silicon optionally `--with "~/path/to/laya-as-judge[mlx]"`
+(the fastest local judge). `uv tool upgrade wiki-fabric` keeps them.
+
+**Dev mode (run from a clone — for working on wiki-fabric itself):**
 
 ```bash
 git clone https://github.com/hybridindie/wiki-fabric wiki-fabric
@@ -90,6 +106,9 @@ mkdir -p ~/.local/bin
 ln -sf "$PWD/scripts/wiki-fabric.sh" ~/.local/bin/wf
 wf status
 ```
+
+Dev mode runs the harness scripts directly (no package); a clone holding a
+`fabric.yaml` doubles as its own fabric.
 
 ### Keeping up to date
 
@@ -173,7 +192,7 @@ wf hook install --extract-claims   # doc-drift commits auto-capture + auto-inges
 | Python | 3.11+ (uv installs its own) |
 | git | any recent version |
 | LLM endpoint | anything OpenAI-compatible — Ollama (`curl -fsSL https://ollama.com/install.sh \| sh`) is the zero-config default; see [Configuration](./configuration) for OpenAI/OpenRouter/etc. |
-| On-device models (optional) | `pip install -e ".[local]"` — GGUF anywhere, MLX on Apple Silicon |
+| On-device models (optional) | dev mode: `pip install -e ".[local]"`; packaged tool: `uv tool install --reinstall wiki-fabric --with laya` (upstream laya covers GGUF/CPU and Apple via torch) — see [Integrations](./integrations#setting-up-the-local-laya-backend) for the judgment tier |
 | **Git hooks** | **required for the freshness guarantee** — `wf hook install` per project (drift-gated: unchanged docs cost 0 tokens; LLM only with `--extract-claims`) |
 | Platform | macOS / Linux (Windows untested; git hooks are POSIX-verified only) |
 
