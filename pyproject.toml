@@ -24,6 +24,11 @@ wf = "wiki_fabric.cli:main"
 # #117: the fabric's core surface as MCP tools (the `mcp` extra)
 wf-mcp = "wiki_fabric.mcp_server:main"
 
+[project.urls]
+Homepage = "https://hybridindie.github.io/wiki-fabric/"
+Repository = "https://github.com/hybridindie/wiki-fabric"
+Issues = "https://github.com/hybridindie/wiki-fabric/issues"
+
 [project.optional-dependencies]
 # #117: the MCP server extra (same shape as graphify's mcp extra).
 mcp = ["mcp>=2,<3"]
