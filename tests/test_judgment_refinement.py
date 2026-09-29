@@ -263,6 +263,13 @@ class TestJudgmentAutoWiring:
         # patch the tier-selection source: main imports judgment.is_judgment_active
         import judgment as J
         monkeypatch.setattr(J, "is_judgment_active", lambda *a, **k: active)
+        import sys as _sys
+        for _m in list(_sys.modules):
+            if _m.endswith("judgment") and _m != "judgment":
+                monkeypatch.setattr(_sys.modules[_m], "is_judgment_active",
+                                    lambda *a, **k: active, raising=False)
+        monkeypatch.setattr(J, "judgment_route", lambda *a, **k: "local")
+        monkeypatch.setattr(J, "cloud_key_ready", lambda *a, **k: True)
         def fake_judged(events, mp_n, threshold=None):
             called["judged"] = True
             return {}

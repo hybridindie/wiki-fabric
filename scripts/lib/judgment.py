@@ -87,9 +87,10 @@ def judgment_route(config=None):
 
 def _typesafe_endpoint():
     """TypeSafe Jev endpoint + key. Resolution order (key):
-    1. TYPESAFE_API_KEY env var
-    2. integrations.judgment.api_key in fabric.yaml (gitignored file — same
-       trust model as llm.api_key)
+    1. TYPESAFE_API_KEY env var / secrets.env (machine-local, gitignored;
+       loaded into env at config load — real env wins)
+    2. integrations.judgment.api_key in fabric.yaml (legacy literal, still
+       read; preferred home is secrets.env)
     Endpoint overridable for self-hosted/compatible judges."""
     env_key = os.environ.get("TYPESAFE_API_KEY", "")
     if env_key:

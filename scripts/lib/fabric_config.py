@@ -234,6 +234,7 @@ def _find_config_file():
 
 
 _CONFIG_CACHE = None  # (fingerprint, config)
+_SECRETS_LOADED = False
 
 
 def _config_fingerprint():
@@ -269,6 +270,49 @@ def _merge_user_config(base, user_config):
     return base
 
 
+def load_secrets_env(fabric_root=None, _force=False):
+    """Load machine-local secrets from <fabric root>/secrets.env (KEY=VALUE)
+    into os.environ — real env vars win, so shell exports override the file.
+    Idempotent per process; file optional. This is where API keys live:
+    fabric.yaml stays shareable (references only), secrets.env is gitignored."""
+    global _SECRETS_LOADED
+    if _SECRETS_LOADED and not _force:
+        return
+    _SECRETS_LOADED = True
+    from pathlib import Path as _P
+    root = _find_config_file()
+    candidates = []
+    if root:
+        root = _P(root)
+        fdir = root.parent                             # fabric dir (vault)
+        candidates += [fdir]                           # vault/fabric dir itself
+        candidates += [fdir / "corpus"]                # corpus subdir (this repo's layout)
+        candidates += [fdir.parent]                    # harness sibling
+    candidates += [_P.home() / ".local" / "share" / "wiki-fabric"]  # install dir
+    candidates = [_P(c) for c in candidates]
+    secrets_path = None
+    for cand in candidates:
+        for name in ("secrets.env", "config.env"):
+            c = cand / name
+            if c.exists():
+                secrets_path = c
+                break
+        if secrets_path:
+            break
+    if not secrets_path:
+        return
+    import re as _re
+    for line in secrets_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, _, v = line.partition("=")
+        k, v = k.strip(), v.strip().strip('"').strip("'")
+        if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", k):
+            continue
+        os.environ.setdefault(k, v)   # real env wins
+
+
 def get_config():
     """Load fabric.yaml, merged with defaults. Returns dict.
 
@@ -277,6 +321,7 @@ def get_config():
     once instead of on every call. Call get_config.invalidate() (or flip an
     env var) when you need a guaranteed re-read."""
     global _CONFIG_CACHE
+    load_secrets_env()
     fp = _config_fingerprint()
     if _CONFIG_CACHE is not None and _CONFIG_CACHE[0] == fp:
         return _CONFIG_CACHE[1]
