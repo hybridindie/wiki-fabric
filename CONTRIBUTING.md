@@ -79,7 +79,7 @@ cp -r evaluations/fixtures/source-a.md evidence/_inbox/
 # Score per evaluations/rubric.md
 ```
 
-### 3. Promote a Pattern
+### 4. Promote a Pattern
 
 ```bash
 # 1. Run promote skill (clusters experience-events → dossiers)
@@ -94,7 +94,7 @@ cp -r evaluations/fixtures/source-a.md evidence/_inbox/
 # 3. On approval: write patterns/<slug>.md, update indexes, lint, commit
 ```
 
-### 3. Add a Skill
+### 5. Add a Skill
 
 ```bash
 mkdir -p .opencode/skills/<skill-name>
@@ -108,6 +108,40 @@ mkdir -p .opencode/skills/<skill-name>
 ```
 
 ---
+
+## Releasing (PyPI)
+
+The package is `wiki-fabric`; the harness tree ships as package data
+(`prep-package.py` copies scripts/system/templates/schemas/references/evaluations
+into `src/wiki_fabric/_harness/` before build).
+
+```bash
+uv venv && uv pip install -r pyproject.toml -e .
+python3 scripts/pkg/prep-package.py          # sync _harness (117+ files)
+uv run pytest tests/ -m "not live" -q        # full suite
+bash scripts/smoke-test.sh                   # E2E in a throwaway fabric
+python3 -m build                             # sdist + wheel
+uv tool install wiki-fabric --from dist/*.whl --force   # install the artifact
+wf version && wf status                      # sanity the install
+```
+
+Then release:
+
+1. Bump `version` in `pyproject.toml` (single source; `wiki_fabric.__version__`
+   reads importlib.metadata, with a literal fallback for dev checkouts — keep
+   both in sync when bumping).
+2. Commit, tag, push: `git tag v0.3.0 && git push origin v0.3.0`
+3. The tag triggers `.github/workflows/publish.yml` — builds, smoke-tests the
+   wheel, publishes via PyPI trusted publisher (OIDC; one-time setup on
+   pypi.org: add a pending publisher for this repo+workflow, environment `pypi`).
+4. Verify: `uv tool install wiki-fabric --upgrade` from a clean machine, run
+   `wf version` (matches the tag) and one command end-to-end.
+
+**What ships vs stays repo-only:** the wheel carries `wiki_fabric/` +
+`_harness/**` (scripts, system, templates, schemas, references, evaluations,
+global/computations, okf-base.yaml, fabric.yaml.example, AGENTS.md, index.md).
+Repo-only: docs/, tests/, scripts/pkg/, .github/, and personal config
+(gitignored — fabric.yaml, opencode.json, overlays with identity).
 
 ## Code Style
 

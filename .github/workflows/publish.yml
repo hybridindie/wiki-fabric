@@ -1,0 +1,70 @@
+name: Publish to PyPI
+
+# Release flow: push a tag v* → build sdist+wheel → publish via trusted
+# publisher (OIDC — no token secret needed; configure once on PyPI:
+# pypi.org → project wiki-fabric → publishing → GitHub Actions, environment
+# `pypi`, owner hybridindie, repo wiki-fabric, workflow publish.yml).
+#
+# Prereqs (run before tagging):
+#   python3 scripts/pkg/prep-package.py
+#   python3 -m build
+#   uv run pytest tests/ -m "not live" -q
+#   bash scripts/smoke-test.sh
+
+'on':
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Deps
+        run: uv pip install . build
+
+      - name: Prep harness tree
+        run: python3 scripts/pkg/prep-package.py
+
+      - name: Build sdist + wheel
+        run: python3 -m build
+
+      - name: Smoke the wheel
+        run: |
+          uv venv /tmp/wf-wheel && uv pip install --python /tmp/wf-wheel/bin/python dist/*.whl
+          /tmp/wf-wheel/bin/wf version
+          /tmp/wf-wheel/bin/wf lint --help >/dev/null && echo "wheel CLI ok"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi            # PyPI trusted-publisher environment name
+    permissions:
+      id-token: write             # OIDC — no API token in secrets
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1

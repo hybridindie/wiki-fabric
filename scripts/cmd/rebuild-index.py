@@ -36,8 +36,14 @@ def _default_root():
       its atoms live under corpus/).
     --root / WIKI_FABRIC_ROOT still override in main()."""
     own = (Path(__file__).resolve().parent).parent.parent  # scripts/cmd -> scripts -> fabric root
+    # Isolated-fabric heuristic (eval-stability copies the script into a flat
+    # temp fabric): content dirs at the root AND no corpus/ subdir. The harness
+    # repo itself carries a patterns/ skeleton + corpus/, so the presence of
+    # corpus/ is the discriminating signal — never index the harness root
+    # (that would write the catalog outside the corpus).
     if (own / "patterns").is_dir() or (own / "evidence").is_dir():
-        return own  # isolated fabric (content at its root)
+        if not (own / "corpus").is_dir():
+            return own  # isolated fabric (content at its root)
     return CORPUS_ROOT
 
 

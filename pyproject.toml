@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wiki-fabric"
-version = "0.2.0"
+version = "0.3.0"
 description = "Evidence-first knowledge base that compounds across projects — one fabric, many project namespaces"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -18,8 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-# Phase-1 (#118): the packaged bash orchestrator is the behavior source; the
-# console script locates and runs it. Phase 2 migrates verbs into python.
+# Phase 2 (#118): pure-python dispatch — verbs map to shipped scripts.
 wf = "wiki_fabric.cli:main"
 # #117: the fabric's core surface as MCP tools (the `mcp` extra)
 wf-mcp = "wiki_fabric.mcp_server:main"
