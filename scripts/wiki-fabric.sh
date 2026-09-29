@@ -264,15 +264,23 @@ ensure_fabric_yaml() {
         ok "Created fabric.yaml (owner: ${owner})"
         warn "Edit ${config_file} to add your repos"
     else
-        # Minimal config
-        cat > "${config_file}" << EOF
+        # The ONE template (fabric_config.DEFAULT_TEMPLATE, #153) — the old
+        # inline copy omitted compiler_model and tripped the G4 gate.
+        local tmpl_sh
+        tmpl_sh="$(dirname "${BASH_SOURCE[0]}")/render_template.py"
+        if [[ -f "${tmpl_sh}" ]] && command -v python3 >/dev/null 2>&1; then
+            python3 "${tmpl_sh}" owner="${owner}" ${enable_graphify:+--graphify} > "${config_file}"
+        else
+            cat > "${config_file}" << EOF
 owner: ${owner}
 llm:
   base_url: http://localhost:11434/v1
   api_key: ollama
   model: qwen2.5-coder:7b
+  compiler_model: deepseek-v4.1-flash:cloud
 repos: {}
 EOF
+        fi
         ok "Created minimal fabric.yaml (owner: ${owner})"
     fi
 

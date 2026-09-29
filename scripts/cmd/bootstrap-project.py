@@ -163,8 +163,8 @@ def register_in_fabric_yaml(project_slug, project_root, owner="", args=None):
     entry["graph_dir"] = graph_dir
     repos[project_slug] = entry
 
-    from wf_common import dump_frontmatter
-    config_path.write_text(dump_frontmatter(config))
+    from fabric_config import save_config
+    save_config(config, path=config_path)
     print(f"Registered {project_slug} in fabric.yaml (path: {rel_path})")
 
 
@@ -324,12 +324,13 @@ def _collect_config(args, env):
     if not args.non_interactive and (not fabric_yaml_path.exists() or owner == "you"):
         new_owner = prompt_with_default("Your name (for promotion dossiers)", git_name or "you")
         if new_owner != owner:
-            # Update fabric.yaml
+            # Update fabric.yaml (save_config invalidates the config cache, #153)
             try:
+                from fabric_config import save_config
                 import yaml as yaml_mod
                 existing_yaml = yaml_mod.safe_load(fabric_yaml_path.read_text()) if fabric_yaml_path.exists() else {}
                 existing_yaml["owner"] = new_owner
-                fabric_yaml_path.write_text(yaml_mod.dump(existing_yaml, default_flow_style=False, sort_keys=False))
+                save_config(existing_yaml, path=fabric_yaml_path)
                 print(f"  Updated fabric.yaml owner → {new_owner}")
             except Exception:
                 pass
@@ -417,13 +418,14 @@ def _execute_bootstrap(args, project_root_str, project_name, project_slug, domai
         _compiler = input("    compiler model [deepseek-v4.1-flash:cloud]: ").strip() \
             or "deepseek-v4.1-flash:cloud"
         try:
+            from fabric_config import save_config
             import yaml as yaml_mod
             _cfg = yaml_mod.safe_load(fabric_yaml_path.read_text()) if fabric_yaml_path.exists() else {}
             _cfg.setdefault("llm", {})["compiler_model"] = _compiler
             local_model = input("    local model id (blank to skip): ").strip()
             if local_model:
                 _cfg["llm"]["local_model"] = local_model
-            fabric_yaml_path.write_text(yaml_mod.dump(_cfg, default_flow_style=False, sort_keys=False))
+            save_config(_cfg, path=fabric_yaml_path)
             print(f"  Updated fabric.yaml llm → compiler {_compiler}")
         except Exception as _e:
             print(f"  warn: could not write model to fabric.yaml: {_e}", file=sys.stderr)
@@ -686,8 +688,8 @@ WIKI_LLM_MODEL={config["llm"]["model"]}
                 _rcfg["synthesize"] = "local"
                 _repos[project_slug] = _rcfg
                 _rc["repos"] = _repos
-                from wf_common import dump_frontmatter as _dump
-                _routing_cfg.write_text(_dump(_rc), encoding="utf-8")
+                from fabric_config import save_config
+                save_config(_rc, path=_routing_cfg)
                 print(f"  ✓ extract + synthesize routed local for {project_slug}")
             except Exception as e:
                 print(f"  (routing write failed: {e})")

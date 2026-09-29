@@ -357,6 +357,62 @@ def resolve_repo_path(config, repo_name):
     return (FABRIC_ROOT / p).resolve()
 
 
+# === Config template + writes =================================================
+# #153: fresh-install shapes diverged (bash fallback, skeleton.py, configure,
+# fabric.yaml.example) and fabric writes bypassed get_config's memoization —
+# the bash shape omitted compiler_model, tripping the G4 gate on promotion;
+# post-write reads served stale cache. One template + one saver.
+
+DEFAULT_TEMPLATE = """\
+owner: {owner}
+llm:
+  base_url: http://localhost:11434/v1
+  api_key: ollama
+  model: qwen2.5-coder:7b
+  compiler_model: deepseek-v4.1-flash:cloud
+
+repos: {{}}
+
+domains:
+  agent-systems:
+    signals: [agent, mcp, fastmcp, opencode, claude]
+  web-systems:
+    signals: [fastapi, flask, react, nextjs, supabase, postgresql]
+{extra}
+"""
+
+GRAPHIFY_EXTRA = """\
+integrations:
+  graphify:
+    enabled: true
+    graph_dir: graphify-out
+"""
+
+
+def render_config_template(owner="you", with_graphify=False, extra=""):
+    """A fresh fabric.yaml from the ONE template (#153). `extra` carries
+    caller-specific blocks (routing notes, integrations)."""
+    blocks = list(extra or "")
+    if with_graphify and "integrations:" not in (extra or ""):
+        blocks.insert(0, GRAPHIFY_EXTRA)
+    return DEFAULT_TEMPLATE.format(owner=owner, extra="\n".join(b for b in blocks if b))
+
+
+def save_config(config, path=None):
+    """Write fabric.yaml and invalidate the memoized get_config (#153: four
+    bootstrap dump sites + configure bypassed this and served stale data for
+    the rest of the process). One dump convention: wf_common.dump_frontmatter."""
+    from wf_common import dump_frontmatter
+    target = Path(path) if path else _find_config_file() or (CORPUS_ROOT / CONFIG_FILENAME)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    header = "# Wiki Fabric configuration — machine-local; edit freely\n" \
+             "# keys: <fabric>/secrets.env (gitignored), real env vars win\n"
+    target.write_text(header + dump_frontmatter(config), encoding="utf-8")
+    global _CONFIG_CACHE
+    _CONFIG_CACHE = None
+    return target
+
+
 def get_all_repo_names(config):
     """Return list of configured repo names (explicit + discovered)."""
     merged = get_discovered_repos(config)
