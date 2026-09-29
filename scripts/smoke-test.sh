@@ -50,7 +50,7 @@ if [[ -x "${FABRIC}/.venv/bin/python" ]]; then
     PY="${FABRIC}/.venv/bin/python"
     pass "fabric venv present: ${PY}"
 elif command -v uv &>/dev/null; then
-    (cd "${FABRIC}" && uv venv --quiet && uv pip install -q -r requirements.txt --python .venv/bin/python) || true
+    (cd "${FABRIC}" && uv venv --quiet && uv pip install -q -r pyproject.toml --python .venv/bin/python) || true
     [[ -x "${FABRIC}/.venv/bin/python" ]] && PY="${FABRIC}/.venv/bin/python" || PY="python3"
 else
     PY="python3"

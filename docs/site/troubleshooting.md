@@ -28,12 +28,12 @@ export PATH="$HOME/.local/bin:$PATH"   # add to .zshrc / .bashrc
 (status, query, context, lint) work; LLM-dependent commands need deps:
 
 ```bash
-pip install -r requirements.txt   # pyyaml, openai, anthropic
+pip install pyyaml openai anthropic   # core deps (pyproject.toml is the source)
 ```
 
 ### Tests fail with `ModuleNotFoundError: huggingface_hub`
 
-The fast venv (`requirements.txt`) doesn't include model-backend deps by
+The fast venv (core deps from `pyproject.toml`) doesn't include model-backend deps by
 design. The ensure/download tests skip automatically. To run them:
 
 ```bash

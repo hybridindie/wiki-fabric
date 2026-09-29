@@ -100,7 +100,7 @@ integrations:
     enabled: false                 # true → call-graph staleness, claim
     graph_dir: graphify-out        #        enrichment, query graph expansion
   embeddings:
-    enabled: false                 # planned: semantic re-ranking of retrieval
+    enabled: false                 # semantic re-rank boost (off by default; shipped)
     model: all-MiniLM-L6-v2
 
 # ─── Domain taxonomy ────────────────────────────────────────────────────────
@@ -336,7 +336,7 @@ integrations:
     enabled: true        # call-graph staleness, claim enrichment, graph expansion
     graph_dir: graphify-out
   embeddings:
-    enabled: false       # semantic re-ranking (planned)
+    enabled: false       # semantic re-rank boost (shipped; off by default)
     model: all-MiniLM-L6-v2
   judgment:
     enabled: false       # decision-model judging for eval gates (Jev / Laya)

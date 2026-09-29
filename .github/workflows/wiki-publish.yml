@@ -44,7 +44,7 @@ jobs:
       - name: Export wiki (deterministic)
         run: |
           uv venv
-          uv pip install -r requirements.txt pyyaml
+          uv pip install ./
           uv run python scripts/cmd/export-wiki.py --deep-dives --mode mechanical
 
       - name: No-op gate (sha256 manifest)

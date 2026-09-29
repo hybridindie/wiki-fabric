@@ -67,8 +67,8 @@ another spot), creates the **fabric** (your content
 the harness, and symlinks `wf` into `~/.local/bin/`. Everything Python runs
 inside that venv — no system pip pollution, no version drift. If uv can't be
 installed, `wf` falls back to plain `python3` (core CLI works; LLM features
-need the one-time `pip install -r requirements.txt` in the harness venv).
-`wf update` re-syncs deps when `requirements.txt` changes.
+need a one-time `pip install pyyaml openai anthropic` (or any uv install).
+`wf update` re-syncs deps from `pyproject.toml` when it changes.
 
 **Harness vs fabric:** the harness clone never holds your knowledge — it's a
 git clone of this public repo, refreshed by `wf update` (git pull). Your
@@ -101,7 +101,7 @@ and on Apple Silicon optionally `--with "~/path/to/laya-as-judge[mlx]"`
 ```bash
 git clone https://github.com/hybridindie/wiki-fabric wiki-fabric
 cd wiki-fabric
-uv venv && uv pip install -r requirements.txt
+uv venv && uv pip install -r pyproject.toml
 mkdir -p ~/.local/bin
 ln -sf "$PWD/scripts/wiki-fabric.sh" ~/.local/bin/wf
 wf status

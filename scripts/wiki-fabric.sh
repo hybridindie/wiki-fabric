@@ -81,14 +81,15 @@ sync_deps() {
             uv venv --quiet 2>/dev/null
         fi
         if [[ -d .venv ]] && command -v uv &>/dev/null; then
-            uv pip install -q -r requirements.txt --python .venv/bin/python && \
+            uv pip install -q -r pyproject.toml --python .venv/bin/python && \
                 { ok "Python dependencies synced (uv)"; return 0; }
         fi
         # Fallback: plain pip into the venv or user site
         if [[ -x .venv/bin/pip ]]; then
-            .venv/bin/pip install -q -r requirements.txt && { ok "Python dependencies synced (pip)"; return 0; }
+            .venv/bin/pip install -q -r pyproject.toml && { ok "Python dependencies synced (pip)"; return 0; }
         fi
-        python3 -m pip install -q -r requirements.txt && ok "Python dependencies synced (pip)" || \
+        # last resort: core deps only (pyproject extras/tools not resolved by bare pip -r)
+        python3 -m pip install pyyaml openai anthropic && ok "Python dependencies synced (pip, core)" || \
             warn "Could not install python deps — LLM features may be unavailable (core CLI still works)"
     ) || true
 }
@@ -745,7 +746,7 @@ EOF
     fi
 
     # Sync python deps (in case requirements changed)
-    if [[ -f "requirements.txt" ]]; then
+    if [[ -f "pyproject.toml" ]]; then
         sync_deps "${fabric_dir}"
     fi
 

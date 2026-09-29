@@ -21,7 +21,7 @@ jobs:
     - name: Capture doc drift (sha256-gated, no LLM)
       run: 'uv venv
 
-        uv pip install -r requirements.txt pyyaml
+        uv pip install ./
 
         # capture without --extract-claims: deterministic, free; claims
 

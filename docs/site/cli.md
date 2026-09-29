@@ -13,7 +13,7 @@ Every `wf` command, every page type, and the module layout of the harness. For c
 
 ## Note Types
 
-Every page in the fabric is one of twelve types. The type drives what lint
+Every page in the fabric is one of 24 types (VALID_TYPES in lint.py — the corpus has grown; the lint code is the source of truth). The type drives what lint
 demands of it and who can change its status — that's how a claim and a pattern
 can have different trust rules. The ones you'll touch daily are `claim`,
 `experience-event`, `pattern`, and `decision`.
