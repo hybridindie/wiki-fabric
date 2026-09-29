@@ -148,6 +148,9 @@ def _load_policy_profile(name="default-coding-agent"):
         return None
 
 
+args_judge_borderline = False  # --judge-borderline in main() (#29 item 4)
+
+
 def select_context(pages, task, paths, project, today, max_items=20):
     """Deterministic selection: project > domain > global, each with a reason.
 
@@ -331,11 +334,73 @@ def select_context(pages, task, paths, project, today, max_items=20):
             item["title"] = pg["fm"]["title"]
         selected.append(item)
     if len(scored) > max_items:
+        # Borderline judged re-rank (#29 item 4): when the judgment tier is
+        # active, candidates just past the --max cut (within 35% of the cut
+        # score) get one noul relevance judgment each — cheap, per-item,
+        # recorded. Judged-relevant items swap into 'selected' (max +2);
+        # everything else keeps the deterministic decision. Never fatal.
+        promoted_stems = set()
+        # borderline = same priority tier as the last selected item (the cut
+        # is tier-ordered, so same-tier = genuinely borderline inclusion)
+        if scored:
+            cut_tier = scored[max_items - 1]["priority"]
+            borderline = [i for i, s in enumerate(scored[max_items:])
+                          if s["priority"] == cut_tier][:4]
+        else:
+            borderline = []
+        swapped = 0
+        if scored and borderline and args_judge_borderline:
+            try:
+                from judgment import noul, is_judgment_active
+                if is_judgment_active():
+                    promoted_ids = []
+                    for i in borderline:
+                        s = scored[i]
+                        if swapped >= 2:
+                            break
+                        p = noul("Is this artifact relevant to the stated task?",
+                                 (f"TASK: {task}\n\nARTIFACT: "
+                                  f"{s['pg']['path']}\n"
+                                  f"{(s['pg'].get('fm') or {}).get('statement') or (s['pg'].get('fm') or {}).get('problem') or ''}"))
+                        excluded.append({"stem": s["pg"]["stem"], "path": s["pg"]["posix"],
+                                         "reason": f"beyond --max {max_items}"
+                                                   + (f" — judged-relevant, promoted"
+                                                      if p >= 0.6 else
+                                                      f" (judged: p={p:.2f}, not promoted)")})
+                        if p >= 0.6:
+                            s["judged_p"] = p
+                            selected.append(_judged_item(s, "judged-relevant", task))
+                            swapped += 1
+                            promoted_stems.add(s["pg"]["stem"])
+            except Exception:
+                pass  # tier unavailable → deterministic boundary stands
         for s in scored[max_items:]:
+            if s["pg"]["stem"] in promoted_stems:
+                continue  # judged-relevant item was promoted, not excluded
             excluded.append({"stem": s["pg"]["stem"], "path": s["pg"]["posix"],
                              "reason": f"beyond --max {max_items}"})
 
     return selected, excluded
+
+
+def _judged_item(s, reason, task):
+    """Item dict for a judged-promoted borderline candidate — full shape to
+    match the selected-manifest contract (id/stem/path/type/scope/reason/
+    priority + judged metadata for the receipt)."""
+    pg = s["pg"]
+    fm = pg.get("fm") or {}
+    item = {
+        "id": str(fm.get("id") or pg["stem"]),
+        "stem": pg["stem"],
+        "path": pg.get("posix", ""),
+        "type": pg["type"],
+        "scope": pg["scope"],
+        "reason": f"{reason} (judged p={s.get('judged_p', 0):.2f})",
+        "priority": s["priority"],
+    }
+    if fm.get("title"):
+        item["title"] = fm["title"]
+    return item
 
 
 def trust_tier(fm):
@@ -576,6 +641,7 @@ def write_receipt(manifest, project):
 
 
 def main():
+    global args_judge_borderline
     parser = argparse.ArgumentParser(description="Compile a task-specific context manifest (0 tokens)")
     parser.add_argument("--task", required=True, help="What the agent is about to do")
     parser.add_argument("--paths", action="append", default=[], help="Code path(s) the task touches (repeatable)")
@@ -584,7 +650,10 @@ def main():
     parser.add_argument("--max", type=int, default=20, help="Max selected artifacts (default 20)")
     parser.add_argument("--write-receipt", action="store_true",
                         help="Persist the manifest as a receipt (schema receipt-v1); path on stderr")
+    parser.add_argument("--judge-borderline", action="store_true",
+                        help="#29: judgment tier re-ranks borderline beyond--max candidates (requires integrations.judgment; per-item receipt record)")
     args = parser.parse_args()
+    args_judge_borderline = args.judge_borderline
 
     pages = load_corpus()
     selected, excluded = select_context(pages, args.task, args.paths, args.project, date.today(), args.max)

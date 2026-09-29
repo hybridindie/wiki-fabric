@@ -195,11 +195,25 @@ class TestCoreIsolation:
     """The judgment tier must never be imported by the 0-token core."""
 
     def test_context_query_lint_do_not_import_judgment(self):
-        for script in ("scripts/cmd/context.py", "scripts/cmd/query.py", "scripts/cmd/lint.py"):
+        """Core isolation: the 0-token core must not *depend* on the judgment
+        tier. eval-behavior sets the precedent: import is allowed only when
+        gated behind a CLI flag, and the default path never touches it. (#29
+        item 4 added a --judge-borderline gate to context.py under the same
+        rule.)"""
+        for script in ("scripts/cmd/query.py", "scripts/cmd/lint.py"):
             src = (REPO / script).read_text()
             assert "judgment" not in src.replace("integrations.judgment", ""), \
                 f"{script} must not depend on the judgment tier"
             assert "from judgment import" not in src
+        # context.py: gated flag pattern — import inside the flag branch
+        src = (REPO / "scripts/cmd/context.py").read_text()
+        assert "from judgment import" in src
+        assert "args_judge_borderline" in src
+        assert 'add_argument("--judge-borderline"' in src
+        # the import must sit INSIDE the gate (flag checked first)
+        gate_idx = src.find("args_judge_borderline")
+        import_idx = src.find("from judgment import")
+        assert 0 < gate_idx < import_idx, "--judge-borderline gate must precede the lazy import"
 
     def test_eval_default_mode_has_no_judgment_import(self):
         # zero-LLM mode (no --judge flag) must not touch the judgment module
