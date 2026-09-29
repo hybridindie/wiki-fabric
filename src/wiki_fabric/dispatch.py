@@ -179,6 +179,11 @@ def _rebuild_index(argv):
     return _run_script(find_fabric(), "scripts/cmd/rebuild-index.py", *argv)
 
 
+@verb("configure")
+def _configure(argv):
+    return _run_script(find_fabric(), "scripts/cmd/configure.py", *argv)
+
+
 @verb("apply-changeset")
 def _apply_changeset(argv):
     return _run_script(find_fabric(), "scripts/cmd/apply_changeset.py", *argv)

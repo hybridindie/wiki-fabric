@@ -551,9 +551,17 @@ cmd_install() {
     # Ensure fabric.yaml in the FABRIC dir (the harness clone keeps none)
     ensure_fabric_yaml "${fabric_dir}" "${with_graphify}"
 
-    # Interactive first-run configuration
+    # Interactive first-run configuration — python walkthrough (cross-platform;
+    # covers the full surface incl. secrets.env + integrations)
     if [[ -t 0 ]] && [[ ! -f "${fabric_dir}/fabric.yaml" || "${interactive}" == "true" ]]; then
-        interactive_setup "${fabric_dir}"
+        if command -v uv &>/dev/null; then
+            (cd "${install_dir}" && uv venv --quiet 2>/dev/null;              uv pip install -q -r pyproject.toml 2>/dev/null; \
+             "$FABRIC/scripts/../..//usr/bin/true" 2>/dev/null || true)
+            "${install_dir}/.venv/bin/python" "scripts/cmd/configure.py" "${fabric_dir}" \
+                || interactive_setup "${fabric_dir}"   # bash fallback if python walkthrough fails
+        else
+            interactive_setup "${fabric_dir}"
+        fi
     fi
 
     # Vault location: --vault <PATH> pins where the fabric's content root
@@ -1003,6 +1011,11 @@ case "${1:-help}" in
         fdir=$(find_fabric)
         run_script "${fdir}" "scripts/cmd/rebuild-index.py" "$@"
         ;;
+    configure)
+        shift
+        fdir=$(find_fabric)
+        run_script "${fdir}" "scripts/cmd/configure.py" "$@"
+        ;;
     apply-changeset)
         shift
         fdir=$(find_fabric)
@@ -1283,8 +1296,8 @@ case "${1:-help}" in
         echo "Usage: ${SCRIPT_NAME} <command> [options]"
         echo ""
         echo "Commands:"
-        echo "  install [--repo URL] [--dir DIR]  Install fabric from repo URL"
-        echo "          [--corpus GIT-URL] [--interactive]  Wire team corpus + force config walkthrough"
+        echo "  configure [fabric-root]           First-run config walkthrough (full fabric.yaml surface)"
+        echo "  install [--repo URL] [--dir DIR] [--corpus GIT-URL] [--interactive]  Install + force config walkthrough"
         echo "  update                            Pull latest + rebuild entity index"
         echo "  status                            Show fabric health + inventory"
         echo "  version                           Show wf version + CLI sync state"
