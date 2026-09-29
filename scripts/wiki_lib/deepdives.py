@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 
 
+from wf_common import claim_statement
 from wiki_lib.diagrams import _mermaid_valid, MERMAID_REPAIR_COMMENT
 
 _NOISE = ("test", "conftest", "fixture")
@@ -162,10 +163,9 @@ def _claims_footnote(slug, max_n=8):
     claims = sorted((CORPUS_ROOT / "evidence" / "claims").glob(f"claim-{slug}-*.md"))
     out = []
     for c in claims[:max_n]:
-        s = c.read_text(encoding="utf-8", errors="replace")
-        m = re.search(r'statement: "?([^\n]+)', s)
-        if m:
-            out.append(f"- [[{c.stem}]] — {m.group(1)[:110]}")
+        st = claim_statement(c)
+        if st:
+            out.append(f"- [[{c.stem}]] — {st[:110]}")
     return out
 
 

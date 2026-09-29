@@ -163,7 +163,8 @@ def register_in_fabric_yaml(project_slug, project_root, owner="", args=None):
     entry["graph_dir"] = graph_dir
     repos[project_slug] = entry
 
-    config_path.write_text(yaml.dump(config, default_flow_style=False, sort_keys=False))
+    from wf_common import dump_frontmatter
+    config_path.write_text(dump_frontmatter(config))
     print(f"Registered {project_slug} in fabric.yaml (path: {rel_path})")
 
 
@@ -685,7 +686,8 @@ WIKI_LLM_MODEL={config["llm"]["model"]}
                 _rcfg["synthesize"] = "local"
                 _repos[project_slug] = _rcfg
                 _rc["repos"] = _repos
-                _yaml.safe_dump(_rc, open(_routing_cfg, "w"), sort_keys=False, allow_unicode=True)
+                from wf_common import dump_frontmatter as _dump
+                _routing_cfg.write_text(_dump(_rc), encoding="utf-8")
                 print(f"  ✓ extract + synthesize routed local for {project_slug}")
             except Exception as e:
                 print(f"  (routing write failed: {e})")

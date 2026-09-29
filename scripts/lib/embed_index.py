@@ -24,14 +24,12 @@ MODEL_DEFAULT = "sentence-transformers/all-MiniLM-L6-v2"
 
 def _corpus_fingerprint(corpus_root):
     """Content hash over claim statement+id — the index's no-op gate."""
-    import re as _re
+    from wf_common import claim_statement
     h = hashlib.sha256()
     n = 0
     for p in sorted((Path(corpus_root) / "evidence" / "claims").glob("claim-*.md")):
-        t = p.read_text(encoding="utf-8", errors="replace")
-        m = _re.search(r'statement: "?([^\n]+)', t)
         h.update(p.stem.encode())
-        h.update((m.group(1) if m else "").encode())
+        h.update(claim_statement(p).encode())
         n += 1
     return h.hexdigest()[:16], n
 
@@ -61,13 +59,12 @@ def load_or_build(corpus_root, model_name=None, rebuild=False):
         except Exception:
             pass  # corrupt index → rebuild
     # build
+    from wf_common import claim_statement
     texts, ids = [], []
     for p in sorted((corpus_root / "evidence" / "claims").glob("claim-*.md")):
-        t = p.read_text(encoding="utf-8", errors="replace")
-        import re as _re
-        m = _re.search(r'statement: "?([^\n]+)', t)
-        if m and len(m.group(1)) > 20:
-            texts.append(m.group(1))
+        st = claim_statement(p)
+        if len(st) > 20:
+            texts.append(st)
             ids.append(p.stem)
     if len(texts) < 2:
         return None, {}, "unavailable (too few claims)"

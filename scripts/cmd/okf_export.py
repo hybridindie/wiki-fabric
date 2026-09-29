@@ -167,7 +167,8 @@ def export(out_dir, scope="all", dry_run=False, root=None):
                     fmd2["sources"] = sources
                     body2 = body2.rstrip() + "\n\n" + "\n".join(footnotes) + "\n"
 
-            fm_yaml = yaml.dump(fmd2, sort_keys=False, allow_unicode=True, width=10**6)
+            from wf_common import dump_frontmatter
+            fm_yaml = dump_frontmatter(fmd2)
             # Wikilinks inside frontmatter values resolve too (resource, source_refs)
             fm_yaml = LINK_RE.sub(lambda m: _fm_link(m, link_map), fm_yaml)
             dest = out / rel

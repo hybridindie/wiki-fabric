@@ -126,11 +126,11 @@ def claim_statements(claims_dir):
     """{normalized statement} set from claim files. Normalization is semantic-ish:
     unify ~ vs 'approximately', strip code-tick markup, collapse whitespace — so
     paraphrase-only differences don't mask real instability."""
+    from wf_common import claim_statement
     out = set()
     for f in claims_dir.glob("claim-*.md"):
-        m = re.search(r'statement:\s*"(.+)"', f.read_text(encoding="utf-8", errors="replace"))
-        if m:
-            s = m.group(1).strip().lower()
+        s = claim_statement(f).strip().lower()
+        if s:
             s = s.replace("~", "approximately ").replace("`", "")
             s = re.sub(r"\s+", " ", s).strip()
             out.add(s)

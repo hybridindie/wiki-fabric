@@ -133,6 +133,61 @@ def yaml_scalar(value):
     return f'"{out}"'
 
 
+_STATEMENT_KEY_RE = re.compile(r"^statement:[ \t]*(.*)$", re.MULTILINE)
+_FM_BLOCK_RE = re.compile(r"\A---\n(.*?)\n---", re.DOTALL)
+
+def claim_statement(text_or_path):
+    """The claim's statement, parsed from `statement:` frontmatter — the one
+    parser for all consumers (#154: 12 drifted regex copies, two incompatible
+    variants).
+
+    Tolerant of every shipped shape:
+      - double/single-quoted inline:  statement: "..."
+      - bare inline:                  statement: Alpaca Agents is ...
+      - block scalars:                statement: | / > (literal/folded)
+    Returns the statement unwrapped and right-trimmed; "" when absent. A
+    block scalar is read to the end of its indentation block; quoted/inline
+    forms end at the line. Accepts raw page text or a Path."""
+    from pathlib import Path as _Path
+    if isinstance(text_or_path, _Path) or hasattr(text_or_path, "read_text"):
+        try:
+            text = _Path(text_or_path).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return ""
+    else:
+        text = text_or_path or ""
+    # only the frontmatter block counts — a body line `statement: ...` is prose
+    mb = _FM_BLOCK_RE.match(text)
+    if not mb:
+        return ""
+    scope = mb.group(1)
+    m = _STATEMENT_KEY_RE.search(scope)
+    if not m:
+        return ""
+    rest = m.group(1).strip()
+    if rest in ("|", "|-", "|+", ">", ">-", ">+"):
+        # block scalar: the lines after the key line, up to the block's end
+        # (deeper-indent run inside the frontmatter scope)
+        after_key = scope[m.end():]
+        lines = after_key.splitlines()
+        block, indent = [], None
+        for line in lines:
+            if not line.strip():
+                block.append("")
+                continue
+            cur = len(line) - len(line.lstrip())
+            if indent is None:
+                indent = cur
+            if cur < indent:
+                break
+            block.append(line[indent:])
+        return "\n".join(block).strip("\n") if rest.startswith("|") else \
+            re.sub(r"\s+", " ", " ".join(b.strip() for b in block)).strip()
+    if len(rest) >= 2 and rest[0] == rest[-1] and rest[0] in ('"', "'"):
+        rest = rest[1:-1]
+    return rest.rstrip()
+
+
 def git_sh(*args, cwd=None, timeout=120):
     """Run a git command; return stdout or None on failure."""
     import subprocess
@@ -144,3 +199,21 @@ def git_sh(*args, cwd=None, timeout=120):
         return out.stdout if out.returncode == 0 else None
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return None
+
+
+def dump_frontmatter(fm):
+    """Serialize a frontmatter dict — ONE dump convention (#154: promote/
+    okf_export/repos-migrate each re-implemented it with different options;
+    only okf_export set width, so long scalars wrapped differently for the
+    same page). Keys preserved in insertion order, unicode kept, no line
+    wrapping (width=10**6), block style off."""
+    import yaml
+    return yaml.dump(fm, sort_keys=False, allow_unicode=True, width=10**6)
+
+
+def write_frontmatter(path, fm, body):
+    """Write a markdown page: `---` + frontmatter + `---` + body (#154 — the
+    one frontmatter writer; promote.py owned the only named one and okf_export/
+    repos-migrate/configure dumped inline with drifted options)."""
+    path = Path(path)
+    path.write_text(f"---\n{dump_frontmatter(fm)}---\n{body}", encoding="utf-8")

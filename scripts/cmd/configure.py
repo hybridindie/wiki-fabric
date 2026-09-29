@@ -289,10 +289,11 @@ def main():
         return 0
 
     import json
+    from wf_common import dump_frontmatter
     cfg, _secrets = run(fabric_root, args)
     yaml_text = "# Wiki Fabric configuration — machine-local; edit freely\n" \
                 "# keys: <fabric>/secrets.env (gitignored), real env vars win\n" \
-                + _yaml.safe_dump(cfg, sort_keys=False, default_flow_style=False)
+                + dump_frontmatter(cfg)
     (fabric_root / "fabric.yaml").write_text(yaml_text, encoding="utf-8")
     print(f"\nConfigured: {fabric_root / 'fabric.yaml'}")
     return 0
