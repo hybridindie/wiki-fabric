@@ -27,6 +27,8 @@ fi
 if [[ "${WHEEL_SMOKE_SKIP_BUILD:-0}" != "1" ]]; then
     echo "── prep + build"
     python3 scripts/pkg/prep-package.py || fail "prep-package.py failed"
+    # self-sufficiency: CI legs don't preinstall `build` (publish.yml does)
+    python3 -c "import build" 2>/dev/null || python3 -m pip install --quiet build || (command -v uv >/dev/null && uv pip install --quiet build) || fail "cannot install the `build` package"
     python3 -m build --outdir "${WORK}/dist" || fail "python -m build failed"
 else
     echo "── reuse dist/ wheels (skip build)"
