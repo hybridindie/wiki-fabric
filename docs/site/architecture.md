@@ -65,7 +65,7 @@ graph TB
     WIKI -->|"publish-wiki.py"| SITE["static site<br/>(Quartz, graph view)"]
 ```
 
-**Design rule:** every script runs standalone (`python3 scripts/x.py --help`);
+**Design rule:** every script runs standalone, but the `wf` CLI is the only user surface;
 shared logic lives in the `scripts/lib/` modules (`fabric_config`,
 `extract_backends`, `local_llm`, `wf_common`, `eval_core`, `judgment`,
 `embed_index`, `tombstones`) — import, don't copy (anti-loop rule 7

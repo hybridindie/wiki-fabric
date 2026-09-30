@@ -22,7 +22,7 @@ Integrations add capabilities on top of the core loop. They are declared in `fab
 | **graphify** | claims carry `code_symbols` + `graph_edges` (doc→code provenance); `graphify-bridge --diff` adds AST staleness detection after refactors; **`wf context` gains a `Code navigation` block** — task tokens → graph symbols → ranked file shortlist (0 tokens, deterministic); code-reachable claims surface first (query ranking boost + symbol-discovery tier); optional tree-sitter language packs extend extraction to additional languages | 0 tokens (AST + community detection) |
 | **obsidian** | the vault becomes **two-way**: `wf export wiki` harvests human edits to wiki notes as evidence *before* regenerating (an export manifest records path→hash at export time; human-changed notes land in `evidence/raw/<project>/obsidian/` with capture provenance); `--push` mirrors generated notes through the [Local REST API](https://github.com/coddingtonbear/obsidian-local-rest-api). Requires the Obsidian Local REST API plugin; key from the env var (or the plugin's data.json — gitignored) | 0 tokens |
 | **embeddings** | `wf query` gains a semantic re-rank boost (fusion with lexical+graph, top-40 candidates, ~5 ms/query offline). **Ships off by default** — see "when each integration earns its keep" below | local inference (fastembed ONNX, ~30 MB, no network) |
-| **judgment** | low-variance decision-model judging: promotion-mining near-miss refinement (automatic when enabled), `python3 scripts/eval/eval-behavior.py --judge` fixture scoring, and `wf verify-effects` — the independent second opinion on ingest effect classification (no more extractor-grades-own-homework) | ~$0.0004/call (cloud Jev) or on-device (local Laya) |
+| **judgment** | low-variance decision-model judging: promotion-mining near-miss refinement (automatic when enabled), `wf eval behavior --judge` fixture scoring, and `wf verify-effects` — the independent second opinion on ingest effect classification (no more extractor-grades-own-homework) | ~$0.0004/call (cloud Jev) or on-device (local Laya) |
 
 ## When each integration earns its keep
 
@@ -50,7 +50,7 @@ found 100% binary accuracy vs a human oracle with 92–913× lower variance than
 GPT-5.6/Claude LLM judges, at ~1/80th Claude's cost.
 
 **Where it may run (all live):**
-- `python3 scripts/eval/eval-behavior.py --judge` — the `--llm` probe of behavior evals becomes a
+- `wf eval behavior --judge` — the `--llm` probe of behavior evals becomes a
   `noul` judgment ("does the prompt deliver the binding decision?"), stable
   enough to gate CI.
 - `eval-stability.py --judge` — **G4-J**: model pairs the fuzzy gate failed

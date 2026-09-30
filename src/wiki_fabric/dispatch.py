@@ -136,6 +136,35 @@ def _ingest(argv): return _simple_script("scripts/cmd/ingest.py", argv)
 def _review(argv): return _simple_script("scripts/cmd/review.py", argv)
 @verb("freshness")
 def _freshness(argv): return _simple_script("scripts/cmd/freshness-job.py", argv)
+@verb("eval")
+def _eval(argv):
+    """Golden-corpus/behavior/stability/real-repo/PR-replay evaluations.
+    Usage: wf eval {behavior|stability|golden|real|pr} [flags...]"""
+    sub = argv[0] if argv else "behavior"
+    scripts = {"behavior": "scripts/eval/eval-behavior.py",
+               "stability": "scripts/eval/eval-stability.py",
+               "golden": "scripts/eval/eval.py",
+               "real": "scripts/eval/eval-real-repo.py",
+               "pr": "scripts/eval/eval-pr-replay.py"}
+    script = scripts.get(sub)
+    if script is None:
+        raise SystemExit("wf eval {behavior|stability|golden|real|pr}")
+    return _simple_script(script, argv[1:])
+
+
+@verb("graphify")
+def _graphify(argv):
+    """The graphify integration cycle. Usage: wf graphify {all|import|enrich|diff|status}
+    The sub-verb maps to the bridge's flag form (its argparse is flag-based
+    — no positional subcommand)."""
+    fdir = find_fabric()
+    script = "scripts/harness/graphify-bridge.py"
+    sub = argv[0] if argv else "status"
+    if sub.startswith("-"):              # passthrough: flags already given
+        return _run_script(fdir, script, *argv)
+    if sub not in ("all", "import", "enrich", "diff", "status"):
+        raise SystemExit("wf graphify {all|import|enrich|diff|status}")
+    return _run_script(fdir, script, f"--{sub}", *argv[1:])
 @verb("gate")
 def _gate(argv): return _simple_script("scripts/cmd/gate.py", argv)
 @verb("promote-domains")

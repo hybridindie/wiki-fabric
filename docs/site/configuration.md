@@ -372,7 +372,7 @@ integrations:
 ```
 
 The judgment tier (`integrations.judgment`) enables low-variance
-decision-model judging for evaluation surfaces — `python3 scripts/eval/eval-behavior.py --judge`.
+decision-model judging for evaluation surfaces — `wf eval behavior --judge`.
 It is **never** used by `wf query` or `lint` (0-token core);
 `wf context` gains it only behind the explicit `--judge-borderline` flag
 (a test enforces the gate). `route: cloud` uses the TypeSafe Jev
@@ -391,10 +391,10 @@ human review. See [Optional Integrations](./integrations#the-judgment-tier).
 ## Domains
 
 Domain taxonomy drives classification and context scoping. Start with the
-defaults. `python3 scripts/cmd/propose-domains.py` discovers new domains from
+defaults. `wf propose-domains` discovers new domains from
 evidence signals and writes them as **pending-review proposal dossiers**
 (`registry/domain-proposals/`); merge an approved one into the ontology with
-`python3 scripts/cmd/promote-domains.py --apply <dossier>`. `wf gate` surfaces
+`wf promote-domains --apply <dossier>`. `wf gate` surfaces
 pending proposals at session start:
 
 ```yaml

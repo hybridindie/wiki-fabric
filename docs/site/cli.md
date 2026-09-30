@@ -157,7 +157,7 @@ Environment: `WIKI_FABRIC_REPO` overrides the source repo URL.
 ## Scripts Reference
 
 Scripts live in four subdirectories of `scripts/` — `cmd/` (entrypoints), `eval/`,
-`harness/`, and shared `lib/`. Each runs standalone: `python3 scripts/cmd/<name>.py --help`.
+`harness/`, and shared `lib/`. Each runs standalone (`<name>.py --help`) — but the `wf` verbs are the user surface: `wf eval {behavior|stability|golden|real|pr}`, `wf graphify {all|import|enrich|diff|status}` wrap the eval/bridge scripts.
 
 ### `cmd/` — CLI commands
 

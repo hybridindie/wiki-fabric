@@ -15,7 +15,7 @@ agent harnesses can consume it without parsing prose:
 
 ```bash
 wf lint --format json            # errors/warnings with code + page + message, ok flag
-python3 scripts/cmd/rebuild-index.py # writes registry/catalog.json (catalog with ids, types, scopes, statuses)
+wf rebuild-index                  # writes registry/catalog.json (catalog with ids, types, scopes, statuses)
 ```
 
 The lint report codes are stable: `FRONTMATTER`, `BROKEN-LINK`, `SCOPE`,

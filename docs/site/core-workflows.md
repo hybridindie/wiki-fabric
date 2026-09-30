@@ -347,10 +347,10 @@ wf lint
 wf lint --format json
 
 # Run formal evaluation (golden corpus)
-WIKI_LLM_MODEL="qwen3.8:27b-mlx" python3 scripts/eval/eval.py
+WIKI_LLM_MODEL="qwen3.8:27b-mlx" wf eval golden
 
 # Discover new domains from evidence
-python3 scripts/cmd/propose-domains.py
+wf propose-domains
 
 # ONE health report (what status audits — now the bash CLI delegates here)
 wf status
@@ -369,9 +369,9 @@ wf gate
 
 # Graphify integration (optional, 0 token cost)
 graphify update                              # refresh each connected repo's graph (AST-only)
-python3 scripts/harness/graphify-bridge.py --all     # update → import → enrich → diff
-python3 scripts/harness/graphify-bridge.py --status  # dashboard
-python3 scripts/harness/graphify-bridge.py --diff    # staleness check
+wf graphify all                    # update → import → enrich → diff
+wf graphify status                 # dashboard
+wf graphify diff                   # staleness check
 ```
 
 Run the graphify refresh **after code refactors** (it's AST-only — a few
