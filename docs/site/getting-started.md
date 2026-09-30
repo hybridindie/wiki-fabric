@@ -153,7 +153,7 @@ wf review --auto-reverify            # clear the mechanical review debt (0 token
 wf freshness                         # pull the team cycle's refreshed evidence (or run it locally)
 wf export wiki                       # generate the human wiki (topics, projects, staleness)
 wf wiki-generate begin --project my-project   # writer/bookkeeper narrative generation
-wf publish                           # publish the wiki as a static site
+wf publish                           # Quartz static site → <vault>/site/public (serve or host it)
 wf mine chats my-project             # distill chat transcripts into patterns/anti-patterns
 ```
 

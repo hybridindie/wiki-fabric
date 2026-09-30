@@ -464,12 +464,42 @@ wf wiki-generate finish                        # refuses if any page lacks durab
 
 ## 9. Publish the wiki
 
+`wf publish` stages the wiki output into [Quartz v4](https://quartz.jzhao.xyz)
+(cloned at a **pinned release** for reproducible builds) and emits a static
+site — graph view, full-text search, backlinks — a *view* of the wiki, never
+the canonical form (`vault`/`corpus`/`wiki/` stays canonical):
+
 ```bash
-wf publish                     # Quartz v4 (pinned), static site with graph view + search
+wf publish                        # local: builds to <vault>/site/public
+wf publish --out /var/www/wiki    # any target dir
+wf publish --dry-run              # no npm, no clone
 ```
 
-No-op-clean: the export records a `content_hash`; unchanged wiki content
-produces a zero-diff run. See [Integrations › publish](./integrations).
+Measured (fresh sandbox fabric, 24-topic wiki): clone@v4.5.2 → npm ci →
+build ≈ under a minute; output `index.html` + per-topic pages + RSS
+(`index.xml`).
+
+Three consumers of the same site:
+
+| who | how |
+|-----|-----|
+| you | open `site/public/index.html` or `npx quartz serve` locally |
+| a host | copy `site/public/` to any static host (GitHub Pages, Netlify, a NAS) |
+| the corpus CI | the scaffolded `wiki-publish.yml` runs it daily and opens a **docs PR** when content changed (no-op clean: the export's `wiki-export-manifest.json` hash means an unchanged wiki commits nothing) |
+
+The chain of truths:
+
+```mermaid
+flowchart LR
+    CV["evidence/<br/>(claims w/ locators)"] -->|"wf export wiki<br/>(mechanical, 0 tokens)"| W["corpus/wiki/<br/>(canonical wiki)"]
+    W -->|"wf publish<br/>(staged view)"| S["site/public/<br/>(static HTML)"]
+    S -.->|"is a view of"| W
+    W -.->|"is a projection of"| CV
+```
+
+Editing `site/public/` by hand is the anti-pattern: publish regenerates it.
+Curate by editing **evidence** (claims, patterns) or the human vault layer —
+the views track.
 
 ### Slow-lane protection (maintenance)
 
