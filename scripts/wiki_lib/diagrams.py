@@ -5,21 +5,6 @@ import re
 MERMAID_REPAIR_COMMENT = "OPENWIKI-REPAIR"
 
 
-def _provenance_block(producer, generated_at):
-    return f"generated: {{ by: \"{producer}\", at: \"{generated_at}\" }}"
-
-
-def _claim_provenance(claim_path):
-    """Return {source, locator} for a claim's first source_ref, or {}."""
-    s = claim_path.read_text(encoding="utf-8", errors="replace")
-    src = re.search(r'source: "\[\[(src-[^\]]+)\]\]"', s)
-    loc = re.search(r'locator: "?([^\n"]+)', s)
-    return {
-        "source": src.group(1) if src else None,
-        "locator": loc.group(1) if loc else None,
-    }
-
-
 def _extract_mermaid_fences(text):
     """Find ```fence blocks. Returns list of {'start': line_no(0-based) of the
     opening fence, 'lang': str, 'body': str}. Markdown fences close with a bare

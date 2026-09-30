@@ -91,7 +91,7 @@ def run(fabric_root: Path, args):
             ["git", "config", "--global", "user.name"],
             capture_output=True, text=True).stdout.strip()
     except Exception:
-        pass
+        pass  # git identity absent → interactive prompt supplies owner
 
     print()
     print("════════════════════════════════════════════")

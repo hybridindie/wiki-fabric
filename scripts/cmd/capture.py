@@ -28,7 +28,7 @@ from datetime import date
 
 from fabric_config import get_config, get_ignores, is_ignored
 from fabric_config import CORPUS_ROOT, VAULT_ROOT
-from wf_common import parse_frontmatter
+from wf_common import parse_frontmatter, sha256_file
 from fabric_config import FABRIC_ROOT
 from fabric_config import CORPUS_ROOT
 
@@ -37,10 +37,6 @@ EVIDENCE_RAW = VAULT_ROOT / "evidence" / "raw"
 args_quiet = False
 
 
-def sha256(path):
-    h = hashlib.sha256()
-    h.update(Path(path).read_bytes())
-    return h.hexdigest()
 def match_globs(repo_path, globs):
     """Find files in repo_path matching the glob patterns."""
     matched = []
@@ -103,7 +99,7 @@ def capture_project(project_slug, repo_filter=None, dry_run=False):
                     }]
                     return process_sources(project_slug, source_repos, repo_filter, dry_run)
         except Exception:
-            pass
+            pass  # overlay unreadable → no source_repos entries → default globs below
 
     if not overlay_path:
         print(f"Error: no .wiki-overlay.md found for project '{project_slug}'", file=sys.stderr)

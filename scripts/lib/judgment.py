@@ -269,14 +269,14 @@ def _ask_cloud(q):
                  "Authorization": f"Bearer {key}"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:  # TIMEOUT_API tier
             out = _json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
         detail = ""
         try:
             detail = e.read().decode()[:200]
         except Exception:
-            pass
+            pass  # diagnostic read only — the raise below is the signal
         raise JudgmentUnavailable(f"cloud judge HTTP {e.code}: {detail}")
     except Exception as e:
         raise JudgmentUnavailable(f"cloud judge unreachable: {e}")

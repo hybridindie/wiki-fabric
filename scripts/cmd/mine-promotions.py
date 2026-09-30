@@ -75,7 +75,7 @@ def cluster_events_semantic(events, min_projects=2, model=None, threshold=0.7):
             embeddings.append(emb)
             valid_events.append(ev)
         except Exception:
-            continue
+            continue  # no embedding for this event → excluded from semantic run
     
     if len(valid_events) < 2:
         return {}
@@ -123,7 +123,7 @@ def _thread_graph():
         import thread_signals
         return thread_signals.build_graph(thread_signals.load_index())
     except Exception:
-        return ({}, {}, set())
+        return ({}, {}, set())  # thread index unavailable → keyword clustering only
 
 
 def _judged_context(ea, eb):
@@ -146,6 +146,7 @@ def _classify_with_threads(ev_a, ev_b, similarity, threshold):
         import thread_signals
         return thread_signals.classify_pair(ev_a, ev_b, graph, similarity, threshold)
     except Exception:
+        # thread graph unavailable → plain text-similarity verdict
         return (similarity >= threshold, "text" if similarity >= threshold else "")
 
 
@@ -164,18 +165,9 @@ def cluster_events_keyword(events, min_projects=2, _keyword_threshold=None):
         "crash": ["crash", "fail", "error", "exception", "abort"],
         "single-writer": ["single-threaded", "serial", "sequential", "mutex", "lock"],
     }
-    
-    def expand_keywords(text):
-        words = set(re.findall(r'\b[a-z]{3,}\b', text.lower()))
-        expanded = set(words)
-        for word in words:
-            for key, syns in domain_synonyms.items():
-                if key in word or word in key:
-                    expanded.update(syns)
-        expanded.update(words)
-        return expanded
-    
-    # Compute expanded keyword sets for each event
+
+    # Compute expanded keyword sets for each event (the dead nested
+    # expand_keywords() here duplicated this inline loop — #155 audit)
     event_keywords = []
     for ev in events:
         problem = ev.get("observed_problem", "").lower()
@@ -436,7 +428,7 @@ def _dossier_thread_citations(events):
         session_nodes = {str(n.get("session", "")).lower(): n
                          for n in index.get("nodes", []) if n.get("session")}
     except Exception:
-        return None
+        return None  # no thread index → no citations (dossier still valid)
     lines, seen = [], set()
     for ev in events:
         sid = str(ev.get("session") or "").strip()
@@ -763,7 +755,7 @@ def main():
                       "keyword clusters for this run")
                 use_judged = False
         except Exception:
-            pass
+            pass  # route check itself unavailable → try judged path, its own guards handle it
     if use_judged:
         print("Judgment tier: active — near-miss pairs will be refined by the decision model")
         clusters = cluster_events_judged(events, MIN_PROJECTS)

@@ -118,7 +118,7 @@ def find_vault_dir_for_fabric(fabric_dir):
             p = Path(str(vp)).expanduser()
             return p if p.is_absolute() else (fabric_dir / p).resolve()
     except Exception:
-        pass
+        pass  # no/invalid vault.path → the fabric root IS the vault (rule 3)
     return fabric_dir
 
 

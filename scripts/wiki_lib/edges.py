@@ -6,7 +6,7 @@ from pathlib import Path
 
 import fabric_config
 from fabric_config import get_config, get_all_repo_names, actor, get_vault_path
-from wiki_lib.generators import _staleness
+from wiki_lib.generators import _staleness, _claim_tier
 from wf_common import now_iso_utc
 
 TODAY = date.today()
@@ -108,13 +108,6 @@ def emit_citation_graph(topics, projects, dry_run=False):
     Legacy keys (topics/projects/claim_sources) are retained for back-compat.
     """
     import json
-
-    def _claim_tier(cp):
-        s = cp.read_text(encoding="utf-8", errors="replace")
-        ra = re.search(r"review_after: (\S+)", s)
-        sa = re.search(r"stale_after: (\S+)", s)
-        tier, _, _ = _staleness(ra.group(1) if ra else None, sa.group(1) if sa else None)
-        return {1: "current", 2: "due", 3: "stale"}[tier]
 
     claim_sources = {}
     for cp in sorted((fabric_config.CORPUS_ROOT / "evidence" / "claims").glob("claim-*.md")):

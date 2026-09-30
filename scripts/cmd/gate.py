@@ -91,7 +91,7 @@ def _recent_deliveries(limit=10):
             try:
                 data = _json.loads(rp.read_text(encoding="utf-8"))
             except Exception:
-                continue
+                continue  #continue  # torn receipt mid-write → not reportable this cycle
             rid = data.get("receipt_id") or rp.stem
             seen.setdefault(rid, {
                 "receipt_id": rid,

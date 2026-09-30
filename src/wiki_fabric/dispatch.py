@@ -18,6 +18,11 @@ from typing import Callable
 
 # --- script/asset resolution (dev tree or packaged _harness) --------------
 
+# Subprocess timeout tiers — mirror wf_common.TIMEOUT_* (packaged dispatch
+# must not import wf_common for constants; the values are pinned by the
+# dispatch-agreement tests).
+TIMEOUT_SCRIPT = 600
+
 _PACKAGED = Path(__file__).resolve().parent / "_harness"
 
 
@@ -28,29 +33,37 @@ def harness_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent
 
 
+def _paths_mod():
+    """Import the shipped paths.py resolution layer (dev tree or packaged
+    _harness). Bare `from paths import ...` only works when the harness lib
+    is already on sys.path (tests do this) — packaged wf must self-locate."""
+    lib = harness_root() / "scripts" / "lib"
+    if str(lib) not in sys.path:
+        sys.path.insert(0, str(lib))
+    import paths
+    return paths
+
+
 def find_fabric() -> Path | None:
     """Fabric root (content + config). Chain (paths.py #152, single truth):
       1. $WIKI_FABRIC_DIR  2. cwd walk (harness trees skipped)  3. dev
       sibling vault  4. XDG default. Returns None when no fabric exists
       (commands needing content fail cleanly)."""
-    from paths import (
-        env_fabric_root, walk_for_fabric, sibling_vault_of, xdg_fabric_root,
-    )
-    found = env_fabric_root() or walk_for_fabric(Path.cwd())
+    p = _paths_mod()
+    found = p.env_fabric_root() or p.walk_for_fabric(Path.cwd())
     if found:
         return found
     # dev sibling vault (anchored at THIS dispatcher's harness root — tests
     # and packaged mode monkeypatch harness_root())
-    found = sibling_vault_of(harness_root())
+    found = p.sibling_vault_of(harness_root())
     if found:
         return found.resolve()
-    return xdg_fabric_root()
+    return p.xdg_fabric_root()
 
 
 def corpus_root(fabric_dir: Path) -> Path:
     """CORPUS_ROOT resolution (delegates to paths.py, #152)."""
-    from paths import find_corpus_root
-    return find_corpus_root(fabric_dir)
+    return _paths_mod().find_corpus_root(fabric_dir)
 
 
 def _python(fabric_dir: Path | None) -> str:
@@ -63,7 +76,7 @@ def _python(fabric_dir: Path | None) -> str:
     return sys.executable
 
 
-def _run_script(fabric_dir: Path | None, rel: str, *args: str, timeout: int = 600) -> int:
+def _run_script(fabric_dir: Path | None, rel: str, *args: str, timeout: int = TIMEOUT_SCRIPT) -> int:
     """run_script() equivalent: run a shipped script with the right python,
     inheriting stdout/stderr (the tool UX is the script's UX)."""
     script = _harness(rel)
@@ -321,8 +334,7 @@ def _vault_dir(fabric_dir: Path) -> Path:
     """Vault for the status report — paths.py is the single resolver home
     (#152). Honors WIKI_FABRIC_VAULT (dispatch's copy silently ignored it)
     then fabric.yaml vault.path, then "the vault IS the fabric"."""
-    from paths import find_vault_dir_for_fabric
-    return find_vault_dir_for_fabric(fabric_dir)
+    return _paths_mod().find_vault_dir_for_fabric(fabric_dir)
 
 
 @verb("status")
@@ -382,9 +394,11 @@ def _status(argv):
                     else:
                         print(f"\033[1;33m⚠\033[0m  Local:  {local_model} (not downloaded — run: wf models ensure)")
                 except Exception:
-                    pass
-        except Exception:
-            pass
+                    pass  # local-model check is cosmetic — status must not break on it
+        except Exception as _e:
+            # status degrades to "not configured" rather than crashing (audit)
+            print(f"\033[1;33m⚠\033[0m  LLM:    config unreadable ({_e})")
+
 
     # Inventory
     croot = corpus_root(fdir)
@@ -466,7 +480,7 @@ def _integrations(argv):
         try:
             _run_script(fdir, "scripts/cmd/obsidian_status.py")
         except Exception:
-            pass
+            pass  # obsidian status detail is cosmetic — the ENABLED line already printed
     else:
         print("ℹ  obsidian: inactive")
         print("     enable: fabric.yaml integrations.obsidian.enabled: true (Local REST API plugin required)")

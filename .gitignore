@@ -55,9 +55,8 @@ venv/
 .okflint/
 
 # graphify self-graph artifacts (regenerated: graphify --update). Build output —
-# not tracked. A .gitkeep preserves the dir.
-graphify-out/*
-!graphify-out/.gitkeep
+# not tracked; graphify creates graphify-out/ on demand.
+graphify-out/
 docs/site/node_modules/
 docs/site/dist/
 projects/*/overlay.yml

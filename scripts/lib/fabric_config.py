@@ -49,22 +49,6 @@ from paths import (  # scripts/lib/paths.py — single resolver home (#152)
 HARNESS_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
-def _looks_like_fabric(d):
-    """A directory that can serve as the fabric root: holds fabric.yaml, or
-    content at its root, or the nested corpus layout. Single truth in
-    paths.py (#152) — this is a thin alias."""
-    from paths import is_fabric_dir
-    return is_fabric_dir(d)
-
-
-def _is_harness_tree(d):
-    """A harness checkout (the tool): has the runner + cmd scripts. Never a
-    fabric — its fabric.yaml is a dev convenience resolved by rule 3.
-    Single truth in paths.py (#152) — this is a thin alias."""
-    from paths import is_harness_tree
-    return is_harness_tree(d)
-
-
 def _resolve_fabric_root():
     """Where the fabric (content + config) lives.
 
@@ -322,8 +306,9 @@ def get_config():
         try:
             user_config = yaml.safe_load(config_file.read_text()) or {}
             config = _merge_user_config(config, user_config)
-        except Exception:
-            pass
+        except Exception as _e:
+            # a corrupt fabric.yaml must still yield DEFAULTS (never crash import)
+            print(f"warning: fabric.yaml unreadable, using defaults ({_e})", file=sys.stderr)
 
     # Env var overrides for LLM
     config["llm"]["base_url"] = os.environ.get("WIKI_LLM_BASE_URL", config["llm"]["base_url"])
@@ -442,7 +427,7 @@ def _overlay_fingerprint():
             st = overlay.stat()
             sig.append(f"{overlay}:{st.st_mtime_ns}")
     except OSError:
-        pass
+        pass  # vanished mid-scan → hash from what's readable (signature only)
     return hashlib.sha1("|".join(sig).encode()).hexdigest()
 
 
@@ -475,7 +460,7 @@ def get_discovered_repos(config):
                 continue
             fm = yaml.safe_load(m.group(1)) or {}
         except Exception:
-            continue
+            continue  # torn/partial overlay mid-write → not discoverable this cycle
         slug = str(fm.get("namespace") or "").strip()
         if not slug or slug in found:
             continue  # sibling name collision: first found wins; lint flags ambiguity
@@ -532,12 +517,12 @@ def detect_owner_fallback():
     try:
         import subprocess
         out = subprocess.run(["git", "config", "--global", "user.name"],
-                             capture_output=True, text=True, timeout=5)
+                             capture_output=True, text=True, timeout=10)  # probe tier
         val = out.stdout.strip()
         if out.returncode == 0 and val:
             return val
     except Exception:
-        pass
+        pass  # git absent/unconfigured → caller's sentinel (get_owner contract)
     return None
 
 
@@ -676,7 +661,7 @@ def ensure_local_model(model_id=None, assume_yes=False, config=None):
         try:
             is_tty = sys.stdin.isatty() and sys.stdout.isatty()
         except Exception:
-            pass
+            pass  # exotic stdio (IDE capture) → treat as non-interactive
         if not (assume_yes or is_tty):
             print(f"local model '{model_id}' not found locally; "
                   f"download with: wf models ensure (or --yes)", file=sys.stderr)

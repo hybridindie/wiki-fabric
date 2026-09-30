@@ -94,7 +94,7 @@ def scan_repo_tech_stack(repo_path, signal_lookup):
                 if domain:
                     signals[domain] += 1
         except Exception:
-            pass
+            pass  # single file's signals unreadable → contributes zero (count keeps going)
 
     # JS: package.json
     for f in repo_path.rglob("package.json"):
@@ -108,7 +108,7 @@ def scan_repo_tech_stack(repo_path, signal_lookup):
                 if domain:
                     signals[domain] += 1
         except Exception:
-            pass
+            pass  # same per-file tolerance as :97
 
     # Docker / k8s
     for pattern in ["docker-compose*.yml", "Dockerfile*", "k8s/**/*.yaml"]:

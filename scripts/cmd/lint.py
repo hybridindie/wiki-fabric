@@ -23,6 +23,7 @@ import hashlib
 from pathlib import Path
 
 from fabric_config import get_config, get_ignores, is_ignored
+from wf_common import sha256_file as sha256
 
 import sys
 import re
@@ -73,7 +74,7 @@ def parse_frontmatter(path, _cache=None):
             if key in _cache:
                 return _cache[key]
         except OSError:
-            pass
+            pass  # cache miss path → recompute below (cache is an optimization)
     text = path.read_text(encoding="utf-8", errors="replace")
     m = re.match(r"^---\n(.*?)\n---\n(.*)$", text, re.DOTALL)
     if not m:
@@ -99,7 +100,7 @@ def parse_frontmatter(path, _cache=None):
             st = path.stat()
             _cache[(str(path), st.st_mtime_ns, st.st_size)] = out
         except (OSError, NameError):
-            pass
+            pass  # stat failed mid-lint → don't cache (recompute next time)
     return out
 
 
@@ -117,12 +118,6 @@ def strip_code(body):
 
 def is_placeholder(target):
     return len(target) < 3 or "..." in target or any(c in target for c in "<>{}")
-
-
-def sha256(path):
-    h = hashlib.sha256()
-    h.update(Path(path).read_bytes())
-    return h.hexdigest()
 
 
 _GLOBAL_IGNORES = None
@@ -387,10 +382,6 @@ ACTOR_RE = re.compile(r"^(agent/[\w.@-]+/[\w.@:-]+|human:[\w.@-]+|process:[\w.@-
 # SkillOpt S4 slow-lane contract lives in scripts/lib/contracts.py (#151) —
 # single truth shared with the change-set apply gate + the miner.
 from contracts import PROTECTED_FIELDS, protected_fingerprint  # noqa: F401 (re-export)
-
-
-def _sys_exec():
-    return sys.executable
 
 
 def _fm_from_text(text):
@@ -915,11 +906,11 @@ def main():
     try:
         errors.extend(check_llm_config(get_config()))
     except Exception:
-        pass
+        pass  # pre-wired config missing → config checks skip, structural lint still runs
     try:
         errors.extend(check_ignore_config(get_config()))
     except Exception:
-        pass
+        pass  # same half-config tolerance as above
 
     # check sections (#124.3): each section a function on shared state
     state = LintState(vault, today, only_orphans=only_orphans)

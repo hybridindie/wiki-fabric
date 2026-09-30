@@ -44,7 +44,7 @@ try:
     from graphify_langpack_gdscript import install as _install_gd_lang_pack
     _install_gd_lang_pack()
 except ImportError:
-    pass
+    pass  # GDScript langpack optional — core graphify unaffected
 
 from wf_common import parse_frontmatter
 
@@ -343,7 +343,7 @@ def cmd_status():
 
     # Check if graphify CLI is available
     try:
-        subprocess.run(["graphify", "--version"], capture_output=True, timeout=5)
+        subprocess.run(["graphify", "--version"], capture_output=True, timeout=10)  # TIMEOUT_PROBE tier
         print(f"\n  graphify CLI: available")
     except (FileNotFoundError, subprocess.TimeoutExpired):
         print(f"\n  graphify CLI: NOT available")

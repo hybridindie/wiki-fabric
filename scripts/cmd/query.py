@@ -34,7 +34,7 @@ import argparse
 from pathlib import Path
 from datetime import date
 from collections import Counter
-from wf_common import parse_frontmatter, norm
+from wf_common import parse_frontmatter, norm, STOPWORDS, RETRIEVAL
 from fabric_config import FABRIC_ROOT
 from fabric_config import CORPUS_ROOT, VAULT_ROOT
 
@@ -52,10 +52,7 @@ def concept_match(query_norm, text_norm):
     text_words = set(norm(text_norm).split())
     if not query_words:
         return 0.0
-    stopwords = {"the", "a", "an", "is", "of", "to", "in", "and", "or", "for",
-                 "on", "with", "at", "by", "from", "that", "this", "it", "as",
-                 "be", "are", "was", "were", "what", "why", "how", "does", "do"}
-    content_words = query_words - stopwords
+    content_words = query_words - STOPWORDS
     if not content_words:
         return 0.0
     overlap = len(content_words & text_words) / len(content_words)
@@ -93,7 +90,7 @@ def graphify_active():
         from fabric_config import get_config, is_integration_active
         return is_integration_active(get_config(), "graphify")
     except Exception:
-        return False
+        return False  # config unavailable → feature off (gated-by-default contract)
 
 
 def graph_edge_symbols(pg):
@@ -146,7 +143,7 @@ def load_thread_index():
         import json as _json
         return _json.loads((VAULT_ROOT / "registry" / "threads.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return None
+        return None  # no/partial thread index → lineage section omitted
 
 
 _LINEAGE_QUERY_WORDS = {"where", "origin", "provenance", "discussed", "session",
@@ -218,7 +215,7 @@ def _embed_active():
         import importlib.util as _u
         return _u.find_spec("fastembed") is not None
     except Exception:
-        return False
+        return False  # config/module unavailable → embeddings off (opt-in)
 
 
 def embed_boost(scores, pages, query):
@@ -254,7 +251,7 @@ def embed_boost(scores, pages, query):
         sem.append(float(np.dot(np.asarray(qe), v) / denom))
     sem = np.array(sem, dtype=float)
     sem = (sem - sem.min()) / (sem.max() - sem.min() + 1e-9)
-    fused = 0.5 * lex + 0.5 * sem
+    fused = RETRIEVAL["fuse_lex"] * lex + RETRIEVAL["fuse_sem"] * sem
     order = np.argsort(-fused)
     reranked = [top[i] for i in order]
     reranked += scores[40:]
@@ -276,7 +273,7 @@ def graphify_boost(pg, q_tokens, q_words):
     hits = len(q_tokens & symbols)
     if not hits:
         return 0.0
-    return 0.15 * min(hits, 3)
+    return RETRIEVAL["graphboost_hit"] * min(hits, RETRIEVAL["graphboost_cap"])
 
 
 def score_pages(pages, query, query_type):
@@ -303,17 +300,13 @@ def score_pages(pages, query, query_type):
         if not q_words:
             continue
 
-        # Overlap score
-        stopwords = {"the", "a", "an", "is", "of", "to", "in", "and", "or", "for",
-                     "on", "with", "at", "by", "from", "that", "this", "it", "as",
-                     "be", "are", "was", "were", "what", "why", "how", "does", "do",
-                     "i", "should", "next", "investigate"}
-        content_q = q_words - stopwords
+        # Overlap score (the one stopword set — wf_common, #155 audit)
+        content_q = q_words - STOPWORDS
         if not content_q:
             continue
         overlap = len(content_q & t_words) / len(content_q)
 
-        if overlap < 0.15:
+        if overlap < RETRIEVAL["min_overlap"]:
             continue
 
         # Type-based boosting per retrieval policy
@@ -348,10 +341,10 @@ def score_pages(pages, query, query_type):
             try:
                 from datetime import datetime, timedelta
                 lv = datetime.strptime(str(last_verified)[:10], "%Y-%m-%d")
-                if lv >= datetime.now() - timedelta(days=30):
-                    boost *= 1.2
+                if lv >= datetime.now() - timedelta(days=RETRIEVAL["fresh_days"]):
+                    boost *= RETRIEVAL["fresh_boost"]
             except ValueError:
-                pass
+                pass  # unparseable date → recency boost simply not applied
 
         # Graph-proximity boost (#48, gated on integrations.graphify.enabled):
         # a claim whose graphify edges name a symbol the query mentions is
@@ -411,7 +404,7 @@ def expand_graph(scored_pages, relations, pages, max_hops=1):
     result = list(scored_pages)
     for stem in expanded:
         if stem not in scored_stems and stem in by_stem:
-            result.append((0.1, by_stem[stem]))  # low score = graph-discovered
+            result.append((RETRIEVAL["graph_seed_score"], by_stem[stem]))
     return result
 
 
@@ -710,7 +703,7 @@ def main():
                 if pg["type"] != "claim" or pg["stem"] in scored_stems:
                     continue
                 if q_syms & graph_edge_symbols(pg):
-                    expanded.append((0.1, pg))
+                    expanded.append((RETRIEVAL["graph_seed_score"], pg))
                     scored_stems.add(pg["stem"])
                     symbol_hits.append(pg)
             if args.verbose and symbol_hits:

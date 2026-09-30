@@ -32,6 +32,7 @@ from pathlib import Path
 from datetime import date
 from wf_common import parse_frontmatter, slugify, yaml_scalar
 from fabric_config import CORPUS_ROOT, get_config, actor
+from wf_common import now_iso_utc as _dt_iso
 
 CONCEPTS_DIR = CORPUS_ROOT / "concepts"
 PROPOSALS_DIR = CORPUS_ROOT / "registry" / "question-proposals"
@@ -123,16 +124,10 @@ def rel_target_exists(qid):
 
 
 def actor_block():
-    try:
-        _actor = actor(get_config(), "agent")
-    except Exception:
-        _actor = "agent/unknown/unknown"
+    # One actor chain (#155-B): fabric_config.actor falls back internally —
+    # no hand-built "agent/unknown/unknown" laundering a missing owner.
+    _actor = actor(get_config(), "agent")
     return f'generated: {{ by: "{_actor}", at: "{_dt_iso()}" }}\n'
-
-
-def _dt_iso():
-    from datetime import datetime, timezone
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def harvest_all(project=None, dry_run=False):

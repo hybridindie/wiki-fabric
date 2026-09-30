@@ -87,6 +87,8 @@ class TestHookInstallUninstall:
 
 
 class TestHookScriptContent:
+    REPO = Path(__file__).parent.parent
+
     def test_python_payload_shell_safe(self):
         """The -c payload is base64'd (the raw body's quotes/${} mangled the
         shell double-quoted launcher — found when the graphify block silently
@@ -118,6 +120,33 @@ class TestHookScriptContent:
             '[ "${WIKI_SKIP_HOOK:-0}" = "1" ] && exit 0',
         )
         assert 'WIKI_HOOK_EXTRACT:-1' in script
+
+    def test_embedded_shell_blocks_bash_parse(self):
+        """#155-B: _PYTHON_DETECT is pasted into every generated hook. A bash
+        syntax error there ships dead hooks silently (the doubled `done`
+        regression) — contract: every string literal in hooks.py that carries
+        the shell fabric-resolution block parses clean under `bash -n`."""
+        import ast as _ast
+        import os
+        import subprocess
+        import tempfile
+        src = (self.REPO / "scripts" / "harness" / "hooks.py").read_text()
+        tree = _ast.parse(src)
+        checked = 0
+        for node in _ast.walk(tree):
+            if isinstance(node, _ast.Constant) and isinstance(node.value, str):
+                text = node.value
+                if "_WF_FABRIC" in text and "for _wf_cand in" in text:
+                    with tempfile.NamedTemporaryFile("w", suffix=".sh", delete=False) as fh:
+                        fh.write(text)
+                        path = fh.name
+                    try:
+                        r = subprocess.run(["bash", "-n", path], capture_output=True, text=True)
+                        assert r.returncode == 0, f"hook shell block fails bash -n: {r.stderr.strip()}"
+                        checked += 1
+                    finally:
+                        os.unlink(path)
+        assert checked >= 1, "_PYTHON_DETECT block not found in hooks.py literals"
 
 
 class TestMergeBodyValidity:

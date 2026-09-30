@@ -39,6 +39,7 @@ import argparse
 from pathlib import Path
 from datetime import date, datetime, timedelta
 import wf_common
+from wf_common import sha256_file as sha256
 from fabric_config import FABRIC_ROOT
 from fabric_config import CORPUS_ROOT, VAULT_ROOT
 
@@ -47,11 +48,6 @@ EVIDENCE_RAW = VAULT_ROOT / "evidence" / "raw"
 SKIP_PREFIXES = ("chore", "docs", "style", "test", "ci", "build", "release")
 INTERESTING_PREFIXES = ("fix", "feat", "perf", "refactor", "revert")
 
-
-def sha256(path):
-    h = hashlib.sha256()
-    h.update(Path(path).read_bytes())
-    return h.hexdigest()
 
 
 def gh(*args, expect_json=False):
@@ -320,7 +316,7 @@ def write_since_state(project):
         sp.parent.mkdir(parents=True, exist_ok=True)
         sp.write_text(datetime.now().strftime("%Y-%m-%d"), encoding="utf-8")
     except OSError:
-        pass
+        pass  # state file unwritable → the next run re-captures (fresh, not stale)
 
 
 def github_repo_from_remote(repo_path):

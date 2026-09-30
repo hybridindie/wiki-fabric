@@ -59,6 +59,53 @@ def norm(s):
     return re.sub(r'[^a-z0-9]+', ' ', (s or "").lower()).strip()
 
 
+# The one stopword set (#155 audit: query/synthesize kept 3 drifting copies
+# of 28/31/32 words). Retrieval stopword set shared by query/synthesize/context.
+STOPWORDS = frozenset({
+    "the", "a", "an", "is", "of", "to", "in", "and", "or", "for",
+    "on", "with", "at", "by", "from", "that", "this", "it", "as",
+    "be", "are", "was", "were", "what", "why", "how", "does", "do",
+    "i", "should", "next", "investigate",
+})
+
+
+# Retrieval physics in one place (#155 audit: query.py/score_pages + context
+# ranking carried these as inline literals). Change only with a recorded
+# golden-eval run (behavior must not drift silently).
+RETRIEVAL = {
+    "min_overlap": 0.15,        # below: page is not a candidate at all
+    "fresh_days": 30,           # recency boost window (last_verified)
+    "fresh_boost": 1.2,
+    "fuse_lex": 0.5,            # embedding rerank: lexical vs semantic weight
+    "fuse_sem": 0.5,
+    "graphboost_hit": 0.15,     # per symbol hit, capped
+    "graphboost_cap": 3,
+    "graph_seed_score": 0.1,    # graph-discovered pages enter below lexical
+    "judged_relevant_p": 0.6,   # judgment tier: promote a borderline item
+    "judged_max_promotions": 2,
+}
+
+
+def tokens(text, min_len=2):
+    """Stemming-ish token set, one tokenizer for retrieval + eval scoring.
+
+    (The audit found two clones that differed in the word-length floor —
+    context used {2,}, eval_core {3,}; evals must measure the same token
+    universe retrieval uses, so this one home serves both. Cheap suffix
+    strip: -tion/-ting/-ing/-ed/-s + e-restoration (caching→cache).)
+    """
+    out = set()
+    for w in re.findall(r"[a-z0-9][a-z0-9_-]{%d,}" % (min_len - 1), (text or "").lower()):
+        out.add(w)
+        for suf, add in (("tion", ""), ("ting", ""), ("ing", "e"), ("ed", "e"), ("s", "")):
+            if w.endswith(suf) and len(w) - len(suf) >= 4:
+                out.add(w[: -len(suf)])
+                if add:
+                    out.add(w[: -len(suf)] + add)
+                break
+    return out
+
+
 def sha256_file(path):
     """Hex sha256 of a file's bytes (ingest/capture/lint/okf_export)."""
     import hashlib
@@ -101,7 +148,7 @@ def github_repo_from_remote(repo_path, remote="origin", git_fn=None):
         def git_fn(cwd, *args):
             try:
                 out = subprocess.run(["git"] + list(args), cwd=str(cwd),
-                                     capture_output=True, text=True, timeout=30)
+                                     capture_output=True, text=True, timeout=TIMEOUT_API)
                 return out.stdout if out.returncode == 0 else None
             except (subprocess.TimeoutExpired, FileNotFoundError):
                 return None
@@ -215,7 +262,17 @@ def claim_statement(text_or_path):
     return rest.rstrip()
 
 
-def git_sh(*args, cwd=None, timeout=120):
+# Subprocess timeout policy (#155 audit: 9 ad-hoc values — job-scaled tiers,
+# named once for the shared helpers; single-purpose evals may pass explicit
+# overrides but should pick from these tiers).
+TIMEOUT_PROBE = 10      # version checks, is-alive probes, git config reads
+TIMEOUT_API = 30        # HTTP calls (obsidian, judgment), gh quick queries
+TIMEOUT_GIT = 120       # git operations (clone-free: log/diff/merge)
+TIMEOUT_SCRIPT = 600    # shipped-script verbs (lint, query, ingest)
+TIMEOUT_EVAL = 900      # full eval runs (multi-LLM passes)
+
+
+def git_sh(*args, cwd=None, timeout=TIMEOUT_GIT):
     """Run a git command; return stdout or None on failure."""
     import subprocess
     try:

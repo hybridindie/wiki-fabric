@@ -51,8 +51,8 @@ def _producer_actor(config, mode):
 #   YAML frontmatter + provenance stamps
 #   SUMMARY: <one line>            (lead, matches first prose line)
 #   ... prose ...
-#   ## Key Takeaways               (the durable facts the page asserts)
-#   ## Sources                     (claim -> source -> locator backtrace)
+#   # Key Takeaways               (the durable facts the page asserts)
+#   # Sources                     (claim -> source -> locator backtrace)
 # And any mermaid fence that fails a lightweight syntactic check is degraded to a
 # `text` fence with a repair comment (repaired on the next run) — so a broken
 # diagram never ships.
@@ -170,6 +170,17 @@ def _staleness(review_after, stale_after):
     if overdue > 0:
         return 2, f"review overdue {overdue}d", overdue
     return 1, None, 0
+
+
+def _claim_tier(cp):
+    """Claim freshness tier ('current'/'due'/'stale') from review_after/
+    stale_after. One copy (was duplicated in edges.py + export-wiki.py —
+    #155 audit)."""
+    s = cp.read_text(encoding="utf-8", errors="replace")
+    ra = re.search(r"review_after: (\S+)", s)
+    sa = re.search(r"stale_after: (\S+)", s)
+    tier, _, _ = _staleness(ra.group(1) if ra else None, sa.group(1) if sa else None)
+    return {1: "current", 2: "due", 3: "stale"}[tier]
 
 
 # --- Evidence-version freshness (#143 / living-wiki S1) ----------------------
@@ -294,7 +305,7 @@ Return ONLY the markdown article body (no YAML frontmatter).
 
 def _llm_topic_article(topic, claims, dry_run=False):
     """Generate a narrative wiki article using the compiler model."""
-    from extract_backends import parse_json_array, llm_config
+    from extract_backends import parse_json_array, llm_config, LLM_TEMPERATURE, ARTICLE_MAX_TOKENS
     import openai, os
     cfg = llm_config(compiler=True)
     client = openai.OpenAI(base_url=cfg["base_url"], api_key=cfg["api_key"],
@@ -313,7 +324,7 @@ def _llm_topic_article(topic, claims, dry_run=False):
 
     prompt = WIKI_ARTICLE_PROMPT.format(title=topic["title"], evidence=evidence_text)
     resp = client.chat.completions.create(
-        model=cfg["model"], temperature=0.1, max_tokens=4096,
+        model=cfg["model"], temperature=LLM_TEMPERATURE, max_tokens=ARTICLE_MAX_TOKENS,
         messages=[{"role": "system", "content": "You write wiki articles. Return ONLY valid markdown."},
                   {"role": "user", "content": prompt}])
     return resp.choices[0].message.content or ""
@@ -353,7 +364,7 @@ Return ONLY the markdown article body (no YAML frontmatter).
 
 def _llm_project_article(project, claims, topic_links, insight_takeaways, patterns, dry_run=False):
     """Generate a project retrospective using the compiler model."""
-    from extract_backends import llm_config
+    from extract_backends import llm_config, LLM_TEMPERATURE, ARTICLE_MAX_TOKENS
     import openai, os
     cfg = llm_config(compiler=True)
     client = openai.OpenAI(base_url=cfg["base_url"], api_key=cfg["api_key"],
@@ -373,7 +384,7 @@ def _llm_project_article(project, claims, topic_links, insight_takeaways, patter
         patterns="\n".join(f"- [[{ps}] {pt}" for ps, pt in patterns) if patterns else "_(none yet)_",
         insights=insights_text)
     resp = client.chat.completions.create(
-        model=cfg["model"], temperature=0.1, max_tokens=4096,
+        model=cfg["model"], temperature=LLM_TEMPERATURE, max_tokens=ARTICLE_MAX_TOKENS,
         messages=[{"role": "system", "content": "You write project retrospectives. Return ONLY valid markdown."},
                   {"role": "user", "content": prompt}])
     return resp.choices[0].message.content or ""

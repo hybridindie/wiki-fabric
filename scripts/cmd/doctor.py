@@ -35,7 +35,7 @@ def check_result(name, passed, detail, fix=None):
     return {"check": name, "passed": passed, "detail": detail, "fix": fix}
 
 
-def endpoint_models(base_url, api_key, timeout=10):
+def endpoint_models(base_url, api_key, timeout=10):  # probe tier (wf_common.TIMEOUT_PROBE)
     """List model ids from the OpenAI-compatible endpoint; None on failure."""
     url = base_url.rstrip("/") + "/models"
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {api_key}"})

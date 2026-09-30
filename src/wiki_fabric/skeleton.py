@@ -67,10 +67,12 @@ def ensure_fabric_skeleton(fabric_dir, owner="sim", with_graphify=False):
     """Create the content skeleton + a starter fabric.yaml. Idempotent."""
     import yaml
     if owner == "sim":
+        # the one owner chain (#155-B): fabric_config OWNER_SENTINEL default
         try:
-            owner = _sh("git", "config", "--global", "user.name") or "you"
+            from fabric_config import get_config, get_owner, OWNER_SENTINEL
+            owner = get_owner(get_config()) or OWNER_SENTINEL
         except Exception:
-            owner = "you"
+            owner = _sh("git", "config", "--global", "user.name") or "you"
     fabric_dir = Path(fabric_dir)
     fabric_dir.mkdir(parents=True, exist_ok=True)
     for d in DIRECTORIES:

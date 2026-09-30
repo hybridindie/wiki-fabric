@@ -111,7 +111,7 @@ Return ONLY a JSON array. Empty session → [].
 
 
 def llm_takeaways(transcript_path):
-    from extract_backends import parse_json_array, llm_config
+    from extract_backends import parse_json_array, llm_config, LLM_TEMPERATURE, ARTICLE_MAX_TOKENS
     import openai, os
     cfg = llm_config(compiler=True)
     client = openai.OpenAI(base_url=cfg["base_url"], api_key=cfg["api_key"],
@@ -120,7 +120,7 @@ def llm_takeaways(transcript_path):
     if len(text) > 120_000:
         text = text[:120_000] + "\n... [truncated]"
     resp = client.chat.completions.create(
-        model=cfg["model"], temperature=0.1, max_tokens=4096,
+        model=cfg["model"], temperature=LLM_TEMPERATURE, max_tokens=ARTICLE_MAX_TOKENS,
         messages=[
             {"role": "system", "content": "You extract durable engineering knowledge from engineering chat transcripts. Return ONLY valid JSON."},
             {"role": "user", "content": LLM_PROMPT + "\n\n" + text},

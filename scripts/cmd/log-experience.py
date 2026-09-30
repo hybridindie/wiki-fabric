@@ -25,7 +25,7 @@ import yaml
 import argparse
 from pathlib import Path
 from datetime import date
-from wf_common import slugify, yaml_scalar
+from wf_common import slugify, yaml_scalar, now_iso_utc as _now_iso
 from fabric_config import FABRIC_ROOT
 from fabric_config import CORPUS_ROOT, VAULT_ROOT
 
@@ -51,11 +51,6 @@ def _actor():
     """Author actor: the owner logs their own experience (OKF human actor)."""
     from fabric_config import get_config, actor
     return actor(get_config(), "human")
-
-
-def _now_iso():
-    from datetime import datetime, timezone
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def write_event(project, problem, intervention, conditions, outcomes, evidence, tags, receipt=None, session=None):

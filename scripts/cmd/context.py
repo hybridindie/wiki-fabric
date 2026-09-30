@@ -48,6 +48,7 @@ except ImportError:
     HAVE_YAML = False
 
 from fabric_config import FABRIC_ROOT
+from wf_common import tokens, RETRIEVAL
 from fabric_config import CORPUS_ROOT, VAULT_ROOT
 from fabric_config import get_config, get_ignores, is_ignored, get_tuning
 from wf_common import parse_frontmatter
@@ -83,21 +84,6 @@ def load_corpus():
     return pages
 
 
-def tokens(text):
-    """Lowercase word tokens, crudely stemmed (rotation→rotat, rotating→rotat)
-    so morphological variants still match. Pure string ops — 0 tokens."""
-    import re
-    out = set()
-    for w in re.findall(r"[a-z0-9][a-z0-9_-]{2,}", text.lower()):
-        out.add(w)
-        # cheap suffix strip: -tion/-ting/-ing/-ed/-s + e-restoration (caching→cache)
-        for suf, add in (("tion", ""), ("ting", ""), ("ing", "e"), ("ed", "e"), ("s", "")):
-            if w.endswith(suf) and len(w) - len(suf) >= 4:
-                out.add(w[: -len(suf)])
-                if add:
-                    out.add(w[: -len(suf)] + add)
-                break
-    return out
 
 
 def is_stale(fm, today):
@@ -308,7 +294,7 @@ def select_context(pages, task, paths, project, today, max_items=20):
                         _w = f"commitment overdue (due {due})"
                         item["warning"] = (item["warning"] + "; " if item.get("warning") else "") + _w
                 except (ValueError, IndexError):
-                    pass
+                    pass  # malformed due date → no overdue warning (not a crash)
         sa = pg["fm"].get("stale_after")
         if sa:
             item["stale_after"] = str(sa)
@@ -319,7 +305,7 @@ def select_context(pages, task, paths, project, today, max_items=20):
                     _w = "stale_after reached — verify before relying on it"
                     item["warning"] = (item["warning"] + "; " if item.get("warning") else "") + _w
             except (ValueError, IndexError):
-                pass
+                pass  # malformed stale_after → no staleness warning (not a crash)
         if pg["fm"].get("title"):
             item["title"] = pg["fm"]["title"]
         selected.append(item)
@@ -346,7 +332,7 @@ def select_context(pages, task, paths, project, today, max_items=20):
                     promoted_ids = []
                     for i in borderline:
                         s = scored[i]
-                        if swapped >= 2:
+                        if swapped >= RETRIEVAL["judged_max_promotions"]:
                             break
                         p = noul("Is this artifact relevant to the stated task?",
                                  (f"TASK: {task}\n\nARTIFACT: "
@@ -355,9 +341,9 @@ def select_context(pages, task, paths, project, today, max_items=20):
                         excluded.append({"stem": s["pg"]["stem"], "path": s["pg"]["posix"],
                                          "reason": f"beyond --max {max_items}"
                                                    + (f" — judged-relevant, promoted"
-                                                      if p >= 0.6 else
+                                                      if p >= RETRIEVAL["judged_relevant_p"] else
                                                       f" (judged: p={p:.2f}, not promoted)")})
-                        if p >= 0.6:
+                        if p >= RETRIEVAL["judged_relevant_p"]:
                             s["judged_p"] = p
                             selected.append(_judged_item(s, "judged-relevant", task))
                             swapped += 1
@@ -440,7 +426,7 @@ def code_navigation(task, project=None, max_files=None):
             try:
                 g = json.loads(graph_path.read_text())
             except Exception:
-                continue
+                continue  # corrupt/unreadable graph → no symbol expansion for this page
             hits = [n for n in g.get("nodes", [])
                     if n.get("source_file") and n.get("_callable")
                     and any(t in str(n.get("id", "")).lower() for t in toks)]
@@ -608,7 +594,7 @@ def _corpus_revision():
         if out.returncode == 0:
             return out.stdout.strip()
     except Exception:
-        pass
+        pass  # git unavailable in this harness → None (caller's default)
     return None
 
 
