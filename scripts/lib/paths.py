@@ -126,8 +126,13 @@ def find_vault_dir_for_fabric(fabric_dir):
             p = Path(str(vp)).expanduser()
             return p if p.is_absolute() else (fabric_dir / p).resolve()
     except Exception:
-        pass  # no/invalid vault.path → the fabric root IS the vault (rule 3)
-    return fabric_dir
+        pass  # no/invalid vault.path → the layout-aware default (below)
+    # layout-aware default — parity with fabric_config._default_vault_root:
+    # nested corpus → the generated wiki at corpus/wiki; legacy → sibling vault
+    corpus = find_corpus_root(fabric_dir)
+    if corpus is not None and corpus.name == "corpus":
+        return corpus / "wiki"
+    return Path(fabric_dir).parent / "vault"
 
 
 def find_harness_root():

@@ -92,12 +92,17 @@ class TestVaultAgreement(unittest.TestCase):
             (fab / "fabric.yaml").write_text("vault:\n  path: out/vault\n")
             assert find_vault_dir_for_fabric(fab) == (fab / "out/vault").resolve()
 
-    def test_fallback_is_fabric_itself(self):
+    def test_fallback_is_layout_aware_default(self):
+        """No vault.path → the layout-aware default (parity with the
+        resolver home): nested corpus → corpus/wiki; legacy → sibling vault."""
         from paths import find_vault_dir_for_fabric
         with tempfile.TemporaryDirectory() as td:
             fab = Path(td) / "fab"
-            fab.mkdir()
-            assert find_vault_dir_for_fabric(fab) == fab
+            (fab / "corpus" / "evidence").mkdir(parents=True)  # nested layout
+            assert find_vault_dir_for_fabric(fab) == (fab / "corpus" / "wiki").resolve()
+            fab2 = Path(td) / "fab2"
+            fab2.mkdir()  # no content — find_corpus_root defaults nested (corpus/)
+            assert find_vault_dir_for_fabric(fab2) == (fab2 / "corpus" / "wiki").resolve()
 
 
 class TestHarnessAgreement(unittest.TestCase):

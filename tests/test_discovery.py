@@ -259,6 +259,8 @@ class TestFabricRootResolution(unittest.TestCase):
 
     def test_env_override_wins(self):
         import fabric_config as fc
+        # env dir must carry a fabric marker (empty dir = pending install)
+        (self.fabric / "fabric.yaml").write_text("owner: t\n")
         with mock.patch.dict(os.environ, {"WIKI_FABRIC_DIR": str(self.fabric)}):
             self.assertEqual(fc._resolve_fabric_root(), self.fabric.resolve())
 

@@ -36,8 +36,15 @@ class TestVerbs:
 
 class TestFindFabric:
     def test_env_override(self, tmp_path, monkeypatch):
+        # the env must carry a fabric marker (fabric.yaml/corpus/evidence/projects):
+        # an EMPTY $WIKI_FABRIC_DIR is a pending install target, not a fabric
+        (tmp_path / "fabric.yaml").write_text("owner: t\n")
         monkeypatch.setenv("WIKI_FABRIC_DIR", str(tmp_path))
         assert dispatch.find_fabric() == tmp_path.resolve()
+
+    def test_empty_env_dir_is_not_a_fabric(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("WIKI_FABRIC_DIR", str(tmp_path))
+        assert dispatch.find_fabric() != tmp_path.resolve()
 
     def test_dev_sibling_vault(self, tmp_path, monkeypatch):
         harness = tmp_path / "harness"

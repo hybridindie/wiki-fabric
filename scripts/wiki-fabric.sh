@@ -31,6 +31,23 @@ _HARNESS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 WF_VERSION="$(sed -n 's/^version = "\([^\"]*\)".*/\1/p' "${_WF_PYPROJECT:-${_HARNESS_ROOT}/pyproject.toml}" 2>/dev/null || true)"
 WF_VERSION="${WF_VERSION:-unknown}"
 
+# Effective version: the shim (~/.local/bin) itself carries no pyproject —
+# resolve from the harness the shim finds (parse-time read is the fallback).
+resolve_version() {
+    if [[ "${WF_VERSION}" != "unknown" ]]; then
+        echo "${WF_VERSION}"
+        return 0
+    fi
+    local _h _v
+    _h="$(find_harness 2>/dev/null || true)"
+    if [[ -n "${_h}" && -f "${_h}/pyproject.toml" ]]; then
+        _v="$(sed -n 's/^version = "\([^\"]*\)".*/\1/p' "${_h}/pyproject.toml" 2>/dev/null || true)"
+        echo "${_v:-unknown}"
+    else
+        echo "unknown"
+    fi
+}
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -866,10 +883,10 @@ sys.exit(main(["status"]))
     local cli_state
     cli_state="$(cli_sync_state)"
     case "${cli_state}" in
-        current) ok "CLI:     current (v${WF_VERSION})" ;;
+        current) ok "CLI:     current (v$(resolve_version))" ;;
         stale)   warn "CLI:   STALE - installed wf differs from harness; run: wf update" ;;
         missing) warn "CLI:   not installed - run: wf install (or copy scripts/wiki-fabric.sh to ~/.local/bin/wf)" ;;
-        package) ok "CLI:     packaged (uv tool, v${WF_VERSION})" ;;
+        package) ok "CLI:     packaged (uv tool, v$(resolve_version))" ;;
     esac
     return 0
 }
@@ -1242,15 +1259,8 @@ case "${1:-help}" in
         ;;
     version)
         # Version: the shim (~/.local/bin) itself carries no pyproject —
-        # resolve from the harness it found (falls back to parse-time read).
-        _ver="${WF_VERSION}"
-        if [[ "${_ver}" == "unknown" ]]; then
-            _h="$(find_harness 2>/dev/null || true)"
-            if [[ -n "${_h}" && -f "${_h}/pyproject.toml" ]]; then
-                _ver="$(sed -n 's/^version = "\([^\"]*\)".*/\1/p' "${_h}/pyproject.toml" 2>/dev/null || true)"
-                _ver="${_ver:-unknown}"
-            fi
-        fi
+        # resolve via the helper (parse-time read is the fallback).
+        _ver="$(resolve_version)"
         echo "wf ${_ver} (harness: $(find_harness 2>/dev/null || echo unknown))"
         echo "installed CLI: $(cli_sync_state)"
         ;;

@@ -58,13 +58,10 @@ SIGNALS_STALE = [
 
 
 def default_vault_path():
-    # corpus-nested layout: the generated wiki lives at corpus/wiki (the
-    # fabric root is the content corpus, not the output). Legacy flat layout
-    # (content at fabric root, wiki/ generated at root) keeps the old default.
-    from fabric_config import CORPUS_ROOT, FABRIC_ROOT
-    if CORPUS_ROOT.name == "corpus":
-        return CORPUS_ROOT / "wiki"
-    return FABRIC_ROOT.parent / "vault"
+    """Single truth: fabric_config's layout-aware default (the resolver and
+    the audit must agree — #151/#152 class)."""
+    from fabric_config import _default_vault_root
+    return _default_vault_root()
 
 
 def refresh(vault_path, check_only=False, quiet=False):

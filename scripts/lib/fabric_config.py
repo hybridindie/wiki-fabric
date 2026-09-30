@@ -985,12 +985,28 @@ def get_vault_path(config=None):
     disabled = isinstance(path, str) and path.strip() == ""
     if not disabled:
         if path is None:
-            return FABRIC_ROOT  # the vault IS the fabric root now
+            # nested-corpus layout (default install): the generated wiki lives
+            # at corpus/wiki — vault-refresh's audit root AND this resolver
+            # must agree (the audit class of #151/#152); legacy flat layout
+            # keeps the sibling-vault default.
+            return _default_vault_root()
         p = Path(os.path.expanduser(str(path)))
         if not p.is_absolute():
             p = (FABRIC_ROOT / p).resolve()
         return p.resolve()
     return None
+
+
+def _default_vault_root():
+    """The vault-is-the-fabric rule, layout-aware (single truth for the
+    "no vault.path configured" default)."""
+    try:
+        cr = find_corpus_root(FABRIC_ROOT)
+    except Exception:
+        cr = None
+    if cr is not None and cr.name == "corpus":
+        return cr / "wiki"
+    return FABRIC_ROOT.parent / "vault"
 
 
 def get_tuning(config=None, section=None, key=None, default=None):
