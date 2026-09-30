@@ -38,9 +38,16 @@ QUARTZ_REF = "v4.5.2"
 
 
 def _wiki_root():
-    from fabric_config import get_vault_path, CORPUS_ROOT
-    v = get_vault_path()
-    return (v / "wiki") if v else (CORPUS_ROOT / "wiki")
+    # layout-aware default (parity with export-wiki/generators — an explicit
+    # vault.path names the wiki root directly; no /wiki append)
+    from fabric_config import _default_vault_root
+    return _default_vault_root()
+
+
+def _default_site_root():
+    """Published site lives beside the wiki root (per-layout, resolver-named)."""
+    from fabric_config import _default_vault_root
+    return _default_vault_root().parent / "site"
 
 
 def ensure_quartz(quartz_dir, dry_run=False):
@@ -103,14 +110,11 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    wiki_root = None
-    from fabric_config import get_vault_path, CORPUS_ROOT
-    v = get_vault_path()
-    wiki_root = (v / "wiki") if v else (CORPUS_ROOT / "wiki")
+    wiki_root = _wiki_root()
     if not wiki_root.is_dir() or not list(wiki_root.glob("*.md")):
         print("No wiki output to publish — run: wf export wiki", file=sys.stderr)
         return 1
-    out_root = Path(args.out) if args.out else ((v / "site") if v else (CORPUS_ROOT / "site"))
+    out_root = Path(args.out) if args.out else _default_site_root()
     out_root = Path(out_root)
     out_root.mkdir(parents=True, exist_ok=True)
     quartz_dir = Path(args.quartz_dir) if args.quartz_dir else out_root / "_quartz"
