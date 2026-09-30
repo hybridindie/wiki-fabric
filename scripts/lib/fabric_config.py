@@ -1001,7 +1001,7 @@ def _default_vault_root():
     """The vault-is-the-fabric rule, layout-aware (single truth for the
     "no vault.path configured" default)."""
     try:
-        cr = find_corpus_root(FABRIC_ROOT)
+        cr = _paths_find_corpus_root(FABRIC_ROOT)
     except Exception:
         cr = None
     if cr is not None and cr.name == "corpus":

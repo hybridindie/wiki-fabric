@@ -578,7 +578,7 @@ def _bootstrap_gitignore_and_commit(args):
         print("Initialized git repository with initial commit")
 
 
-def _bootstrap_fabric_side(fabric_root, project_root, project_slug, project_name, owner, args, domains):
+def _bootstrap_fabric_side(fabric_root, harness_root, project_root, project_slug, project_name, owner, args, domains):
     """Phases 5-5b + 6: namespace, cold-start vocabulary, vault refresh,
     namespace README, fabric.yaml registration."""
     namespace_dir = fabric_root / "corpus" / "projects" / project_slug
@@ -589,14 +589,14 @@ def _bootstrap_fabric_side(fabric_root, project_root, project_slug, project_name
     (namespace_dir / "decisions").mkdir(parents=True, exist_ok=True)
     print(f"Created project namespace: {namespace_dir}")
 
-    domains = _cold_start_vocabulary(fabric_root, project_root, project_slug, domains)
-    _refresh_fabric_vault(fabric_root)
+    domains = _cold_start_vocabulary(fabric_root, harness_root, project_root, project_slug, domains)
+    _refresh_fabric_vault(fabric_root, harness_root)
     write_namespace_readme(namespace_dir, project_slug, project_name, owner, args.source_repo or [])
     register_in_fabric_yaml(project_slug, str(project_root), owner=owner, args=args)
     return namespace_dir
 
 
-def _cold_start_vocabulary(fabric_root, project_root, project_slug, domains):
+def _cold_start_vocabulary(fabric_root, harness_root, project_root, project_slug, domains):
     """Phase 5a: on the FIRST project (empty ontology), derive provisional
     domains from this project's structural evidence. Written as PROPOSALS
     (promote-domains --apply makes them ontology domains)."""
@@ -607,7 +607,7 @@ def _cold_start_vocabulary(fabric_root, project_root, project_slug, domains):
         if not ontology_has_domains:
             import importlib.util as _ilu
             _spec = _ilu.spec_from_file_location(
-                "propose_domains", fabric_root / "scripts" / "cmd" / "propose-domains.py")
+                "propose_domains", harness_root / "scripts" / "cmd" / "propose-domains.py")
             _pd = _ilu.module_from_spec(_spec)
             _spec.loader.exec_module(_pd)
             detected = _pd.structural_domains(project_root)
@@ -635,10 +635,10 @@ def _cold_start_vocabulary(fabric_root, project_root, project_slug, domains):
     return domains
 
 
-def _refresh_fabric_vault(fabric_root):
+def _refresh_fabric_vault(fabric_root, harness_root):
     """Phase 5b: fabric-side overlay view + refresh links."""
     try:
-        vr = fabric_root / "scripts" / "cmd/vault-refresh.py"
+        vr = harness_root / "scripts" / "cmd/vault-refresh.py"
         if vr.exists():
             import importlib.util as _ilu
             spec = _ilu.spec_from_file_location("vault_refresh", str(vr))
@@ -711,7 +711,7 @@ def _bootstrap_hook(args, project_root, project_slug):
         print("Hook install skipped (--no-hook) — doc drift will wait for manual capture.")
         return
     import subprocess as _sp
-    hooks_py = find_fabric_root() / "scripts" / "harness/hooks.py"
+    hooks_py = find_harness_root() / "scripts" / "harness/hooks.py"
     hook_cmd = [_sp.sys.executable, str(hooks_py), "install"]
     if args.hook_extract_claims:
         hook_cmd.append("--extract-claims")
@@ -784,7 +784,7 @@ def _execute_bootstrap(args, project_root_str, project_name, project_slug, domai
     _bootstrap_overlay(args, project_name, project_slug, domains, skills, owner)
     _bootstrap_agent_configs(harness_root, fabric_root)
     _bootstrap_gitignore_and_commit(args)
-    namespace_dir = _bootstrap_fabric_side(fabric_root, project_root, project_slug,
+    namespace_dir = _bootstrap_fabric_side(fabric_root, harness_root, project_root, project_slug,
                                            project_name, owner, args, domains)
     _bootstrap_project_env(project_root, project_slug, args)
     _bootstrap_sync_note()
