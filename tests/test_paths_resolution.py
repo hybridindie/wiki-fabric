@@ -42,11 +42,18 @@ class TestChainAgreement(unittest.TestCase):
         assert CORPUS_ROOT == paths.find_corpus_root(FABRIC_ROOT)
 
     def test_legacy_layout_roundtrip(self):
-        # paths.find_corpus_root: legacy (content at root) vs nested vs fresh
+        # paths.find_corpus_root: legacy (content at root) vs nested vs fresh.
+        # Legacy requires REAL page content now (gitkeeped skeletons don't
+        # count — #e2e harness fix).
         with tempfile.TemporaryDirectory() as td:
             legacy = Path(td) / "legacy"
-            (legacy / "evidence").mkdir(parents=True)
+            (legacy / "evidence" / "claims").mkdir(parents=True)
+            (legacy / "evidence" / "claims" / "claim-x.md").write_text("x")
             assert paths.find_corpus_root(legacy) == legacy.resolve()
+            # empty skeleton stays fresh-nested
+            skeleton = Path(td) / "skeleton"
+            (skeleton / "evidence" / "raw").mkdir(parents=True)
+            assert paths.find_corpus_root(skeleton) == (skeleton / "corpus").resolve()
             nested = Path(td) / "nested"
             (nested / "corpus" / "evidence").mkdir(parents=True)
             assert paths.find_corpus_root(nested) == (nested / "corpus").resolve()

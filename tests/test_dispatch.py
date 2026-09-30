@@ -64,10 +64,14 @@ class TestFindFabric:
 class TestCorpusRoot:
     def test_nested_corpus(self, tmp_path):
         (tmp_path / "corpus" / "evidence").mkdir(parents=True)
+        (tmp_path / "corpus" / "evidence" / "claims").mkdir()
+        (tmp_path / "corpus" / "evidence" / "claims" / "claim-x.md").write_text("x")
         assert dispatch.corpus_root(tmp_path) == tmp_path / "corpus"
 
     def test_legacy_layout(self, tmp_path):
-        (tmp_path / "evidence").mkdir()
+        # legacy layout needs real content (empty skeletons resolve fresh — #e2e)
+        (tmp_path / "evidence" / "raw").mkdir(parents=True)
+        (tmp_path / "evidence" / "raw" / "doc.md").write_text("x")
         assert dispatch.corpus_root(tmp_path) == tmp_path
 
 

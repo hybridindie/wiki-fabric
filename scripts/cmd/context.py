@@ -424,6 +424,7 @@ def code_navigation(task, project=None, max_files=None):
         toks = [t for t in re.findall(r"[a-z0-9]{3,}", (task or "").lower())]
         if not toks:
             return None
+        pinned = (project or "").strip().lower()
         entries = []
         for repo in get_all_repo_names(cfg):
             repo_cfg = get_repo_config(cfg, repo)
@@ -452,7 +453,9 @@ def code_navigation(task, project=None, max_files=None):
             # be genuinely task-specific (>=15% of its callable nodes).
             task_names_repo = repo.lower() in toks or repo.replace("_", "-") in toks
             total_callable = sum(1 for n in g.get("nodes", []) if n.get("_callable") and n.get("source_file"))
-            dense = total_callable and (len(hits) / total_callable) >= 0.15
+            # dense = task-specific enough to stand without the pin: >= 8 hits
+            # AND >= 5% of the repo's callable nodes (fixture graphs are small)
+            dense = total_callable and len(hits) >= 8 and (len(hits) / total_callable) >= 0.05
             pinned_or_named = pinned == repo.lower() or task_names_repo
             if not pinned_or_named and not dense:
                 continue
@@ -467,7 +470,6 @@ def code_navigation(task, project=None, max_files=None):
                             "files": [{"path": f, "symbol_count": c} for f, c in ranked]})
         # #54: pinned project's repo leads; remaining repos rank by symbol
         # matches (name tie-break keeps byte-identical re-runs).
-        pinned = (project or "").strip().lower()
         entries.sort(key=lambda e: (0 if e["repo"].lower() == pinned else 1,
                                     -e["symbols_matched"], e["repo"]))
         return entries or None
