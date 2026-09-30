@@ -30,20 +30,16 @@ if [[ "${WHEEL_SMOKE_SKIP_BUILD:-0}" != "1" ]]; then
     # Pick an interpreter that has `build` (CI legs run the smoke inside the
     # uv-managed .venv; publish.yml preinstalls into system python) — else
     # install minimally via uv into a scratch target.
-    PY=""
-    for cand in "${VENV_PYTHON:-}" "${VIRTUAL_ENV:-}/bin/python" .venv/bin/python python3; do
-        [[ -n "${cand}" ]] && [[ -x "$(command -v "${cand}")" || -x "${cand}" ]] || continue
-        "${cand}" -c "import build" 2>/dev/null && { PY="${cand}"; break; }
-    done
-    if [[ -z "${PY}" ]]; then
-        # give the best candidate the build package (uv-first: no user-site pollution)
-        PY="${VENV_PYTHON:-.venv/bin/python}"
-        [[ -x "${PY}" ]] || PY="python3"
-        command -v uv >/dev/null 2>&1 && uv pip install -q build --python "${PY}" 2>/dev/null \
-            || "${PY}" -m pip install -q --user build 2>/dev/null \
-            || fail "cannot provision the `build` package"
-        "${PY}" -c "import build" 2>/dev/null || fail "build package still unavailable"
-    fi
+    # Provision `build` into a KNOWN interpreter (uv-first). Old distros
+    # carry a `build` without __main__ — verify by running its CLI, not by
+    # importing the package (the check above that fooled CI twice).
+    PY=".venv/bin/python"
+    [[ -x "${PY}" ]] || PY="${VIRTUAL_ENV:-}/bin/python"
+    [[ -x "${PY}" ]] || PY="python3"
+    "${PY}" -m build --version >/dev/null 2>&1 || {
+        command -v uv >/dev/null 2>&1 && { uv pip install -q -U build pyyaml openai anthropic --python "${PY}"; }
+        "${PY}" -m build --version >/dev/null 2>&1 || fail "cannot provision `build` (tried uv)"
+    }
     echo "using interpreter: ${PY}"
     "${PY}" scripts/pkg/prep-package.py
     "${PY}" -m build --outdir "${WORK}/dist" || fail "python -m build failed"
