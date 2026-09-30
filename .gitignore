@@ -77,3 +77,6 @@ opencode.json
 
 # === machine-local secrets ===
 secrets.env
+
+# nested-harness litter (an install run from the repo cwd creates ./wiki-fabric)
+/wiki-fabric/
