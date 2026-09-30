@@ -87,11 +87,28 @@ class TestLooksLikeLocalModel(unittest.TestCase):
         assert not looks_like_local_model("anthropic/claude-x")
         assert not looks_like_local_model("deepseek/deepseek-r1")
 
-    def test_ollama_style_rejected(self):
-        from fabric_config import looks_like_local_model
-        assert not looks_like_local_model("qwen2.5-coder:7b")
+    def test_ollama_tags(self):
+        """Ollama-server tags are the LOCAL tier (server-local, egress-free) —
+        except ":cloud"/":hosted"/":remote" (ollama's hosted farm = egress)."""
+        from fabric_config import looks_like_local_model, _is_ollama_tag
+        assert looks_like_local_model("gemma4:e4b-fixed")
+        assert looks_like_local_model("spark-x2.5-4b:latest")
+        assert _is_ollama_tag("gemma4:e4b-fixed")
+        assert not _is_ollama_tag("deepseek-v4.1-flash:cloud")
         assert not looks_like_local_model("deepseek-v4.1-flash:cloud")
-        assert not looks_like_local_model("plain-model-name")
+        assert not looks_like_local_model("glm-5.3-flash:cloud")
+        # host:port and bare names are not tags
+        assert not _is_ollama_tag("localhost:11434")
+        assert not _is_ollama_tag("plain-model-name")
+        assert not _is_ollama_tag("unsloth/gemma-4-e4b-it-GGUF")
+
+    def test_darwin_default_is_ollama_gemma4(self):
+        from fabric_config import DEFAULT_LOCAL_MODELS, DEFAULT_LOCAL_MODELS_OFFLINE, _is_ollama_tag
+        assert DEFAULT_LOCAL_MODELS["darwin"] == "gemma4:e4b-fixed"
+        assert _is_ollama_tag(DEFAULT_LOCAL_MODELS["darwin"])
+        # offline fallback keeps the on-device HF tiers
+        assert DEFAULT_LOCAL_MODELS_OFFLINE["darwin"] == "mlx-community/gemma-4-e4b-it-4bit"
+        assert DEFAULT_LOCAL_MODELS_OFFLINE["default"] == "unsloth/gemma-4-e4b-it-GGUF"
 
     def test_gguf_and_mlx_substrings(self):
         from fabric_config import looks_like_local_model
@@ -155,8 +172,13 @@ class TestLintLlmConfig(unittest.TestCase):
         from lint import check_llm_config
         return check_llm_config(cfg)
 
-    def test_reject_ollama_tag(self):
-        probs = self._check({"llm": {"local_model": "qwen2.5-coder:7b"}})
+    def test_accept_ollama_tag(self):
+        """Ollama-server tags are now the local tier (server-local route)."""
+        assert self._check({"llm": {"local_model": "gemma4:e4b-fixed"}}) == []
+        assert self._check({"llm": {"local_model": "qwen2.5-coder:7b"}}) == []
+
+    def test_reject_ollama_cloud_tag(self):
+        probs = self._check({"llm": {"local_model": "deepseek-v4.1-flash:cloud"}})
         assert probs and "LLM-CONFIG" in probs[0]
 
     def test_reject_provider_namespaced(self):

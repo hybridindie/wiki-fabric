@@ -49,6 +49,7 @@ CONFIG_TEMPLATE = """owner: {owner}
 llm:
   base_url: http://localhost:11434/v1
   api_key: ollama
+  local_model: gemma4:e4b-fixed
   model: qwen2.5-coder:7b
   compiler_model: deepseek-v4.1-flash:cloud
 

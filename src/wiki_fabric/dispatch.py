@@ -389,9 +389,12 @@ def _status(argv):
             if local_model:
                 try:
                     sys.path.insert(0, str(harness_root() / "scripts" / "lib"))
-                    from fabric_config import find_local_model_path
+                    from fabric_config import find_local_model_path, _is_ollama_tag
                     import shutil as _sh
-                    if find_local_model_path(local_model) or os.path.isdir(os.path.expanduser(local_model)):
+                    if _is_ollama_tag(local_model):
+                        # ollama-served tag: local tier comes from the server
+                        print(f"\033[0;32m✓\033[0m  Local:  {local_model} (ollama-served)")
+                    elif find_local_model_path(local_model) or os.path.isdir(os.path.expanduser(local_model)):
                         print(f"\033[0;32m✓\033[0m  Local:  {local_model} (cached)")
                     else:
                         print(f"\033[1;33m⚠\033[0m  Local:  {local_model} (not downloaded — run: wf models ensure)")

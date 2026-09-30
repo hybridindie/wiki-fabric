@@ -55,9 +55,9 @@ def _choice(prompt, options, default_idx=1):
 
 
 def _platform_local_model():
-    if platform.system() == "Darwin" and platform.machine() == "arm64":
-        return "mlx-community/gemma-4-e4b-it-4bit"
-    return "unsloth/gemma-4-e4b-it-GGUF"
+    # ollama-served gemma4 = the default local tier (server-local, egress-free);
+    # offline/on-device HF GGUF elsewhere (get_local_model contract)
+    return "gemma4:e4b-fixed" if platform.system() == "Darwin" else "unsloth/gemma-4-e4b-it-GGUF"
 
 
 def _write_secrets(fabric_root, entries):

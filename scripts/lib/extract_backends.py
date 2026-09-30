@@ -305,6 +305,12 @@ def extract_claims_mlx(source_text, source_path, model=None):
     elsewhere).
     """
     mlx_model = model or os.environ.get("WIKI_MLX_MODEL") or get_local_model()
+    # Ollama-served tags ("gemma4:e4b-fixed", any bare "<name>:<tag>" that
+    # isn't a cloud tag) run through the OpenAI-compatible endpoint — they
+    # are server-local models (no HF download, no on-device load). The
+    # privacy property is the same: base_url is localhost, zero egress.
+    if is_ollama_tag(mlx_model):
+        return extract_via_ollama_tag(source_text, source_path, mlx_model)
     # Offer to download the local model when missing (human-gated, once per
     # process; main() front-loads this before workers when routing is known).
     global _ENSURE_DONE
@@ -331,6 +337,28 @@ def extract_claims_mlx(source_text, source_path, model=None):
     return []
 
 
+def is_ollama_tag(model_id):
+    """True for ollama-server model tags: bare "<name>:<tag>" strings —
+    "gemma4:e4b-fixed", "qwen2.5-coder:7b". Not host:port strings, not
+    ollama CLOUD tags (":cloud" runs on ollama's hosted farm → egress →
+    not a local tier)."""
+    from fabric_config import looks_like_local_model, _is_ollama_tag
+    return _is_ollama_tag(model_id)
+
+
+def extract_via_ollama_tag(source_text, source_path, ollama_model):
+    """Run claim extraction against the ollama OpenAI-compatible endpoint
+    with a specific server-local model tag (privacy-safe: localhost)."""
+    cfg = llm_config(compiler=True)
+    return _openai_compatible_extract(
+        source_text, source_path,
+        base_url=os.environ.get("WIKI_LLM_BASE_URL", cfg["base_url"]),
+        api_key=os.environ.get("WIKI_LLM_API_KEY", cfg["api_key"]),
+        model=ollama_model,
+        max_tokens=EXTRACT_MAX_TOKENS,
+    )
+
+
 _ENSURE_DONE = False
 
 
@@ -348,8 +376,25 @@ def extract_claims_openai_compatible(source_text, source_path, model=None):
     # accept any model name the server recognizes.
     if model is None:
         model = cfg["model"]
+    return _openai_compatible_extract(
+        source_text, source_path,
+        base_url=os.environ.get("WIKI_LLM_BASE_URL", cfg["base_url"]),
+        api_key=os.environ.get("WIKI_LLM_API_KEY", cfg["api_key"]),
+        model=model,
+        max_tokens=EXTRACT_MAX_TOKENS,
+    )
+
+
+def _openai_compatible_extract(source_text, source_path, base_url, api_key, model, max_tokens):
+    """The shared OpenAI-compatible call path (used by the default compiler
+    route AND ollama-tag local routes — #84 local-model work)."""
+    try:
+        import openai
+    except ImportError:
+        print("openai package not installed; skipping", file=sys.stderr)
+        return []
     model_name = model
-    client = openai.OpenAI(base_url=cfg["base_url"], api_key=cfg["api_key"],
+    client = openai.OpenAI(base_url=base_url, api_key=api_key,
                            timeout=float(os.environ.get("WIKI_LLM_TIMEOUT", "600")))
     try:
         def _call(max_tokens, extra=None):
@@ -360,7 +405,7 @@ def extract_claims_openai_compatible(source_text, source_path, model=None):
             return client.chat.completions.create(
                 model=model_name, temperature=LLM_TEMPERATURE, max_tokens=max_tokens, messages=messages)
 
-        response = _call(EXTRACT_MAX_TOKENS)
+        response = _call(max_tokens)
         msg = response.choices[0].message
         # Reasoning models (deepseek etc.) may put the answer in `content` only,
         # or spend the budget on `reasoning` — if no parseable JSON came back and

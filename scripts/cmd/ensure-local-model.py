@@ -34,6 +34,21 @@ def main():
 
     model_id = args.model or get_local_model(get_config())
 
+    from fabric_config import _is_ollama_tag
+    if _is_ollama_tag(model_id):
+        # ollama-served tag: presence = the server knows the name
+        import subprocess as _sp
+        r = _sp.run(["ollama", "list"], capture_output=True, text=True, timeout=10)
+        listed = r.stdout or ""
+        known = model_id in listed or model_id.split(":")[0] in listed
+        if known:
+            print(f"OK: {model_id} (ollama-served)")
+            return 0
+        if args.check:
+            print(f"MISSING: {model_id} — pull it: ollama pull {model_id}")
+            return 1
+        print(f"{model_id} not pulled yet — run: ollama pull {model_id}")
+        return 0  # nothing for this tool to download; the user pulls
     if find_local_model_path(model_id) or Path(model_id).expanduser().is_dir():
         print(f"OK: {model_id} (cached)")
         return 0

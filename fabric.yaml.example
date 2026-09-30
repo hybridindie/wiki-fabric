@@ -34,13 +34,17 @@ llm:
   # Policy (eval-stability G4): compiler work needs the most capable model; model
   # swaps require a recorded compiler eval (promote/mine refuse without it).
 
-  # local_model: resolves repos.<slug>.<stage>="local" routes (extraction,
-  # synthesis on-device). Default when unset — platform-split:
-  #   Apple Silicon: mlx-community/gemma-4-e4b-it-4bit   (MLX, 34s/doc)
-  #   other:         unsloth/gemma-4-e4b-it-GGUF         (llama.cpp/GGUF)
-  # Missing models are offered for download at first use (human-gated), or
-  # pre-fetch with: wf models ensure [--yes]
-  # local_model: mlx-community/gemma-4-e4b-it-4bit
+  # local_model: resolves repos.<slug>.<stage>="local" routes (privacy tier).
+  # Two tiers exist:
+  #   ollama-served (default, darwin): gemma4:e4b-fixed — server-local,
+  #     egress-free via base_url; `ollama pull gemma4:e4b-fixed` if missing.
+  #   on-device HF (offline, or ollama-less): gemma4 e4b MLX/GGUF —
+  #     apple: mlx-community/gemma-4-e4b-it-4bit; elsewhere:
+  #     unsloth/gemma-4-e4b-it-GGUF (downloaded on first use, human-gated;
+  #     pre-fetch: wf models ensure [--yes])
+  # NOTE: ":cloud" tags (deepseek-v4.1-flash:cloud) are OLLAMA'S HOSTED farm
+  # — egress! Never use them as a privacy-tier local_model.
+  local_model: gemma4:e4b-fixed
 
 # Secrets live in <fabric>/secrets.env (KEY=VALUE, gitignored):
 #   WIKI_LLM_API_KEY=…     cloud LLM key

@@ -110,7 +110,19 @@ CONFIG_FILENAME = "fabric.yaml"
 # Local-model defaults (platform-split): MLX on Apple Silicon, GGUF elsewhere.
 # mlx-community/... and unsloth/... repos are HuggingFace ids resolvable by
 # mlx_lm.load / llama-cpp-python. See get_local_model() + ensure_local_model().
+# Local-model defaults by platform (#84-adjacent decision, 2026-09-30):
+#   darwin → gemma4:e4b-fixed via the local ollama server (6.1 GB, tested:
+#   follows the compact claim schema with locators; egress-free).
+#   default (non-darwin / no ollama) → GGUF tier via llama-cpp (offline-safe:
+#   HF snapshot, no server dependency).
+# Both shapes are valid llm.local_model values; get_local_backend dispatches
+# (ollama tag → OpenAI-compatible endpoint; HF/path → on-device load).
 DEFAULT_LOCAL_MODELS = {
+    "darwin": "gemma4:e4b-fixed",
+    "default": "unsloth/gemma-4-e4b-it-GGUF",
+}
+# Offline fallback when the darwin default can't reach ollama (no server up):
+DEFAULT_LOCAL_MODELS_OFFLINE = {
     "darwin": "mlx-community/gemma-4-e4b-it-4bit",
     "default": "unsloth/gemma-4-e4b-it-GGUF",
 }
@@ -353,6 +365,9 @@ owner: {owner}
 llm:
   base_url: http://localhost:11434/v1
   api_key: ollama
+  # local tier (privacy): ollama-served gemma4 e4b; offline alternative:
+  # mlx-community/gemma-4-e4b-it-4bit darwin / unsloth/gemma-4-e4b-it-GGUF
+  local_model: gemma4:e4b-fixed
   model: qwen2.5-coder:7b
   compiler_model: deepseek-v4.1-flash:cloud
 
@@ -542,8 +557,13 @@ def get_owner(config):
 
 def get_local_model(config=None):
     """Resolve the local-model default: llm.local_model from fabric.yaml, then
-    WIKI_LLM_LOCAL_MODEL (env), then the platform default — MLX on Apple
-    Silicon, GGUF elsewhere. Returns a HuggingFace model id."""
+    WIKI_LLM_LOCAL_MODEL (env), then the platform default.
+
+    Two tiers by platform (ollama tag = server-local via the OpenAI-compatible
+    endpoint; HF id = on-device via local_llm — see DEFAULT_LOCAL_MODELS):
+      darwin → "gemma4:e4b-fixed" (ollama-served gemma4 E4B)
+      other  → "unsloth/gemma-4-e4b-it-GGUF" (offline-safe; llama-cpp)
+    """
     if config is None:
         config = get_config()
     explicit = (config.get("llm", {}) or {}).get("local_model")
@@ -650,6 +670,10 @@ def ensure_local_model(model_id=None, assume_yes=False, config=None):
     Thread-safe: concurrent workers serialize here.
     """
     model_id = model_id or get_local_model(config)
+    if _is_ollama_tag(model_id):
+        # ollama-served tag: present when the server knows it (no download
+        # path — `ollama pull <tag>` is the user's action; surface a hint).
+        return model_id, False
     if find_local_model_path(model_id) or Path(model_id).exists():
         return model_id, False
     with _ensure_lock():
@@ -716,16 +740,45 @@ _PROVIDER_PREFIXES = {
 }
 
 
+_OLLAMA_LOCAL_TAGS = {"cloud", "hosted", "remote"}  # ollama's hosted farm — NOT local
+
+
+def _is_ollama_tag(model_id):
+    """True for ollama-server model tags: bare "<name>:<tag>" strings —
+    "gemma4:e4b-fixed", "qwen2.5-coder:7b". Not host:port strings, not
+    ollama CLOUD tags ("glm-5.3-flash:cloud" runs on ollama's hosted farm →
+    egress → not a local tier)."""
+    m = str(model_id or "")
+    if not m or m.startswith("http") or "/" in m:
+        return False
+    if ":" not in m or m.startswith(":"):
+        return False
+    if re.match(r"^[a-z0-9.]+:[0-9]{2,5}(/|$)", m, re.IGNORECASE):
+        return False  # host:port
+    tag = m.rsplit(":", 1)[1].lower()
+    return tag not in _OLLAMA_LOCAL_TAGS
+
+
 def looks_like_local_model(model_id):
-    """Heuristic: True when a model string should run on-device.
-    Matches the local backend's own shapes: local paths, .gguf ids, mlx ids,
-    and '<org>/<repo>' HF ids that are not a known cloud-provider namespace."""
+    """Heuristic: True when a model string should be treated as the local
+    (privacy-safe) tier. Matches four shapes:
+      - an existing local path, .gguf ids, mlx/gguf-named HF ids
+      - ollama-served tags:  bare names with a ollama tag ("gemma4:e4b-fixed",
+        "qwen2.5-coder:7b") — served on localhost (no egress)
+      - '<org>/<repo>' HF ids that are not a known cloud-provider namespace
+    """
     m = str(model_id or "")
     if not m or m.startswith("http"):
         return False
     if Path(m).expanduser().is_dir() or m.lower().endswith(".gguf"):
         return True
-    if "mlx" in m.lower() or "gguf" in m.lower():
+    low = m.lower()
+    if "mlx" in low or "gguf" in low:
+        return True
+    # ollama tag shape: no "/" + a ":" tag (e.g. "gemma4:e4b-fixed" — an
+    # ollama-server model; egress-free, so local tier). Except ollama's
+    # CLOUD-served tags (":cloud") — those run on ollama's hosted farm.
+    if _is_ollama_tag(m):
         return True
     if "/" not in m:
         return False

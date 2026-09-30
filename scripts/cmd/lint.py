@@ -538,10 +538,11 @@ def check_ignore_config(config):
 def check_llm_config(config):
     """Deterministic fabric.yaml llm.* checks. Returns list of problems.
     Shape rules:
-      - llm.local_model must be an on-device model id (HF '<org>/<repo>' with
-        an on-device org/repo shape, .gguf file/repo, or an existing local path)
-        — ollama-style tags ('name:tag') and provider namespaced ids
-        ('openai/gpt-4o') are rejected: they can never run on-device.
+      - llm.local_model must be a LOCAL-tier model id: HF '<org>/<repo>' with
+        an on-device shape, .gguf file/repo, an existing local path — or an
+        ollama-server tag ('name:tag', egress-free). Reject: provider
+        namespaced ids ('openai/gpt-4o') and ollama CLOUD tags
+        (':cloud' — ollama's hosted farm is egress, not local).
     """
     probs = []
     llm = (config.get("llm") or {}) if isinstance(config, dict) else {}
@@ -552,11 +553,15 @@ def check_llm_config(config):
     from pathlib import Path as _P
     if _P(lm).expanduser().exists():
         return probs  # existing path: fine
-    from fabric_config import looks_like_local_model
+    from fabric_config import looks_like_local_model, _is_ollama_tag
     if not looks_like_local_model(lm):
-        probs.append(f"LLM-CONFIG llm.local_model: '{lm}' does not look like an "
-                     f"on-device model id (expected '<org>/<repo>' HF id, *.gguf, "
-                     f"or an existing local path)")
+        if _is_ollama_tag(lm):
+            probs.append(f"LLM-CONFIG llm.local_model: '{lm}' is an ollama "
+                         f"server tag but was rejected as local — check the tag")
+        else:
+            probs.append(f"LLM-CONFIG llm.local_model: '{lm}' does not look like a "
+                         f"local-tier model id (expected '<org>/<repo>' HF id, *.gguf, "
+                         f"an existing local path, or an ollama-served tag)")
     return probs
 
 
