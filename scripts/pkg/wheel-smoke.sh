@@ -26,10 +26,27 @@ fi
 
 if [[ "${WHEEL_SMOKE_SKIP_BUILD:-0}" != "1" ]]; then
     echo "── prep + build"
-    python3 scripts/pkg/prep-package.py || fail "prep-package.py failed"
     # self-sufficiency: CI legs don't preinstall `build` (publish.yml does)
-    python3 -c "import build" 2>/dev/null || python3 -m pip install --quiet build || (command -v uv >/dev/null && uv pip install --quiet build) || fail "cannot install the `build` package"
-    python3 -m build --outdir "${WORK}/dist" || fail "python -m build failed"
+    # Pick an interpreter that has `build` (CI legs run the smoke inside the
+    # uv-managed .venv; publish.yml preinstalls into system python) — else
+    # install minimally via uv into a scratch target.
+    PY=""
+    for cand in "${VENV_PYTHON:-}" "${VIRTUAL_ENV:-}/bin/python" .venv/bin/python python3; do
+        [[ -n "${cand}" ]] && [[ -x "$(command -v "${cand}")" || -x "${cand}" ]] || continue
+        "${cand}" -c "import build" 2>/dev/null && { PY="${cand}"; break; }
+    done
+    if [[ -z "${PY}" ]]; then
+        # give the best candidate the build package (uv-first: no user-site pollution)
+        PY="${VENV_PYTHON:-.venv/bin/python}"
+        [[ -x "${PY}" ]] || PY="python3"
+        command -v uv >/dev/null 2>&1 && uv pip install -q build --python "${PY}" 2>/dev/null \
+            || "${PY}" -m pip install -q --user build 2>/dev/null \
+            || fail "cannot provision the `build` package"
+        "${PY}" -c "import build" 2>/dev/null || fail "build package still unavailable"
+    fi
+    echo "using interpreter: ${PY}"
+    "${PY}" scripts/pkg/prep-package.py
+    "${PY}" -m build --outdir "${WORK}/dist" || fail "python -m build failed"
 else
     echo "── reuse dist/ wheels (skip build)"
     mkdir -p "${WORK}/dist_w"
