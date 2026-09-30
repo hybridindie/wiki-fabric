@@ -850,9 +850,8 @@ class TestDomainHubs:
         import fabric_config as fc
         with mock.patch.object(fc, "CORPUS_ROOT", tmp_path), \
              mock.patch.object(fc, "FABRIC_ROOT", tmp_path), \
-             mock.patch.object(fc, "get_vault_path", return_value=(tmp_path / "vault")), \
+             mock.patch.object(fc, "_default_vault_root", return_value=wiki), \
              mock.patch.object(m, "CORPUS_ROOT", tmp_path), \
-             mock.patch.object(m, "get_vault_path", return_value=(tmp_path / "vault")), \
              mock.patch.object(m, "_wiki_root", return_value=wiki):
             topics = [
                 {"slug": "tok", "title": "Token", "domain": "agent-systems", "claims": ["c1"]},
