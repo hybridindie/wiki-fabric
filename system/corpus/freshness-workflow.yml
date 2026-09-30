@@ -1,0 +1,73 @@
+name: Upstream freshness
+
+# Scheduled upstream-freshness cycle (#84): the corpus-freshness guarantee
+# needs a cadence that doesn't depend on any machine's hook cadence. This
+# job iterates repos: from fabric.yaml — captures new upstream PR/issue
+# history (sha256-gated), mechanically re-verifies claims (0 tokens), and
+# pushes refreshed evidence to the corpus so every machine gets it on
+# sync pull. Drift that needs a human lands in the review queues (wf gate).
+#
+# Requires: the harness clone (below) + gh auth for any private upstream.
+# Zero LLM cost in the default mode. Opt-in: set repo var WIKI_FABRIC_FRESHNESS=1.
+#
+# Evidence-plane only: this never rewrites claims; contested/stale states
+# are the representation. Conflicts follow the existing review-queue policy.
+
+'on':
+  schedule:
+    - cron: '17 6 * * *'   # daily, off-peak
+  workflow_dispatch:
+
+concurrency:
+  group: upstream-freshness
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    name: Capture upstream drift + mechanical re-verify
+    runs-on: ubuntu-latest
+    if: ${{ vars.WIKI_FABRIC_FRESHNESS == '1' }}
+    steps:
+      - name: Checkout corpus (this repo)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 5
+
+      - name: Checkout harness (the tooling)
+        uses: actions/checkout@v4
+        with:
+          repository: hybridindie/wiki-fabric
+          ref: main
+          path: harness
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Run the freshness cycle (deterministic, 0 tokens)
+        run: |
+          cd harness
+          uv venv
+          uv pip install pyyaml openai anthropic
+          WIKI_FABRIC_DIR="$(pwd)/../" uv run python scripts/cmd/freshness-job.py || DRIFT=1
+          echo "WIKI_FABRIC_DRIFT=${DRIFT:-0}" >> "$GITHUB_ENV"
+
+      - name: Commit refreshed evidence
+        run: |
+          cd ../
+          git config user.name "wiki-fabric freshness"
+          git config user.email "freshness@wiki-fabric.local"
+          git add evidence/ registry/ || true
+          if git diff --cached --quiet; then
+            echo "no evidence changes"
+          else
+            git commit -m "freshness cycle: upstream evidence refresh (sha256-gated)"
+            git push origin HEAD:main || echo "push failed (conflict) — resolve at next sync"
+          fi
+
+      - name: Gate is live (drift needs a human)
+        if: env.WIKI_FABRIC_DRIFT == '1'
+        run: |
+          echo "::notice::Upstream drift captured. Review queues updated — run wf gate locally after sync pull."

@@ -52,6 +52,7 @@ persistent memory layer.
 | Capture upstream docs | `wf capture <slug>` | 0 | Copies from source repos → `evidence/raw/` |
 | Ingest a source | `wf ingest <path> [--extract-claims]` | 1 call | Source record + summary + claims |
 | Detect drift | `graphify-bridge.py --diff` | 0 | Only when graphify integration is enabled |
+| Upstream freshness | `wf freshness [--dry-run]` | 0 | #84: capture-git (sha256-gated) + mechanical re-verify per connected repo; scheduled on the corpus CI (scaffolded by `wf sync init/setup`; opt-in var `WIKI_FABRIC_FRESHNESS=1`) |
 | Verify a computation | `references/attesters/*.py` | **0** | Deterministic receipt checks (no LLM) |
 | Export portable bundle | `wf okf export` | **0** | Deterministic, okflint-conformant output |
 | Route extraction/synthesis | `repos.<slug>.extract` / `.synthesize` / `.dossier` | — | Per-repo, per-stage: `"cloud"` (default) or `"local"` (on-device — MLX on Apple Silicon, GGUF elsewhere; model = `llm.local_model`) — privacy + quality tiering |

@@ -118,6 +118,28 @@ class TestHarnessAgreement(unittest.TestCase):
         p = mcp_server._script("scripts/cmd/lint.py")
         assert p.exists()
 
+    def test_dev_freshness_verb_reaches_new_scripts(self):
+        """The stale-staging trap (#84 session): a leftover src/wiki_fabric/
+        _harness from a wheel-smoke run shadows the dev tree — verbs added
+        after the last prep then 'break install'. Guard: every verb's script
+        resolvable in a dev checkout WITH a staging dir present must resolve
+        through the same module the verb used — i.e., dispatch.harness_root()
+        must either be the repo root or contain a scripts/cmd snapshot as
+        fresh as the dev tree's."""
+        import wiki_fabric.dispatch as dispatch
+        dev_cmd = _SCRIPTS / "cmd"
+        if not dev_cmd.is_dir():
+            self.skipTest("not a dev checkout")
+        staged = dispatch._PACKAGED
+        if not (staged / "scripts" / "cmd").is_dir():
+            self.skipTest("no staging dir present (normal)")
+        dev_scripts = {p.name for p in dev_cmd.glob("*.py")}
+        staged_scripts = {p.name for p in (staged / "scripts" / "cmd").glob("*.py")}
+        missing = dev_scripts - staged_scripts
+        assert not missing, (
+            f"stale staging copy shadows the dev tree — remove it "
+            f"(rm -rf {staged}) or re-run prep-package: missing {sorted(missing)[:5]}")
+
 
 class TestBashChainParity(unittest.TestCase):
     """The bash find_fabric documents the same chain (env → sibling → cwd

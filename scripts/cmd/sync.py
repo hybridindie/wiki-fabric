@@ -191,9 +191,28 @@ def scaffold_ci_workflow():
     return True
 
 
+def scaffold_freshness_workflow():
+    """Write the scheduled upstream-freshness workflow (#84) into
+    <corpus>/.github/workflows/ when absent — capture upstream PR/issue
+    drift + mechanical re-verification on a cron, evidence-plane only
+    (0 tokens). Opt-in per repo variable WIKI_FABRIC_FRESHNESS=1."""
+    harness = Path(__file__).resolve().parent.parent.parent
+    template = harness / "system" / "corpus" / "freshness-workflow.yml"
+    wf_dir = VAULT_ROOT / ".github" / "workflows"
+    wf_dir.mkdir(parents=True, exist_ok=True)
+    target = wf_dir / "freshness.yml"
+    if target.exists() or not template.exists():
+        return False
+    shutil.copy(template, target)
+    print("Scaffolded CI workflow: .github/workflows/freshness.yml "
+          "(daily upstream-freshness cycle; enable: repo var WIKI_FABRIC_FRESHNESS=1)")
+    return True
+
+
 def cmd_init(remote_url):
     validate_fabric()
     scaffold_ci_workflow()
+    scaffold_freshness_workflow()
     if get_remote():
         print(f"Corpus remote already set: {get_remote()}")
         print(f"Change it with: git remote set-url {CONTENT_REMOTE_NAME} <url>")
@@ -237,6 +256,7 @@ def cmd_setup(name=None, private=True, yes=False):
     --yes."""
     validate_fabric()
     scaffold_ci_workflow()
+    scaffold_freshness_workflow()
 
     # 1. gh CLI detection + auth
     def _run(args, timeout=TIMEOUT_API):
