@@ -194,6 +194,7 @@ def propose_candidates(transcript_path, takeaways, dry_run=False, project=None):
             print(f"  [DRY] would propose {cid}")
             proposed += 1
             continue
+        source_stem = f"{project}-chats-{transcript_path.stem}"  # links resolve to the ingested source page
         dest.write_text(f"""---
 type: pattern
 id: {cid}
@@ -201,10 +202,10 @@ title: {yaml_scalar(statement[:140])}
 status: candidate
 maturity: 1
 origin: chat-mined
-source_chat: "[[{transcript_path.stem}]]"
+source_chat: "[[{source_stem}]]"
 project: {project}
 provenance:
-  - source: "[[{transcript_path.stem}]]"
+  - source: "[[{source_stem}]]"
     locator: "session transcript"
     quote: {yaml_scalar(statement[:120])}
 tags: [chat-mined, inbox]
@@ -215,7 +216,7 @@ created: {date.today().isoformat()}
 
 {statement}
 
-**Mined from:** [[{transcript_path.stem}]] — session-level durable takeaway
+**Mined from:** [[{source_stem}]] — session-level durable takeaway
 (kind: {kind}). Review against the promotion checklist: independence,
 evidence, applicability. Apply via promote-patterns --apply.""")
         proposed += 1

@@ -237,14 +237,14 @@ def write_concept_page(concept_slug, cluster, synthesis, domain):
 
     concept_path.write_text(f"""---
 type: concept
-title: {synthesis.get("title", concept_slug.replace("-", " ").title())}
+title: {_concept_title_scalar(synthesis, concept_slug)}
 domain: [{", ".join(domain_list)}]
 claims:
 {chr(10).join(f'  - "[[{c["stem"]}]]"' for c in cluster)}
 created: {today}
 ---
 
-# Concept: {synthesis.get("title", concept_slug.replace("-", " ").title())}
+# Concept: {_concept_title(synthesis, concept_slug)}
 
 ## Definition
 
@@ -271,6 +271,19 @@ created: {today}
 
     return concept_path
 
+
+
+def _concept_title(synthesis, concept_slug):
+    """Concept display title (LLM-provided or slug-derived)."""
+    title = str((synthesis or {}).get("title") or concept_slug.replace("-", " ").title())
+    return title
+
+
+def _concept_title_scalar(synthesis, concept_slug):
+    """Frontmatter-safe title scalar (#e2e finding: 'Epic: One graph...' — an
+    unquoted colon broke yaml on every concept with a colon in the title)."""
+    from wf_common import yaml_scalar
+    return yaml_scalar(_concept_title(synthesis, concept_slug))
 
 def synthesize_uncovered(cfg=None, threshold=0.4, min_claims=2, dry_run=False):
     """Synthesize concept pages for claims not yet covered by any concept.

@@ -36,9 +36,9 @@ def slugify(text):
 
 
 def find_fabric_root():
-    # Content root — paths.py is the single resolver home (#152).
-    import paths
-    return paths.find_fabric_root() or FABRIC_ROOT
+    # Content root — the canonical chain lives in fabric_config (composed of
+    # paths.py primitives, #152). FABRIC_ROOT IS that chain, frozen at import.
+    return FABRIC_ROOT
 
 
 def find_harness_root():

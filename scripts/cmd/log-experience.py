@@ -25,7 +25,7 @@ import yaml
 import argparse
 from pathlib import Path
 from datetime import date
-from wf_common import slugify
+from wf_common import slugify, yaml_scalar
 from fabric_config import FABRIC_ROOT
 from fabric_config import CORPUS_ROOT, VAULT_ROOT
 
@@ -67,29 +67,31 @@ def write_event(project, problem, intervention, conditions, outcomes, evidence, 
 
     today = date.today().isoformat()
 
-    # Build frontmatter
+    # Build frontmatter — free-text fields go through yaml_scalar (LLM/human
+    # text can carry quotes, wikilink-shaped shell fragments, colons; the
+    # hand-built f-strings broke yaml on any of them, #e2e finding ×3 events)
     lines = [
         "---",
         "type: experience-event",
         f"id: ee-{slug}",
-        f"title: \"{problem[:80]}\"",
-        f"description: \"Experience event in {project}: {problem[:100]}\"",
+        f"title: {yaml_scalar(problem[:80])}",
+        f"description: {yaml_scalar(f'Experience event in {project}: {problem[:100]}')}",
         f"generated: {{ by: \"{_actor()}\", at: \"{_now_iso()}\" }}",
         f"project: {project}",
         "domain: [agent-systems]",
-        f"observed_problem: \"{problem}\"",
+        f"observed_problem: {yaml_scalar(problem)}",
     ]
 
     if intervention:
-        lines.append(f"intervention: \"{intervention}\"")
+        lines.append(f"intervention: {yaml_scalar(intervention)}")
 
     lines.append("conditions:")
     for k, v in conditions.items():
-        lines.append(f"    {k}: \"{v}\"")
+        lines.append(f"    {k}: {yaml_scalar(v)}")
 
     lines.append("outcomes:")
     for k, v in outcomes.items():
-        lines.append(f"    {k}: \"{v}\"")
+        lines.append(f"    {k}: {yaml_scalar(v)}")
 
     if receipt:
         # #87: the delivery receipt is the missing provenance half — what the
