@@ -21,6 +21,46 @@ Run `wf skill --list` to list them; `wf skill <name>` to print the full
 procedure. The procedure is the contract — it carries the anti-loop rules and
 the step order that the CLI only partially enforces.
 
+```bash
+$ wf skill --list
+Available skills (wf skill <name> prints the full procedure):
+
+  ingest     Ingest a raw source into the evidence fabric via `wf ingest` —
+             creates source record, faithful summary, extracts claims, opens
+             a change-set for review...
+  promote    Run the promotion pipeline via `mine-promotions.py` + `promote.py`
+             — cluster experience-events deterministically, generate dossiers...
+
+$ wf skill ingest      # prints the procedure (agents: read BEFORE the first
+                       # ingest this session — it is the step contract)
+```
+
+**The harness loop in one pass** — what an agent session looks like when the
+fabric is installed (the always-on block arrives at session start; the agent
+runs these in order):
+
+```text
+SESSION START (from the always-on block, 0 tokens)
+  → wf context --task "<task>" --write-receipt   # scoped manifest + receipt id
+  → [optional] wf query "<question>"             # evidence-backed answers
+
+DO THE WORK (code changes land via the normal commit)
+
+END OF SESSION
+  → wf log --project <slug> --receipt <receipt-id>   # outcome against delivery
+  → wf gate                                          # what needs a human? surface it
+```
+
+The git hook fires on commit (drift capture, 0 tokens for unchanged files);
+graphify rebuilds on its own plugin (branch switches), not the agent's
+attention. Everything the agent prints is either manifest-shaped or a
+gate report — you never reverse-engineer state from prose.
+
+**Why procedures in files, not prompts in code:** the skill file versions
+with the harness (a changed workflow = a changed file = the next session
+reads the new contract), and it's readable by any agent harness with zero
+integration — that's the "universal loader" row above.
+
 ## How skills reach your harness
 
 | Surface | Mechanism | Who gets it |

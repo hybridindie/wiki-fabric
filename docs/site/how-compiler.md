@@ -72,9 +72,58 @@ Only then does it merge into the corpus, append to `registry/log.md`, and
 commit. The LLM never writes canonical knowledge by itself — it proposes, you
 decide.
 
+The real loop, end to end (this session, on this repo's own docs):
+
+```bash
+$ wf capture wiki-fabric                     # docs → evidence/raw/ (sha256-gated)
+Capture summary: 1 new, 7 changed, 20 unchanged
+
+$ wf ingest --changed wiki-fabric            # compile claims (LLM tier by routing)
+...
+Change-set: .../evidence/traces/change-sets/2026-09-30-wiki-fabric-wiki-fabric-docs-site-integrations-md/
+Ingest summary: 8 ingested, 0 skipped
+
+$ wf apply-changeset 2026-09-30-wiki-fabric-wiki-fabric-docs-site-integrations-md --dry-run
+Pages to create: 2
+Applying diff...
+[DRY RUN] Would apply git apply: .../change-sets/.../diff.md
+[DRY RUN] no changes written                 # ← human gate: nothing canonical until
+                                             #   you run it without --dry-run
+```
+
+Every step's output is the next step's input — and the merge is the only
+step a human must click.
+
 ## Why the anti-loop matters
 
 Re-running ingest on an unchanged file would re-spend tokens for identical
 output. So the sha256 is checked first: matching hash = skip. Files recorded
 but never extracted (`status: pending`) resume cleanly. One capture, one
 compile, one review — then it's free forever.
+
+```bash
+$ wf ingest evidence/raw/wiki-fabric/docs-readme.md --extract-claims
+Skipped — already ingested as src-...-docs-readme-md.md (matching sha256)
+  (anti-loop: unchanged sources are never re-ingested. ...)
+```
+
+## The agent-harness flow
+
+The same loop is what an AI agent runs — the harness loads the ingesting
+procedure once (`wf skill ingest`), then the mechanical parts are plain
+CLI calls. What the agent sees after capture:
+
+```text
+Source: /path/to/repo/docs/auth.md
+SHA256: 3f9c2b1a77d0...
+Project namespace: auth-service
+  → summary written (faithful, locator-backed)
+  → 9 claims extracted (5 primary evidence)
+  → locator verification: 9/9 locators resolve
+  → effect verification (judgment second opinion): 2 contradicts → review queue
+Change-set: evidence/traces/change-sets/2026-09-30-auth-service-auth-md/
+```
+
+The agent presents the change-set manifest and asks; the human gates the
+merge; `wf lint` (0 errors) is the pre-commit gate either way. This exact
+contract is what the [behavior evals](./evals) measure.

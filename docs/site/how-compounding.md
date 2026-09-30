@@ -42,6 +42,20 @@ overlap — keyword Jaccard by default; near-miss pairs get judged refinement on
 problem → intervention → outcome shows up in **two or more independent
 projects**, it stops being one team's anecdote and becomes a candidate rule.
 
+The judged refinement, live (the decision model splits incoherent clusters
+instead of letting one bad merge reach a dossier):
+
+```bash
+$ wf mine promotions
+Mining promotions (min projects: 2, embeddings: False)...
+Found 9 experience events
+Judgment tier: active — near-miss pairs will be refined by the decision model
+  judged instructions-and-rules+godot-mcp: p=0.030 -> keep-split
+  judged instructions-and-rules+nomokailist: p=0.030 -> keep-split
+  judged instructions-and-rules+aperiodic: p=0.020 -> keep-split
+(no pending candidates — mine with: wf mine chats <project> --propose)
+```
+
 ## Step 3: The dossier
 
 The full mining procedure is on demand: `wf skill promote`.

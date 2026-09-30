@@ -28,7 +28,7 @@ from datetime import date
 
 from fabric_config import get_config, get_ignores, is_ignored
 from fabric_config import CORPUS_ROOT, VAULT_ROOT
-from wf_common import parse_frontmatter, sha256_file
+from wf_common import parse_frontmatter, sha256_file as sha256
 from fabric_config import FABRIC_ROOT
 from fabric_config import CORPUS_ROOT
 

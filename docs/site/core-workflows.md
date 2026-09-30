@@ -178,6 +178,42 @@ A lexical query costs 0 tokens and returns the relevant claims with locators —
 the agent reads the underlying sources itself instead of asking you to repeat
 project history you half-remember.
 
+**What the answer actually looks like** (this repo's fabric, real output):
+
+```text
+$ wf query "why does config go stale"
+
+## Bottom line
+Go-live thresholds are configured under `go_live` in settings.yaml via
+src.config.risk.GoLiveConfig.
+
+## Evidence
+- Go-live thresholds are configured under `go_live` in settings.yaml ...
+  [L27-L30] quote: "Thresholds are configured under `go_live` in `settings.yaml`..."
+  status=supported conf=high ev=primary
+...
+
+## Code-reachable evidence (graphify)
+- The Market Data Agent performs technical analysis...
+  [L286-L288] quote: "**Purpose**: Technical analysis..."
+  symbols: `config`
+
+## Confidence
+10 claims cited: 10 supported, 6 primary evidence.
+Cross-validated across 6 sources.
+
+## Suggested next action
+File this answer as a synthesis page if reusable: `--save` flag.
+```
+
+Every claim carries its line locator and verbatim quote — you verify any
+line by opening the source at that span. With the judgment tier enabled,
+the top candidates additionally get the System One fusion rerank (measured
+separations: 0.970 direct answer vs 0.026 word-collision — the false
+positive the lexical layer alone cannot kill), and graph expansion hops get
+gated by the same local decision model. `--verbose` prints both reranks;
+`--no-rerank` forces the pure-lexical path.
+
 **Scenario — contradicting sources.** Two docs disagree about a throughput
 figure. Ingesting both produces a `status: contested` claim with a `contradicts`
 relation, not a silently merged average. Querying the topic surfaces the conflict
@@ -315,6 +351,21 @@ WIKI_LLM_MODEL="qwen3.8:27b-mlx" python3 scripts/eval/eval.py
 
 # Discover new domains from evidence
 python3 scripts/cmd/propose-domains.py
+
+# ONE health report (what status audits — now the bash CLI delegates here)
+wf status
+#  ✓  Fabric: /Users/johnd/Development/vault
+#  ✓  Vault:  /Users/johnd/Development/vault/corpus/wiki (fresh)
+#  ✓  LLM:    qwen2.5-coder:7b
+#  ✓  Local:  gemma4:e4b-fixed (ollama-served)
+#  Inventory: Claims/Sources/Concepts/Patterns/Projects/Discovered
+#  ✓  Lint: clean
+
+# Scheduled upstream drift (dry-run first; scheduled on corpus CI)
+wf freshness --dry-run
+
+# What's awaiting a human, in one place
+wf gate
 
 # Graphify integration (optional, 0 token cost)
 graphify update                              # refresh each connected repo's graph (AST-only)

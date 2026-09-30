@@ -39,15 +39,24 @@ wf query "Why does my code batch writes?"
 wf context --task "Add token rotation to the OAuth service"
 wf log --project my-project --problem "..." --intervention "..." --outcomes "..."
 
+# The agent harness POV (always-on block arrives at session start):
+wf context --task "..." --write-receipt   # step 1: scoped manifest + receipt (0 tokens)
+wf query "..."                   # step 2: evidence with line locators (0 tokens)
+#  step 3: the agent writes code
+wf log --project my-project --receipt <receipt-id> ...   # step 4: outcome ↔ delivery
+wf gate                          # step 5: surface anything awaiting a human
+
 # Make it a team system (gh CLI creates + publishes the corpus repo):
 wf sync setup
+# Upstream moves while machines sleep → the scheduled freshness cycle:
+wf freshness --dry-run           # capture-git + mechanical re-verify (0 tokens)
 ```
 
 The daily loop — connect → capture → ingest → validate → context → work → mine/review — compounding at step 7 into step 5's context for the next project. Full walkthrough, flags, and requirements: **[Getting Started](https://hybridindie.github.io/wiki-fabric/getting-started.html)**.
 
 ## What it is
 
-Two trees: the **harness** (tooling, this repo) and the **fabric** (your knowledge — gitignored, lives in the corpus/vault; teammates pull it at install — see [Teams](docs/site/teams.md)). The harness ships: the knowledge format (claims with locators, patterns, decisions, commitments), the deterministic context compiler (`wf context` — every inclusion/exclusion carries a reason, persisted receipts), contract enforcement (lint + CI gate), behavior evaluations, and the self-building domain vocabulary. Optional integrations: graphify (call-graph staleness + code navigation), obsidian (two-way vault: human wiki edits flow back as evidence), judgment tier (decision-model eval gates), embeddings (semantic re-rank, off by default), team sync (solo direct-push or PR-gated distribution). The fabric also serves its core surface as **MCP tools** (`wf-mcp`) for any MCP client. See [Architecture](docs/site/architecture.md) for the pipeline and [Core Workflows](docs/site/core-workflows.md) for the loop with scenarios.
+Two trees: the **harness** (tooling, this repo) and the **fabric** (your knowledge — gitignored, lives in the corpus/vault; teammates pull it at install — see [Teams](docs/site/teams.md)). The harness ships: the knowledge format (claims with locators, patterns, decisions, commitments), the deterministic context compiler (`wf context` — every inclusion/exclusion carries a reason, persisted receipts), contract enforcement (lint + CI gate), behavior evaluations, and the self-building domain vocabulary. Optional integrations: graphify (call-graph staleness + code navigation), obsidian (two-way vault: human wiki edits flow back as evidence), judgment tier (local decision models — ollama serves the System One wire, Tev/Nimble — for eval gates, retrieval fusion rerank, and review triage), embeddings (semantic re-rank, off by default), team sync (solo direct-push or PR-gated distribution). The fabric also serves its core surface as **MCP tools** (`wf-mcp`) for any MCP client. See [Architecture](docs/site/architecture.md) for the pipeline and [Core Workflows](docs/site/core-workflows.md) for the loop with scenarios.
 
 ## Documentation
 

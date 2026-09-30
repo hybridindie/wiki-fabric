@@ -30,3 +30,27 @@ they touch canonical pages.
 | What does the fabric NOT know? | Concept open-questions harvest into gated question pages (open → answered via `answers` relations); surfaced by the gate + query | #88 loop; lint `QUESTION` |
 
 None of these are promises in a README — each is a lint check or workflow gate in CI right now.
+
+## The human gate in practice: one change-set, three commands
+
+The same governance question — "does the agent follow it?" — is answerable
+by watching any session's change-set flow. Real outputs from this repo:
+
+```bash
+$ wf gate                    # ONE report of everything awaiting a human
+gate: nothing pending — fabric is current (HITL queues empty)
+# (with work pending it lists stale claims, promotion dossiers,
+#  domain proposals, open change-sets — each with its deadline)
+
+$ wf apply-changeset <slug> --dry-run    # inspect BEFORE anything canonical
+Pages to create: 2
+[DRY RUN] Would apply git apply: .../change-sets/.../diff.md
+[DRY RUN] no changes written
+
+$ wf lint                    # the 0-error gate before any commit
+0 error(s), 6314 warning(s)  # warnings are advisory; errors fail the commit
+```
+
+`wf skill ingest` / `wf skill promote` print the full agent-facing
+procedures — so any harness (Claude Code, opencode, Codex) runs the same
+governed loop without the human dictating steps each time.

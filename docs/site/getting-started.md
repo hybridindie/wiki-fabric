@@ -152,11 +152,45 @@ wf log --project my-project --problem "..." --intervention "..." --outcomes "...
 wf context --task "..." --write-receipt   # what the agent receives before a task
 wf gate                              # session-start: pending human decisions
 wf review --auto-reverify            # clear the mechanical review debt (0 tokens)
+wf freshness                         # pull the team cycle's refreshed evidence (or run it locally)
 wf export wiki                       # generate the human wiki (topics, projects, staleness)
 wf wiki-generate begin --project my-project   # writer/bookkeeper narrative generation
 wf publish                           # publish the wiki as a static site
 wf mine chats my-project             # distill chat transcripts into patterns/anti-patterns
 ```
+
+### The first agent session (what the harness actually runs)
+
+With the fabric installed and the always-on block loaded, an agent's first
+session looks like this (each step is a real command with real output):
+
+```text
+1. wf context --task "Add token rotation to the OAuth service" --write-receipt
+   receipt: .../receipts/receipt-2d253c6d98c7.json (receipt-2d253c6d98c7)
+   ## Selected
+   - [[claim-...-git-issue-812-md-005]] — task evidence (claim): window
+     *decided in: [[src-alpaca-agents-git-issue-812-md]]*   ← provenance: open the PR
+   ## Excluded
+   - patterns/pattern-stale.md — stale: review_after overdue 255 days
+   (0 tokens; every inclusion AND exclusion carries a reason)
+
+2. wf query "does anything ban caching tokens here?"       # 0 tokens
+
+3. ← the agent writes code (live evidence is the harness's job)
+
+4. wf log --project auth-service --receipt receipt-2d253c6d98c7 \
+      --problem "refresh tokens never rotated" \
+      --intervention "rotation on refresh, reuse detects replay" \
+      --outcomes "replay rejects live in staging"
+   # receipt ↔ outcome: the delivery is now auditable — was it
+   #   solved with what was known at session start?
+
+5. wf gate                                                  # nothing pending → exit clean
+```
+
+Steps 1–2 and 5 cost zero LLM tokens; step 4 is file write. The LLM is
+spent only on extraction/synthesis when YOU capture new sources — the
+agent's session flow itself is free.
 
 ### Optional: make it a team system
 
