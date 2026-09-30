@@ -48,19 +48,28 @@ def _derive_github_slug(repo_path: Path):
 
 def refresh_git_history(slug, repo_cfg, dry_run=False):
     """Step 1 per project: PR/issue history via capture-git --since-state.
+    Route: explicit repos.<slug>.git → GitHub (gh CLI); a local path with a
+    GitHub remote → GitHub; a local path without one → capture-git's local
+    git-log route (CI runs need no gh auth for this path).
 
     Returns 'captured' | 'clean' | 'error:<detail>'."""
     script = _HERE / "capture-git.py"
     repo = repo_cfg.get("git") or None
     path = repo_cfg.get("path")
-    if not repo and path:
-        # local path available (dev machine): derive owner/name from its remote
-        p = Path(str(path))
-        repo = _derive_github_slug(p if p.is_absolute()
-                                   else (fabric_config.FABRIC_ROOT / p))
-    if not repo:
-        return "error:no-github-source (repos.<slug>.git or a local path with a github remote)"
-    cmd = [sys.executable, str(script), slug, "--repo", repo, "--since-state"]
+    local_path = None
+    if path:
+        p = Path(str(path)).expanduser()
+        if not p.is_absolute():
+            p = (fabric_config.FABRIC_ROOT / p)
+        if p.is_dir() and p.exists() or (p / ".git").exists():
+            local_path = p.resolve()
+    if not repo and local_path:
+        repo = _derive_github_slug(local_path)
+    if not repo and not local_path:
+        return "error:no-source (repos.<slug>.git, or a local path)"
+    cmd = [sys.executable, str(script), slug, "--repo",
+           str(local_path) if (local_path and not repo) else repo,
+           "--since-state"]
     if dry_run:
         cmd.append("--dry-run")
     try:

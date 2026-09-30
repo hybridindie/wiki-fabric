@@ -8,6 +8,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
     steps:
       - uses: actions/checkout@v4
         with:
@@ -20,7 +23,7 @@ jobs:
 
       - name: Create venv + install deps
         run: |
-          uv venv
+          uv venv --python ${{ matrix.python-version }}
           uv pip install ".[mcp]"
           uv pip install pytest
 
@@ -40,9 +43,15 @@ jobs:
         run: uv run python scripts/cmd/lint.py .
 
       - name: OKF v0.2 conformance (floor gate)
+        if: matrix.python-version == '3.12'
         run: uv run python scripts/cmd/lint.py . --okf
 
       - name: OKF cross-check (okflint, external validator)
+        if: matrix.python-version == '3.12'
         run: |
           uv tool install okflint
           okflint validate --manifest okf-base.yaml
+
+      - name: Wheel smoke (build → clean venv → packaged wf)
+        if: matrix.python-version == '3.12'
+        run: bash scripts/pkg/wheel-smoke.sh

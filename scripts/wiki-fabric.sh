@@ -19,11 +19,17 @@ set -euo pipefail
 FABRIC_REPO="${WIKI_FABRIC_REPO:-https://github.com/hybridindie/wiki-fabric.git}"
 DEFAULT_DIR="$(pwd)/wiki-fabric"   # harness clone default: CWD (override with --dir)
 SCRIPT_NAME="wf"
-WF_VERSION="0.2.0"
 # Harness root, resolved once at parse time to an ABSOLUTE path. BASH_SOURCE is
 # relative when invoked as 'bash scripts/wiki-fabric.sh', so computing this lazily
 # inside functions breaks after any `cd` (e.g. cmd_status cds into corpus/).
 _HARNESS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
+# Version single-read from pyproject.toml (audit: the hardcoded copy had
+# drifted 0.2.0 vs 0.3.0 — the installed shim self-reported the wrong age).
+# Tolerant read: a shim at ~/.local/bin has no pyproject beside it — a failed
+# read must NOT abort the script under `set -euo pipefail`; version reports
+# "unknown" instead of crashing.
+WF_VERSION="$(sed -n 's/^version = "\([^\"]*\)".*/\1/p' "${_WF_PYPROJECT:-${_HARNESS_ROOT}/pyproject.toml}" 2>/dev/null || true)"
+WF_VERSION="${WF_VERSION:-unknown}"
 
 # Colors
 RED='\033[0;31m'
@@ -776,8 +782,13 @@ EOF
             run_script "${fabric_dir}" "scripts/harness/hooks.py" reinstall --repos-from-config 2>/dev/null || true
         fi
 
-        # Self-update: refresh the installed CLI (it's a copy of this script)
-        local script_src="${fabric_dir}/scripts/wiki-fabric.sh"
+        # Self-update: refresh the installed CLI (it's a copy of this script).
+        # Source is THIS script (audit: fabric_dir/scripts/ only exists in a
+        # full harness-fabric checkout; the corpus layout has no scripts/ and
+        # the refresh silently no-oped). _HARNESS_ROOT is absolute-at-parse:
+        # cmd_update cds later in the flow and a relative BASH_SOURCE broke
+        # the copy (failed with "No such file", swallowed by the || chain).
+        local script_src="${_HARNESS_ROOT}/scripts/wiki-fabric.sh"
         for dest in "${HOME}/.local/bin/wf" "${HOME}/.local/bin/wiki-fabric"; do
             if [[ -f "${dest}" ]] && ! cmp -s "${script_src}" "${dest}" 2>/dev/null; then
                 cp "${script_src}" "${dest}" && chmod +x "${dest}" && ok "CLI refreshed: ${dest}"
@@ -1221,7 +1232,17 @@ case "${1:-help}" in
         echo ""
         ;;
     version)
-        echo "wf ${WF_VERSION} (harness: $(find_harness 2>/dev/null || echo unknown))"
+        # Version: the shim (~/.local/bin) itself carries no pyproject —
+        # resolve from the harness it found (falls back to parse-time read).
+        _ver="${WF_VERSION}"
+        if [[ "${_ver}" == "unknown" ]]; then
+            _h="$(find_harness 2>/dev/null || true)"
+            if [[ -n "${_h}" && -f "${_h}/pyproject.toml" ]]; then
+                _ver="$(sed -n 's/^version = "\([^\"]*\)".*/\1/p' "${_h}/pyproject.toml" 2>/dev/null || true)"
+                _ver="${_ver:-unknown}"
+            fi
+        fi
+        echo "wf ${_ver} (harness: $(find_harness 2>/dev/null || echo unknown))"
         echo "installed CLI: $(cli_sync_state)"
         ;;
     help|--help|-h)

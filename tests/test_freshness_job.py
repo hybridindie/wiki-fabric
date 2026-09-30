@@ -85,38 +85,54 @@ class TestUnknownProjects(unittest.TestCase):
         assert "no fabric" in src
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 class TestSandboxE2E(unittest.TestCase):
+    def _seed_repo(self, root):
+        """Tiny repo with conventional commits (deterministic local capture)."""
+        repo = root / "src-repo"
+        repo.mkdir()
+        def g(*a):
+            subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@t",
+                            "-c", "user.name=t"] + list(a), check=True,
+                           capture_output=True)
+        g("init", "-q", ".")
+        (repo / "a.md").write_text("x")
+        g("add", "."); g("commit", "-qm", "feat: evidence-worthy change")
+        (repo / "b.md").write_text("y")
+        g("add", "."); g("commit", "-qm", "fix: another one")
+        (repo / "c.md").write_text("z")
+        g("add", "."); g("commit", "-qm", "chore: filtered out")
+        return repo
+
     def test_capture_writes_evidence_and_state(self):
-        """Deterministic e2e against the local git history of THIS repo
-        (no gh needed): local path with a github remote? The runner only
-        uses gh for github; capture-git with a *local path* uses git log.
-        Verify the runner routes path-repos through capture and evidence
-        lands under the resolved corpus."""
+        """Deterministic e2e: a fabric sandbox + a seeded local repo whose
+        remote is NON-github (forces capture-git's local git-log route —
+        GitHub capture needs gh auth, which CI test jobs lack)."""
+        import shutil
         fab = Path("/tmp/wf-freshness-e2e")
         if fab.exists():
-            import shutil
             shutil.rmtree(fab)
         (fab / "corpus" / "evidence" / "raw").mkdir(parents=True)
+        repo = self._seed_repo(fab)
         (fab / "fabric.yaml").write_text(
-            "owner: test\nllm:\n  base_url: x\n  model: m\nrepos:\n  wiki-fabric:\n"
-            f"    path: {_SCRIPTS.parent}\n")
+            "owner: test\nllm:\n  base_url: x\n  model: m\nrepos:\n  seeded:\n"
+            f"    path: {repo}\n")
         env = {**os.environ, "WIKI_FABRIC_DIR": str(fab)}
         runner = _SCRIPTS / "cmd" / "freshness-job.py"
         r = subprocess.run([sys.executable, str(runner), "--no-reverify",
-                            "wiki-fabric"], env=env,
+                            "seeded"], env=env,
                            capture_output=True, text=True, timeout=600)
         # rc: 0 (clean) or 1 (captured drift — expected on first run)
         assert r.returncode in (0, 1), r.stderr[-500:]
-        git_dir = fab / "corpus" / "evidence" / "raw" / "wiki-fabric" / "git"
-        assert git_dir.is_dir(), f"capture wrote nothing: {r.stdout[-800]}"
+        git_dir = fab / "corpus" / "evidence" / "raw" / "seeded" / "git"
+        assert git_dir.is_dir(), f"capture wrote nothing: {r.stdout[-800:]}"
         captured_files = list(git_dir.glob("*.md"))
-        assert captured_files, "no evidence files captured"
-        marker = git_dir / ".last-capture"
-        assert marker.exists(), "since-state marker missing"
-        # local capture route: capture_git uses local git log → 'Capture summary'
-        # and the runner reported it
-        import shutil
+        assert captured_files, f"no evidence files captured: {r.stdout[-800:]}"
+        assert (git_dir / ".last-capture").exists(), "since-state marker missing"
+        # local commit records are commit-<sha>.md — 2 files: feat + fix;
+        # the chore commit is filtered by capture-git's conventional filter
+        assert len(captured_files) == 2, names
         shutil.rmtree(fab)
+
+
+if __name__ == "__main__":
+    unittest.main()
