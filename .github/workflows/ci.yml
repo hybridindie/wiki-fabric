@@ -34,17 +34,17 @@ jobs:
         run: bash scripts/smoke-test.sh
 
       - name: Behavior evaluation (P4, zero-LLM)
-        run: uv run python scripts/eval/eval-behavior.py
+        run: uv run wf eval behavior
 
       - name: Stability evaluation (deterministic gates)
-        run: uv run python scripts/eval/eval-stability.py --skip-llm
+        run: uv run wf eval stability --skip-llm
 
       - name: Fabric lint (0 errors gate)
-        run: uv run python scripts/cmd/lint.py .
+        run: uv run wf lint
 
       - name: OKF v0.2 conformance (floor gate)
         if: matrix.python-version == '3.12'
-        run: uv run python scripts/cmd/lint.py . --okf
+        run: uv run wf lint --okf
 
       - name: OKF cross-check (okflint, external validator)
         if: matrix.python-version == '3.12'
