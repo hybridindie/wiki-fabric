@@ -146,9 +146,10 @@ def run(fabric_root: Path, args):
                   "local_model": local_model}
 
     # 3. Judgment tier
-    judge_on = _choice("\n  Judgment tier (Jev cloud / Laya local) — calibrated judging"
+    judge_on = _choice("\n  Judgment tier — calibrated judging"
                        "\n  for mining + eval gates + ingest verification:", [
         ("off — deterministic only (default; add later)", False),
+        ("on — ollama decision models local (tev1/nimble, no key, no egress)", "ollama"),
         ("on — Jev cloud (~$0.0004/call, key needed)", "cloud"),
         ("on — Laya local (Apple Silicon, on-device)", "local-laya-mlx"),
         ("on — Laya local cross-platform (pip laya, CPU)", "laya-torch"),
@@ -161,8 +162,10 @@ def run(fabric_root: Path, args):
                                            "local_backend": "laya"}
     else:
         route = "cloud" if judge_on == "cloud" else "local"
-        backend = {"laya-mlx": "laya", "laya-torch": "laya", **{}}.get(judge_on, "laya") \
-            if judge_on in ("laya-mlx", "laya-torch") else "generic"
+        backend = {"laya-mlx": "laya", "laya-torch": "laya",
+                   "ollama": "ollama"}.get(judge_on, "generic") \
+            if judge_on not in ("laya-mlx", "laya-torch", "ollama") else \
+            {"laya-mlx": "laya", "laya-torch": "laya", "ollama": "ollama"}[judge_on]
         entry = {"enabled": True, "route": route}
         if route == "cloud":
             key = _ask("  TypeSafe API key (stored in secrets.env)", "").strip()
@@ -173,6 +176,12 @@ def run(fabric_root: Path, args):
             cfg["integrations"]["judgment"] = {
                 "enabled": True, "route": "cloud",
                 "cloud_model": _ask("  Jev model", "jev-latest")}
+        elif backend == "ollama":
+            model = _ask("  Ollama decision model (pull with ollama pull <tag>)",
+                         "tev1:latest").strip() or "tev1:latest"
+            cfg["integrations"]["judgment"] = {
+                "enabled": True, "route": "local", "local_backend": "ollama",
+                "local_model": model}
         else:
             cfg["integrations"]["judgment"] = {
                 "enabled": True, "route": "local", "local_backend": backend}

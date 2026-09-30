@@ -29,7 +29,7 @@ Integration shape (fabric.yaml):
       judgment:
         enabled: true
         route: local           # "cloud" | "local"
-        local_backend: laya    # "laya" (auto: MLX when installed) | "generic"
+        local_backend: laya    # "laya" (auto: MLX if installed) | "ollama" (tev1/nimble decision models) | "generic"
         cloud_model: jev-latest # cloud route only
 """
 
@@ -48,6 +48,12 @@ for _dir in (_HERE, _HERE.parent / "lib"):
         sys.path.insert(0, str(_dir))
 
 from fabric_config import get_config, get_integrations, is_integration_active, get_tuning
+
+
+def fabric_config_get(key, default):
+    """Tiny accessor so the ollama judge route reads live config (llm.)
+    without a second import cycle."""
+    return get_config().get(key, default)
 
 CLOUD_MODEL_DEFAULT = "jev-latest"
 MINING_THRESHOLD_DEFAULT = 0.8  # live-calibrated: unrelated pairs score ~0.75
@@ -320,19 +326,24 @@ def _is_apple_silicon():
 
 
 def _ask_local(q):
-    """On-device judging, platform-aware with a cross-platform default (#29):
+    """Local judging, platform-aware (#29; 2026-09-30: decision models add
+    the ollama tier — Tev/Nimble-class server-local classifiers, egress-free):
 
       1. laya-as-judge (MLX, Apple Silicon) — fastest path (7-14ms)
       2. upstream laya (pip laya, torch/ONNX — macOS/Linux/Windows, CPU/GPU)
          — same typed heads, calibrated; first load downloads ~430MB
-      3. generic route (any local GGUF/text model via local_llm, lowest
+      3. ollama decision models (repo-external, server-local; e.g. tev1:latest,
+         nimble:latest) — typed-ish heads via format:json probes; no egress
+      4. generic route (any local GGUF/text model via local_llm, lowest
          fidelity) — explicit only, opt-in
 
-    Config: local_backend: laya (auto) | laya-mlx | laya-torch | generic."""
+    Config: local_backend: laya (auto) | laya-mlx | laya-torch | ollama | generic."""
     cfg = judgment_config()
     backend = cfg.get("local_backend", "laya")
     if backend == "generic":
         return _ask_generic(q)
+    if backend == "ollama":
+        return _ask_ollama(q)
     if backend == "laya-torch":
         return _ask_laya_direct(q)
     if backend in ("laya", "laya-mlx"):
@@ -346,6 +357,87 @@ def _ask_local(q):
                 # fall through to the cross-platform laya path
         return _ask_laya_direct(q)
     raise JudgmentUnavailable(f"unknown local_backend: {backend!r}")
+
+
+_OLLAMA_JUDGE_REJECT_TAGS = ("cloud", "hosted", "remote")  # hosted farm = egress
+
+
+def _judge_ollama_model():
+    """The ollama decision-model tag for the judge tier: judgment.local_model,
+    else llm.local_model when it's an ollama tag, else tev1:latest (4B, fast).
+    An EXPLICIT hosted-farm tag (':cloud') is a config error — refused here,
+    not silently swapped for the default."""
+    cfg = judgment_config()
+    m = cfg.get("local_model")
+    if not m:
+        m = fabric_config_get("llm", {}).get("local_model")
+    if m and str(m).strip():
+        if _ollama_tag_ok(m):
+            return m
+        if _looks_like_ollama_tag(m):
+            raise JudgmentUnavailable(
+                f"ollama judge tag {m!r} is not a server-local tag (hosted-farm/"
+                f"port tags egress) — use e.g. tev1:latest, nimble:latest")
+        # HF id / on-device path: not an ollama-managed judge — ollama default
+    return "tev1:latest"
+
+
+def _looks_like_ollama_tag(tag):
+    """Tag-shape check (indifferent to local/cloud): bare <name>:<tail>."""
+    m = str(tag or "")
+    return ":" in m and "/" not in m and not m.startswith(":")
+
+
+def _ollama_tag_ok(tag):
+    m = str(tag or "")
+    if ":" not in m or "/" in m:
+        return False
+    tail = m.rsplit(":", 1)[1].lower()
+    if tail in _OLLAMA_JUDGE_REJECT_TAGS:
+        return False
+    # ollama tags are <name>:< alphanumeric tag> — a bare numeric tail is a
+    # host:port, not a model tag ("localhost:11434", "host:port:9999")
+    if not re.match(r"[a-z0-9][a-z0-9._-]*", tail) or tail.isdigit():
+        return False
+    return True
+
+
+def _ask_ollama(q):
+    """Judgment via the LOCAL ollama server (/api/chat, format:json). The
+    decision-model tier: egress-free, ~100ms. think:false for reasoner-class
+    tags (tev1); format:json forces JSON verdicts on classifier tags
+    (nimble). Cloud tags in config are refused — egress, not local."""
+    model_id = _judge_ollama_model()
+    if not _ollama_tag_ok(model_id):
+        raise JudgmentUnavailable(
+            f"ollama judge tag {model_id!r} is a hosted-farm tag (cloud) — egress; "
+            f"use a server-local decision model (e.g. tev1:latest, nimble:latest)")
+    value_prompt = (f'Answer as a JSON object: {{"value": <probability 0..1>}}'
+                    if q["kind"] == "noul"
+                    else 'Answer as a JSON object: {"value": <option|score>, "confidence": <float>}')
+    payload = {
+        "model": model_id,
+        "stream": False,
+        "think": False,
+        "format": "json",
+        "messages": [{"role": "user", "content":
+                      f"Question: {q['question']}\n\nState:\n{q.get('state') or ''}\n\n"
+                      f"{value_prompt}\nDo not explain; output the JSON object only."}],
+    }
+    base_url = (fabric_config_get("llm", {}).get("base_url")
+                or "http://localhost:11434").replace("/v1", "")
+    import urllib.request
+    req = urllib.request.Request(
+        f"{base_url}/api/chat",
+        data=_json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            out = _json.loads(resp.read().decode())
+    except Exception as e:
+        raise JudgmentUnavailable(f"ollama judge call failed ({model_id}): {e}")
+    content = (out.get("message") or {}).get("content") or ""
+    return _parse_local(content)
 
 
 def _ask_laya_direct(q):
