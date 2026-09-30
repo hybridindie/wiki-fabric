@@ -658,7 +658,7 @@ cmd_install() {
     if [[ "${skip_vault}" == false ]]; then
         local vault_path="$(vault_dir "${fabric_dir}")"
         info "Setting up Obsidian vault at ${vault_path}..."
-        bash "${install_dir}/scripts/setup-vault.sh" "${vault_path}" 2>/dev/null || true
+        mkdir -p "${vault_path}/.obsidian"  # scaffold (setup-vault.sh retired)
         run_script "${fabric_dir}" "scripts/cmd/vault-refresh.py" "${vault_path}" 2>/dev/null || true
         echo ""
     fi
@@ -841,7 +841,7 @@ EOF
     if [[ -d "${vault_path}" ]]; then
         echo ""
         info "Refreshing vault..."
-        bash "scripts/setup-vault.sh" "${vault_path}" 2>/dev/null || true
+        mkdir -p "${vault_path}/.obsidian"  # scaffold (setup-vault.sh retired)
         run_script "${fabric_dir}" "scripts/cmd/vault-refresh.py" "${vault_path}" || true
     fi
 
@@ -892,42 +892,13 @@ sys.exit(main(["status"]))
 }
 
 # === Command: vault ===
+# Single implementation: the python dispatch's vault verb (scaffold + refresh
+# + --check; setup-vault.sh was retired when this was ported). The bash copy
+# still referenced the retired script and audited its own tree.
 cmd_vault() {
-    local fabric_dir
-    if ! fabric_dir=$(find_fabric); then
-        err "Fabric not found. Run: ${SCRIPT_NAME} install"
-        exit 1
-    fi
-
-    # Explicit positional path wins; otherwise let vault-refresh resolve the
-    # output dir from fabric.yaml vault.path (defaulting to a sibling vault).
-    local vault_path=""
-    local check=false quiet=false
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --check) check=true; shift ;;
-            --quiet) quiet=true; shift ;;
-            *) vault_path="$1"; shift ;;
-        esac
-    done
-    echo ""
-    if [[ "$check" == true ]]; then
-        info "Checking Obsidian vault..."
-        if [[ -n "$vault_path" ]]; then
-            run_script "${fabric_dir}" "scripts/cmd/vault-refresh.py" "${vault_path}" --check
-        else
-            run_script "${fabric_dir}" "scripts/cmd/vault-refresh.py" --check
-        fi
-    else
-        info "Setting up / refreshing Obsidian vault..."
-        if [[ -n "$vault_path" ]]; then
-            bash "${fabric_dir}/scripts/setup-vault.sh" "${vault_path}" 2>/dev/null || true
-            run_script "${fabric_dir}" "scripts/cmd/vault-refresh.py" "${vault_path}"
-        else
-            bash "${fabric_dir}/scripts/setup-vault.sh" 2>/dev/null || true
-            run_script "${fabric_dir}" "scripts/cmd/vault-refresh.py"
-        fi
-    fi
+    local vault_args=("${@:-}")
+    # pass through --check and positional path (mirrors dispatch's parser)
+    run_script "$(find_fabric)" "scripts/cmd/vault-refresh.py" ${vault_args[@]+"${vault_args[@]}"}
 }
 
 # === Command: bootstrap ===
@@ -978,7 +949,19 @@ case "${1:-help}" in
         ;;
     vault)
         shift
-        cmd_vault "$@"
+        # single implementation: the python dispatch's vault verb
+        # (explicit path scaffold+refresh, --check, default-audit)
+        if [[ -n "${1:-}" ]] && [[ ! "${1}" =~ ^- ]]; then
+            fdir=$(find_fabric)
+            if [[ "${2:-}" == "--check" ]]; then
+                run_script "${fdir}" "scripts/cmd/vault-refresh.py" "$1" --check "${@:3}"
+            else
+                mkdir -p "$1" "$1/.obsidian"
+                run_script "${fdir}" "scripts/cmd/vault-refresh.py" "$1"
+            fi
+        else
+            cmd_vault "$@"
+        fi
         ;;
     rebuild-index)
         shift
