@@ -46,10 +46,12 @@ TODAY = date.today()
 # The agent actor is the compiler model that wrote the prose; mechanical pages are
 # stamped as a process. `by` carries the full actor; `at` is an ISO-8601 instant.
 def _wiki_root():
-    """The wiki output dir — inside the configured vault when set, else
-    in-repo (CORPUS_ROOT/wiki/). The vault is a real output dir (no symlinks)."""
-    v = get_vault_path()
-    return (v / "wiki") if v else (CORPUS_ROOT / "wiki")
+    """The wiki output dir — the LAYOUT-AWARE default resolver rule
+    (fabric_config._default_vault_root: nested corpus → corpus/wiki). An
+    explicit vault.path NAMES the wiki root directly (no /wiki appending —
+    that double-nested wiki/wiki in corpus layouts)."""
+    from fabric_config import _default_vault_root
+    return _default_vault_root()
 
 
 def select_topics(min_claims=None):
