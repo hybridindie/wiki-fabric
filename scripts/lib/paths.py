@@ -61,11 +61,19 @@ def xdg_fabric_root():
 
 
 def env_fabric_root():
-    """$WIKI_FABRIC_DIR when set and present."""
+    """$WIKI_FABRIC_DIR when set AND has content — an empty dir is a pending
+    install target, not a fabric (resolving it made status audit an empty
+    tree and invent "structure drift"; parity with the bash chain)."""
     env = os.environ.get("WIKI_FABRIC_DIR")
     if env and Path(env).expanduser().is_dir():
-        return Path(env).expanduser().resolve()
+        d = Path(env).expanduser().resolve()
+        if is_fabric_dir(d) and not _dir_is_empty(d):
+            return d
     return None
+
+
+def _dir_is_empty(d):
+    return not any(d.iterdir())
 
 
 def sibling_vault_of(harness_dir):

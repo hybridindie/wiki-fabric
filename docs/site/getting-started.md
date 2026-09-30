@@ -87,14 +87,16 @@ run with plain `python3` from a clone (dev mode: a clone holding a
 ```bash
 uv tool install wiki-fabric                 # CLI only
 uv tool install wiki-fabric --with mcp      # + wf-mcp server
-uv tool install wiki-fabric --with mcp --with fastembed --with laya
-                                            # + semantic re-rank + local judgment
+uv tool install wiki-fabric --with mcp --with fastembed
+                                            # + semantic re-rank (embeddings tier)
 ```
 
 Extras compose per machine: `mcp` (the MCP server), `fastembed` (the
-embeddings tier), `laya` (upstream laya — cross-platform local judgment),
-and on Apple Silicon optionally `--with "~/path/to/laya-as-judge[mlx]"`
-(the fastest local judge). `uv tool upgrade wiki-fabric` keeps them.
+embeddings tier). The judgment tier doesn't need an extra: the local-first
+route runs on **ollama decision models** (`ollama pull tev1:latest` — the
+same System One wire, localhost, no key). Optional on-device judges: `laya`
+(cross-platform, typed heads) and laya-as-judge[mlx] (Apple Silicon's
+fastest). `uv tool upgrade wiki-fabric` keeps them.
 
 **Dev mode (run from a clone — for working on wiki-fabric itself):**
 
@@ -227,7 +229,7 @@ wf hook install --extract-claims   # doc-drift commits auto-capture + auto-inges
 | Python | 3.11+ (uv installs its own) |
 | git | any recent version |
 | LLM endpoint | anything OpenAI-compatible — Ollama (`curl -fsSL https://ollama.com/install.sh \| sh`) is the zero-config default; see [Configuration](./configuration) for OpenAI/OpenRouter/etc. |
-| On-device models (optional) | dev mode: `pip install -e ".[local]"`; packaged tool: `uv tool install --reinstall wiki-fabric --with laya` (upstream laya covers GGUF/CPU and Apple via torch) — see [Integrations](./integrations#setting-up-the-local-laya-backend) for the judgment tier |
+| Local models (optional) | the judgment tier needs no extra — `ollama pull tev1:latest` (local-first default). On-device extraction weights: `pip install -e ".[local]"` (dev) or `uv tool install --reinstall wiki-fabric --with laya` — see [Integrations](./integrations#setting-up-the-local-backends) |
 | **Git hooks** | **required for the freshness guarantee** — `wf hook install` per project (drift-gated: unchanged docs cost 0 tokens; LLM only with `--extract-claims`) |
 | Platform | macOS / Linux (Windows untested; git hooks are POSIX-verified only) |
 

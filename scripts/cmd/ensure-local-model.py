@@ -8,7 +8,7 @@
 #
 # Resolution order (see fabric_config.get_local_model):
 #   --model flag > llm.local_model in fabric.yaml > WIKI_LLM_LOCAL_MODEL > platform default
-#   (mlx-community/gemma-4-e4b-it-4bit on Apple Silicon, GGUF elsewhere).
+#   gemma4:e4b-fixed default (ollama-served); on-device MLX/GGUF fallback tiers).
 
 import sys
 import sys as _s, pathlib as _p

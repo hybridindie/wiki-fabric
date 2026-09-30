@@ -178,7 +178,7 @@ In configuration, the split is three knobs plus per-repo overrides:
 llm:
   model: qwen2.5-coder:7b            # ops: query, capture, status
   compiler_model: glm-5.3-flash:cloud # extraction, synthesis, mining (eval-gated)
-  local_model: mlx-community/gemma-4-e4b-it-4bit  # privacy routes (on-device)
+  local_model: gemma4:e4b-fixed  # privacy routes (ollama-served; on-device HF ids also work)
 repos:
   my-sensitive-repo:
     extract: local       # route by sensitivity

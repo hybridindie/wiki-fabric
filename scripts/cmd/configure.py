@@ -129,10 +129,10 @@ def run(fabric_root: Path, args):
                  cfg.get("llm", {}).get("model", "qwen2.5-coder:7b"))
     compiler = _ask("  Compiler model (claim extraction, synthesis)",
                     cfg.get("llm", {}).get("compiler_model", "deepseek-v4.1-flash:cloud"))
-    local_default = "mlx-community/gemma-4-e4b-it-4bit" \
-        if platform.system() == "Darwin" and platform.machine() == "arm64" \
-        else "unsloth/gemma-4-e4b-it-GGUF"
-    local_model = _ask("  Local model (on-device routing, optional)",
+    from fabric_config import DEFAULT_LOCAL_MODELS
+    local_default = DEFAULT_LOCAL_MODELS.get(sys.platform,
+                                             DEFAULT_LOCAL_MODELS["default"])
+    local_model = _ask("  Local model (local-tier routing; ollama tag or HF id)",
                        cfg.get("llm", {}).get("local_model") or local_default)
     if llm_key:
         secrets_to_write["WIKI_LLM_API_KEY"] = llm_key

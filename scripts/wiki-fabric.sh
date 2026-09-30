@@ -206,8 +206,12 @@ run_script() {
 # ($HOME/wiki-fabric, bare clones, cwd-parent sibling harnesses) are gone:
 # they produced verdicts about a DIFFERENT tree than `wf status` audited.
 find_fabric() {
-    # 1. Env override
-    if [[ -n "${WIKI_FABRIC_DIR:-}" ]] && [[ -d "${WIKI_FABRIC_DIR}" ]]; then
+    # 1. Env override (must LOOK like a fabric — an empty $WIKI_FABRIC_DIR is
+    # a pending install target, not a fabric: resolving it made status audit
+    # an empty tree and invent "structure drift"; audit finding, 2026-09-30)
+    if [[ -n "${WIKI_FABRIC_DIR:-}" && -d "${WIKI_FABRIC_DIR}" ]] &&
+       [[ -f "${WIKI_FABRIC_DIR}/fabric.yaml" || -d "${WIKI_FABRIC_DIR}/corpus" ||
+          -d "${WIKI_FABRIC_DIR}/evidence" || -d "${WIKI_FABRIC_DIR}/projects" ]]; then
         echo "${WIKI_FABRIC_DIR}"
         return 0
     fi
@@ -514,9 +518,14 @@ cmd_install() {
     echo "  Dir:   ${install_dir}"
     echo ""
 
-    # Check if already installed
+    # Check if already installed (the HARNESS; the fabric config may still
+    # need creating — a caller pre-creating $WIKI_FABRIC_DIR then installing
+    # used to no-op here and later "audit" an empty tree as drift)
     if [[ -d "${install_dir}/.git" ]]; then
         warn "Fabric already installed at ${install_dir}"
+        local _target_fabric="${WIKI_FABRIC_DIR:-$(fabric_home)}"
+        mkdir -p "${_target_fabric}"
+        ensure_fabric_yaml "${_target_fabric}" "${with_graphify}"
         read -p "  Update instead? [Y/n] " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z "$REPLY" ]]; then

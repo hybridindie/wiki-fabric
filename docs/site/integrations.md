@@ -34,7 +34,7 @@ conditions, measured where the claim is quantitative:
 | **graphify** | the repo's docs reference code symbols; you navigate a codebase you didn't write; refactors rename code (AST staleness catches what sha256 can't) | pure-ops repo with no code claims; docs-only fabric |
 | **obsidian** | you read/curate the wiki by hand in Obsidian (two-way harvest protects human edits) | the wiki is generated-read-only for you (agent-only consumption) |
 | **embeddings** | corpus > ~2k claims (lexical collisions multiply; embedding space still separates topics) or cross-project word divergence is common; re-benchmark (`exp-embeddings-spike-2026-09-28`) at scale — at ~500 claims the measured gain was thin (+3 rel@10, none @5) | small corpus; strictly within-topic queries; determinism audits that can't tolerate an ML component |
-| **judgment** | promotion mining gets real traffic (near-miss pairs decide dossiers); ingest volume is high enough that self-preference risk matters (verify-effects second opinion). The local cross-platform path (upstream laya, torch/ONNX) removes the "no key and no Mac" limitation — only the lowest-fidelity skip case remains | tiny fabric where keyword clustering suffices |
+| **judgment** | promotion mining gets real traffic (near-miss pairs decide dossiers); ingest volume is high enough that self-preference risk matters (verify-effects second opinion); retrieval fusion (rerank + hop gating) wanted. The ollama decision-model tier (tev1/nimble, localhost, no key) removes the "no key and no Mac" limitation — laya remains the on-device zero-server option | tiny fabric where keyword clustering suffices |
 
 The deterministic core never depends on any of these — every gate, lint, and
 manifest works with all integrations off.
@@ -115,8 +115,10 @@ Config (see [Configuration](./configuration#judgment-tier)):
 integrations:
   judgment:
     enabled: true
-    route: local          # cloud (TypeSafe Jev) | local (Laya-MLX on-device)
-    local_backend: laya   # laya-as-judge[mlx] (typed heads, real inference)
+    route: local           # cloud (TypeSafe Jev) | local
+    local_backend: ollama  # local-first: tev1/nimble via ollama's /v1/systemone
+    local_model: tev1:latest
+    # alternatives: laya | laya-mlx | laya-torch | generic
 ```
 
 

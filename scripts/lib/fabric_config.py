@@ -10,7 +10,7 @@ fabric.yaml schema:
       base_url: http://localhost:11434/v1   # any OpenAI-compatible endpoint
       api_key: ollama                        # or a real key for cloud providers
       model: qwen2.5-coder:7b
-      local_model: mlx-community/gemma-4-e4b-it-4bit   # resolves "local" routes
+      local_model: gemma4:e4b-fixed   # resolves "local" routes (ollama-served)
     repos:
       my-project:
         path: ../my-project          # relative to fabric root, or absolute

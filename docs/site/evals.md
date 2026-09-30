@@ -241,7 +241,7 @@ whatever model is configured for cheap queries:
 |---------|---------|----------|
 | `llm.model` | `qwen2.5-coder:7b` | ops: capture, status, cheap query synthesis |
 | `llm.compiler_model` | `deepseek-v4.1-flash:cloud` | claim extraction (`ingest --extract-claims`), synthesis, promotion mining |
-| `llm.local_model` | platform-split: `mlx-community/gemma-4-e4b-it-4bit` (Apple Silicon) / `unsloth/gemma-4-e4b-it-GGUF` (other) | resolves `repos.<slug>.<stage>: local` routes — extraction, synthesis, dossier generation on-device |
+| `llm.local_model` | platform default: `gemma4:e4b-fixed` (ollama-served); offline fallbacks `mlx-community/gemma-4-e4b-it-4bit` (Apple Silicon) / `unsloth/gemma-4-e4b-it-GGUF` (other) | resolves `repos.<slug>.<stage>: local` routes — extraction, synthesis, dossier generation on-device |
 
 ```bash
 # Override per-run (e.g. test a different compiler model):

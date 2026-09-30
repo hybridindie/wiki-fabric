@@ -362,11 +362,13 @@ sync:
 integrations:
   judgment:
     enabled: true
-    route: cloud          # "cloud" (TypeSafe Jev) | "local" (on-device)
+    route: cloud          # "cloud" (TypeSafe Jev) | "local" (local backends)
     cloud_model: jev-latest
     api_key: <jev key>    # or TYPESAFE_API_KEY env; gitignored file OK
     # base_url: http://localhost:8000   # self-hosted judge (stuntd/laya-serve)
-    local_backend: laya   # laya (auto) | laya-mlx | laya-torch | generic
+    local_backend: ollama # ollama (tev1/nimble — System One on localhost; local-first)
+                          # laya (auto) | laya-mlx | laya-torch | generic
+    local_model: tev1:latest   # the ollama decision-model tag (judge tier)
 ```
 
 The judgment tier (`integrations.judgment`) enables low-variance
@@ -377,10 +379,12 @@ It is **never** used by `wf query` or `lint` (0-token core);
 API — `POST /v1/systemone`, key via `TYPESAFE_API_KEY` (env or the
 machine-local `secrets.env`), endpoint overridable
 (`base_url` / `TYPESAFE_BASE_URL`, e.g. a self-hosted stuntd/laya-serve).
-`route: local` runs an on-device judge — Laya-MLX typed heads on Apple
-Silicon, upstream laya (torch/ONNX) on Linux/Windows, or the generic GGUF
-route via `llm.local_model` — auto-picked by platform unless you pin
-`local_backend`. Every judgment records backend, model, and probability —
+`route: local` picks per machine — the **ollama decision-model tier**
+(local-first default suggestion: `tev1:latest`/`nimble:latest` via ollama's
+own `/v1/systemone`, egress-free, no key, no weights download), Laya-MLX
+typed heads on Apple Silicon, upstream laya (torch/ONNX) on Linux/Windows,
+or the generic GGUF route via `llm.local_model`. Auto-picked by platform
+unless you pin `local_backend`. Every judgment records backend, model, and probability —
 low-variance judgment, not determinism; near-threshold values escalate to
 human review. See [Optional Integrations](./integrations#the-judgment-tier).
 
