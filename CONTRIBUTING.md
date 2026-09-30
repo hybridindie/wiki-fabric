@@ -156,6 +156,10 @@ Repo-only: docs/, tests/, scripts/pkg/, .github/, and personal config
   the canonical homes for config, extraction, frontmatter parsing, eval
   scoring, and on-device generation. A local copy of one of these helpers is
   a bug waiting to drift (tests guard the import shape).
+- **PR review scope** — `pr-agent.toml` configures the repo's PR-review bot
+  (third-party app for this repo's own PRs): it reviews only the Python/shell
+  code surface and skips docs/content/config files. Internal plumbing — not
+  part of the product, not a wiki-fabric feature.
 
 ---
 

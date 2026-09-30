@@ -132,10 +132,6 @@ Tests marked `live` (run with plain `pytest tests/ -q`) exercise real on-device
 models and self-skip when the model isn't cached or the platform lacks the
 backend.
 
-### PR review agent
-
-The repo carries a `pr-agent.toml` that configures [PR-Agent](https://github.com/Codium-ai/pr-agent) to review only Python and shell scripts. Once the app is installed on the repo, every PR gets a scored review targeting anti-loop guards, path resolution safety, actor conventions, staleness gates, and local model routing — the things that matter in this codebase.
-
 ## 4. Connect your first project
 
 ```bash
