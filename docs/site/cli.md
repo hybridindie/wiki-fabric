@@ -95,7 +95,8 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 | `wf ingest --changed <slug>` | Ingest only NEW/CHANGED raw files for a project (sha256 anti-loop) |
 | `wf ingest --pending <slug>` | Claim-extract recorded-but-unextracted sources (anti-loop safe) |
 | `wf ingest --reclaim <slug>` | Recover zero-claim ingested sources → back to pending (silent-orphan recovery, #93) |
-| `wf query "<question>"` | Ask the fabric a question (lexical + graph expansion; lineage-shaped queries gain an evidence-graph provenance section; graphify symbol discovery when enabled) |
+| `wf query "<question>" [--no-rerank]` | Ask the fabric a question (lexical + graph expansion; lineage-shaped queries gain an evidence-graph provenance section; graphify symbol discovery when enabled; optional System One fusion rerank — a local decision model reorders the top candidates, latency-budgeted, silent fall-back to lexical order) |
+| `wf freshness [--dry-run] [projects...]` | Scheduled upstream-freshness cycle (0 tokens): capture-git `--since-state` + mechanical auto-reverify per connected repo; scheduled on the corpus CI by `sync setup/init` (opt-in var `WIKI_FABRIC_FRESHNESS=1`); drift flags land in `wf gate` |
 | `wf thread <session-or-claim-id> [--stats] [--json]` | Evidence-graph thread lookup: claims citing the session/PR, files touched, continuation edges |
 | `wf log --project <slug> ...` | Log an experience event |
 | `wf hook {install\|uninstall\|status}` | Git post-commit auto-capture+ingest (`--extract-claims` for LLM on drift) |

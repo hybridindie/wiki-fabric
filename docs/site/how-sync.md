@@ -114,7 +114,33 @@ reality:
    manifests before it misleads
 5. **Structure drifts** (new project, moved dir) → `wf vault --check` fails
    loudly; `wf vault` self-heals
+6. **Upstream moves while every machine is dormant** → the scheduled
+   freshness cycle (`wf freshness`, daily on the corpus CI when
+   `WIKI_FABRIC_FRESHNESS=1`): capture-git pulls new upstream PRs/issues
+   (sha256-gated) + mechanically re-verifies claims — refreshed evidence
+   lands in the team corpus and reaches every machine on `sync pull`
+   (see [the freshness cycle](#the-scheduled-upstream-freshness-cycle)).
 
 None of these require remembering to run something. The hooks run on commits;
 the lint runs in CI and on every command that could be affected; `wf status`
 surfaces whatever needs attention.
+
+## The scheduled upstream-freshness cycle
+
+Hooks capture *local* commit drift on *active* machines. A team whose every
+machine is dormant for a week can still carry silently stale claims — so a
+cadence that depends on nobody's work habits can't be load-bearing. The
+freshness cycle closes that hole:
+
+- **`wf freshness [--dry-run] [projects...]`** (0 tokens): per connected
+  project — `capture-git --since-state` (new upstream PRs/issues →
+  evidence/raw/, sha256-gated) then `review --auto-reverify` (mechanical
+  quote+hash re-verification). Exit 1 = drift captured; the human gate
+  (`wf gate`) lists anything that needs a decision.
+- **Scheduled on the corpus CI**: `wf sync init`/`sync setup` scaffold
+  `.github/workflows/freshness.yml` (daily, opt-in per repo variable
+  `WIKI_FABRIC_FRESHNESS=1`). The run commits refreshed evidence and pushes;
+  teammates pick it up on the next `wf sync pull`.
+- **Evidence-plane only**: the cycle never rewrites claims — stale/contested
+  states are the representation; re-extraction stays opt-in per repo
+  routing tier.

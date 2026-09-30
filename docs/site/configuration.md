@@ -47,7 +47,7 @@ llm:
   #   elsewhere:     unsloth/gemma-4-e4b-it-GGUF         (GGUF, ~4 GB Q4_K_M)
   # Missing models are offered for download at first use (human-gated y/N),
   # or pre-fetch with: wf models ensure [--yes]
-  local_model: mlx-community/gemma-4-e4b-it-4bit
+  local_model: gemma4:e4b-fixed   # ollama-served (local tier); MLX/HF ids work offline too
 
 # ─── Connected repos (namespaces): each project gets its own folder ────────
 # inside the fabric, so its claims stay separate from global knowledge ─────
@@ -183,7 +183,7 @@ Three model roles, each independently configurable:
 |---------|---------|----------|
 | `llm.model` | `qwen2.5-coder:7b` | ops: capture, status, cheap query synthesis |
 | `llm.compiler_model` | `deepseek-v4.1-flash:cloud` | claim extraction, synthesis, promotion mining (compiler work) |
-| `llm.local_model` | `mlx-community/gemma-4-e4b-it-4bit` (Apple Silicon) / `unsloth/gemma-4-e4b-it-GGUF` (other) | resolves `repos.<slug>.<stage>: local` routes |
+| `llm.local_model` | `gemma4:e4b-fixed` (ollama-served, egress-free) — offline/HF alternatives: `mlx-community/gemma-4-e4b-it-4bit` (Apple Silicon) / `unsloth/gemma-4-e4b-it-GGUF` (other) | resolves `repos.<slug>.<stage>: local` routes; ollama tags need `ollama pull <tag>` |
 
 **Why a separate compiler model?** Claim extraction compiles sources into
 canonical evidence — the fabric's most sensitive operation. Cross-model

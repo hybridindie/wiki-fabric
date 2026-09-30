@@ -128,7 +128,46 @@ never a mid-run crash.
 Local route dispatches through the on-device judgment stack (see below).
 
 
-## Setting up the local (Laya) backend
+## Setting up the local backends
+
+Four local judge options now exist; pick per machine:
+
+### 1. Ollama decision models (default suggestion — no key, no weights download)
+
+Ollama serves the **full System One wire protocol locally** — the same
+`POST /v1/systemone` the Jev cloud route uses, minus auth. The decision
+family (Tev/Nimble-class reasoner-classifiers) is what the server-side gate
+accepts:
+
+```bash
+ollama pull tev1:latest     # 4B decision model (Together AI) — default judge
+ollama pull nimble:latest   # 9B typed classifier (Bespoke Labs)
+```
+
+```yaml
+integrations:
+  judgment:
+    enabled: true
+    route: local
+    local_backend: ollama
+    local_model: tev1:latest   # default; nimble:latest for sharper typed heads
+```
+
+Live-calibrated (tev1 keep-warm, localhost): ~70ms/page batched rerank,
+deterministic repeated verdicts, sharp separation on diverse candidates
+(0.97 direct answer / 0.03 unrelated in one 4-page batch). `:cloud` tags
+(`glm-5.3-flash:cloud`) are **refused on this tier** — they route over
+ollama's hosted farm (egress), which would silently break the local tier's
+privacy contract. Gemma/gemma4-class tags are valid ollama models but not
+System One-supported (`"...use a local Nimble or Tev model"`) — the judge
+falls back to `tev1:latest` with a notice.
+
+The same endpoint powers **retrieval fusion** (see
+[the retrieval tier](./how-retrieval)): top-candidate relevance rerank,
+graph-hop gating, and claim-pair relation triage
+(`scripts/lib/systemone.py`).
+
+### 2. Laya (on-device typed heads, Apple Silicon fastest)
 
 ```bash
 git clone https://github.com/rbrus/laya-as-judge.git
