@@ -145,10 +145,11 @@ def _enrich_page(path, config, mode, related_links=None):
 
 
 def _wiki_root():
-    """The wiki output dir — inside the configured vault when set, else
-    in-repo (fabric_config.CORPUS_ROOT/wiki/). The vault is a real output dir (no symlinks)."""
-    v = fabric_config.get_vault_path()
-    return (v / "wiki") if v else (fabric_config.CORPUS_ROOT / "wiki")
+    """The wiki output dir — the LAYOUT-AWARE default (parity:
+    fabric_config._default_vault_root); an explicit vault.path names the
+    wiki root directly (no /wiki append — the 2026-09-30 audit found the
+    double-nested wiki/wiki in nested-corpus layouts)."""
+    return fabric_config._default_vault_root()
 
 
 def _staleness(review_after, stale_after):
