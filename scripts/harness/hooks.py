@@ -31,9 +31,9 @@ for _dir in (_HERE, _HERE.parent / "lib"):
 from pathlib import Path
 
 _HOOK_MARKER = "# wiki-fabric-hook-start"
-HOOK_VERSION = 3  # bump when hook script bodies change; wf hook status reports drift
-# v3: merge body syntax fix (bare else: killed every installed post-merge hook
-# at exec — silent since v2) + merge-time capture-git step (#85)
+HOOK_VERSION = 4  # bump when hook script bodies change; wf hook status reports drift
+# v4: doubled `done` in _PYTHON_DETECT syntax error (every installed hook died
+# at exec — regression from dabba11/#152); shell blocks now bash -n-gated in tests.
 _HOOK_MARKER_END = "# wiki-fabric-hook-end"
 _CHECKOUT_MARKER = "# wf-checkout-hook-start"
 # HOOK_VERSION is stamped inside the marker line: "# wiki-fabric-hook-start v<N>"
@@ -49,6 +49,8 @@ _FABRIC_OUTPUT_DIRS = (
 _PYTHON_DETECT = """\
 # Resolve the fabric root + venv python at hook time (not install time):
 # the fabric can be re-installed or updated after the hook is installed.
+# Candidate chain mirrors scripts/lib/paths.py (#152) — the single resolver
+# home; kept inline because the hook runs before any wf import is possible.
 _WF_FABRIC=""
 for _wf_cand in "${WIKI_FABRIC_DIR:-}" "${XDG_DATA_HOME:-$HOME/.local/share}/wiki-fabric" "$HOME/Development/wiki-fabric" "$HOME/wiki-fabric" "$(dirname "$(pwd)")/wiki-fabric"; do
     [ -n "$_wf_cand" ] || continue
@@ -260,7 +262,7 @@ def _hooks_dir(root: Path) -> Path:
                 d.mkdir(parents=True, exist_ok=True)
                 return d
     except (OSError, FileNotFoundError):
-        pass
+        pass  # candidate hooks dir unwritable → try the next candidate
     try:
         res = subprocess.run(
             ["git", "-C", str(root), "rev-parse", "--git-path", "hooks"],
@@ -273,7 +275,7 @@ def _hooks_dir(root: Path) -> Path:
                 d.mkdir(parents=True, exist_ok=True)
                 return d
     except (OSError, FileNotFoundError):
-        pass
+        pass  # last candidate failed → default .git/hooks below
     d = root / ".git" / "hooks"
     d.mkdir(parents=True, exist_ok=True)
     return d
@@ -341,6 +343,12 @@ def _uninstall_hook(hooks_dir: Path, name: str, marker: str, marker_end: str) ->
 
 
 def _find_fabric_dir():
+    """Harness-tree locator for hook install — delegates to paths.py (#152)."""
+    from paths import find_harness_root
+    try:
+        return find_harness_root()
+    except Exception:
+        pass  # paths.py unimportable → bootstrapping candidates below (pre-harness)
     candidates = [
         os.environ.get("WIKI_FABRIC_DIR", ""),
         str(Path.home() / "Development" / "wiki-fabric"),

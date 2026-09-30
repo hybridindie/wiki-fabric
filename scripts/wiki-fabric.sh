@@ -158,7 +158,8 @@ cli_sync_state() {
 
 # === Helper: resolve the vault dir (the content root). The vault IS the fabric:
 # corpora under vault/corpus/, generated wiki under vault/wiki/. Config key /
-# env override, else the fabric dir itself. ===
+# env override, else the fabric dir itself. Order mirrors scripts/lib/paths.py
+# find_vault_dir_for_fabric (#152): env → vault.path → the fabric root.
 vault_dir() {
     local fabric_dir="${1:-$(pwd)}"
     # env override
@@ -194,6 +195,10 @@ run_script() {
 }
 
 # === Helper: find fabric root ===
+# Chain mirrors scripts/lib/paths.py (#152, single truth): env override →
+# harness-sibling vault → cwd walk → XDG. The python-only fallbacks
+# ($HOME/wiki-fabric, bare clones, cwd-parent sibling harnesses) are gone:
+# they produced verdicts about a DIFFERENT tree than `wf status` audited.
 find_fabric() {
     # 1. Env override
     if [[ -n "${WIKI_FABRIC_DIR:-}" ]] && [[ -d "${WIKI_FABRIC_DIR}" ]]; then
@@ -208,39 +213,31 @@ find_fabric() {
         echo "${sibling_vault}"
         return 0
     fi
-    # 2b. Dev layout from any cwd: sibling vault of a sibling harness clone.
-    # The installed CLI is a copy — its BASH_SOURCE can't see the harness
-    # checkout, so also look for <cwd-sibling>/vault (the documented dev
-    # layout: wiki-fabric/ + vault/ side by side).
-    local cwd_parent="$(dirname "$(pwd)")"
-    if [[ -d "${cwd_parent}/wiki-fabric/scripts" && ( -d "${cwd_parent}/vault/corpus" || -d "${cwd_parent}/vault/evidence" ) ]]; then
-        echo "${cwd_parent}/vault"
-        return 0
-    fi
-    # 3. XDG default fabric (the vault)
+    # 3. cwd walk: nearest ancestor with a fabric marker (fabric.yaml at the
+    # root, flat content, or the nested corpus/ layout). A harness tree
+    # (runner + cmd/) stops the walk — its dev fabric.yaml is not a fabric.
+    local d="${PWD}"
+    while true; do
+        if [[ -f "${d}/scripts/wiki-fabric.sh" && -d "${d}/scripts/cmd" ]]; then
+            break
+        fi
+        if [[ -f "${d}/fabric.yaml" || -d "${d}/evidence" || -d "${d}/projects" || -d "${d}/corpus" ]]; then
+            echo "${d}"
+            return 0
+        fi
+        local parent="$(dirname "${d}")"
+        [[ "${parent}" == "${d}" ]] && break
+        d="${parent}"
+    done
+    # 4. XDG default fabric (the vault)
     local fh; fh="$(fabric_home)"
-    if [[ -f "${fh}/fabric.yaml" ]] || [[ -d "${fh}/evidence" ]] || [[ -d "${fh}/projects" ]]; then
+    if [[ -f "${fh}/fabric.yaml" || -d "${fh}/evidence" || -d "${fh}/projects" || -d "${fh}/corpus" ]]; then
         echo "${fh}"
         return 0
     fi
-    # 4. Dev fallback: a configured harness clone (fabric.yaml present)
-    for cand in "${DEFAULT_DIR}" "${HOME}/wiki-fabric"; do
-        if [[ -f "${cand}/fabric.yaml" ]]; then
-            echo "${cand}"
-            return 0
-        fi
-    done
-    # 5. Bare harness clone: scripts still runnable, commands needing content fail cleanly
-    for cand in "${DEFAULT_DIR}" "${HOME}/wiki-fabric"; do
-        if [[ -d "${cand}/scripts" ]]; then
-            echo "${cand}"
-            return 0
-        fi
-    done
-    # 6. Sibling of current directory (dev checkouts)
-    local parent="$(dirname "$(pwd)")"
-    if [[ -d "${parent}/wiki-fabric/scripts" ]]; then
-        echo "${parent}/wiki-fabric"
+    # 5. Bare harness clone (scripts still runnable; content commands fail cleanly)
+    if [[ -d "${script_dir}/scripts" ]]; then
+        echo "${script_dir}"
         return 0
     fi
     return 1
@@ -256,9 +253,11 @@ ensure_fabric_yaml() {
         return 0
     fi
 
-    # Get owner from git config
+    # Owner: the ONE chain (#155-B) — git config user.name, sentinel 'you'
+    # (mirrors fabric_config.detect_owner_fallback; bash can't import it here)
     local owner
-    owner=$(git config --global user.name 2>/dev/null || echo "you")
+    owner=$(git config --global user.name 2>/dev/null || true)
+    [[ -n "${owner}" ]] || owner="you"
 
     # Create config from example
     if [[ -f "${fabric_dir}/fabric.yaml.example" ]]; then
@@ -267,15 +266,23 @@ ensure_fabric_yaml() {
         ok "Created fabric.yaml (owner: ${owner})"
         warn "Edit ${config_file} to add your repos"
     else
-        # Minimal config
-        cat > "${config_file}" << EOF
+        # The ONE template (fabric_config.DEFAULT_TEMPLATE, #153) — the old
+        # inline copy omitted compiler_model and tripped the G4 gate.
+        local tmpl_sh
+        tmpl_sh="$(dirname "${BASH_SOURCE[0]}")/lib/render_template.py"
+        if [[ -f "${tmpl_sh}" ]] && command -v python3 >/dev/null 2>&1; then
+            python3 "${tmpl_sh}" owner="${owner}" ${enable_graphify:+--graphify} > "${config_file}"
+        else
+            cat > "${config_file}" << EOF
 owner: ${owner}
 llm:
   base_url: http://localhost:11434/v1
   api_key: ollama
   model: qwen2.5-coder:7b
+  compiler_model: deepseek-v4.1-flash:cloud
 repos: {}
 EOF
+        fi
         ok "Created minimal fabric.yaml (owner: ${owner})"
     fi
 
@@ -806,115 +813,45 @@ EOF
 }
 
 # === Command: status ===
+# (#155-A) Single implementation: the python dispatch's _status. This bash
+# copy used to re-implement the whole report (own find_fabric chain + awk
+# yaml) and audited a DIFFERENT tree than the packaged `wf status` on the
+# same machine; it now delegates and keeps only the bash-specific CLI-sync
+# line (installed ~/.local/bin/wf vs this harness script).
 cmd_status() {
-    local fabric_dir
-    if ! fabric_dir=$(find_fabric); then
-        err "Fabric not found. Run: ${SCRIPT_NAME} install"
-        exit 1
+    local fabric_dir=""
+    fabric_dir="$(find_fabric 2>/dev/null || true)"
+    local harness_dir
+    harness_dir="$(find_harness 2>/dev/null || echo "${fabric_dir:-$PWD}")"
+    local dispatch_rc
+    WF_BASH_HARNESS_DIR="${harness_dir}" \
+        run_python "${fabric_dir}" -c '
+import os, sys
+from pathlib import Path
+h = Path(os.environ["WF_BASH_HARNESS_DIR"])
+if (h / "src" / "wiki_fabric" / "dispatch.py").exists():
+    sys.path.insert(0, str(h / "src"))
+try:
+    from wiki_fabric.dispatch import main
+except ModuleNotFoundError as e:
+    print(f"wiki_fabric not importable ({e}) — run: wf update", file=sys.stderr)
+    raise SystemExit(1)
+sys.exit(main(["status"]))
+'
+    dispatch_rc=$?
+    if [[ "${dispatch_rc}" -ne 0 ]]; then
+        return "${dispatch_rc}"
     fi
-
-    echo ""
-    echo "════════════════════════════════════════════"
-    echo "   Wiki Fabric — Status"
-    echo "════════════════════════════════════════════"
-    echo ""
-
-    # Location
-    ok "Fabric: ${fabric_dir}"
-
-    # Vault
-    local vault_path="$(vault_dir "${fabric_dir}")"
-    if [[ -d "${vault_path}" ]]; then
-        local vault_state
-        vault_state=$(run_script "${fabric_dir}" "scripts/cmd/vault-refresh.py" "${vault_path}" --check --quiet 2>/dev/null; echo "exit=$?")
-        if [[ "$vault_state" == *"exit=0"* ]]; then
-            ok "Vault:  ${vault_path} (fresh)"
-        else
-            warn "Vault:  ${vault_path} (structure drift — run: wf vault)"
-        fi
-    else
-        warn "Vault:  not set up (run: ${SCRIPT_NAME} vault)"
-    fi
-
-    # CLI sync (installed ~/.local/bin/wf vs this harness script)
-    local cli_state; cli_state="$(cli_sync_state)"
+    # bash-side extra: CLI sync (this harness script vs the installed wf)
+    local cli_state
+    cli_state="$(cli_sync_state)"
     case "${cli_state}" in
         current) ok "CLI:     current (v${WF_VERSION})" ;;
         stale)   warn "CLI:   STALE - installed wf differs from harness; run: wf update" ;;
         missing) warn "CLI:   not installed - run: wf install (or copy scripts/wiki-fabric.sh to ~/.local/bin/wf)" ;;
         package) ok "CLI:     packaged (uv tool, v${WF_VERSION})" ;;
-        *)       info "CLI:   dev mode (running from harness)" ;;
     esac
-
-    # LLM
-    if [[ -f "${fabric_dir}/fabric.yaml" ]]; then
-        local harness_scripts_dir
-        harness_scripts_dir="$(find_harness 2>/dev/null || echo "${fabric_dir}")/scripts"
-        local llm_model=$(grep "^  model:" "${fabric_dir}/fabric.yaml" 2>/dev/null | head -1 | awk '{print $2}')
-        local compiler_model=$(grep "^  compiler_model:" "${fabric_dir}/fabric.yaml" 2>/dev/null | head -1 | awk '{print $2}')
-        ok "LLM:    ${llm_model:-not configured}"
-        ok "Compiler: ${compiler_model:-${llm_model:-not configured}} (claim extraction, synthesis, promotion)"
-        # The inline checks import fabric_config (shipped with the HARNESS, not
-        # the fabric content tree) — resolve its path via find_harness, else the
-        # import fails and `set -euo pipefail` tears down cmd_status early.
-        local local_model
-        local_model=$(run_python "${fabric_dir}" -c "
-import sys; sys.path.insert(0, '${harness_scripts_dir}')
-from fabric_config import get_local_model; print(get_local_model())" 2>/dev/null || true)
-        if [[ -n "${local_model}" ]]; then
-            if run_python "${fabric_dir}" -c "
-import sys, os; sys.path.insert(0, '${harness_scripts_dir}')
-from fabric_config import find_local_model_path
-mid = sys.argv[1]
-sys.exit(0 if find_local_model_path(mid) or os.path.isdir(os.path.expanduser(mid)) else 1)" "${local_model}" 2>/dev/null; then
-                ok "Local:  ${local_model} (cached)"
-            else
-                warn "Local:  ${local_model} (not downloaded — run: ${SCRIPT_NAME} models ensure)"
-            fi
-        fi
-    fi
-
-    # Inventory counts — content lives in the corpus (${fabric_dir}/corpus)
-    local corpus_dir="${fabric_dir}/corpus"
-    cd "${corpus_dir}"
-    local claims=$(find evidence/claims -name "claim-*.md" 2>/dev/null | wc -l | tr -d ' ')
-    local sources=$(find evidence/sources -name "src-*.md" 2>/dev/null | wc -l | tr -d ' ')
-    local concepts=$(find concepts -name "concept-*.md" 2>/dev/null | wc -l | tr -d ' ')
-    local patterns=$(find patterns -name "pattern-*.md" 2>/dev/null | wc -l | tr -d ' ')
-    local projects=$(find projects -maxdepth 1 -type d | wc -l | tr -d ' ')
-    local entities=$(find global/entities -name "entity-*.md" 2>/dev/null | wc -l | tr -d ' ')
-    local discovered
-    discovered=$(run_python "${fabric_dir}" -c "
-import sys; sys.path.insert(0, '${harness_scripts_dir}')
-from fabric_config import get_config, get_discovered_repos
-print(len(get_discovered_repos(get_config())))" 2>/dev/null || echo 0)
-
-    echo ""
-    echo "  Inventory:"
-    echo "    Claims:             ${claims}"
-    echo "    Sources:            ${sources}"
-    echo "    Concepts:           ${concepts}"
-    echo "    Patterns:           ${patterns}"
-    echo "    Projects connected: ${projects}"
-    echo "    Discovered:         ${discovered} (overlay auto-discovery)"
-    echo "    Entity pages:       ${entities}"
-
-    # Lint health
-    echo ""
-    if run_script "${fabric_dir}" "scripts/cmd/lint.py" "${corpus_dir}" 2>/dev/null; then
-        ok "Lint: clean"
-    else
-        warn "Lint: has errors"
-    fi
-
-    # Graphify
-    if [[ -d "${corpus_dir}/global/graphs" ]] && [[ -n "$(ls "${corpus_dir}/global/graphs"/*.json 2>/dev/null)" ]]; then
-        ok "Graphify: graphs imported"
-    else
-        info "Graphify: not configured (optional)"
-    fi
-
-    echo ""
+    return 0
 }
 
 # === Command: vault ===

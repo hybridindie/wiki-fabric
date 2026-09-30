@@ -21,7 +21,7 @@ def _sh(*args, cwd=None):
     return _git_sh(*args, cwd=str(cwd or fabric_config.CORPUS_ROOT))
 
 
-def gh_run(*args, timeout=60, capture_err=False):
+def gh_run(*args, timeout=60, capture_err=False):  # gh API write — 60s, agent-tunable
     """Run a gh CLI command for the corpus remote; return stdout or None.
     capture_err=True stashes stderr for gh_last_error() (pr-create failure
     diagnostics — a swallowed error once printed 'Awaiting human review'

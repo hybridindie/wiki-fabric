@@ -28,9 +28,15 @@ from collections import defaultdict
 
 from fabric_config import FABRIC_ROOT, get_tuning
 from fabric_config import CORPUS_ROOT, VAULT_ROOT
-from extract_backends import llm_config
+from extract_backends import llm_config, LLM_TEMPERATURE
 from fabric_config import get_local_model
-from wf_common import parse_frontmatter, norm
+from wf_common import STOPWORDS, parse_frontmatter, norm
+
+# Generic words filtered from concept NAMES (distinct from retrieval STOPWORDS —
+# here they pollute a title, not a score; #155 audit: was two inline copies)
+CONCEPT_NAME_FILTER = STOPWORDS | {
+    "per", "not", "must", "can", "cannot", "only", "all", "each",
+}
 
 CLAIMS_DIR = VAULT_ROOT / "evidence" / "claims"
 CONCEPTS_BASE = VAULT_ROOT
@@ -76,10 +82,7 @@ def generate_concept_slug(cluster, existing_stems):
     all_words = []
     for c in cluster:
         words = set(norm(c["statement"]).split())
-        stopwords = {"the", "a", "an", "is", "of", "to", "in", "and", "or", "for",
-                     "on", "with", "at", "by", "from", "that", "this", "it", "as",
-                     "be", "are", "was", "were", "per", "not", "must", "can",
-                     "cannot", "only", "all", "each"}
+        stopwords = CONCEPT_NAME_FILTER
         all_words.append(words - stopwords)
 
     if not all_words:
@@ -177,7 +180,7 @@ def synthesize_concept(cluster, concept_slug):
         client = openai.OpenAI(base_url=base_url, api_key=api_key)
         response = client.chat.completions.create(
             model=model,
-            temperature=0.1,
+            temperature=LLM_TEMPERATURE,
             messages=[
                 {"role": "system", "content": "You are a knowledge synthesizer. Synthesize related claims into concept definitions. Draw ONLY from the provided claims. Return ONLY a valid JSON object."},
                 {"role": "user", "content": prompt}
@@ -237,14 +240,14 @@ def write_concept_page(concept_slug, cluster, synthesis, domain):
 
     concept_path.write_text(f"""---
 type: concept
-title: {synthesis.get("title", concept_slug.replace("-", " ").title())}
+title: {_concept_title_scalar(synthesis, concept_slug)}
 domain: [{", ".join(domain_list)}]
 claims:
 {chr(10).join(f'  - "[[{c["stem"]}]]"' for c in cluster)}
 created: {today}
 ---
 
-# Concept: {synthesis.get("title", concept_slug.replace("-", " ").title())}
+# Concept: {_concept_title(synthesis, concept_slug)}
 
 ## Definition
 
@@ -271,6 +274,19 @@ created: {today}
 
     return concept_path
 
+
+
+def _concept_title(synthesis, concept_slug):
+    """Concept display title (LLM-provided or slug-derived)."""
+    title = str((synthesis or {}).get("title") or concept_slug.replace("-", " ").title())
+    return title
+
+
+def _concept_title_scalar(synthesis, concept_slug):
+    """Frontmatter-safe title scalar (#e2e finding: 'Epic: One graph...' — an
+    unquoted colon broke yaml on every concept with a colon in the title)."""
+    from wf_common import yaml_scalar
+    return yaml_scalar(_concept_title(synthesis, concept_slug))
 
 def synthesize_uncovered(cfg=None, threshold=0.4, min_claims=2, dry_run=False):
     """Synthesize concept pages for claims not yet covered by any concept.
@@ -421,10 +437,7 @@ def cluster_by_concept(claims, threshold):
         if pi != pj:
             parent[pi] = pj
 
-    stopwords = {"the", "a", "an", "is", "of", "to", "in", "and", "or", "for",
-                 "on", "with", "at", "by", "from", "that", "this", "it", "as",
-                 "be", "are", "was", "were", "per", "not", "must", "can",
-                 "cannot", "only", "all", "each"}
+    stopwords = CONCEPT_NAME_FILTER
 
     for i in range(n):
         for j in range(i + 1, n):

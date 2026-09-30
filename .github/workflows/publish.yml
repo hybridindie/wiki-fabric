@@ -10,6 +10,7 @@ name: Publish to PyPI
 #   python3 -m build
 #   uv run pytest tests/ -m "not live" -q
 #   bash scripts/smoke-test.sh
+#   bash scripts/pkg/wheel-smoke.sh   (CI runs it in the build job)
 
 'on':
   push:
@@ -44,10 +45,7 @@ jobs:
         run: python3 -m build
 
       - name: Smoke the wheel
-        run: |
-          uv venv /tmp/wf-wheel && uv pip install --python /tmp/wf-wheel/bin/python dist/*.whl
-          /tmp/wf-wheel/bin/wf version
-          /tmp/wf-wheel/bin/wf lint --help >/dev/null && echo "wheel CLI ok"
+        run: WHEEL_SMOKE_SKIP_BUILD=1 bash scripts/pkg/wheel-smoke.sh
 
       - uses: actions/upload-artifact@v4
         with:

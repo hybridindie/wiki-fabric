@@ -178,7 +178,7 @@ def _render_opencode_session(db_path, session_id, min_turns):
         try:
             parts_by_msg.setdefault(mid, []).append(_json.loads(data))
         except Exception:
-            continue
+            continue  # malformed JSONL line — transcripts are skip-tolerant by design
 
     msgs = []
     for mid, data in rows:
@@ -187,7 +187,7 @@ def _render_opencode_session(db_path, session_id, min_turns):
             m["id"] = mid
             msgs.append(m)
         except Exception:
-            continue
+            continue  # malformed record — skip-tolerant (see :180)
 
     user_turns = 0
     out = []
@@ -309,7 +309,7 @@ def capture_claude(project, project_root, raw_dir, since_ms, limit, min_turns, d
             try:
                 rec = json.loads(line)
             except Exception:
-                continue
+                continue  # malformed JSONL line — skip-tolerant (see :181)
             role = rec.get("type")
             msg = rec.get("message") or {}
             content = msg.get("content")
@@ -433,7 +433,7 @@ def _read_codex_session(jsonl_path, project_root):
         try:
             rec = _json.loads(line)
         except Exception:
-            continue
+            continue  # malformed JSONL line — skip-tolerant (see :181)
         rec_type = rec.get("type")
         payload = rec.get("payload") or {}
         ptype = payload.get("type")
@@ -443,7 +443,7 @@ def _read_codex_session(jsonl_path, project_root):
                 from datetime import datetime as _dt
                 last_ts = int(_dt.fromisoformat(ts.replace("Z", "+00:00")).timestamp() * 1000)
             except Exception:
-                pass
+                pass  # timestamp metadata only — session ordering degrades mildly
         if rec_type == "session_meta":
             sid = payload.get("id") or sid
             cwd = payload.get("cwd") or cwd
@@ -506,7 +506,7 @@ def capture_gemini(project, project_root, raw_dir, since_ms, limit, min_turns, d
         try:
             record = json.loads(path.read_text(encoding="utf-8", errors="replace"))
         except Exception:
-            continue
+            continue  # unreadable session file — skip-tolerant (see :181)
         sid = str(record.get("sessionId") or path.stem)
         turns, files_touched = [], []
         for msg in record.get("messages") or []:

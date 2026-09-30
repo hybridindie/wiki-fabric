@@ -97,13 +97,14 @@ def prune_fabric_yaml(config, moves):
         if overlay_path is not None and overlay_path.parent.parent == parent and not entry:
             del repos[slug]  # fully discoverable — entry adds nothing
         n += 1
-    cfg_path.write_text(_yaml.dump(data, sort_keys=False, allow_unicode=True))
+    from wf_common import dump_frontmatter
+    cfg_path.write_text(dump_frontmatter(data))
     return n
 
 
 def yaml_safe_dump(fm):
-    import yaml
-    return yaml.dump(fm, sort_keys=False, allow_unicode=True, default_flow_style=False)
+    from wf_common import dump_frontmatter
+    return dump_frontmatter(fm)
 
 
 def main():

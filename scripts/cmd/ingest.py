@@ -46,24 +46,13 @@ extract_claims_fn = extract_claims
 _MLX_ENSURE_DONE = False
 
 import threading as _threading
-from wf_common import slugify, yaml_scalar
+from wf_common import slugify, yaml_scalar, sha256_file as sha256, now_iso_utc as _dt_iso
 _LOG_LOCK = _threading.Lock()
 
 # main() sets this from argv (global). Module-level default so ingest_source()
 # stays callable as a library entry point (tests, evals) without a NameError.
 args_dry_run = False
 
-
-def _dt_iso():
-    """ISO-8601 instant with UTC offset (OKF §5: every timestamp has explicit offset)."""
-    from datetime import datetime, timezone
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def sha256(path):
-    h = hashlib.sha256()
-    h.update(Path(path).read_bytes())
-    return h.hexdigest()
 
 
 def find_project_namespace(vault_root):
@@ -109,6 +98,13 @@ def provenance_relations(source_slug, source_path):
     return [rel]
 
 
+def sanitize_wikilinks(text):
+    """LLM text may contain shell/code fragments like [[ "$x" == "y" ]] which
+    lint parses as wikilinks (broken → error, gates the commit). Body prose
+    in claim pages is NOT a link; escape the double bracket."""
+    return text.replace("[[", "\\[\\[")
+
+
 def claim_frontmatter(claim, source_slug, idx, provenance=None):
     quote = clean_quote(claim.get('quote', ''))
     statement = claim.get('statement', '')
@@ -143,7 +139,7 @@ last_verified: {date.today().isoformat()}
 
 # claim-{source_slug}-{idx:03d}
 
-{statement}
+{sanitize_wikilinks(statement)}
 """
 
 

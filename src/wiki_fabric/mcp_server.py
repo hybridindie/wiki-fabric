@@ -29,18 +29,34 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 import mcp.types as types
 
-# script resolution: dev tree (repo root) or packaged _harness/
+# script resolution: delegated to scripts/lib/paths.py (#152) — the single
+# home for "where is the harness tree?" (dev tree or packaged _harness/).
 _PACKAGED = Path(__file__).resolve().parent / "_harness"
-_HERE = _PACKAGED if (_PACKAGED / "scripts").exists() else Path(__file__).resolve().parent.parent.parent
+try:
+    import sys as _sys, pathlib as _plib
+    for _d in (_PACKAGED / "scripts" / "lib", Path(__file__).resolve().parent.parent.parent / "scripts" / "lib"):
+        if _d.is_dir() and str(_d) not in _sys.path:
+            _sys.path.insert(0, str(_d))
+    from paths import find_harness_asset as _find_asset
 
-
-def _script(rel: str) -> Path:
-    """Path to a shipped script (dev tree or packaged _harness)."""
-    for base in (_HERE, _PACKAGED):
-        cand = base / rel
+    def _script(rel: str) -> Path:
+        """Path to a shipped script (dev tree or packaged _harness)."""
+        p = _find_asset(rel)
+        if p.exists():
+            return p
+        # packaged fallback: the sibling _harness copy (prep-package staging)
+        cand = _PACKAGED / rel
         if cand.exists():
             return cand
-    raise FileNotFoundError(rel)
+        raise FileNotFoundError(rel)
+except Exception:
+    def _script(rel: str) -> Path:
+        """Fallback when scripts/lib isn't shipped: dev tree or _harness."""
+        for base in (Path(__file__).resolve().parent.parent.parent, _PACKAGED):
+            cand = base / rel
+            if cand.exists():
+                return cand
+        raise FileNotFoundError(rel)
 
 
 def _run_script(rel: str, *args: str, timeout: int = 120) -> str:

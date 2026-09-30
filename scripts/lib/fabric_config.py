@@ -41,22 +41,12 @@ try:
 except ImportError:
     HAVE_YAML = False
 
+from paths import (  # scripts/lib/paths.py — single resolver home (#152)
+    env_fabric_root, walk_for_fabric, sibling_vault_of, xdg_fabric_root,
+    find_corpus_root as _paths_find_corpus_root,
+)
+
 HARNESS_ROOT = Path(__file__).resolve().parent.parent.parent
-
-
-def _looks_like_fabric(d):
-    """A directory that can serve as the fabric root: holds fabric.yaml, or
-    content at its root, or the nested corpus layout."""
-    return ((d / "fabric.yaml").exists()
-            or (d / "evidence").exists()
-            or (d / "projects").exists()
-            or (d / "corpus").exists())
-
-
-def _is_harness_tree(d):
-    """A harness checkout (the tool): has the runner + cmd scripts. Never a
-    fabric — its fabric.yaml is a dev convenience resolved by rule 3."""
-    return (d / "scripts" / "wiki-fabric.sh").exists() and (d / "scripts" / "cmd").is_dir()
 
 
 def _resolve_fabric_root():
@@ -67,7 +57,7 @@ def _resolve_fabric_root():
     vault/corpus/ and the generated wiki under vault/wiki/. Configs live in
     the bootstrapped projects, not the harness.
 
-    Resolution chain:
+    Resolution chain (primitives from paths.py — #152 single truth):
       1. $WIKI_FABRIC_DIR  — explicit override (the vault dir)
       2. cwd or a cwd ancestor that looks like a fabric (sim finding: scripts
          run from inside a non-standard fabric layout resolved to the wrong
@@ -75,34 +65,23 @@ def _resolve_fabric_root():
       3. A vault/ sibling of this harness repo (dev mode) — the vault IS the fabric
       4. $XDG_DATA_HOME/wiki-fabric  — default install target (the vault)
     """
-    env = os.environ.get("WIKI_FABRIC_DIR")
-    if env and Path(env).expanduser().is_dir():
-        return Path(env).expanduser().resolve()
-
-    # cwd-based discovery: scripts invoked from inside a fabric should find
-    # THAT fabric — walk up from cwd, stop at the filesystem root. Harness
-    # trees (tool code) are skipped by signature, not by identity: their
-    # dev-mode fabric.yaml must not hijack resolution (sim finding #11).
-    cwd = Path.cwd()
-    for d in (cwd, *cwd.parents):
-        if _is_harness_tree(d):
-            break
-        if _looks_like_fabric(d):
-            return d.resolve()
+    found = env_fabric_root() or walk_for_fabric(Path.cwd())
+    if found:
+        return found
 
     # dev: the harness repo lives with a sibling vault/ that holds all content
-    sibling_vault = HARNESS_ROOT.parent / "vault"
-    if (sibling_vault / "corpus").exists() or (sibling_vault / "evidence").exists():
+    sibling_vault = sibling_vault_of(HARNESS_ROOT)
+    if sibling_vault:
         return sibling_vault
 
-    xdg_data = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
-    default = Path(xdg_data) / "wiki-fabric"
-    if default.is_dir():
-        return default
-
     # bare harness clone: no fabric — scripts still run (lint/help), commands
-    # needing content point at a still-absent vault.
-    return sibling_vault
+    # needing content point at a still-absent vault. (xdg_fabric_root() was
+    # checked eagerly above the sibling only when the walk found nothing —
+    # original semantics: sibling vault wins over XDG, XDG over the bare
+    # fallback path.)
+    return (sibling_vault_of(HARNESS_ROOT)
+            or xdg_fabric_root()
+            or (HARNESS_ROOT.parent / "vault"))
 
 
 FABRIC_ROOT = _resolve_fabric_root()
@@ -113,18 +92,7 @@ FABRIC_ROOT = _resolve_fabric_root()
 # at FABRIC_ROOT (pre-corpus layout), use FABRIC_ROOT as the corpus root.
 _CORPUS_SUBDIR = "corpus"
 
-def _resolve_corpus_root():
-    corpus = FABRIC_ROOT / _CORPUS_SUBDIR
-    # already nested?
-    if (corpus / "evidence").exists() or (corpus / "fabric.yaml").exists():
-        return corpus.resolve()
-    # legacy: content at fabric root?
-    if (FABRIC_ROOT / "evidence").exists() or (FABRIC_ROOT / "projects").exists():
-        return FABRIC_ROOT.resolve()
-    # fresh: use corpus/
-    return corpus.resolve()
-
-CORPUS_ROOT = _resolve_corpus_root()
+CORPUS_ROOT = _paths_find_corpus_root(FABRIC_ROOT)
 
 
 def get_CORPUS_ROOT_or_none():
@@ -338,8 +306,9 @@ def get_config():
         try:
             user_config = yaml.safe_load(config_file.read_text()) or {}
             config = _merge_user_config(config, user_config)
-        except Exception:
-            pass
+        except Exception as _e:
+            # a corrupt fabric.yaml must still yield DEFAULTS (never crash import)
+            print(f"warning: fabric.yaml unreadable, using defaults ({_e})", file=sys.stderr)
 
     # Env var overrides for LLM
     config["llm"]["base_url"] = os.environ.get("WIKI_LLM_BASE_URL", config["llm"]["base_url"])
@@ -373,6 +342,62 @@ def resolve_repo_path(config, repo_name):
     return (FABRIC_ROOT / p).resolve()
 
 
+# === Config template + writes =================================================
+# #153: fresh-install shapes diverged (bash fallback, skeleton.py, configure,
+# fabric.yaml.example) and fabric writes bypassed get_config's memoization —
+# the bash shape omitted compiler_model, tripping the G4 gate on promotion;
+# post-write reads served stale cache. One template + one saver.
+
+DEFAULT_TEMPLATE = """\
+owner: {owner}
+llm:
+  base_url: http://localhost:11434/v1
+  api_key: ollama
+  model: qwen2.5-coder:7b
+  compiler_model: deepseek-v4.1-flash:cloud
+
+repos: {{}}
+
+domains:
+  agent-systems:
+    signals: [agent, mcp, fastmcp, opencode, claude]
+  web-systems:
+    signals: [fastapi, flask, react, nextjs, supabase, postgresql]
+{extra}
+"""
+
+GRAPHIFY_EXTRA = """\
+integrations:
+  graphify:
+    enabled: true
+    graph_dir: graphify-out
+"""
+
+
+def render_config_template(owner="you", with_graphify=False, extra=""):
+    """A fresh fabric.yaml from the ONE template (#153). `extra` carries
+    caller-specific blocks (routing notes, integrations)."""
+    blocks = list(extra or "")
+    if with_graphify and "integrations:" not in (extra or ""):
+        blocks.insert(0, GRAPHIFY_EXTRA)
+    return DEFAULT_TEMPLATE.format(owner=owner, extra="\n".join(b for b in blocks if b))
+
+
+def save_config(config, path=None):
+    """Write fabric.yaml and invalidate the memoized get_config (#153: four
+    bootstrap dump sites + configure bypassed this and served stale data for
+    the rest of the process). One dump convention: wf_common.dump_frontmatter."""
+    from wf_common import dump_frontmatter
+    target = Path(path) if path else _find_config_file() or (CORPUS_ROOT / CONFIG_FILENAME)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    header = "# Wiki Fabric configuration — machine-local; edit freely\n" \
+             "# keys: <fabric>/secrets.env (gitignored), real env vars win\n"
+    target.write_text(header + dump_frontmatter(config), encoding="utf-8")
+    global _CONFIG_CACHE
+    _CONFIG_CACHE = None
+    return target
+
+
 def get_all_repo_names(config):
     """Return list of configured repo names (explicit + discovered)."""
     merged = get_discovered_repos(config)
@@ -402,7 +427,7 @@ def _overlay_fingerprint():
             st = overlay.stat()
             sig.append(f"{overlay}:{st.st_mtime_ns}")
     except OSError:
-        pass
+        pass  # vanished mid-scan → hash from what's readable (signature only)
     return hashlib.sha1("|".join(sig).encode()).hexdigest()
 
 
@@ -435,7 +460,7 @@ def get_discovered_repos(config):
                 continue
             fm = yaml.safe_load(m.group(1)) or {}
         except Exception:
-            continue
+            continue  # torn/partial overlay mid-write → not discoverable this cycle
         slug = str(fm.get("namespace") or "").strip()
         if not slug or slug in found:
             continue  # sibling name collision: first found wins; lint flags ambiguity
@@ -484,9 +509,33 @@ def get_domain_signals(config):
     return result
 
 
+def detect_owner_fallback():
+    """Git-config owner — the shared fallback of every owner chain (#155-B).
+    The four chains (bootstrap git>yaml>prompt, bash git-only, skeleton
+    git>you, sync gh>you) were one chain in four dialects; this is the one
+    git step, and the sentinel 'you' is the single documented default."""
+    try:
+        import subprocess
+        out = subprocess.run(["git", "config", "--global", "user.name"],
+                             capture_output=True, text=True, timeout=10)  # probe tier
+        val = out.stdout.strip()
+        if out.returncode == 0 and val:
+            return val
+    except Exception:
+        pass  # git absent/unconfigured → caller's sentinel (get_owner contract)
+    return None
+
+
+OWNER_SENTINEL = "you"
+
+
 def get_owner(config):
-    """Return the configured owner name."""
-    return config.get("owner", "you")
+    """Return the configured owner name. Chain (documented once, #155-B):
+    fabric.yaml owner → git config user.name → the OWNER_SENTINEL."""
+    owner = config.get("owner")
+    if owner and owner != OWNER_SENTINEL:
+        return owner
+    return detect_owner_fallback() or OWNER_SENTINEL
 
 
 
@@ -612,7 +661,7 @@ def ensure_local_model(model_id=None, assume_yes=False, config=None):
         try:
             is_tty = sys.stdin.isatty() and sys.stdout.isatty()
         except Exception:
-            pass
+            pass  # exotic stdio (IDE capture) → treat as non-interactive
         if not (assume_yes or is_tty):
             print(f"local model '{model_id}' not found locally; "
                   f"download with: wf models ensure (or --yes)", file=sys.stderr)

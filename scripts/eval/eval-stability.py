@@ -126,11 +126,11 @@ def claim_statements(claims_dir):
     """{normalized statement} set from claim files. Normalization is semantic-ish:
     unify ~ vs 'approximately', strip code-tick markup, collapse whitespace — so
     paraphrase-only differences don't mask real instability."""
+    from wf_common import claim_statement
     out = set()
     for f in claims_dir.glob("claim-*.md"):
-        m = re.search(r'statement:\s*"(.+)"', f.read_text(encoding="utf-8", errors="replace"))
-        if m:
-            s = m.group(1).strip().lower()
+        s = claim_statement(f).strip().lower()
+        if s:
             s = s.replace("~", "approximately ").replace("`", "")
             s = re.sub(r"\s+", " ", s).strip()
             out.add(s)
@@ -155,11 +155,13 @@ def gate_context_determinism(tmp, runs=20):
 
 def gate_rebuild_determinism(tmp, runs=3):
     """G2: rebuild-index twice → identical index.md (minus updated: line) + identical index.json."""
-    subprocess.run([sys.executable, str(tmp / "scripts" / "cmd/rebuild-index.py")],
+    subprocess.run([sys.executable, str(tmp / "scripts" / "cmd/rebuild-index.py"),
+                    "--root", str(tmp)],
                    capture_output=True, cwd=str(tmp))
     idx1 = (tmp / "registry" / "catalog.json").read_text()
     js1 = (tmp / "registry" / "catalog.json").read_text() if (tmp / "registry" / "catalog.json").exists() else ""
-    subprocess.run([sys.executable, str(tmp / "scripts" / "cmd/rebuild-index.py")],
+    subprocess.run([sys.executable, str(tmp / "scripts" / "cmd/rebuild-index.py"),
+                    "--root", str(tmp)],
                    capture_output=True, cwd=str(tmp))
     idx2 = (tmp / "registry" / "catalog.json").read_text()
     js2 = (tmp / "registry" / "catalog.json").read_text() if (tmp / "registry" / "catalog.json").exists() else ""
@@ -293,7 +295,8 @@ def main():
         timings["manifest_compile_ms"] = g1["measured_ms"]
 
         # G2: rebuild determinism + latency
-        _, t_rebuild = timed(sys.executable, tmp / "scripts" / "cmd/rebuild-index.py", cwd=tmp)
+        _, t_rebuild = timed(sys.executable, tmp / "scripts" / "cmd/rebuild-index.py",
+                             "--root", str(tmp), cwd=tmp)
         g2 = gate_rebuild_determinism(tmp)
         gates.append(g2)
         timings["rebuild_index_ms"] = round(t_rebuild * 1000, 1)

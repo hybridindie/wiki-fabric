@@ -6,7 +6,7 @@ from pathlib import Path
 
 import fabric_config
 from fabric_config import get_config, get_all_repo_names, get_repo_config, actor
-from wf_common import now_iso_utc
+from wf_common import now_iso_utc, claim_statement
 from wiki_lib.diagrams import MERMAID_REPAIR_COMMENT, _mermaid_valid, _validate_and_repair_diagrams
 
 TODAY = date.today()
@@ -51,8 +51,8 @@ def _producer_actor(config, mode):
 #   YAML frontmatter + provenance stamps
 #   SUMMARY: <one line>            (lead, matches first prose line)
 #   ... prose ...
-#   ## Key Takeaways               (the durable facts the page asserts)
-#   ## Sources                     (claim -> source -> locator backtrace)
+#   # Key Takeaways               (the durable facts the page asserts)
+#   # Sources                     (claim -> source -> locator backtrace)
 # And any mermaid fence that fails a lightweight syntactic check is degraded to a
 # `text` fence with a repair comment (repaired on the next run) — so a broken
 # diagram never ships.
@@ -113,10 +113,9 @@ def _enrich_page(path, config, mode, related_links=None):
         cp = fabric_config.CORPUS_ROOT / "evidence" / "claims" / f"{cs}.md"
         if not cp.exists():
             continue
-        s = cp.read_text(encoding="utf-8", errors="replace")
-        st = re.search(r"statement: \"?([^\n]+)", s)
+        st = claim_statement(cp)
         if st:
-            takeaways.append(f"- {st.group(1).strip()[:160]} [[{cs}]]")
+            takeaways.append(f"- {st.strip()[:160]} [[{cs}]]")
         prov = _claim_provenance(cp)
         if prov.get("source") and prov["source"] not in sources:
             sources[prov["source"]] = prov.get("locator") or ""
@@ -171,6 +170,17 @@ def _staleness(review_after, stale_after):
     if overdue > 0:
         return 2, f"review overdue {overdue}d", overdue
     return 1, None, 0
+
+
+def _claim_tier(cp):
+    """Claim freshness tier ('current'/'due'/'stale') from review_after/
+    stale_after. One copy (was duplicated in edges.py + export-wiki.py —
+    #155 audit)."""
+    s = cp.read_text(encoding="utf-8", errors="replace")
+    ra = re.search(r"review_after: (\S+)", s)
+    sa = re.search(r"stale_after: (\S+)", s)
+    tier, _, _ = _staleness(ra.group(1) if ra else None, sa.group(1) if sa else None)
+    return {1: "current", 2: "due", 3: "stale"}[tier]
 
 
 # --- Evidence-version freshness (#143 / living-wiki S1) ----------------------
@@ -247,8 +257,11 @@ def _claim_evidence_tier(claim_path):
 def _cite_claim(claim_path, idx):
     """Format a footnote citation for a claim. Returns (inline_ref, footnote)."""
     s = claim_path.read_text(encoding="utf-8", errors="replace")
-    m = re.search(r"^title: (.+)$|^statement: \"?([^\n]{10,})", s, re.MULTILINE)
-    title = (m.group(1) or m.group(2) or "")[:80].strip() if m else claim_path.stem
+    m = re.search(r"^title: (.+)$", s, re.MULTILINE)
+    if m:
+        title = m.group(1)[:80].strip()
+    else:
+        title = claim_statement(claim_path)[:80].strip() or claim_path.stem
     ra = re.search(r"review_after: (\S+)", s)
     sa = re.search(r"stale_after: (\S+)", s)
     tier, _, overdue = _staleness(ra.group(1) if ra else None, sa.group(1) if sa else None)
@@ -292,7 +305,7 @@ Return ONLY the markdown article body (no YAML frontmatter).
 
 def _llm_topic_article(topic, claims, dry_run=False):
     """Generate a narrative wiki article using the compiler model."""
-    from extract_backends import parse_json_array, llm_config
+    from extract_backends import parse_json_array, llm_config, LLM_TEMPERATURE, ARTICLE_MAX_TOKENS
     import openai, os
     cfg = llm_config(compiler=True)
     client = openai.OpenAI(base_url=cfg["base_url"], api_key=cfg["api_key"],
@@ -300,19 +313,18 @@ def _llm_topic_article(topic, claims, dry_run=False):
 
     evidence_parts = []
     for i, cp in enumerate(claims, 1):
-        s = cp.read_text(encoding="utf-8", errors="replace")
-        statement = re.search(r"statement: \"?([^\n]+)", s)
-        locator = re.search(r'locator: "?([^\n]+?)"?\s*$', s, re.MULTILINE)
+        statement = claim_statement(cp)
+        locator = re.search(r'locator: "?([^\n]+?)"?\s*$', cp.read_text(encoding="utf-8", errors="replace"), re.MULTILINE)
         project = re.search(r"claim-([a-z0-9-]+?)-", cp.stem)
         evidence_parts.append(
-            f"[{i}] {statement.group(1) if statement else cp.stem} "
+            f"[{i}] {statement if statement else cp.stem} "
             f"(from {project.group(1) if project else '?'}"
             f"{', ' + locator.group(1) if locator else ''})")
     evidence_text = "\n".join(evidence_parts)
 
     prompt = WIKI_ARTICLE_PROMPT.format(title=topic["title"], evidence=evidence_text)
     resp = client.chat.completions.create(
-        model=cfg["model"], temperature=0.1, max_tokens=4096,
+        model=cfg["model"], temperature=LLM_TEMPERATURE, max_tokens=ARTICLE_MAX_TOKENS,
         messages=[{"role": "system", "content": "You write wiki articles. Return ONLY valid markdown."},
                   {"role": "user", "content": prompt}])
     return resp.choices[0].message.content or ""
@@ -352,7 +364,7 @@ Return ONLY the markdown article body (no YAML frontmatter).
 
 def _llm_project_article(project, claims, topic_links, insight_takeaways, patterns, dry_run=False):
     """Generate a project retrospective using the compiler model."""
-    from extract_backends import llm_config
+    from extract_backends import llm_config, LLM_TEMPERATURE, ARTICLE_MAX_TOKENS
     import openai, os
     cfg = llm_config(compiler=True)
     client = openai.OpenAI(base_url=cfg["base_url"], api_key=cfg["api_key"],
@@ -361,9 +373,8 @@ def _llm_project_article(project, claims, topic_links, insight_takeaways, patter
     # evidence: durable claims (not transient)
     evidence_parts = []
     for i, cp in enumerate(claims, 1):
-        s = cp.read_text(encoding="utf-8", errors="replace")
-        statement = re.search(r"statement: \"?([^\n]+)", s)
-        evidence_parts.append(f"[{i}] {statement.group(1) if statement else cp.stem}")
+        statement = claim_statement(cp)
+        evidence_parts.append(f"[{i}] {statement if statement else cp.stem}")
     evidence_text = "\n".join(evidence_parts[:30])  # cap at 30 for context
 
     topic_refs = "\n".join(f"- [[{slug}]] {title}" for slug, title in topic_links)
@@ -373,7 +384,7 @@ def _llm_project_article(project, claims, topic_links, insight_takeaways, patter
         patterns="\n".join(f"- [[{ps}] {pt}" for ps, pt in patterns) if patterns else "_(none yet)_",
         insights=insights_text)
     resp = client.chat.completions.create(
-        model=cfg["model"], temperature=0.1, max_tokens=4096,
+        model=cfg["model"], temperature=LLM_TEMPERATURE, max_tokens=ARTICLE_MAX_TOKENS,
         messages=[{"role": "system", "content": "You write project retrospectives. Return ONLY valid markdown."},
                   {"role": "user", "content": prompt}])
     return resp.choices[0].message.content or ""
@@ -394,8 +405,7 @@ def _generate_topic_article(topic, mode="mechanical", dry_run=False):
     current, flagged, stale = [], [], []
     for cp in claims:
         tier, _, _ = _claim_evidence_tier(cp)
-        statement = re.search(r'statement: "?([^\n]+)', s := cp.read_text(encoding="utf-8", errors="replace"))
-        st = statement.group(1) if statement else ""
+        st = claim_statement(cp)
         if tier == 3:
             stale.append((cp, st))
         elif tier == 2:
@@ -522,10 +532,8 @@ def _generate_project_article(project, config, dry_run=False, mode=None):
     # staleness (calendar + evidence-version drift, #143)
     current, flagged, stale = [], [], []
     for cp in claims:
-        s = cp.read_text(encoding="utf-8", errors="replace")
         tier, label, _ = _claim_evidence_tier(cp)
-        statement = re.search(r'statement: "?([^\n]+)', s)
-        st = statement.group(1) if statement else ""
+        st = claim_statement(cp)
         if tier == 3:
             stale.append((cp, st))
         elif tier == 2:

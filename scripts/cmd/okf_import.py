@@ -55,8 +55,9 @@ def sha256(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def now_iso():
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+from wf_common import now_iso_utc as now_iso
 
 
 def import_bundle(bundle, scope, extract_claims=False, dry_run=False):
@@ -189,7 +190,7 @@ Imported from OKF bundle `{bundle}`. Trust tier **recorded, not inherited**
                                "--extract-claims", "--model", _m]
                     break
         except Exception:
-            pass
+            pass  # env probing failed → fall through to the subprocess with defaults
         r = subprocess.run(cmd, capture_output=True, text=True)
         print(r.stdout[-500:] if r.stdout else "")
 

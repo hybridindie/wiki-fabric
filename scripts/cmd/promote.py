@@ -30,9 +30,9 @@ PROMOTION_QUEUE = VAULT_ROOT / "registry" / "promotion-queue.md"
 PROMOTIONS_DIR = VAULT_ROOT / "registry" / "promotions"
 
 def write_frontmatter(path, fm, body):
-    import yaml
-    frontmatter = yaml.dump(fm, sort_keys=False, allow_unicode=True)
-    path.write_text(f"---\n{frontmatter}---\n{body}")
+    # shared writer since #154 (wf_common — one dump convention)
+    from wf_common import write_frontmatter
+    write_frontmatter(path, fm, body)
 
 
 def list_pending_promotions():

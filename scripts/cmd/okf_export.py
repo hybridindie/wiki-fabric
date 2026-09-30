@@ -45,16 +45,49 @@ def _fm_link(m, link_map):
     return f"{target}"
 
 
-def stem_to_path_map(scope_roots):
+def stem_to_path_map(scope_roots, ig=None):
     """Stem -> list of bundle-relative paths (first wins on export)."""
+    ig = ig or _user_ignores()
     index = {}
+    ig = _user_ignores()
     for root in scope_roots:
         for p in root.rglob("*.md"):
             rel = p.relative_to(VAULT_ROOT)
             if any(x in rel.parts for x in (".git", ".venv", "node_modules", "__pycache__", ".okflint", ".pytest_cache")):
                 continue
+            if _ignored_by_config(rel, ig):
+                continue
             index.setdefault(rel.stem.lower(), []).append(rel.as_posix())
     return index
+
+
+def _user_ignores(fabric_root=None):
+    """The fabric's ignore: config (#151/#153) — the SAME predicate lint uses;
+    a page invisible to lint must never leak into the portable bundle. With an
+    explicit --root, that root's fabric.yaml governs (a --root bundle export
+    must honor the bundle's own config, not the ambient machine's)."""
+    try:
+        import yaml
+        if fabric_root:
+            cfg_file = Path(fabric_root) / "fabric.yaml"
+            if cfg_file.exists():
+                raw = (yaml.safe_load(cfg_file.read_text()) or {}).get("ignore") or {}
+            else:
+                raw = {}
+            from fabric_config import get_ignores as _gi
+            return _gi({"ignore": raw})
+        from fabric_config import get_config, get_ignores
+        return get_ignores(get_config())
+    except Exception:
+        return {"globs": [], "regexes": [], "compiled": []}
+
+
+def _ignored_by_config(rel, ig):
+    from fabric_config import is_ignored
+    try:
+        return is_ignored(rel.as_posix(), ig)
+    except Exception:
+        return False
 
 
 def resolve_link(stem, link_map):
@@ -116,7 +149,8 @@ def export(out_dir, scope="all", dry_run=False, root=None):
             print(f"Error: unknown scope {scope!r}", file=sys.stderr)
             return 1
 
-    link_map = stem_to_path_map(roots)
+    ig = _user_ignores(VAULT_ROOT if root else None)
+    link_map = stem_to_path_map(roots, ig)
     concept_count = 0
 
     for root in roots:
@@ -124,6 +158,8 @@ def export(out_dir, scope="all", dry_run=False, root=None):
             rel = p.relative_to(VAULT_ROOT)
             parts = rel.parts
             posix_str = rel.as_posix()
+            if _ignored_by_config(rel, ig):
+                continue
             user_excludes = tuple(x.lstrip("./") for x in get_export_excludes())
             if any(x in parts for x in (".git", ".venv", "node_modules", "__pycache__", ".okflint", ".pytest_cache", ".obsidian", ".opencode")):
                 continue
@@ -167,7 +203,8 @@ def export(out_dir, scope="all", dry_run=False, root=None):
                     fmd2["sources"] = sources
                     body2 = body2.rstrip() + "\n\n" + "\n".join(footnotes) + "\n"
 
-            fm_yaml = yaml.dump(fmd2, sort_keys=False, allow_unicode=True, width=10**6)
+            from wf_common import dump_frontmatter
+            fm_yaml = dump_frontmatter(fmd2)
             # Wikilinks inside frontmatter values resolve too (resource, source_refs)
             fm_yaml = LINK_RE.sub(lambda m: _fm_link(m, link_map), fm_yaml)
             dest = out / rel

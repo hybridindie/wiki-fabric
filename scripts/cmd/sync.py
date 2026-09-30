@@ -35,7 +35,7 @@ import shutil
 from pathlib import Path
 from datetime import date, datetime
 import wf_common
-from wf_common import git_sh as _git_sh, parse_frontmatter, yaml_scalar
+from wf_common import git_sh as _git_sh, parse_frontmatter, yaml_scalar, TIMEOUT_GIT, TIMEOUT_API
 from sync_lib.policy import (sync_mode, evidence_prs_policy, classify_change,
                              classify_changes, pr_merge_policy, use_pr_mode,
                              machine_name, pr_branch_name)
@@ -43,10 +43,11 @@ from sync_lib.pr import (gh_run, gh_last_error, corpus_github_repo,
                          build_pr_body, push_via_pr,
                          change_set_manifests_for_range)
 
-def sh(*args, cwd=None, timeout=120):
+def sh(*args, cwd=None, timeout=TIMEOUT_GIT):
     return _git_sh(*args, cwd=str(cwd or VAULT_ROOT), timeout=timeout)
 from fabric_config import FABRIC_ROOT
 from fabric_config import CORPUS_ROOT, VAULT_ROOT
+import paths  # scripts/lib — single resolver home (#152)
 
 CONTENT_REMOTE_NAME = "corpus"
 SYNC_BRANCH = "main"
@@ -121,7 +122,7 @@ def describe_namespaces(names):
                 title = fm.get("title") or name
                 owner = fm.get("owner") or ""
             except Exception:
-                pass
+                pass  # unparseable README → fall back to the dir name (below)
         out.append(f"  projects/{name}/ — {title}" + (f" (owner: {owner})" if owner else ""))
     return out
 
@@ -153,10 +154,10 @@ def validate_fabric():
     AGENTS.md marker — scaffold it from the harness rather than failing
     (same gap install-time teammate onboarding hit; the corpus needs the
     marker for git validation, the harness clone has the source)."""
+    harness = paths.find_harness_root()
     registry = VAULT_ROOT / "registry"
     registry.mkdir(parents=True, exist_ok=True)
     if not (VAULT_ROOT / "AGENTS.md").exists():
-        harness = Path(__file__).resolve().parent.parent.parent
         src_ag = harness / "AGENTS.md"
         if src_ag.exists():
             shutil.copy(src_ag, VAULT_ROOT / "AGENTS.md")
@@ -238,7 +239,7 @@ def cmd_setup(name=None, private=True, yes=False):
     scaffold_ci_workflow()
 
     # 1. gh CLI detection + auth
-    def _run(args, timeout=30):
+    def _run(args, timeout=TIMEOUT_API):
         try:
             return subprocess.run(args, capture_output=True, text=True, timeout=timeout)
         except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -258,6 +259,8 @@ def cmd_setup(name=None, private=True, yes=False):
         print("gh is installed but not authenticated. Run: gh auth login", file=sys.stderr)
         sys.exit(1)
     who = _run(["gh", "api", "user", "--jq", ".login"])
+    # gh identity IS the sync owner (the corpus remote lives in the gh user's
+    # namespace); sentinel shared with get_owner's default (#155-B)
     owner = (who.stdout.strip() if who and who.returncode == 0 else "") or "you"
     print(f"gh CLI detected (authenticated as {owner})")
 
@@ -658,8 +661,8 @@ def cmd_pull():
                 print(f"\nNew project namespace(s) received:")
                 print("\n".join(describe_namespaces(new_projects)))
                 print("Next: wf status to see inventory, wf query to use them.")
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"  (post-pull namespace report skipped: {e})", file=sys.stderr)
         return
 
     # Merge failed: collect conflicts

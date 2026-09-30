@@ -169,13 +169,13 @@ def _gguf_chat_or_complete(handle, prompt, max_tokens):
     try:
         r = handle.create_chat_completion(
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=max_tokens, temperature=0.1)
+            max_tokens=max_tokens, temperature=0.1)  # matches extract_backends.LLM_TEMPERATURE
         msg = r["choices"][0]["message"]
         return msg.get("content") or "" if isinstance(msg, dict) else (msg.content or "")
     except (KeyError, TypeError, ValueError):
         # no chat template: base completion model — raw path
         return handle.create_completion(
-            prompt=prompt, max_tokens=max_tokens, temperature=0.1,
+            prompt=prompt, max_tokens=max_tokens, temperature=0.1,  # ditto
         )["choices"][0]["text"]
 
 

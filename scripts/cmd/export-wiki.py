@@ -37,7 +37,7 @@ from wiki_lib.diagrams import MERMAID_REPAIR_COMMENT, _mermaid_valid, _validate_
 from wiki_lib.generators import (_enrich_page, _staleness, _cite_claim,
                                  _llm_topic_article, _llm_project_article,
                                  _generate_topic_article, _generate_project_article,
-                                 _generate_index, _generate_domain_hubs)
+                                 _generate_index, _generate_domain_hubs, _claim_tier)
 from wiki_lib.edges import _compute_wiki_edges, emit_citation_graph
 
 TODAY = date.today()
@@ -72,13 +72,6 @@ def select_topics(min_claims=None):
     for t in topics:
         t["slug"] = re.sub(r"[^a-z0-9-]+", "-", t["title"].lower()).strip("-")
     return topics
-def _claim_tier(cp):
-    s = cp.read_text(encoding="utf-8", errors="replace")
-    ra = re.search(r"review_after: (\S+)", s)
-    sa = re.search(r"stale_after: (\S+)", s)
-    tier, _, _ = _staleness(ra.group(1) if ra else None, sa.group(1) if sa else None)
-    return {1: "current", 2: "due", 3: "stale"}[tier]
-
 
 def _reconcile_wiki_dir(subdir, dry_run=False):
     """Delete stale generated pages in a wiki subdir so a run always reflects
@@ -95,7 +88,7 @@ def _reconcile_wiki_dir(subdir, dry_run=False):
         try:
             p.unlink()
         except OSError:
-            pass
+            pass  # best-effort reconcile — page regenerates on next run
     return removed
 
 
@@ -240,7 +233,7 @@ def main():
                         try:
                             sub_p.unlink()
                         except OSError:
-                            pass
+                            pass  # best-effort (same reconcile contract as _reconcile_wiki_dir)
         for proj in sorted(active):
             try:
                 written, n_nodes = _dd(proj, dry_run=args.dry_run)

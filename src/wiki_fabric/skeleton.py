@@ -28,6 +28,23 @@ DIRECTORIES = [
     "corpus/global/graphs",
 ]
 
+# The ONE config template (#153) — canonical shape lives in
+# fabric_config.DEFAULT_TEMPLATE; this alias keeps the shipped skeleton
+# dependency-light (renders via the harness lib when importable).
+def _canonical_template(owner="you", with_graphify=False, extra=""):
+    try:
+        import sys as _sys, pathlib as _pl
+        _lib = pathlib.Path(__file__).resolve().parent / "_harness" / "scripts" / "lib"
+        if not _lib.is_dir():
+            _lib = pathlib.Path(__file__).resolve().parent.parent.parent / "scripts" / "lib"
+        if str(_lib) not in _sys.path:
+            _sys.path.insert(0, str(_lib))
+        from fabric_config import render_config_template
+        return render_config_template(owner=owner, with_graphify=with_graphify, extra=extra)
+    except Exception:
+        return CONFIG_TEMPLATE.format(owner=owner, extra=extra)
+
+
 CONFIG_TEMPLATE = """owner: {owner}
 llm:
   base_url: http://localhost:11434/v1
@@ -49,6 +66,13 @@ domains:
 def ensure_fabric_skeleton(fabric_dir, owner="sim", with_graphify=False):
     """Create the content skeleton + a starter fabric.yaml. Idempotent."""
     import yaml
+    if owner == "sim":
+        # the one owner chain (#155-B): fabric_config OWNER_SENTINEL default
+        try:
+            from fabric_config import get_config, get_owner, OWNER_SENTINEL
+            owner = get_owner(get_config()) or OWNER_SENTINEL
+        except Exception:
+            owner = _sh("git", "config", "--global", "user.name") or "you"
     fabric_dir = Path(fabric_dir)
     fabric_dir.mkdir(parents=True, exist_ok=True)
     for d in DIRECTORIES:
@@ -67,12 +91,7 @@ def ensure_fabric_skeleton(fabric_dir, owner="sim", with_graphify=False):
         extra = ""
         if with_graphify:
             extra = "\nintegrations:\n  graphify:\n    enabled: true\n    graph_dir: graphify-out\n"
-        import subprocess as _sp
-        try:
-            owner = _sh("git", "config", "--global", "user.name") or "you"
-        except Exception:
-            owner = "you"
-        cfg_path.write_text(CONFIG_TEMPLATE.format(owner=owner, extra=extra))
+        cfg_path.write_text(_canonical_template(owner=owner, with_graphify=with_graphify, extra=extra))
         print(f"\033[0;32m✓\033[0m  Created {cfg_path}")
     return fabric_dir
 

@@ -28,7 +28,7 @@ from pathlib import Path
 from datetime import date
 import re
 
-from fabric_config import get_config, FABRIC_ROOT, CORPUS_ROOT, get_all_repo_names, get_domain_signals
+from fabric_config import get_config, FABRIC_ROOT, CORPUS_ROOT, get_all_repo_names, get_domain_signals, get_owner, OWNER_SENTINEL
 
 
 def slugify(text):
@@ -36,23 +36,16 @@ def slugify(text):
 
 
 def find_fabric_root():
-    # Content root: honors WIKI_FABRIC_DIR via fabric_config; falls back to the
-    # harness parent in dev mode.
-    try:
-        from fabric_config import FABRIC_ROOT
-        return FABRIC_ROOT
-    except Exception:
-        return Path(__file__).parent.resolve().parent
+    # Content root — the canonical chain lives in fabric_config (composed of
+    # paths.py primitives, #152). FABRIC_ROOT IS that chain, frozen at import.
+    return FABRIC_ROOT
 
 
 def find_harness_root():
     # Code root: where the scripts live (may differ from the fabric in
-    # installed mode).
-    try:
-        from fabric_config import HARNESS_ROOT
-        return HARNESS_ROOT
-    except Exception:
-        return Path(__file__).parent.resolve().parent
+    # installed mode) — paths.py (#152).
+    import paths
+    return paths.find_harness_root()
 
 
 def run_cmd(cmd, cwd=None, check=True):
@@ -170,7 +163,8 @@ def register_in_fabric_yaml(project_slug, project_root, owner="", args=None):
     entry["graph_dir"] = graph_dir
     repos[project_slug] = entry
 
-    config_path.write_text(yaml.dump(config, default_flow_style=False, sort_keys=False))
+    from fabric_config import save_config
+    save_config(config, path=config_path)
     print(f"Registered {project_slug} in fabric.yaml (path: {rel_path})")
 
 
@@ -238,10 +232,9 @@ def _detect_environment(config):
     available_skills = detect_available_skills()
     existing_repos = get_all_repo_names(config)
 
-    # Owner: git config > fabric.yaml > prompt
-    owner = config.get("owner", "you")
-    if owner == "you" and git_name:
-        owner = git_name
+    # Owner: the one chain (fabric_config.get_owner — #155-B: yaml > git >
+    # sentinel 'you'); the interactive prompt below refines it in the UI layer.
+    owner = get_owner(config)
 
 
     return {"git_name": git_name, "git_email": git_email,
@@ -328,17 +321,18 @@ def _collect_config(args, env):
     # Owner confirmation (only if not already in fabric.yaml)
     fabric_yaml_path = FABRIC_ROOT / "fabric.yaml"
     if not args.non_interactive and (not fabric_yaml_path.exists() or owner == "you"):
-        new_owner = prompt_with_default("Your name (for promotion dossiers)", git_name or "you")
+        new_owner = prompt_with_default("Your name (for promotion dossiers)", owner if owner != OWNER_SENTINEL else OWNER_SENTINEL)
         if new_owner != owner:
-            # Update fabric.yaml
+            # Update fabric.yaml (save_config invalidates the config cache, #153)
             try:
+                from fabric_config import save_config
                 import yaml as yaml_mod
                 existing_yaml = yaml_mod.safe_load(fabric_yaml_path.read_text()) if fabric_yaml_path.exists() else {}
                 existing_yaml["owner"] = new_owner
-                fabric_yaml_path.write_text(yaml_mod.dump(existing_yaml, default_flow_style=False, sort_keys=False))
+                save_config(existing_yaml, path=fabric_yaml_path)
                 print(f"  Updated fabric.yaml owner → {new_owner}")
             except Exception:
-                pass
+                pass  # owner write failed → session-local value (config update is best-effort)
             owner = new_owner
 
     # Summary (only in interactive mode — let user confirm; a fully-flagged
@@ -368,20 +362,19 @@ def _collect_config(args, env):
     return (project_root_str, project_name, project_slug, domains, skills, owner, everything_flagged)
 
 
-def _execute_bootstrap(args, project_root_str, project_name, project_slug, domains, skills, owner, everything_flagged):
-    """Phase 3: execute — git init, overlay, opencode config, hooks,
-    registration, capture/ingest walkthrough."""
-    # === Phase 3: Execute ===
-    project_root = Path(project_root_str).resolve()
+def _bootstrap_git_init(args):
+    """Phase 0: cd into the project root + git init when requested."""
+    project_root = Path(args._project_root_str).resolve()
     project_root.mkdir(parents=True, exist_ok=True)
     os.chdir(project_root)
-
-    # Git init if needed
+    args._project_root = project_root
     if args.init_git and not Path(".git").exists():
         run_cmd("git init -q")
         print("Initialized git repository")
 
-    # 1. Create .wiki-overlay.md
+
+def _bootstrap_overlay(args, project_name, project_slug, domains, skills, owner):
+    """Phase 1: write .wiki-overlay.md. Returns the routing dict decided."""
     domains_yaml = "\n".join(f"  - {d}" for d in domains)
     skills_yaml = "\n".join(f"  - {s}" for s in skills) if skills else "  # - serialize-and-verify-writes"
     today = date.today().isoformat()
@@ -410,33 +403,6 @@ def _execute_bootstrap(args, project_root_str, project_name, project_slug, domai
     # versions with the project repo; fabric.yaml stays fabric-global).
     routing_keys = {"extract": args.extract, "synthesize": args.synthesize,
                     "dossier": args.dossier, "graph_dir": args.graph_dir}
-    # Model is DECIDED already — the fabric owner's llm config (fabric.yaml)
-    # is the source of truth; bootstrap copies it into the project instead of
-    # re-asking. Only ask when the fabric itself has no compiler model.
-    from fabric_config import get_config as _get_config
-    _llm = (get_config() or {}).get("llm") or {}
-    _compiler = _llm.get("compiler_model") or _llm.get("model") or ""
-    if not _compiler and not args.non_interactive and sys.stdin.isatty():
-        print()
-        print("  No model decided in fabric.yaml yet — choose the compiler model")
-        print("  (OpenAI-compatible id; local ids need llm.local_model too):")
-        _compiler = input("    compiler model [deepseek-v4.1-flash:cloud]: ").strip() \
-            or "deepseek-v4.1-flash:cloud"
-        try:
-            import yaml as yaml_mod
-            _cfg = yaml_mod.safe_load(fabric_yaml_path.read_text()) if fabric_yaml_path.exists() else {}
-            _cfg.setdefault("llm", {})["compiler_model"] = _compiler
-            local_model = input("    local model id (blank to skip): ").strip()
-            if local_model:
-                _cfg["llm"]["local_model"] = local_model
-            fabric_yaml_path.write_text(yaml_mod.dump(_cfg, default_flow_style=False, sort_keys=False))
-            print(f"  Updated fabric.yaml llm → compiler {_compiler}")
-        except Exception as _e:
-            print(f"  warn: could not write model to fabric.yaml: {_e}", file=sys.stderr)
-    # Routing lives in the OVERLAY (versioned with the project repo) so
-    # teammates inherit the decided config on clone. fabric.yaml repos entries
-    # are registration + MACHINE-LOCAL overrides only (privacy tiering differs
-    # per person). Keys never move — they live in fabric.yaml only.
     decided = {k: v for k, v in routing_keys.items() if v}
     if not decided:
         # derive from the fabric's decided llm config (cloud default)
@@ -469,12 +435,40 @@ config; the fabric discovers it (see fabric.yaml repos.auto_discover).
 """
     Path(".wiki-overlay.md").write_text(overlay_content)
     print("Created .wiki-overlay.md")
+    return decided
 
-    # 2. Create/Update opencode config (additive merge)
-    # Resolve harness/fabric locations at bootstrap time (never hard-code
-    # home-relative guesses — the harness may live anywhere).
-    harness_root = find_harness_root()
-    fabric_root = find_fabric_root()
+
+def _ensure_fabric_compiler_model(args):
+    """First-bootstrap compiler-model decision (#155 audit: this block lived
+    inline and referenced fabric_yaml_path — a local of _collect_config, a
+    latent NameError on the no-compiler-model path)."""
+    from fabric_config import get_config as _get_config
+    _llm = (get_config() or {}).get("llm") or {}
+    _compiler = _llm.get("compiler_model") or _llm.get("model") or ""
+    if not _compiler and not args.non_interactive and sys.stdin.isatty():
+        print()
+        print("  No model decided in fabric.yaml yet — choose the compiler model")
+        print("  (OpenAI-compatible id; local ids need llm.local_model too):")
+        _compiler = input("    compiler model [deepseek-v4.1-flash:cloud]: ").strip() \
+            or "deepseek-v4.1-flash:cloud"
+        try:
+            from fabric_config import save_config
+            import yaml as yaml_mod
+            fabric_yaml_path = FABRIC_ROOT / "fabric.yaml"
+            _cfg = yaml_mod.safe_load(fabric_yaml_path.read_text()) if fabric_yaml_path.exists() else {}
+            _cfg.setdefault("llm", {})["compiler_model"] = _compiler
+            local_model = input("    local model id (blank to skip): ").strip()
+            if local_model:
+                _cfg["llm"]["local_model"] = local_model
+            save_config(_cfg, path=fabric_yaml_path)
+            print(f"  Updated fabric.yaml llm → compiler {_compiler}")
+        except Exception as _e:
+            print(f"  warn: could not write model to fabric.yaml: {_e}", file=sys.stderr)
+    return _compiler
+
+
+def _bootstrap_agent_configs(harness_root, fabric_root):
+    """Phase 2: opencode config merge + plugin + multi-harness install."""
     WIKI_FABRIC_BLOCK = {
         "references": {
             "wiki-fabric": {
@@ -527,19 +521,24 @@ config; the fabric discovers it (see fabric.yaml repos.auto_discover).
         }
         Path("opencode.json").write_text(json.dumps(config, indent=2))
         print("Created opencode.json")
+    _install_opencode_plugin(harness_root)
+    _install_harness_assets(harness_root)
 
-    # 2b. Install the wiki-fabric opencode plugin (session-start nudge)
-    plugin_src = find_harness_root() / "system" / "opencode" / "plugins" / "wiki-fabric.js"
+
+def _install_opencode_plugin(harness_root):
+    """Phase 2b: the wiki-fabric opencode plugin (session-start nudge)."""
+    plugin_src = harness_root / "system" / "opencode" / "plugins" / "wiki-fabric.js"
     plugin_dst = Path(".opencode") / "plugins" / "wiki-fabric.js"
     if plugin_src.exists() and not plugin_dst.exists():
         plugin_dst.parent.mkdir(parents=True, exist_ok=True)
         plugin_dst.write_text(plugin_src.read_text())
         print("Installed .opencode/plugins/wiki-fabric.js (session nudge)")
 
-    # 2c. Multi-harness support: install always-on + skills into every detected
-    # agent harness (Claude Code, Codex, Copilot, Cursor, Gemini CLI, ...).
+
+def _install_harness_assets(harness_root):
+    """Phase 2c: always-on + skills into every detected agent harness."""
     try:
-        harnesses_py = find_harness_root() / "scripts" / "harness/harnesses.py"
+        harnesses_py = harness_root / "scripts" / "harness/harnesses.py"
         if harnesses_py.exists():
             import importlib.util as _hlu
             hspec = _hlu.spec_from_file_location("harnesses", str(harnesses_py))
@@ -560,7 +559,9 @@ config; the fabric discovers it (see fabric.yaml repos.auto_discover).
     except Exception as e:
         print(f"  (harness setup skipped: {e})", file=sys.stderr)
 
-    # 3. Create .gitignore additions
+
+def _bootstrap_gitignore_and_commit(args):
+    """Phases 3-4: .gitignore additions + initial commit when requested."""
     gitignore = Path(".gitignore")
     if not gitignore.exists():
         gitignore.touch()
@@ -571,28 +572,34 @@ config; the fabric discovers it (see fabric.yaml repos.auto_discover).
                 f.write(line + "\n")
     print("Updated .gitignore")
 
-    # 4. Initial commit if requested
     if args.init_git and not Path(".git").exists():
         run_cmd("git add -A")
         run_cmd("git commit -q -m 'chore: initial commit from wiki-fabric bootstrap'")
         print("Initialized git repository with initial commit")
 
-    # 5. Create project namespace in the fabric (corpus content root —
-    # every consumer resolves projects/ under CORPUS_ROOT; FABRIC_ROOT
-    # is the vault shell, not the content root)
-    namespace_dir = find_fabric_root() / "corpus" / "projects" / project_slug
-    if not (find_fabric_root() / "corpus").exists():
+
+def _bootstrap_fabric_side(fabric_root, project_root, project_slug, project_name, owner, args, domains):
+    """Phases 5-5b + 6: namespace, cold-start vocabulary, vault refresh,
+    namespace README, fabric.yaml registration."""
+    namespace_dir = fabric_root / "corpus" / "projects" / project_slug
+    if not (fabric_root / "corpus").exists():
         # pre-corpus layout: content dirs live at the fabric root
-        namespace_dir = find_fabric_root() / "projects" / project_slug
+        namespace_dir = fabric_root / "projects" / project_slug
     (namespace_dir / "experience-events").mkdir(parents=True, exist_ok=True)
     (namespace_dir / "decisions").mkdir(parents=True, exist_ok=True)
     print(f"Created project namespace: {namespace_dir}")
 
-    # 5a. Cold-start vocabulary: on the FIRST project (empty ontology), derive
-    # provisional domains from this project's own structural evidence — the
-    # vocabulary builds itself rather than shipping hardcoded defaults.
-    # Written as PROPOSALS: they become ontology domains after human review
-    # (promote-domains --apply), or are used as this project's routing scope.
+    domains = _cold_start_vocabulary(fabric_root, project_root, project_slug, domains)
+    _refresh_fabric_vault(fabric_root)
+    write_namespace_readme(namespace_dir, project_slug, project_name, owner, args.source_repo or [])
+    register_in_fabric_yaml(project_slug, str(project_root), owner=owner, args=args)
+    return namespace_dir
+
+
+def _cold_start_vocabulary(fabric_root, project_root, project_slug, domains):
+    """Phase 5a: on the FIRST project (empty ontology), derive provisional
+    domains from this project's structural evidence. Written as PROPOSALS
+    (promote-domains --apply makes them ontology domains)."""
     try:
         ontology = fabric_root / "corpus" / "domains" / "ontology.md"
         ontology_has_domains = ontology.exists() and "## Domains" in ontology.read_text() \
@@ -607,7 +614,6 @@ config; the fabric discovers it (see fabric.yaml repos.auto_discover).
             if detected:
                 top = [d for d, _ in detected.most_common(3)]
                 print(f"  Cold-start vocabulary: structural scan detected {top}")
-                # provisional domains: recorded in the ontology doc as proposed
                 header = ('---\ntype: ontology\ntitle: Domain Ontology\n'
                           f'created: {date.today().isoformat()}\n---\n\n## Domains\n')
                 onto_src = ontology.read_text() if ontology.exists() else header
@@ -621,16 +627,17 @@ config; the fabric discovers it (see fabric.yaml repos.auto_discover).
                     ontology.parent.mkdir(parents=True, exist_ok=True)
                     ontology.write_text(onto_src)
                     print(f"  Ontology: proposed {top} (human review: promote-domains --apply)")
-                # route this project to its detected domains
-                domains = top
+                return top
             else:
                 print("  No structural signals detected — project runs without domains")
     except Exception as _e:
         print(f"  (domain bootstrap skipped: {_e})")
+    return domains
 
-    # 5b. Vault freshness: write the fabric-side overlay view + refresh links
+
+def _refresh_fabric_vault(fabric_root):
+    """Phase 5b: fabric-side overlay view + refresh links."""
     try:
-        harness_root = find_harness_root()
         vr = fabric_root / "scripts" / "cmd/vault-refresh.py"
         if vr.exists():
             import importlib.util as _ilu
@@ -643,13 +650,9 @@ config; the fabric discovers it (see fabric.yaml repos.auto_discover).
     except Exception as e:
         print(f"  (vault refresh skipped: {e})", file=sys.stderr)
 
-    # 5a. Namespace README → syncs to the corpus so teammates see what this project is
-    write_namespace_readme(namespace_dir, project_slug, project_name, owner, args.source_repo or [])
 
-    # 6. Register in fabric.yaml
-    register_in_fabric_yaml(project_slug, str(project_root), owner=owner, args=args)
-
-    # 7. Create LLM config file for the project
+def _bootstrap_project_env(project_root, project_slug, args):
+    """Phase 7: the project's .env.wiki-fabric (LLM configuration)."""
     llm_env_path = project_root / ".env.wiki-fabric"
     if not llm_env_path.exists():
         config = get_config()
@@ -662,7 +665,9 @@ WIKI_LLM_MODEL={config["llm"]["model"]}
 """)
         print("Created .env.wiki-fabric (LLM configuration)")
 
-    # 8. Corpus awareness: is this fabric wired for team sync?
+
+def _bootstrap_sync_note():
+    """Phase 8: corpus-awareness note (local-only vs team sync)."""
     corpus_remote = get_corpus_remote()
     if corpus_remote:
         print(f"Corpus remote detected: {corpus_remote}")
@@ -674,9 +679,10 @@ WIKI_LLM_MODEL={config["llm"]["model"]}
         print("  wf sync setup          # creates <owner>/wiki-fabric-corpus (private) and publishes")
         print("  wf sync init <git-url> # or point at an existing repo, then: wf sync push")
 
-    # 8b. Extraction routing (interactive): privacy tiering per stage
-    import sys as _sys
-    if not args.non_interactive and _sys.stdin.isatty():
+
+def _bootstrap_routing(args, project_slug):
+    """Phase 8b (interactive): privacy tiering for extract/synthesize."""
+    if not args.non_interactive and sys.stdin.isatty():
         print()
         print("  Extraction routing for this project:")
         print("    cloud = deepseek (4-6s/doc, default)")
@@ -692,44 +698,46 @@ WIKI_LLM_MODEL={config["llm"]["model"]}
                 _rcfg["synthesize"] = "local"
                 _repos[project_slug] = _rcfg
                 _rc["repos"] = _repos
-                _yaml.safe_dump(_rc, open(_routing_cfg, "w"), sort_keys=False, allow_unicode=True)
+                from fabric_config import save_config
+                save_config(_rc, path=_routing_cfg)
                 print(f"  ✓ extract + synthesize routed local for {project_slug}")
             except Exception as e:
                 print(f"  (routing write failed: {e})")
 
-    # 9. Git hook (default on — the freshness guarantee depends on it):
-    # post-commit captures doc drift (0 tokens); --no-hook skips;
-    # --hook-extract-claims additionally compiles drift with the LLM.
+
+def _bootstrap_hook(args, project_root, project_slug):
+    """Phase 9: git post-commit hook (default on — the freshness guarantee)."""
     if args.no_hook:
         print("Hook install skipped (--no-hook) — doc drift will wait for manual capture.")
+        return
+    import subprocess as _sp
+    hooks_py = find_fabric_root() / "scripts" / "harness/hooks.py"
+    hook_cmd = [_sp.sys.executable, str(hooks_py), "install"]
+    if args.hook_extract_claims:
+        hook_cmd.append("--extract-claims")
+    r = _sp.run(hook_cmd, cwd=project_root, capture_output=True, text=True)
+    if r.returncode == 0:
+        print(r.stdout.strip())
+        print("Hook installed — doc drift now auto-captures on commit (WIKI_SKIP_HOOK=1 to skip per command).")
     else:
-        import subprocess as _sp
-        hooks_py = find_fabric_root() / "scripts" / "harness/hooks.py"
-        hook_cmd = [_sp.sys.executable, str(hooks_py), "install"]
-        if args.hook_extract_claims:
-            hook_cmd.append("--extract-claims")
-        r = _sp.run(hook_cmd, cwd=project_root, capture_output=True, text=True)
-        if r.returncode == 0:
-            print(r.stdout.strip())
-            print("Hook installed — doc drift now auto-captures on commit (WIKI_SKIP_HOOK=1 to skip per command).")
-        else:
-            print(f"Hook install failed: {r.stderr.strip()}", file=_sp.sys.stderr)
+        print(f"Hook install failed: {r.stderr.strip()}", file=_sp.sys.stderr)
 
-    # Interactive walkthrough: offer capture + ingest + verify now
-    import sys as _sys
-    if not args.non_interactive and _sys.stdin.isatty():
+
+def _bootstrap_walkthrough(args, project_root, project_slug):
+    """Interactive capture → ingest → query walkthrough."""
+    if not args.non_interactive and sys.stdin.isatty():
         print()
         print("─── Onboarding walkthrough ───")
         print()
         if input(f"  Capture upstream docs now? [Y/n]: ").strip().lower() not in ("n", "no"):
             r = subprocess.run(
-                [_sys.executable, str(find_fabric_root() / "scripts" / "cmd/capture.py"),
+                [sys.executable, str(find_fabric_root() / "scripts" / "cmd/capture.py"),
                  project_slug, "--project-root", str(project_root)],
                 capture_output=True, text=True)
             print(r.stdout.strip() or r.stderr.strip())
             captured_n = sum(1 for line in r.stdout.splitlines() if "matching" in line.lower())
             if input("\n  Ingest captured sources with LLM claim extraction? [Y/n]: ").strip().lower() not in ("n", "no"):
-                ingest_cmd = [_sys.executable, str(find_fabric_root() / "scripts" / "cmd/ingest.py"),
+                ingest_cmd = [sys.executable, str(find_fabric_root() / "scripts" / "cmd/ingest.py"),
                               "--changed", project_slug, "--extract-claims"]
                 if input("  Workers for concurrent extraction [8]: ").strip():
                     ingest_cmd += ["--workers", "8"]
@@ -738,9 +746,11 @@ WIKI_LLM_MODEL={config["llm"]["model"]}
                 if input("\n  Run a test query to verify the fabric? [Y/n]: ").strip().lower() not in ("n", "no"):
                     q = input("  Question [what is this project about?]: ").strip() or "what is this project about?"
                     r3 = subprocess.run(
-                        [_sys.executable, str(find_fabric_root() / "scripts" / "cmd/query.py"), q],
+                        [sys.executable, str(find_fabric_root() / "scripts" / "cmd/query.py"), q],
                         capture_output=False, text=True)
 
+
+def _bootstrap_summary(project_name, project_slug, owner, namespace_dir):
     print(f"""
 === Project bootstrap complete ===
 
@@ -759,6 +769,29 @@ Ongoing:
   wf log --project {project_slug}  # log experience events (feeds promotion)
   wf lint                          # health check (0 errors before commit)
 """)
+
+
+def _execute_bootstrap(args, project_root_str, project_name, project_slug, domains, skills, owner, everything_flagged):
+    """Bootstrap, phase-by-phase (#155 audit: was one 393-line function).
+    Phase functions live above; this is the orchestrator + state threading."""
+    args._project_root_str = project_root_str
+    _bootstrap_git_init(args)
+    project_root = args._project_root
+    fabric_root = find_fabric_root()
+    harness_root = find_harness_root()
+
+    _ensure_fabric_compiler_model(args)
+    _bootstrap_overlay(args, project_name, project_slug, domains, skills, owner)
+    _bootstrap_agent_configs(harness_root, fabric_root)
+    _bootstrap_gitignore_and_commit(args)
+    namespace_dir = _bootstrap_fabric_side(fabric_root, project_root, project_slug,
+                                           project_name, owner, args, domains)
+    _bootstrap_project_env(project_root, project_slug, args)
+    _bootstrap_sync_note()
+    _bootstrap_routing(args, project_slug)
+    _bootstrap_hook(args, project_root, project_slug)
+    _bootstrap_walkthrough(args, project_root, project_slug)
+    _bootstrap_summary(project_name, project_slug, owner, namespace_dir)
 
 
 def main():

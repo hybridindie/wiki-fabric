@@ -28,7 +28,9 @@ COPY_FILES = [
     "AGENTS.md",
     "index.md",
 ]
-SKIP_DIRS = {"__pycache__", ".pytest_cache", ".venv", "node_modules", "wiki"}
+SKIP_DIRS = {"__pycache__", ".pytest_cache", ".venv", "node_modules", "wiki",
+             # fabric content (gitignored) — never ships, even when present on disk
+             "entities", "graphs"}
 
 
 def main():

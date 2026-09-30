@@ -86,14 +86,7 @@ def fuzzy_coverage(source_set, target_set, threshold=0.7):
 
 
 def tokens(text):
-    """Stemming-ish token set for term-coverage scoring (was eval-pr-replay)."""
-    out = set()
-    for w in re.findall(r"[a-z0-9][a-z0-9_-]{3,}", (text or "").lower()):
-        out.add(w)
-        for suf, add in (("tion", ""), ("ting", ""), ("ing", "e"), ("ed", "e"), ("s", "")):
-            if w.endswith(suf) and len(w) - len(suf) >= 4:
-                out.add(w[: -len(suf)])
-                if add:
-                    out.add(w[: -len(suf)] + add)
-                break
-    return out
+    """Term-coverage token set — delegates to wf_common (one tokenizer,
+    #155 audit: evals must measure the same tokens retrieval uses)."""
+    from wf_common import tokens as _t
+    return _t(text, min_len=3)

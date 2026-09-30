@@ -35,9 +35,8 @@ from fabric_config import CORPUS_ROOT
 
 
 def _statement(path):
-    text = path.read_text(encoding="utf-8", errors="replace")
-    m = re.search(r'statement: "?([^\n]+)', text)
-    return (m.group(1).strip().strip('"') if m else ""), text
+    from wf_common import claim_statement
+    return claim_statement(path), path.read_text(encoding="utf-8", errors="replace")
 
 
 def verify_claim(claim_path, max_pairs=12, min_confidence=0.6):

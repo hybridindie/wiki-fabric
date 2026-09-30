@@ -18,6 +18,11 @@ from typing import Callable
 
 # --- script/asset resolution (dev tree or packaged _harness) --------------
 
+# Subprocess timeout tiers — mirror wf_common.TIMEOUT_* (packaged dispatch
+# must not import wf_common for constants; the values are pinned by the
+# dispatch-agreement tests).
+TIMEOUT_SCRIPT = 600
+
 _PACKAGED = Path(__file__).resolve().parent / "_harness"
 
 
@@ -28,40 +33,37 @@ def harness_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent
 
 
+def _paths_mod():
+    """Import the shipped paths.py resolution layer (dev tree or packaged
+    _harness). Bare `from paths import ...` only works when the harness lib
+    is already on sys.path (tests do this) — packaged wf must self-locate."""
+    lib = harness_root() / "scripts" / "lib"
+    if str(lib) not in sys.path:
+        sys.path.insert(0, str(lib))
+    import paths
+    return paths
+
+
 def find_fabric() -> Path | None:
-    """Fabric root (content + config) — mirrors fabric_config's chain and the
-    bash find_fabric, ordered the same way:
-      1. $WIKI_FABRIC_DIR  2. cwd-sibling vault (dev)  3. XDG default.
-    Returns None when no fabric exists (commands needing content fail cleanly)."""
-    env = os.environ.get("WIKI_FABRIC_DIR")
-    if env and Path(env).expanduser().is_dir():
-        return Path(env).expanduser().resolve()
-    cwd = Path.cwd()
-    for d in (cwd, *cwd.parents):
-        if (d / "scripts" / "wiki-fabric.sh").exists() and (d / "scripts" / "cmd").is_dir():
-            break  # harness tree: not a fabric
-        if (d / "fabric.yaml").exists() or (d / "evidence").exists() or (d / "projects").exists():
-            return d.resolve()
-    # dev sibling vault
-    sibling = harness_root().parent / "vault"
-    if (sibling / "corpus").exists() or (sibling / "evidence").exists():
-        return sibling
-    xdg = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
-    default = Path(xdg) / "wiki-fabric"
-    if default.is_dir():
-        return default
-    return None
+    """Fabric root (content + config). Chain (paths.py #152, single truth):
+      1. $WIKI_FABRIC_DIR  2. cwd walk (harness trees skipped)  3. dev
+      sibling vault  4. XDG default. Returns None when no fabric exists
+      (commands needing content fail cleanly)."""
+    p = _paths_mod()
+    found = p.env_fabric_root() or p.walk_for_fabric(Path.cwd())
+    if found:
+        return found
+    # dev sibling vault (anchored at THIS dispatcher's harness root — tests
+    # and packaged mode monkeypatch harness_root())
+    found = p.sibling_vault_of(harness_root())
+    if found:
+        return found.resolve()
+    return p.xdg_fabric_root()
 
 
 def corpus_root(fabric_dir: Path) -> Path:
-    """CORPUS_ROOT resolution (mirrors fabric_config): nested corpus/ when
-    present, else the fabric root itself (pre-corpus layout)."""
-    corpus = fabric_dir / "corpus"
-    if (corpus / "evidence").exists() or (corpus / "fabric.yaml").exists():
-        return corpus
-    if (fabric_dir / "evidence").exists() or (fabric_dir / "projects").exists():
-        return fabric_dir
-    return corpus
+    """CORPUS_ROOT resolution (delegates to paths.py, #152)."""
+    return _paths_mod().find_corpus_root(fabric_dir)
 
 
 def _python(fabric_dir: Path | None) -> str:
@@ -74,7 +76,7 @@ def _python(fabric_dir: Path | None) -> str:
     return sys.executable
 
 
-def _run_script(fabric_dir: Path | None, rel: str, *args: str, timeout: int = 600) -> int:
+def _run_script(fabric_dir: Path | None, rel: str, *args: str, timeout: int = TIMEOUT_SCRIPT) -> int:
     """run_script() equivalent: run a shipped script with the right python,
     inheriting stdout/stderr (the tool UX is the script's UX)."""
     script = _harness(rel)
@@ -329,16 +331,10 @@ def _info(msg):
 
 
 def _vault_dir(fabric_dir: Path) -> Path:
-    try:
-        import yaml
-        cfg = yaml.safe_load((fabric_dir / "fabric.yaml").read_text()) or {}
-        vp = (cfg.get("vault") or {}).get("path")
-        if vp:
-            p = Path(vp)
-            return p if p.is_absolute() else (fabric_dir / p).resolve()
-    except Exception:
-        pass
-    return fabric_dir.parent / "vault"
+    """Vault for the status report — paths.py is the single resolver home
+    (#152). Honors WIKI_FABRIC_VAULT (dispatch's copy silently ignored it)
+    then fabric.yaml vault.path, then "the vault IS the fabric"."""
+    return _paths_mod().find_vault_dir_for_fabric(fabric_dir)
 
 
 @verb("status")
@@ -351,15 +347,21 @@ def _status(argv):
     print("")
     print(f"\033[0;32m✓\033[0m  Fabric: {fdir}")
 
-    # Vault freshness
+    # Vault freshness — the default audit target is vault-refresh's own
+    # default (vault-refresh.py resolves corpus/wiki for nested layouts),
+    # NOT the fabric root (#e2e finding: status re-derived the path and
+    # disagreed with the standalone checker).
     vault = _vault_dir(fdir)
-    if vault.is_dir():
+    refresh_target = vault
+    if (fdir / "fabric.yaml").exists() and (fdir / "corpus" / "wiki" / "index.md").exists():
+        refresh_target = fdir / "corpus" / "wiki"
+    if refresh_target.is_dir():
         r = subprocess.run([_python(fdir), str(_harness("scripts/cmd/vault-refresh.py")),
-                            str(vault), "--check", "--quiet"], capture_output=True)
+                            str(refresh_target), "--check", "--quiet"], capture_output=True)
         if r.returncode == 0:
-            print(f"\033[0;32m✓\033[0m  Vault:  {vault} (fresh)")
+            print(f"\033[0;32m✓\033[0m  Vault:  {refresh_target} (fresh)")
         else:
-            print(f"\033[1;33m⚠\033[0m  Vault:  {vault} (structure drift — run: wf vault)")
+            print(f"\033[1;33m⚠\033[0m  Vault:  {refresh_target} (structure drift — run: wf vault)")
     else:
         print("\033[1;33m⚠\033[0m  Vault:  not set up (run: wf vault)")
 
@@ -392,9 +394,11 @@ def _status(argv):
                     else:
                         print(f"\033[1;33m⚠\033[0m  Local:  {local_model} (not downloaded — run: wf models ensure)")
                 except Exception:
-                    pass
-        except Exception:
-            pass
+                    pass  # local-model check is cosmetic — status must not break on it
+        except Exception as _e:
+            # status degrades to "not configured" rather than crashing (audit)
+            print(f"\033[1;33m⚠\033[0m  LLM:    config unreadable ({_e})")
+
 
     # Inventory
     croot = corpus_root(fdir)
@@ -443,19 +447,27 @@ def _status(argv):
 
 @verb("integrations")
 def _integrations(argv):
+    """Integration report — single truth is fabric_config.is_integration_active
+    (#155-A: an inner yaml-parse copy was shadowed and a module-level regex
+    grep re-implemented the same check, disagreeing with the config layer)."""
     fdir = _require_fabric()
-    yaml_text = (fdir / "fabric.yaml").read_text()
+    try:
+        sys.path.insert(0, str(harness_root() / "scripts" / "lib"))
+        from fabric_config import get_config, is_integration_active
+        cfg = get_config()
+        enabled = lambda name: is_integration_active(cfg, name)  # noqa: E731
+    except Exception:
+        try:
+            import yaml
+            cfg = yaml.safe_load((fdir / "fabric.yaml").read_text()) or {}
+        except Exception:
+            cfg = {}
+        enabled = lambda name: bool(  # noqa: E731
+            ((cfg.get("integrations") or {}).get(name) or {}).get("enabled"))
     print("")
     print(f"Optional integrations (config: {fdir}/fabric.yaml → integrations:)")
     print("")
-    def _enabled(name):
-        try:
-            import yaml
-            cfg = yaml.safe_load(yaml_text) or {}
-            return bool(((cfg.get("integrations") or {}).get(name) or {}).get("enabled"))
-        except Exception:
-            return False
-    if _enabled("graphify", yaml_text):
+    if enabled("graphify"):
         print("\033[0;32m✓\033[0m  graphify: ENABLED (call-graph staleness, claim enrichment, graph expansion)")
         print("     commands: graphify-bridge.py --all | --diff | --status")
     else:
@@ -463,24 +475,18 @@ def _integrations(argv):
         print("     enable: wf update --with-graphify (or fabric.yaml integrations.graphify.enabled: true)")
         print("     effect when active: skills gain graph staleness/enrichment steps; query gains call-graph expansion")
     print("")
-    if _enabled("obsidian", yaml_text):
+    if enabled("obsidian"):
         print("\033[0;32m✓\033[0m  obsidian: ENABLED (two-way vault: harvest-before-export, REST export via --push)")
         try:
             _run_script(fdir, "scripts/cmd/obsidian_status.py")
         except Exception:
-            pass
+            pass  # obsidian status detail is cosmetic — the ENABLED line already printed
     else:
         print("ℹ  obsidian: inactive")
         print("     enable: fabric.yaml integrations.obsidian.enabled: true (Local REST API plugin required)")
         print("     effect when active: export harvests human wiki edits as evidence before regenerating; --push writes via REST")
     print("")
     return 0
-
-
-def _enabled(name: str, yaml_text: str) -> bool:
-    import re
-    m = re.search(rf"^\s+{name}:.*?enabled: true", yaml_text, re.MULTILINE | re.DOTALL)
-    return m is not None
 
 
 @verb("version")

@@ -73,7 +73,7 @@ def _open_run():
                 if r.get("status") in ("open", "writing"):
                     return d, r
             except Exception:
-                continue
+                continue  #continue  # corrupt bookkeeping state → not resumable here
     return None, None
 
 

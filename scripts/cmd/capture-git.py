@@ -39,6 +39,7 @@ import argparse
 from pathlib import Path
 from datetime import date, datetime, timedelta
 import wf_common
+from wf_common import sha256_file as sha256
 from fabric_config import FABRIC_ROOT
 from fabric_config import CORPUS_ROOT, VAULT_ROOT
 
@@ -47,11 +48,6 @@ EVIDENCE_RAW = VAULT_ROOT / "evidence" / "raw"
 SKIP_PREFIXES = ("chore", "docs", "style", "test", "ci", "build", "release")
 INTERESTING_PREFIXES = ("fix", "feat", "perf", "refactor", "revert")
 
-
-def sha256(path):
-    h = hashlib.sha256()
-    h.update(Path(path).read_bytes())
-    return h.hexdigest()
 
 
 def gh(*args, expect_json=False):
@@ -106,8 +102,18 @@ def commit_is_interesting(message):
 
 
 def write_capture(dest, title, header_lines, body_sections, dry_run=False):
-    """Write a captured markdown file if content is new or changed."""
-    if title:
+    """Write a captured markdown file if content is new or changed.
+    header_lines may carry a frontmatter block (PR/issue records) — it MUST
+    stay at the top of the file: parse_frontmatter requires the fence at
+    byte 0 (#e2e finding: '# title' first made every pr-record kind-less and
+    detached the thread graph)."""
+    if header_lines and header_lines[0].strip() == "---":
+        fm = "\n".join(header_lines).rstrip()
+        content = fm + "\n\n"
+        if title:
+            content += f"# {title}\n\n"
+        content += "\n".join(body_sections).strip() + "\n"
+    elif title:
         content = f"# {title}\n\n" + "\n".join(header_lines).rstrip() + "\n\n" + "\n".join(body_sections).strip() + "\n"
     else:
         content = "\n".join(header_lines).rstrip() + "\n\n" + "\n".join(body_sections).strip() + "\n"
@@ -310,7 +316,7 @@ def write_since_state(project):
         sp.parent.mkdir(parents=True, exist_ok=True)
         sp.write_text(datetime.now().strftime("%Y-%m-%d"), encoding="utf-8")
     except OSError:
-        pass
+        pass  # state file unwritable → the next run re-captures (fresh, not stale)
 
 
 def github_repo_from_remote(repo_path):

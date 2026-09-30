@@ -72,18 +72,122 @@ def _stub(path, slug, created_by):
         f"*Created by change-set {slug} — content pending*\n", encoding="utf-8")
 
 
+def _fm_from_lines(lines):
+    """(fm, body) from the post-diff line stream: find a `---` fence open and
+    close, yaml-parse between them. Tolerant: no block → ({}, lines-as-text)."""
+    try:
+        import yaml
+        have_yaml = True
+    except ImportError:
+        have_yaml = False
+    text = "\n".join(lines) + "\n"
+    m = re.match(r"\A---\n(.*?)\n---\n", text, re.S)
+    if not m:
+        return {}, "\n".join(lines) + "\n"
+    if not have_yaml:
+        return {}, text
+    try:
+        return (yaml.safe_load(m.group(1)) or {}), text
+    except Exception:
+        return {}, text
+
+
+def parse_frontmatter_text(text):
+    """(fm, body) from raw text (e.g. a git-show pre-image)."""
+    return _fm_from_lines(text.splitlines() + [""])
+
+
+_HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", re.M)
+_SKIP_LINE_PREFIXES = ("diff --git", "index ", "new file", "deleted file",
+                       "similarity ", "dissimilarity ", "rename ", "copy ",
+                       "old mode", "new mode", "--- ", "+++ ", "Binary ")
+
+
+def _reconstruct_post_state(base_text, file_diff):
+    """Exact post-image of one file from its HEAD pre-image + unified diff
+    hunks (default context). Hunks apply left-to-right with an offset; a missing
+    pre-image (new file) means base is empty."""
+    out = base_text.splitlines()
+    result, pos, offset = [], 0, 0   # pos: next unconsumed base line (0-based)
+    for hm in _HUNK_RE.finditer(file_diff):
+        old_start = int(hm.group(1)) - 1          # 0-based
+        old_len = int(hm.group(2) or "1")
+        # hunk body: until next @@ or EOF
+        rest = file_diff[hm.end():]
+        nxt = _HUNK_RE.search(rest)
+        body = rest[:nxt.start()] if nxt else rest
+        hunk_pre, hunk_post = [], []
+        for line in body.splitlines():
+            if line.startswith("\\"):             # "\ No newline at end of file"
+                continue
+            if line.startswith("+"):
+                hunk_post.append(line[1:])
+            elif line.startswith("-"):
+                hunk_pre.append(line[1:])
+            elif line.startswith(" ") or line == "":
+                hunk_pre.append(line[1:])
+                hunk_post.append(line[1:])
+        # splice: pre-consumed base + hunk post-image. Trust the pre-image
+        # line count (old_len from @@ is the range start's line count but
+        # context can differ after \ No-newline quirks; pre lines are exact).
+        result.extend(out[pos:old_start])
+        result.extend(hunk_post)
+        pos = old_start + len(hunk_pre)
+    result.extend(out[pos:])
+    return "\n".join(result) + ("\n" if result else "")
+
+
 def slow_region_gate(diff_text, allow_override):
     """S4: a diff touching protected slow-lane content on pattern pages is
-    refused without the explicit override."""
+    refused without the explicit override.
+
+    The rule is the fingerprint contract in contracts.py (#151) — the SAME
+    rule lint's check_slow_regions enforces; this implementation no longer
+    greps the diff text (that copy matched any list item, false-positived on
+    every bullet, and could disagree with lint about the same change-set).
+    Mechanism: parse each touched pattern page's pre-image and post-image
+    from the unified diff and compare protected_fingerprints — the diff's
+    post-state is what will be committed, so that is what gets gated."""
     if not diff_text:
         return True
-    pattern_paths = re.findall(r"^diff --git a/((?:corpus/)?patterns/[^\s]+)",
-                               diff_text, re.M)
-    if not pattern_paths:
+    diff_paths = re.findall(r"^diff --git a/((?:corpus/)?patterns/[^\s]+)",
+                            diff_text, re.M)
+    if not diff_paths:
         return True
-    touched = re.findall(r"^[+-](?:applicability:|counterexamples:|\s+excludes:|\s+- )",
-                         diff_text, re.M)
-    if touched and not allow_override:
+    from contracts import protected_fingerprint, slow_update_justified
+
+    def _post_state(diff_text, git_path):
+        """The page's post-diff frontmatter: apply the file's hunks to its
+        HEAD pre-image. For a brand-new page (no pre-image) the diff carries
+        the whole file as additions."""
+        chunk_re = re.compile(
+            r"^diff --git a/(\S+) b/(\S+)\n(?s:.*?)(?=^diff --git a/|\Z)", re.M | re.S)
+        for m in chunk_re.finditer(diff_text):
+            if git_path in (m.group(1), m.group(2)):
+                file_diff = m.group(0)
+                break
+        else:
+            return {}
+        old = subprocess.run(["git", "-C", str(VAULT_ROOT), "show", f"HEAD:{git_path}"],
+                             capture_output=True, text=True)
+        base = old.stdout if old.returncode == 0 else ""
+        post = _reconstruct_post_state(base, file_diff)
+        fm, _body = _fm_from_lines(post.splitlines())
+        return fm
+
+    changed = False
+    for git_path in diff_paths:
+        fm = _post_state(diff_text, git_path)
+        if protected_fingerprint(fm) is None:
+            continue
+        # does the diff alter protected content vs HEAD?
+        old = subprocess.run(["git", "-C", str(VAULT_ROOT), "show", f"HEAD:{git_path}"],
+                             capture_output=True, text=True)
+        old_fm, _ = parse_frontmatter_text(old.stdout if old.returncode == 0 else "")
+        if protected_fingerprint(fm) != protected_fingerprint(old_fm):
+            if not slow_update_justified(fm):
+                changed = True
+    if changed and not allow_override:
         print("BLOCKED: diff edits protected slow-lane content "
               "(applicability/counterexamples) on pattern pages", file=sys.stderr)
         print("Re-run with --override-slow and record a slow-update reason in verified.",

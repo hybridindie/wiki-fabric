@@ -79,6 +79,13 @@ def llm_config(compiler=False):
     return get_llm_config(get_config(), compiler=compiler)
 
 
+# One home for sampling params (#155 audit: temperature=0.1 / max_tokens were
+# baked in 8 call sites; max_tokens differs by JOB SIZE, temperature is policy).
+LLM_TEMPERATURE = 0.1
+EXTRACT_MAX_TOKENS = 16384   # JSON claim arrays from one source document
+ARTICLE_MAX_TOKENS = 4096    # wiki-article / takeaway / synthesis generations
+
+
 # === Quote/locator repair ===
 
 def _normalize_for_match(text):
@@ -250,7 +257,7 @@ def _json_repair_load(cand):
                 try:
                     fixed.append(json.loads("".join(patched)))
                 except json.JSONDecodeError:
-                    pass
+                    pass  # partial JSON prefix not parseable → continue scanning offsets
                 i = j + 1
                 continue
         i += 1
@@ -311,7 +318,7 @@ def extract_claims_mlx(source_text, source_path, model=None):
         return []
 
     raw = build_prompt(source_text, source_path)
-    for budget in (4096, 6144):
+    for budget in (ARTICLE_MAX_TOKENS, ARTICLE_MAX_TOKENS + 2048):
         try:
             out = local_generate(raw, mlx_model, max_tokens=budget)
             claims = parse_json_array(out)
@@ -351,9 +358,9 @@ def extract_claims_openai_compatible(source_text, source_path, model=None):
                 {"role": "user", "content": build_prompt(source_text, source_path)},
             ] + (extra or [])
             return client.chat.completions.create(
-                model=model_name, temperature=0.1, max_tokens=max_tokens, messages=messages)
+                model=model_name, temperature=LLM_TEMPERATURE, max_tokens=max_tokens, messages=messages)
 
-        response = _call(16384)
+        response = _call(EXTRACT_MAX_TOKENS)
         msg = response.choices[0].message
         # Reasoning models (deepseek etc.) may put the answer in `content` only,
         # or spend the budget on `reasoning` — if no parseable JSON came back and
@@ -394,8 +401,8 @@ def extract_claims_anthropic(source_text, source_path, model=None):
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
             model=model_name,
-            max_tokens=4096,
-            temperature=0.1,
+            max_tokens=ARTICLE_MAX_TOKENS,
+            temperature=LLM_TEMPERATURE,
             system="You are a precise claim extractor. Extract atomic, evidence-backed claims from source documents. Return ONLY a valid JSON array.",
             messages=[{"role": "user", "content": build_prompt(source_text, source_path)}]
         )
@@ -416,7 +423,7 @@ def extract_claims_opencode(source_text, source_path, model):
             ["opencode", "run", "--model", model, prompt],
             capture_output=True,
             text=True,
-            timeout=180
+            timeout=300  # extraction backend: API tier, generous
         )
         claims = parse_json_array(result.stdout)
         if claims:

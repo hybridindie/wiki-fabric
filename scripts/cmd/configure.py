@@ -91,7 +91,7 @@ def run(fabric_root: Path, args):
             ["git", "config", "--global", "user.name"],
             capture_output=True, text=True).stdout.strip()
     except Exception:
-        pass
+        pass  # git identity absent → interactive prompt supplies owner
 
     print()
     print("════════════════════════════════════════════")
@@ -289,11 +289,9 @@ def main():
         return 0
 
     import json
+    from fabric_config import save_config
     cfg, _secrets = run(fabric_root, args)
-    yaml_text = "# Wiki Fabric configuration — machine-local; edit freely\n" \
-                "# keys: <fabric>/secrets.env (gitignored), real env vars win\n" \
-                + _yaml.safe_dump(cfg, sort_keys=False, default_flow_style=False)
-    (fabric_root / "fabric.yaml").write_text(yaml_text, encoding="utf-8")
+    save_config(cfg, path=fabric_root / "fabric.yaml")
     print(f"\nConfigured: {fabric_root / 'fabric.yaml'}")
     return 0
 

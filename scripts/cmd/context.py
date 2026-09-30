@@ -48,34 +48,21 @@ except ImportError:
     HAVE_YAML = False
 
 from fabric_config import FABRIC_ROOT
+from wf_common import tokens, RETRIEVAL
 from fabric_config import CORPUS_ROOT, VAULT_ROOT
 from fabric_config import get_config, get_ignores, is_ignored, get_tuning
 from wf_common import parse_frontmatter
 
 
-# wiki/ is the OpenWiki-style human-facing layer: its prose is a paraphrase of
-# claims (drift risk + context bloat if fed back to a model). The machine
-# consumes its *edges* via the citation graph (registry/wiki-graph.json),
-# never the prose. syntheses/ is similarly human-facing generated prose.
-SKIP_PARTS = {".git", ".obsidian", ".opencode", "__pycache__", ".venv", "venv",
-              "templates", "schemas", "evaluations", "raw", "traces", "system", "tests",
-              "examples", "wiki", "syntheses"}
-SKIP_FILES = {"index.md", "log.md", "catalog.json", "README.md", "CONTRIBUTING.md", "AGENTS.md"}
+# corpus walk exclusions are shared (wf_common.SKIP_PARTS/corpus_walk, #155-C)
 
 
 def load_corpus():
     """Load all catalogable corpus pages with derived scope."""
+    from wf_common import corpus_walk
     pages = []
-    for p in VAULT_ROOT.rglob("*.md"):
-        rel = p.relative_to(VAULT_ROOT)
-        parts = rel.parts
-        if any(x in SKIP_PARTS for x in parts):
-            continue
-        if rel.name in SKIP_FILES or rel.name.endswith("README.md"):
-            continue
+    for p, parts, rel in corpus_walk(VAULT_ROOT):
         posix = rel.as_posix()
-        if posix.startswith("evidence/traces"):
-            continue
         if "raw" in parts:
             continue
         fm, body = parse_frontmatter(p)
@@ -97,21 +84,6 @@ def load_corpus():
     return pages
 
 
-def tokens(text):
-    """Lowercase word tokens, crudely stemmed (rotation→rotat, rotating→rotat)
-    so morphological variants still match. Pure string ops — 0 tokens."""
-    import re
-    out = set()
-    for w in re.findall(r"[a-z0-9][a-z0-9_-]{2,}", text.lower()):
-        out.add(w)
-        # cheap suffix strip: -tion/-ting/-ing/-ed/-s + e-restoration (caching→cache)
-        for suf, add in (("tion", ""), ("ting", ""), ("ing", "e"), ("ed", "e"), ("s", "")):
-            if w.endswith(suf) and len(w) - len(suf) >= 4:
-                out.add(w[: -len(suf)])
-                if add:
-                    out.add(w[: -len(suf)] + add)
-                break
-    return out
 
 
 def is_stale(fm, today):
@@ -247,10 +219,14 @@ def select_context(pages, task, paths, project, today, max_items=20):
                     reason = f"task text match: {', '.join(sorted(overlap)[:4])}"
                     priority = "P1-project"
         elif scope == "global" and pg["type"] == "claim":
-            # direct task evidence: a claim whose statement matches the task
+            # direct task evidence: a claim whose statement matches the task.
+            # Stopword guard: "the, tool" is not evidence of relevance —
+            # require at least one CONTENT token (>=5 chars) in the overlap
+            # (#e2e finding: every claim listed on generic tasks otherwise).
             overlap = task_toks & body_tokens(pg)
-            if len(overlap) >= 2:
-                reason = f"task evidence (claim): {', '.join(sorted(overlap)[:4])}"
+            _content = [t for t in overlap if len(t) >= 5]
+            if len(overlap) >= 2 and _content:
+                reason = f"task evidence (claim): {', '.join(sorted(_content)[:4])}"
                 priority = "P1-project"
         elif scope == "domain":
             toks = task_toks & (body_tokens(pg) | tokens(pg["stem"]))
@@ -318,7 +294,7 @@ def select_context(pages, task, paths, project, today, max_items=20):
                         _w = f"commitment overdue (due {due})"
                         item["warning"] = (item["warning"] + "; " if item.get("warning") else "") + _w
                 except (ValueError, IndexError):
-                    pass
+                    pass  # malformed due date → no overdue warning (not a crash)
         sa = pg["fm"].get("stale_after")
         if sa:
             item["stale_after"] = str(sa)
@@ -329,7 +305,7 @@ def select_context(pages, task, paths, project, today, max_items=20):
                     _w = "stale_after reached — verify before relying on it"
                     item["warning"] = (item["warning"] + "; " if item.get("warning") else "") + _w
             except (ValueError, IndexError):
-                pass
+                pass  # malformed stale_after → no staleness warning (not a crash)
         if pg["fm"].get("title"):
             item["title"] = pg["fm"]["title"]
         selected.append(item)
@@ -356,7 +332,7 @@ def select_context(pages, task, paths, project, today, max_items=20):
                     promoted_ids = []
                     for i in borderline:
                         s = scored[i]
-                        if swapped >= 2:
+                        if swapped >= RETRIEVAL["judged_max_promotions"]:
                             break
                         p = noul("Is this artifact relevant to the stated task?",
                                  (f"TASK: {task}\n\nARTIFACT: "
@@ -365,9 +341,9 @@ def select_context(pages, task, paths, project, today, max_items=20):
                         excluded.append({"stem": s["pg"]["stem"], "path": s["pg"]["posix"],
                                          "reason": f"beyond --max {max_items}"
                                                    + (f" — judged-relevant, promoted"
-                                                      if p >= 0.6 else
+                                                      if p >= RETRIEVAL["judged_relevant_p"] else
                                                       f" (judged: p={p:.2f}, not promoted)")})
-                        if p >= 0.6:
+                        if p >= RETRIEVAL["judged_relevant_p"]:
                             s["judged_p"] = p
                             selected.append(_judged_item(s, "judged-relevant", task))
                             swapped += 1
@@ -434,6 +410,7 @@ def code_navigation(task, project=None, max_files=None):
         toks = [t for t in re.findall(r"[a-z0-9]{3,}", (task or "").lower())]
         if not toks:
             return None
+        pinned = (project or "").strip().lower()
         entries = []
         for repo in get_all_repo_names(cfg):
             repo_cfg = get_repo_config(cfg, repo)
@@ -449,11 +426,24 @@ def code_navigation(task, project=None, max_files=None):
             try:
                 g = json.loads(graph_path.read_text())
             except Exception:
-                continue
+                continue  # corrupt/unreadable graph → no symbol expansion for this page
             hits = [n for n in g.get("nodes", [])
                     if n.get("source_file") and n.get("_callable")
                     and any(t in str(n.get("id", "")).lower() for t in toks)]
             if not hits:
+                continue
+            # Cross-project noise guard (#e2e finding): generic task tokens
+            # (tool, add, test) match symbols in EVERY repo's graph. A repo
+            # earns a nav section only when the task names it (slug token)
+            # or the caller pinned it — unless its hits are dense enough to
+            # be genuinely task-specific (>=15% of its callable nodes).
+            task_names_repo = repo.lower() in toks or repo.replace("_", "-") in toks
+            total_callable = sum(1 for n in g.get("nodes", []) if n.get("_callable") and n.get("source_file"))
+            # dense = task-specific enough to stand without the pin: >= 8 hits
+            # AND >= 5% of the repo's callable nodes (fixture graphs are small)
+            dense = total_callable and len(hits) >= 8 and (len(hits) / total_callable) >= 0.05
+            pinned_or_named = pinned == repo.lower() or task_names_repo
+            if not pinned_or_named and not dense:
                 continue
             files = {}
             for n in hits:
@@ -466,7 +456,6 @@ def code_navigation(task, project=None, max_files=None):
                             "files": [{"path": f, "symbol_count": c} for f, c in ranked]})
         # #54: pinned project's repo leads; remaining repos rank by symbol
         # matches (name tie-break keeps byte-identical re-runs).
-        pinned = (project or "").strip().lower()
         entries.sort(key=lambda e: (0 if e["repo"].lower() == pinned else 1,
                                     -e["symbols_matched"], e["repo"]))
         return entries or None
@@ -605,7 +594,7 @@ def _corpus_revision():
         if out.returncode == 0:
             return out.stdout.strip()
     except Exception:
-        pass
+        pass  # git unavailable in this harness → None (caller's default)
     return None
 
 

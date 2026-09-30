@@ -189,9 +189,10 @@ class TestVaultRefresh(unittest.TestCase):
             return vault_refresh.refresh(self.vault, *args)
 
     def _populate_output(self):
-        """A vault with the generated wiki present looks like a fresh OUTPUT dir."""
-        (self.vault / "wiki" / "index.md").parent.mkdir(parents=True, exist_ok=True)
-        (self.vault / "wiki" / "index.md").write_text("---\ntype: index\n---\n\n# Wiki\n")
+        """A vault with the generated wiki present looks like a fresh OUTPUT dir.
+        The index lives at the vault root (corpus/wiki IS the vault, #e2e)."""
+        self.vault.mkdir(parents=True, exist_ok=True)
+        (self.vault / "index.md").write_text("---\ntype: index\n---\n\n# Wiki\n")
         (self.vault / ".obsidian").mkdir(parents=True, exist_ok=True)
 
     def test_refresh_scaffolds_output_dir(self):

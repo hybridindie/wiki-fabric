@@ -67,7 +67,7 @@ def _resolve_key(cfg):
                 if k:
                     return k, f"data.json:{data}"
             except Exception:
-                pass
+                pass  # data.json absent/corrupt → fall through to env-var key
     return None, key_env
 
 
@@ -79,7 +79,7 @@ def _request(method, path, api_url, key, body=None, content_type="text/markdown"
                                  headers={"Authorization": f"Bearer {key}",
                                           "Content-Type": content_type})
     ctx = ssl._create_unverified_context()  # the plugin's self-signed CA
-    with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
+    with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:  # TIMEOUT_API tier
         return resp.status, resp.read().decode("utf-8", errors="replace")
 
 

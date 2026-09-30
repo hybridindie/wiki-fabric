@@ -114,7 +114,7 @@ class TestMinerRevisionProposal:
         """The miner's SLOW-REGION rule: differing protected content means a
         revision must be proposed, never an overwrite. Verify the fingerprint
         contract the miner checks."""
-        from lint import protected_fingerprint
+        from contracts import protected_fingerprint
         base = "---\ntype: pattern\nid: pattern-c1\ntitle: C1\n" \
                "applicability:\n  excludes:\n    - \"old exclusion\"\n" \
                "counterexamples: []\n---\n\nbody\n"
@@ -124,6 +124,90 @@ class TestMinerRevisionProposal:
         # identical → no revision needed
         assert protected_fingerprint(parse_frontmatter_str(base)[0]) == \
                protected_fingerprint(parse_frontmatter_str(base)[0])
+
+
+class TestGatesAgree:
+    """#151: the SLOW-REGION rule has ONE truth (contracts.py). lint and the
+    change-set apply gate must agree on the same change-set."""
+
+    def test_apply_gate_fingerprint_semantics(self, tmp_path, monkeypatch):
+        """apply_changeset's gate reconstructs the diff post-state and applies
+        the fingerprint rule — no more grep-on-diff false positives (any list
+        item used to count as 'protected content')."""
+        import apply_changeset as ac
+        import subprocess as sp
+        import fabric_config as fc
+        corpus = tmp_path / "corpus"
+        (corpus / "patterns").mkdir(parents=True)
+        base = "---\ntype: pattern\nid: pattern-g1\ntitle: G1\n" \
+               "applicability:\n  includes: [a]\ncounterexamples: []\n---\n\nbody\n"
+        (corpus / "patterns" / "pattern-g1.md").write_text(base)
+        sp.run(["git", "init", "-q", str(tmp_path)], check=True)
+        sp.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
+        sp.run(["git", "-C", str(tmp_path), "-c", "user.email=t@t", "-c", "user.name=t",
+                "commit", "-qm", "seed"], check=True)
+        # edit protected content
+        (corpus / "patterns" / "pattern-g1.md").write_text(
+            base.replace("[a]", "[a, b]"))
+        sp.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
+        r = sp.run(["git", "-C", str(tmp_path), "diff", "--cached",
+                    "corpus/patterns/pattern-g1.md"],
+                   capture_output=True, text=True)
+        monkeypatch.setattr(fc, "VAULT_ROOT", tmp_path, raising=False)
+        import apply_changeset as ac
+        monkeypatch.setattr(ac, "VAULT_ROOT", tmp_path, raising=False)
+        # gate must refuse the protected edit
+        assert ac.slow_region_gate(r.stdout, allow_override=False) is False
+        # bullet-only edits (fast lane) no longer false-positive
+        assert ac.slow_region_gate("", allow_override=False) is True
+
+    def test_fast_lane_bullet_edit_passes(self, tmp_path, monkeypatch):
+        """The old grep gate blocked ANY list-item touch; the fuzz-free
+        fingerprint gate lets fast-lane content through when protected
+        fields are unchanged."""
+        import apply_changeset as ac
+        import subprocess as sp
+        corpus = tmp_path / "corpus"
+        (corpus / "patterns").mkdir(parents=True)
+        base = "---\ntype: pattern\nid: pattern-g2\ntitle: G2\n" \
+               "applicability:\n  excludes: [keep]\ncounterexamples: [c]\n---\n\n" \
+               "body\n\n- old bullet\n"
+        (corpus / "patterns" / "pattern-g2.md").write_text(base)
+        sp.run(["git", "init", "-q", str(tmp_path)], check=True)
+        sp.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
+        sp.run(["git", "-C", str(tmp_path), "-c", "user.email=t@t", "-c", "user.name=t",
+                "commit", "-qm", "seed"], check=True)
+        # fast-lane edit: body bullet change only
+        (corpus / "patterns" / "pattern-g2.md").write_text(base.replace("old bullet", "new bullet"))
+        sp.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
+        r = sp.run(["git", "-C", str(tmp_path), "diff", "--cached",
+                    "corpus/patterns/pattern-g2.md"],
+                   capture_output=True, text=True)
+        import apply_changeset as ac
+        monkeypatch.setattr(ac, "VAULT_ROOT", tmp_path, raising=False)
+        assert ac.slow_region_gate(r.stdout, allow_override=False) is True
+
+    def test_slow_update_justified_diff_passes_gate(self, tmp_path, monkeypatch):
+        import subprocess as sp
+        corpus = tmp_path / "corpus"
+        (corpus / "patterns").mkdir(parents=True)
+        base = "---\ntype: pattern\nid: pattern-g3\ntitle: G3\n" \
+               "applicability:\n  excludes: [x]\n" \
+               "verified:\n  - by: human:t\n    reason: \"slow-update: reviewed\"\n---\n\nb\n"
+        (corpus / "patterns" / "pattern-g3.md").write_text(base)
+        sp.run(["git", "init", "-q", str(tmp_path)], check=True)
+        sp.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
+        sp.run(["git", "-C", str(tmp_path), "-c", "user.email=t@t", "-c", "user.name=t",
+                "commit", "-qm", "seed"], check=True)
+        (corpus / "patterns" / "pattern-g3.md").write_text(
+            base.replace("[x]", "[x, y]"))  # protected change, justified in fm
+        sp.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
+        r = sp.run(["git", "-C", str(tmp_path), "diff", "--cached",
+                    "corpus/patterns/pattern-g3.md"],
+                   capture_output=True, text=True)
+        import apply_changeset as ac
+        monkeypatch.setattr(ac, "VAULT_ROOT", tmp_path, raising=False)
+        assert ac.slow_region_gate(r.stdout, allow_override=False) is True
 
 
 def parse_frontmatter_str(text):

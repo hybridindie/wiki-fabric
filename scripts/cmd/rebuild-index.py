@@ -23,28 +23,24 @@ except ImportError:
     HAVE_YAML = False
 
 from fabric_config import get_config, get_ignores, is_ignored, CORPUS_ROOT
-from wf_common import parse_frontmatter
+from wf_common import parse_frontmatter, SKIP_PARTS
 
 
 def _default_root():
-    """Root to index.
-    - If this script's own parent is an isolated fabric holding content dirs
-      directly (patterns/, evidence/, registry/ are at its root — e.g.
-      eval-stability copies the script into a flat temp fabric), index there
-      so the tool is cwd-agnostic.
-    - Else index the canonical corpus (the harness root itself holds no content;
-      its atoms live under corpus/).
-    --root / WIKI_FABRIC_ROOT still override in main()."""
+    """Root to index — paths.py (#152). The harness tree is NEVER a fabric
+    (its patterns/evidence dirs are gitkeeped skeletons): the veto comes
+    first, then the isolated-fabric heuristic for eval-stability's flat
+    temp fabrics. --root / WIKI_FABRIC_ROOT still override in main()."""
+    from paths import find_corpus_root, is_harness_tree
     own = (Path(__file__).resolve().parent).parent.parent  # scripts/cmd -> scripts -> fabric root
+    if is_harness_tree(own):
+        return find_corpus_root(own)
     # Isolated-fabric heuristic (eval-stability copies the script into a flat
-    # temp fabric): content dirs at the root AND no corpus/ subdir. The harness
-    # repo itself carries a patterns/ skeleton + corpus/, so the presence of
-    # corpus/ is the discriminating signal — never index the harness root
-    # (that would write the catalog outside the corpus).
+    # temp fabric): content dirs at the root AND no corpus/ subdir.
     if (own / "patterns").is_dir() or (own / "evidence").is_dir():
         if not (own / "corpus").is_dir():
             return own  # isolated fabric (content at its root)
-    return CORPUS_ROOT
+    return find_corpus_root(own)
 
 
 # The catalog is a corpus artifact; the old harness-root default detached it
@@ -52,7 +48,9 @@ def _default_root():
 VAULT_ROOT = _default_root()
 INDEX_PATH = VAULT_ROOT / "registry" / "catalog.json"
 
-SKIP_PARTS = {".git", ".obsidian", ".opencode", "__pycache__", ".venv", "venv", "node_modules", "templates", "schemas", "evaluations", "system", "examples", "scripts", "tests"}
+# SKIP_PARTS: shared corpus-walk exclusion set (wf_common, #155-C) — the
+# catalog should see the same corpus the retrievers see. Extra, index-only
+# skips live in scan_vault below.
 SKIP_DIRS_IN_EVIDENCE = {"raw", "traces"}
 
 LINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]")
@@ -285,7 +283,14 @@ def main():
     args = parser.parse_args()
 
     global VAULT_ROOT, INDEX_PATH
-    VAULT_ROOT = Path(args.root or os.environ.get("WIKI_FABRIC_ROOT", VAULT_ROOT)).resolve()
+    import os as _os
+    root_arg = args.root or _os.environ.get("WIKI_FABRIC_ROOT")
+    if not root_arg:
+        # canonical resolution (fabric_config chain) — the module default can
+        # land on the harness when run from the toolbox repo (#e2e finding)
+        from fabric_config import CORPUS_ROOT
+        root_arg = str(CORPUS_ROOT)
+    VAULT_ROOT = Path(root_arg).resolve()
     INDEX_PATH = VAULT_ROOT / "registry" / "catalog.json"
 
     categories = scan_vault()

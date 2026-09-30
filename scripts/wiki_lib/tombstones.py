@@ -74,7 +74,7 @@ def load_active(vault_root):
             from wf_common import parse_frontmatter as _pf
             fm, body = _pf(p)
         except Exception:
-            continue
+            continue  #continue  # unparseable tombstone → ignored (active-only filter below)
         if not fm or str(fm.get("status", "")).lower() != "active":
             continue
         sig = set(re.findall(r"[a-z]{4,}", str(fm.get("signature", ""))))
