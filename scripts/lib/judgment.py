@@ -246,53 +246,28 @@ def noul(question, state, false_desc=None, true_desc=None):
 
 
 def _ask_cloud(q):
-    """TypeSafe Jev — the real System One wire protocol (POST /v1/systemone).
-    One question per request (our tier's usage is pairwise, so batching adds
-    no value). Answer payload: answers.<name>.<type> with calibrated values."""
+    """TypeSafe Jev — the System One wire (POST /v1/systemone, same protocol
+    the local ollama tier serves). One question per request (our tier's
+    usage is pairwise, so batching adds no value). Answer payload:
+    answers.<name>.<type> with calibrated values."""
     base, key = _typesafe_endpoint()
     if not key:
         raise JudgmentUnavailable("TYPESAFE_API_KEY not set (judgment cloud route)")
-    import urllib.request
-    name = q.get("name") or "q"
-    question = {k: q[k] for k in ("type", "instructions", "criteria") if k in q}
-    question["type"] = question.get("type") or q.get("kind", "")
-    question["instructions"] = question.get("instructions") or q.get("question", "")
-    if q["kind"] == "choice":
-        # options entries are dicts {name, description} → Jev criteria map
-        opts = q.get("options") or []
-        question["criteria"] = question.get("criteria") or             {o["name"]: o.get("description") for o in opts}
-    if q["kind"] == "noul" and q.get("false_desc"):
-        question["criteria"] = {"false": q.get("false_desc"), "true": q.get("true_desc")}
+    name, question = _systemone_question(q)
     body = {
         "model": judgment_config().get("cloud_model", CLOUD_MODEL_DEFAULT),
         "state": q.get("state") or "",
         "questions": {name: question},
     }
-    req = urllib.request.Request(
-        f"{base}/v1/systemone",
-        data=_json.dumps(body).encode(),
-        headers={"Content-Type": "application/json",
-                 "Authorization": f"Bearer {key}"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:  # TIMEOUT_API tier
-            out = _json.loads(resp.read().decode())
-    except urllib.error.HTTPError as e:
-        detail = ""
-        try:
-            detail = e.read().decode()[:200]
-        except Exception:
-            pass  # diagnostic read only — the raise below is the signal
-        raise JudgmentUnavailable(f"cloud judge HTTP {e.code}: {detail}")
-    except Exception as e:
-        raise JudgmentUnavailable(f"cloud judge unreachable: {e}")
+    out = _ask_systemone(base, body,
+                         headers={"Authorization": f"Bearer {key}"})
     return _normalize_jev(out, name, q)
 
 
-def _normalize_jev(out, name, q):
-    """Map Jev's answers.<name>.<type> to our internal shape."""
-    cfg = judgment_config()
-    cfg.setdefault("cloud_model", CLOUD_MODEL_DEFAULT)  # fabric_config default also updated
+def _normalize_jev(out, name, q, backend="jev"):
+    """Map System One answers.<name>.<type> to our internal shape (Jev cloud
+    AND the local ollama /v1/systemone tier share one wire protocol —
+    same normalizer, backend tag differs)."""
     answers = out.get("answers") or {}
     a = answers.get(name) or {}
     kind = q["kind"]
@@ -300,17 +275,19 @@ def _normalize_jev(out, name, q):
         value = a.get("noul")
         return {"value": float(value) if value is not None else 0.0,
                 "confidence": a.get("answer_confidence") or a.get("confidence"),
-                "backend": "jev", "model": out.get("model", "jev")}
+                "probabilities": a.get("probabilities"),
+                "backend": backend, "model": out.get("model", backend)}
     if kind == "choice":
         # laya-style options dicts vs our option list: Jev returns the label
         return {"value": str(a.get("choice", "")),
                 "confidence": a.get("answer_confidence") or a.get("confidence"),
                 "probabilities": a.get("probabilities"),
-                "backend": "jev", "model": out.get("model", "jev")}
+                "backend": backend, "model": out.get("model", backend)}
     if kind == "score":
         return {"value": a.get("score"),
                 "confidence": a.get("answer_confidence") or a.get("confidence"),
-                "backend": "jev", "model": out.get("model", "jev")}
+                "probabilities": a.get("probabilities"),
+                "backend": backend, "model": out.get("model", backend)}
     raise JudgmentUnavailable(f"unsupported question kind: {kind}")
 
 
@@ -375,9 +352,18 @@ def _judge_ollama_model():
         if _ollama_tag_ok(m):
             return m
         if _looks_like_ollama_tag(m):
-            raise JudgmentUnavailable(
-                f"ollama judge tag {m!r} is not a server-local tag (hosted-farm/"
-                f"port tags egress) — use e.g. tev1:latest, nimble:latest")
+            if str(m).rsplit(":", 1)[1].lower() in _OLLAMA_JUDGE_REJECT_TAGS:
+                # hosted-farm tag = egress: refuse loudly (privacy tier contract)
+                raise JudgmentUnavailable(
+                    f"ollama judge tag {m!r} routes over the network (hosted "
+                    f"farm) — not usable as a LOCAL judge; use a Tev/Nimble "
+                    f"tag (e.g. tev1:latest)")
+            # valid server tag but not System One-supported (gemma etc.) —
+            # the judge needs a decision model: fall back with a notice
+            print(f"judgment: {m} is not System One-supported (Tev/Nimble "
+                  f"only) — using tev1:latest (pull: ollama pull tev1:latest)",
+                  file=sys.stderr)
+            return "tev1:latest"
         # HF id / on-device path: not an ollama-managed judge — ollama default
     return "tev1:latest"
 
@@ -388,7 +374,12 @@ def _looks_like_ollama_tag(tag):
     return ":" in m and "/" not in m and not m.startswith(":")
 
 
+_SYSTEMONE_JUDGE_PREFIXES = ("tev", "nimble")  # ollama's System One server gate:
+# "...use a local Nimble or Tev GGUF model" — anything else 400s
+
+
 def _ollama_tag_ok(tag):
+    """Server-local AND System One-supported (Tev/Nimble family)."""
     m = str(tag or "")
     if ":" not in m or "/" in m:
         return False
@@ -399,45 +390,72 @@ def _ollama_tag_ok(tag):
     # host:port, not a model tag ("localhost:11434", "host:port:9999")
     if not re.match(r"[a-z0-9][a-z0-9._-]*", tail) or tail.isdigit():
         return False
-    return True
+    low = m.lower()
+    return low.startswith(_SYSTEMONE_JUDGE_PREFIXES)
+
+
+def _systemone_question(q):
+    """Our question shape → System One wire shape (shared: cloud + ollama)."""
+    name = q.get("name") or "q"
+    question = {k: q[k] for k in ("type", "instructions", "criteria") if k in q}
+    question["type"] = question.get("type") or q.get("kind", "")
+    question["instructions"] = question.get("instructions") or q.get("question", "")
+    if q["kind"] == "choice":
+        opts = q.get("options") or []
+        question["criteria"] = question.get("criteria") or             {o["name"]: o.get("description") for o in opts}
+    if q["kind"] == "noul" and q.get("false_desc"):
+        question["criteria"] = {"false": q.get("false_desc"), "true": q.get("true_desc")}
+    return name, question
+
+
+def _systemone_url(base_url):
+    """Normalize any base (host, /v1 suffix forms) to the /v1/systemone URL."""
+    b = str(base_url or "").rstrip("/")
+    if b.endswith("/v1"):
+        b = b[:-3]
+    return b + "/v1/systemone"
+
+
+def _ask_systemone(base_url, body, timeout=120, headers=None):
+    """POST /v1/systemone — the one System One wire (local ollama + TypeSafe Jev)."""
+    import urllib.request
+    req = urllib.request.Request(
+        _systemone_url(base_url),
+        data=_json.dumps(body).encode(),
+        headers={"Content-Type": "application/json", **(headers or {})})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return _json.loads(resp.read().decode())
+    except Exception as e:
+        raise JudgmentUnavailable(f"systemone call failed: {e}")
 
 
 def _ask_ollama(q):
-    """Judgment via the LOCAL ollama server (/api/chat, format:json). The
-    decision-model tier: egress-free, ~100ms. think:false for reasoner-class
-    tags (tev1); format:json forces JSON verdicts on classifier tags
-    (nimble). Cloud tags in config are refused — egress, not local."""
+    """Judgment via the LOCAL ollama server's System One endpoint
+    (POST /v1/systemone — the same wire protocol as TypeSafe Jev cloud,
+    minus auth). Decision models: tev1:latest (4B, reasoner — think:false
+    honored), nimble:latest (9B classifier, format:json). Hosted-farm tags
+    in config are refused: ':cloud' egresses, which breaks the local tier's
+    contract."""
     model_id = _judge_ollama_model()
     if not _ollama_tag_ok(model_id):
         raise JudgmentUnavailable(
             f"ollama judge tag {model_id!r} is a hosted-farm tag (cloud) — egress; "
             f"use a server-local decision model (e.g. tev1:latest, nimble:latest)")
-    value_prompt = (f'Answer as a JSON object: {{"value": <probability 0..1>}}'
-                    if q["kind"] == "noul"
-                    else 'Answer as a JSON object: {"value": <option|score>, "confidence": <float>}')
-    payload = {
+    name, question = _systemone_question(q)
+    body = {
         "model": model_id,
-        "stream": False,
-        "think": False,
-        "format": "json",
-        "messages": [{"role": "user", "content":
-                      f"Question: {q['question']}\n\nState:\n{q.get('state') or ''}\n\n"
-                      f"{value_prompt}\nDo not explain; output the JSON object only."}],
+        "state": q.get("state") or "",
+        "questions": {name: question},
     }
     base_url = (fabric_config_get("llm", {}).get("base_url")
-                or "http://localhost:11434").replace("/v1", "")
-    import urllib.request
-    req = urllib.request.Request(
-        f"{base_url}/api/chat",
-        data=_json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json"})
+                or "http://localhost:11434/v1")
     try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            out = _json.loads(resp.read().decode())
-    except Exception as e:
-        raise JudgmentUnavailable(f"ollama judge call failed ({model_id}): {e}")
-    content = (out.get("message") or {}).get("content") or ""
-    return _parse_local(content)
+        out = _ask_systemone(base_url, body)
+    except JudgmentUnavailable as e:
+        raise JudgmentUnavailable(f"ollama judge failed ({model_id}): {e}")
+    return _normalize_jev(out, name, q, backend="ollama")
+
 
 
 def _ask_laya_direct(q):

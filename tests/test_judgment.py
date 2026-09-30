@@ -264,7 +264,10 @@ class TestOllamaJudgeRoute(unittest.TestCase):
 
     def test_ollama_tag_ok(self):
         assert judgment._ollama_tag_ok("tev1:latest")
-        assert judgment._ollama_tag_ok("gemma4:e4b-fixed")
+        assert judgment._ollama_tag_ok("nimble:latest")
+        assert judgment._ollama_tag_ok("tev1:4b")
+        # System One serves only the Tev/Nimble decision family
+        assert not judgment._ollama_tag_ok("gemma4:e4b-fixed")
         assert not judgment._ollama_tag_ok("glm-5.3-flash:cloud")
         assert not judgment._ollama_tag_ok("host:port:9999")
 
