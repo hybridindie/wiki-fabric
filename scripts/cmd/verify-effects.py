@@ -31,6 +31,7 @@ import json
 import re
 from pathlib import Path
 
+import systemone
 from fabric_config import CORPUS_ROOT
 
 
@@ -47,6 +48,10 @@ def verify_claim(claim_path, max_pairs=12, min_confidence=0.6):
     statement, _ = _statement(claim_path)
     pool = related_claim_pool(claim_path, max_n=max_pairs)
     pairs = []
+    # System One pairwise triage (local decision model, choice head): the
+    # relation between the new claim and each pool item, proposed for the
+    # review queue — humans gate canonical edits; contested states stand.
+    _sys_triage = systemone.systemone_active()
     for existing in pool:
         est, _ = _statement(existing)
         if not est:
@@ -57,11 +62,22 @@ def verify_claim(claim_path, max_pairs=12, min_confidence=0.6):
             pairs.append({"against": existing.stem, "error": str(e)[:120],
                           "verdict": None})
             continue
-        pairs.append({
+        pair = {
             "against": existing.stem,
             "effect": v.get("effect"),
             "confidence": v.get("confidence"),
-        })
+        }
+        if _sys_triage and statement and est:
+            try:
+                sp = systemone.systemone_pair(statement, est)
+                if sp:
+                    pair["systemone"] = {
+                        "relation": sp.get("choice"),
+                        "confidence": round(sp.get("confidence") or 0.0, 3),
+                    }
+            except Exception as e:
+                pair["systemone"] = {"relation": None, "error": str(e)[:120]}
+        pairs.append(pair)
     report = {
         "claim": claim_path.stem,
         "route": route,

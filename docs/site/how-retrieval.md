@@ -63,11 +63,16 @@ gate needs.
 
 ## Optional layers (off by default)
 
-Two optional additions sit on top of this deterministic base — see
+Three optional additions sit on top of this deterministic base — see
 [Integrations](./integrations): the semantic re-rank boost
-(integrations.embeddings, top-40 fusion) and the judged borderline re-rank
-(wf context --judge-borderline). Both self-report in the output when active;
-the deterministic base never requires them.
+(integrations.embeddings, top-40 fusion), the System One fusion rerank
+(a local decision model — ollama's `/v1/systemone`, Tev/Nimble-class —
+judging which top-k lexical candidates actually answer the question;
+latency-budgeted ~2s, silent fall-back to lexical order when disabled
+or unreachable), and the judged borderline re-rank
+(wf context --judge-borderline). All self-report in the output when active;
+the deterministic base never requires them. A decision model is a
+*judge* — it never writes content, and humans still gate every merge.
 
 ## The human layer stays out of the machine context
 

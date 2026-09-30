@@ -230,46 +230,32 @@ class TestOllamaJudgeRoute(unittest.TestCase):
     """The ollama decision-model tier (Tev/Nimble-class, server-local)."""
 
     def test_rejects_hosted_farm_tags(self):
-        """':cloud' tags route over the network — refused as a LOCAL judge."""
-        with mock.patch.object(judgment, "judgment_config",
-                               return_value={"enabled": True, "route": "local",
-                                             "local_backend": "ollama"}), \
-             mock.patch.object(judgment, "fabric_config_get",
-                               return_value={"base_url": "http://localhost:11434/v1",
-                                             "local_model": "glm-5.3-flash:cloud"}):
+        """':cloud' tags route over the network — refused as a LOCAL judge
+        (single truth: systemone.judge_tag; judgment delegates)."""
+        with mock.patch.object(judgment, "_judge_ollama_model",
+                               return_value="glm-5.3-flash:cloud"):
             with pytest.raises(judgment.JudgmentUnavailable) as ei:
                 judgment._ask_ollama({"kind": "noul", "question": "q", "state": "s"})
-            assert "cloud" in str(ei.value)
+        assert "cloud" in str(ei.value)
 
-    def test_model_resolution_prefers_judgment_local_model(self):
-        with mock.patch.object(judgment, "judgment_config",
-                               return_value={"local_model": "nimble:latest"}), \
-             mock.patch.object(judgment, "fabric_config_get",
-                               return_value={"local_model": "gemma4:e4b-fixed"}):
-            assert judgment._judge_ollama_model() == "nimble:latest"
+    def test_model_resolution_via_systemone(self):
+        import systemone
 
-    def test_model_resolution_uses_llm_local_model_when_ollama_tag(self):
-        with mock.patch.object(judgment, "judgment_config",
-                               return_value={}), \
-             mock.patch.object(judgment, "fabric_config_get",
-                               return_value={"local_model": "tev1:latest"}):
-            assert judgment._judge_ollama_model() == "tev1:latest"
-
-    def test_model_resolution_default_fallback(self):
-        with mock.patch.object(judgment, "judgment_config",
-                               return_value={}), \
-             mock.patch.object(judgment, "fabric_config_get",
-                               return_value={"local_model": "mlx-community/x-4bit"}):
-            assert judgment._judge_ollama_model() == "tev1:latest"
-
-    def test_ollama_tag_ok(self):
-        assert judgment._ollama_tag_ok("tev1:latest")
-        assert judgment._ollama_tag_ok("nimble:latest")
-        assert judgment._ollama_tag_ok("tev1:4b")
-        # System One serves only the Tev/Nimble decision family
-        assert not judgment._ollama_tag_ok("gemma4:e4b-fixed")
-        assert not judgment._ollama_tag_ok("glm-5.3-flash:cloud")
-        assert not judgment._ollama_tag_ok("host:port:9999")
+        """Tag resolution + egress refusal live in systemone.py now."""
+        import fabric_config
+        cfgs = [
+            ({"integrations": {"judgment": {"local_model": "nimble:latest"}}, "llm": {}}, "nimble:latest"),
+            ({"llm": {"local_model": "gemma4:e4b-fixed"}}, None),   # not System One → default
+            ({"llm": {"local_model": "glm-5.3-flash:cloud"}}, "REFUSE"),
+            ({}, None),
+        ]
+        for cfg, expected in cfgs:
+            with mock.patch.object(fabric_config, "get_config", return_value=cfg):
+                if expected == "REFUSE":
+                    with pytest.raises(systemone.SystemOneUnavailable):
+                        systemone.judge_tag()
+                else:
+                    assert systemone.judge_tag() == (expected or systemone.DEFAULT_JUDGE_TAG)
 
     def test_ask_local_routes_ollama_backend(self):
         with mock.patch.object(judgment, "judgment_config",

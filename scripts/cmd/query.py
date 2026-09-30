@@ -34,7 +34,8 @@ import argparse
 from pathlib import Path
 from datetime import date
 from collections import Counter
-from wf_common import parse_frontmatter, norm, STOPWORDS, RETRIEVAL
+from wf_common import parse_frontmatter, norm, STOPWORDS, RETRIEVAL, TIMEOUT_SCRIPT
+from systemone import systemone_rank
 from fabric_config import FABRIC_ROOT
 from fabric_config import CORPUS_ROOT, VAULT_ROOT
 
@@ -408,6 +409,50 @@ def expand_graph(scored_pages, relations, pages, max_hops=1):
     return result
 
 
+def hop_gate(args, scored_pages, pages, relations, max_edges=RETRIEVAL["graphboost_cap"]):
+    """System One edge-traversal gate (local decision model, egress-free):
+    among related claim edges, judge which hops plausibly carry the answer
+    forward and rank them by that probability — ordering for the flat-seed
+    graph hits. Returns [(seed_p_scaled, pg)] or None (route disabled/
+    unreachable → caller's flat-seed expansion stands).
+
+    Placement contract: hop-scaled score is bounded by graph_seed_score
+    (0.1) — never ranked above lexical evidence (AGENTS.md spending policy).
+    """
+    import systemone
+    if not systemone.systemone_active():
+        return None
+    by_stem = {pg["stem"]: pg for pg in pages}
+    scored_stems = {pg["stem"] for _, pg in scored_pages}
+    candidates = []
+    for seed, pg in scored_pages:
+        for rel in relations.get(pg["stem"], []):
+            target = rel["target"]
+            tp = by_stem.get(target)
+            if tp is not None and target not in scored_stems and \
+                    all(c[2] != target for c in candidates):
+                candidates.append((pg["stem"], rel.get("type", ""), tp["stem"]))
+    if not candidates:
+        return None
+    edges = [(seed_stem, rtype, tp, f"{seed_stem} --{rtype}--> {tp}")
+             for seed_stem, rtype, tp in candidates[:max_edges]]
+    try:
+        # stem key = the SOURCE claim's stem (the join key for hop scores)
+        hops = systemone.systemone_hop(args.query,
+                                       [(e[2], e[1], e[3]) for e in edges])
+    except Exception:
+        return None
+    if not hops:
+        return None
+    out = []
+    for seed_stem, rtype, tp_stem, ctx in edges:
+        pg = by_stem.get(tp_stem)
+        if pg is None:
+            continue
+        out.append((RETRIEVAL["graph_seed_score"] * (hops.get(tp_stem) or 0.0), pg))
+    return sorted(out, key=lambda t: t[0], reverse=True)
+
+
 # ---------------------------------------------------------------------------
 # Answer generation
 # ---------------------------------------------------------------------------
@@ -655,6 +700,8 @@ def main():
                         help="Query type (determines retrieval policy)")
     parser.add_argument("--save", action="store_true", help="Save answer as a synthesis page")
     parser.add_argument("--verbose", action="store_true", help="Show scoring detail")
+    parser.add_argument("--no-rerank", action="store_true",
+                        help="Skip the System One fusion rerank (lexical order stands)")
     args = parser.parse_args()
 
     pages = load_pages()
@@ -679,15 +726,54 @@ def main():
         print(f"Pages loaded: {len(pages)}", file=sys.stderr)
 
     scored = score_pages(pages, args.query, query_type)
-
     if args.verbose:
         print(f"Scored pages: {len(scored)}", file=sys.stderr)
         for score, pg in scored[:5]:
             print(f"  {score:.3f} [{pg['type']:20}] {pg['stem']}", file=sys.stderr)
 
+    # System One fusion rerank (local decision model, egress-free): lexical
+    # overlap gets candidates; tev1/nimble judge which actually answer.
+    # ~0.7s batched for top-10; silent fall-back to lexical order when the
+    # route is disabled/unreachable (systemone_rank returns None).
+    if not args.no_rerank:
+        _p_rerank = systemone_rank(
+            args.query, [{"stem": pg["stem"],
+                          "body": (str(pg.get("fm", {}).get("statement") or "") +
+                                   "\n" + pg.get("body", "")[:800])}
+                         for _, pg in scored[:10]])
+        if _p_rerank:
+            def _fused(item):
+                score, pg = item
+                p = _p_rerank.get(pg["stem"])
+                # missing/None verdict → 0 semantic weight (lexical stands)
+                p = p if isinstance(p, (int, float)) else 0.0
+                return RETRIEVAL["fuse_lex"] * score + RETRIEVAL["fuse_sem"] * p
+            scored = sorted(
+                [(s, pg) for s, pg in scored[:10]] + list(scored[10:]),
+                key=lambda t: (_fused(t), t[1]["stem"]), reverse=True)
+            if args.verbose:
+                print(f"  systemone rerank: "
+                      f"{ {pg['stem'][:24]: round(_p_rerank.get(pg['stem'], -1) or -1, 2) for _, pg in scored[:10]} }",
+                      file=sys.stderr)
+
     # Graph expansion through claim relations
     relations = load_relations(pages)
     expanded = expand_graph(scored, relations, pages)
+
+    # System One hop-gate (local decision model): rank the flat-seed graph
+    # hits by P(edge serves the query). Never above lexical evidence — the
+    # scaled score is bounded by graph_seed_score (0.1).
+    gate = hop_gate(args, scored, pages, relations)
+    if gate:
+        lex_part = [(s, pg) for s, pg in expanded
+                    if s >= RETRIEVAL["graph_seed_score"]]
+        gate_stems = {pg["stem"] for _, pg in gate}
+        gate_hits = [(s, pg) for s, pg in expanded
+                     if s < RETRIEVAL["graph_seed_score"]
+                     and pg["stem"] not in gate_stems]
+        expanded = lex_part + gate + gate_hits
+        if args.verbose:
+            print(f"  hop-gate reranked {len(gate)} edges", file=sys.stderr)
 
     # Symbol proximity discovery (#48, gated on integrations.graphify.enabled):
     # a claim whose graphify edges name a symbol the query mentions is

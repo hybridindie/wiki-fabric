@@ -65,7 +65,12 @@ persistent memory layer.
 ## When NOT to use the LLM
 
 - **Never call the LLM to search the fabric** — `query.py` and `context.py`
-  retrieve via lexical + graph expansion (0 tokens).
+  retrieve via lexical + graph expansion (0 tokens). The System One fusion
+  rerank (`systemone_rank`) is the one ranking signal on top of lexical
+  order — a *local* decision model (ollama `/v1/systemone`, egress-free,
+  latency-budgeted 2s, silent fall-back to lexical when disabled/down).
+  Judgment-tier gated (`integrations.judgment.enabled`); a decision model
+  is a judge, never a content writer.
 - **Never call the LLM to cluster claims** — `mine-promotions.py` uses
   keyword-based Jaccard clustering; the LLM only writes the dossier.
 - **Never call the LLM to check code symbols** — `build-entity-index.py`

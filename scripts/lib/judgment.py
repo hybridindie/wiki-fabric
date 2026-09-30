@@ -340,108 +340,49 @@ _OLLAMA_JUDGE_REJECT_TAGS = ("cloud", "hosted", "remote")  # hosted farm = egres
 
 
 def _judge_ollama_model():
-    """The ollama decision-model tag for the judge tier: judgment.local_model,
-    else llm.local_model when it's an ollama tag, else tev1:latest (4B, fast).
-    An EXPLICIT hosted-farm tag (':cloud') is a config error — refused here,
-    not silently swapped for the default."""
-    cfg = judgment_config()
-    m = cfg.get("local_model")
-    if not m:
-        m = fabric_config_get("llm", {}).get("local_model")
-    if m and str(m).strip():
-        if _ollama_tag_ok(m):
-            return m
-        if _looks_like_ollama_tag(m):
-            if str(m).rsplit(":", 1)[1].lower() in _OLLAMA_JUDGE_REJECT_TAGS:
-                # hosted-farm tag = egress: refuse loudly (privacy tier contract)
-                raise JudgmentUnavailable(
-                    f"ollama judge tag {m!r} routes over the network (hosted "
-                    f"farm) — not usable as a LOCAL judge; use a Tev/Nimble "
-                    f"tag (e.g. tev1:latest)")
-            # valid server tag but not System One-supported (gemma etc.) —
-            # the judge needs a decision model: fall back with a notice
-            print(f"judgment: {m} is not System One-supported (Tev/Nimble "
-                  f"only) — using tev1:latest (pull: ollama pull tev1:latest)",
-                  file=sys.stderr)
-            return "tev1:latest"
-        # HF id / on-device path: not an ollama-managed judge — ollama default
-    return "tev1:latest"
-
-
-def _looks_like_ollama_tag(tag):
-    """Tag-shape check (indifferent to local/cloud): bare <name>:<tail>."""
-    m = str(tag or "")
-    return ":" in m and "/" not in m and not m.startswith(":")
-
-
-_SYSTEMONE_JUDGE_PREFIXES = ("tev", "nimble")  # ollama's System One server gate:
-# "...use a local Nimble or Tev GGUF model" — anything else 400s
-
-
-def _ollama_tag_ok(tag):
-    """Server-local AND System One-supported (Tev/Nimble family)."""
-    m = str(tag or "")
-    if ":" not in m or "/" in m:
-        return False
-    tail = m.rsplit(":", 1)[1].lower()
-    if tail in _OLLAMA_JUDGE_REJECT_TAGS:
-        return False
-    # ollama tags are <name>:< alphanumeric tag> — a bare numeric tail is a
-    # host:port, not a model tag ("localhost:11434", "host:port:9999")
-    if not re.match(r"[a-z0-9][a-z0-9._-]*", tail) or tail.isdigit():
-        return False
-    low = m.lower()
-    return low.startswith(_SYSTEMONE_JUDGE_PREFIXES)
+    """The decision-model tag (single truth: systemone.judge_tag — the same
+    resolution + hosted-farm/notice contract)."""
+    from systemone import judge_tag, SystemOneUnavailable
+    try:
+        return judge_tag()
+    except SystemOneUnavailable as e:
+        raise JudgmentUnavailable(str(e))
 
 
 def _systemone_question(q):
-    """Our question shape → System One wire shape (shared: cloud + ollama)."""
+    """Our question shape → System One wire shape (shape truth here; the
+    POST itself is single-truth via systemone.py)."""
     name = q.get("name") or "q"
     question = {k: q[k] for k in ("type", "instructions", "criteria") if k in q}
     question["type"] = question.get("type") or q.get("kind", "")
     question["instructions"] = question.get("instructions") or q.get("question", "")
     if q["kind"] == "choice":
         opts = q.get("options") or []
-        question["criteria"] = question.get("criteria") or             {o["name"]: o.get("description") for o in opts}
+        question["criteria"] = question.get("criteria") or \
+            {o["name"]: o.get("description") for o in opts}
     if q["kind"] == "noul" and q.get("false_desc"):
         question["criteria"] = {"false": q.get("false_desc"), "true": q.get("true_desc")}
     return name, question
 
 
-def _systemone_url(base_url):
-    """Normalize any base (host, /v1 suffix forms) to the /v1/systemone URL."""
-    b = str(base_url or "").rstrip("/")
-    if b.endswith("/v1"):
-        b = b[:-3]
-    return b + "/v1/systemone"
-
-
 def _ask_systemone(base_url, body, timeout=120, headers=None):
-    """POST /v1/systemone — the one System One wire (local ollama + TypeSafe Jev)."""
-    import urllib.request
-    req = urllib.request.Request(
-        _systemone_url(base_url),
-        data=_json.dumps(body).encode(),
-        headers={"Content-Type": "application/json", **(headers or {})})
+    """POST /v1/systemone via the single wire implementation (systemone.py)."""
+    from systemone import systemone as _post, SystemOneUnavailable
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return _json.loads(resp.read().decode())
-    except Exception as e:
-        raise JudgmentUnavailable(f"systemone call failed: {e}")
+        return _post(base_url, body.get("model"), body.get("state"),
+                     body.get("questions"),
+                     timeout_ms=timeout * 1000 if timeout else None,
+                     headers=headers)
+    except SystemOneUnavailable as e:
+        raise JudgmentUnavailable(str(e))
 
 
 def _ask_ollama(q):
     """Judgment via the LOCAL ollama server's System One endpoint
     (POST /v1/systemone — the same wire protocol as TypeSafe Jev cloud,
-    minus auth). Decision models: tev1:latest (4B, reasoner — think:false
-    honored), nimble:latest (9B classifier, format:json). Hosted-farm tags
-    in config are refused: ':cloud' egresses, which breaks the local tier's
-    contract."""
+    minus auth). Model gates live in systemone.py (Tev/Nimble family;
+    hosted-farm tags refused)."""
     model_id = _judge_ollama_model()
-    if not _ollama_tag_ok(model_id):
-        raise JudgmentUnavailable(
-            f"ollama judge tag {model_id!r} is a hosted-farm tag (cloud) — egress; "
-            f"use a server-local decision model (e.g. tev1:latest, nimble:latest)")
     name, question = _systemone_question(q)
     body = {
         "model": model_id,
