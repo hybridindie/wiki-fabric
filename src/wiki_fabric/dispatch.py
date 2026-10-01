@@ -27,10 +27,19 @@ _PACKAGED = Path(__file__).resolve().parent / "_harness"
 
 
 def harness_root() -> Path:
-    """The shipped tool tree (scripts/, system/, templates/...)."""
+    """The shipped tool tree (scripts/, system/, templates/...).
+    Packaged _harness first, then this file's own position (dev checkout),
+    then the standard install home ($HOME/wiki-fabric — when the dispatch
+    itself is imported from elsewhere, e.g. the MCP server in another venv)."""
     if (_PACKAGED / "scripts").exists():
         return _PACKAGED
-    return Path(__file__).resolve().parent.parent.parent
+    here_parent = Path(__file__).resolve().parent.parent.parent
+    if (here_parent / "scripts" / "wiki-fabric.sh").exists():
+        return here_parent
+    home_harness = Path.home() / "wiki-fabric"
+    if (home_harness / "scripts" / "wiki-fabric.sh").exists():
+        return home_harness
+    return here_parent
 
 
 def _paths_mod():
@@ -585,7 +594,7 @@ def _install(argv):
     build (uv-first). The TOOL is already installed (uv owns it); what a
     fresh fabric needs is: content skeleton + config + corpus git setup."""
     repo_url = FABRIC_REPO
-    install_dir = Path.cwd() / "wiki-fabric"
+    install_dir = Path.home() / "wiki-fabric"
     # explicit env override wins (matches find_fabric's rule 1)
     env_dir = os.environ.get("WIKI_FABRIC_DIR")
     if env_dir:

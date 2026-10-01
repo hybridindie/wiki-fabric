@@ -136,13 +136,17 @@ def find_vault_dir_for_fabric(fabric_dir):
 
 
 def find_harness_root():
-    """The shipped tool tree. A packaged install carries the harness next to
-    this package (src/wiki_fabric/_harness/scripts/...); a dev checkout is
-    the repo root (paths.py lives in scripts/lib/, two levels up)."""
+    """The shipped tool tree. Resolution order: this file's own position
+    (packaged _harness beside the package; dev = the repo root — paths.py
+    lives in scripts/lib/, two levels up), then the standard install home
+    ($HOME/wiki-fabric — the curl one-liner's target)."""
     here = Path(__file__).resolve()
     lib = here.parent                              # .../scripts/lib (both layouts)
     if (lib.parent / "wiki-fabric.sh").exists() and (lib.parent / "cmd").is_dir():
         return lib.parent.parent                   # _harness/scripts/lib → _harness
+    home_harness = Path.home() / "wiki-fabric"
+    if (home_harness / "scripts" / "wiki-fabric.sh").exists():
+        return home_harness
     return here.parent.parent.parent               # dev: the repo root
 
 

@@ -17,7 +17,10 @@ set -euo pipefail
 
 # === Constants ===
 FABRIC_REPO="${WIKI_FABRIC_REPO:-https://github.com/hybridindie/wiki-fabric.git}"
-DEFAULT_DIR="$(pwd)/wiki-fabric"   # harness clone default: CWD (override with --dir)
+# Harness clone default: $HOME/wiki-fabric (deterministic, out of the way —
+# the old cwd-default littered whatever directory the reader happened to be
+# in; the harness home is findable from every resolver chain. --dir overrides.)
+DEFAULT_DIR="${HOME}/wiki-fabric"
 SCRIPT_NAME="wf"
 # Harness root, resolved once at parse time to an ABSOLUTE path. BASH_SOURCE is
 # relative when invoked as 'bash scripts/wiki-fabric.sh', so computing this lazily
