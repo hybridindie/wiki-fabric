@@ -50,6 +50,15 @@ wf sync push -m "ingested upstream docs"   # commit + push corpus changes
 wf sync pull          # fetch + merge; conflicts → review queue
 ```
 
+**Branches, in one table:** knowledge lives on the remote's **`corpus`
+branch only**. Your local fabric works on its own `main`; push does
+`git push corpus HEAD:refs/heads/corpus` (rejected — never force-pushed —
+when the remote moved; pull first), pull does
+`git merge corpus/corpus --allow-unrelated-histories` into your main. Team
+mode adds one **per-push branch** `sync/<machine>-<stamp>` whose PR squash
+merges back to `corpus`. Full model + rationale:
+[Teams › The branch model](/teams#the-branch-model).
+
 **Team mode (PR-gated distribution):** `fabric.yaml → sync: {mode: team,
 evidence_prs: auto}`. Every push opens one PR (branch `sync/<machine>-<stamp>`,
 body carries the change-set receipts + files classified by plane).
@@ -93,15 +102,17 @@ side.
 
 ## Install-time join: two-way gate
 
-`install --corpus` decides the direction automatically:
-
-| Condition | What happens |
-|---|---|
-| Remote carries a corpus branch, local corpus has no knowledge content (.md claims/ontology) | **Teammate join** — the remote corpus is fetched and checked out; the fabric carries the team's knowledge from the first command |
-| Remote has no corpus (or local corpus has content) | **Lead machine** — `sync init` publishes the local corpus as the source of truth |
+`install --corpus` decides the join direction **automatically, by content**:
+the remote is probed with `git ls-remote`; a `corpus` branch that exists
+while the local corpus has no knowledge content ⇒ **teammate join** (fetch +
+checkout of the corpus branch — your local `main` becomes the corpus
+content); otherwise ⇒ **lead machine** (`sync init` publishes the local
+corpus). The full flow — both join paths, what checkout actually does, what
+joining does NOT do — is on [Teams › Joining](/teams#joining-as-a-teammate).
 
 The freshness loop then applies on both sides: hooks capture drift per commit,
-`wf sync push/pull` move it to/from the team remote.
+`wf sync push/pull` move it to/from the team remote — and `wf freshness`
+(the scheduled cycle) closes the dormant-machine hole.
 
 ## Conflict policy: review queue, never silent overwrite
 
