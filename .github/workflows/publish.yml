@@ -44,7 +44,10 @@ jobs:
         run: python3 scripts/pkg/prep-package.py
 
       - name: Build sdist + wheel
-        run: python3 -m build
+        run: |
+          uv pip install -q -U build       # the runner's preinstalled 'build' lacks __main__
+          build --outdir dist
+          ls -la dist
 
       - name: Smoke the wheel
         run: WHEEL_SMOKE_SKIP_BUILD=1 bash scripts/pkg/wheel-smoke.sh
