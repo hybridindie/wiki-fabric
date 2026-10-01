@@ -1,7 +1,7 @@
 ---
 type: index
 title: "Teams: sharing the vault"
-description: "Multi-machine and multi-person operation — the corpus repo, joining (both paths), branch model, sync modes, and governance gates"
+description: "Multi-machine and multi-person operation — the standalone corpus repo, joining (both paths), sync modes, and governance gates"
 created: 2026-09-26
 updated: 2026-10-01
 ---
@@ -48,8 +48,10 @@ One command, using the **gh CLI** (detected at run time — install gh and
 
 1. Creates the corpus repo — `<owner>/wiki-fabric-corpus`, **private** by
    default (`--public` to flip). Prompts before creating unless `--yes`.
-2. Publishes your fabric's corpus as the source of truth: your local HEAD
-   is pushed to the remote's **`corpus` branch** (`git push corpus HEAD:refs/heads/corpus`).
+2. Publishes your fabric's corpus as the source of truth: `sync init` makes
+   the corpus a standalone git repo (`<fabric>/corpus/.git`), commits the
+   content, and pushes to the remote's `main` — the remote's root becomes
+   exactly the corpus content.
 3. Prints the teammate one-liner to send to your team.
 
 If gh isn't available, `setup` prints the manual path (`gh repo create` by
@@ -211,7 +213,7 @@ can't sneak into the shared truth.
 | **API key references** (`api_key_env:` names, no literals) | `fabric.yaml` — shareable | structure yes, secrets no |
 | **Shared project routing** (decided stage routing for a repo) | the project's `.wiki-overlay.md` — **versioned with the project repo** | yes — inherited on clone |
 | **Machine routing overrides** (privacy tiering that differs per teammate) | `fabric.yaml` `repos.<slug>.*` — machine-local overrides | no — personal only |
-| **Knowledge** (claims, patterns, decisions, relationships) | the **corpus** — synchronized on the `corpus` branch | yes — via `wf sync` |
+| **Knowledge** (claims, patterns, decisions, relationships) | the **corpus** — a standalone git repo, synchronized as ordinary content | yes — via `wf sync` |
 
 The merge rule: explicit `fabric.yaml` keys win over the overlay, so a
 teammate can differ locally without touching shared config. The model decision

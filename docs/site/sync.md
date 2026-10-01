@@ -105,16 +105,17 @@ side.
 ## Install-time join: two-way gate
 
 `install --corpus` decides the join direction **automatically, by content**:
-the remote is probed with `git ls-remote`; a `corpus` branch that exists
-while the local corpus has no knowledge content ⇒ **teammate join** (fetch +
-checkout of the corpus branch — your local `main` becomes the corpus
-content); otherwise ⇒ **lead machine** (`sync init` publishes the local
-corpus). The full flow — both join paths, what checkout actually does, what
-joining does NOT do — is on [Teams › Joining](/teams#joining-as-a-teammate).
+the remote is probed (`git ls-remote … refs/heads/main`); a corpus that
+exists remotely while the local corpus has no knowledge content ⇒
+**teammate join — the corpus is CLONED** from the team repo into
+`<fabric>/corpus/` (origin pre-wired for your first push). Otherwise ⇒
+**lead machine** (`sync init` publishes the local corpus). Full detail —
+both join paths, what happens behind the commands — on
+[Teams › Joining](/teams#joining-as-a-teammate).
 
-The freshness loop then applies on both sides: hooks capture drift per commit,
-`wf sync push/pull` move it to/from the team remote — and `wf freshness`
-(the scheduled cycle) closes the dormant-machine hole.
+Legacy-layout fabrics (outer git tracking `corpus/`) get a one-time loud
+advisory on push/pull: run **`wf sync migrate [url]`** — corpus/ becomes a
+standalone git repo, content committed + pushed, outer git untracks it.
 
 ## Conflict policy: review queue, never silent overwrite
 
