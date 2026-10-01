@@ -13,11 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ vars.WIKI_FABRIC_REFRESH == '1' }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 30
     - name: Install uv
-      uses: astral-sh/setup-uv@v5
+      uses: astral-sh/setup-uv@v7
     - name: Capture doc drift (sha256-gated, no LLM)
       run: 'uv venv
 

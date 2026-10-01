@@ -548,7 +548,10 @@ def cmd_push(message=None, pr=False, no_pr=False):
             p = l[3:].lstrip('"').rstrip('"')
             subprocess.run(["git", "add", "--", p], cwd=str(VAULT_ROOT))
         msg = message or f"sync {date.today().isoformat()} ({len(changes)} files)"
-        if subprocess.run(["git", "commit", "-m", msg], cwd=str(VAULT_ROOT), capture_output=True).returncode != 0:
+        # identity carries a fallback: runners/containers have no global git config
+        if subprocess.run(["git", "-c", "user.name=wiki-fabric", "-c",
+                           "user.email=wf@corpus.local", "commit", "-m", msg],
+                          cwd=str(VAULT_ROOT), capture_output=True).returncode != 0:
             print("Error: commit failed (nothing to commit or hook rejected)", file=sys.stderr)
             sys.exit(1)
         print(f"Committed {len(changes)} corpus files: {msg}")
@@ -714,7 +717,9 @@ def cmd_resolve(conflict, strategy, message=None):
     # commit the resolution
     subprocess.run(["git", "add", "--", path, str(conflict_file)], cwd=str(VAULT_ROOT), capture_output=True)
     msg = f"sync resolve [{strategy}]: {path} ({stamp})"
-    subprocess.run(["git", "commit", "-q", "-m", msg], cwd=str(VAULT_ROOT), capture_output=True)
+    subprocess.run(["git", "-c", "user.name=wiki-fabric", "-c",
+                    "user.email=wf@corpus.local", "commit", "-q", "-m", msg],
+                   cwd=str(VAULT_ROOT), capture_output=True)
 
     print(f"Resolved [{strategy}]: {path} — {resolution}")
     print(f"Conflict record removed; SYNC-CONFLICT gate cleared for this file.")
@@ -742,7 +747,9 @@ def cmd_pull():
         for l in changes:
             p = l[3:].lstrip('"').rstrip('"')
             subprocess.run(["git", "add", "--", p], cwd=str(VAULT_ROOT))
-        subprocess.run(["git", "commit", "-m", f"sync local changes before pull ({stamp})"],
+        subprocess.run(["git", "-c", "user.name=wiki-fabric", "-c",
+                        "user.email=wf@corpus.local", "commit", "-m",
+                        f"sync local changes before pull ({stamp})"],
                        cwd=str(VAULT_ROOT), capture_output=True)
         print(f"Committed {len(changes)} local corpus changes before merging.")
 
