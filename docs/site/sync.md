@@ -67,13 +67,13 @@ Evidence-plane-only PRs auto-merge when CI is green; anything touching atoms
 auto-merged. Per-invocation: `--pr` opts in even solo; `--no-pr` opts out even
 team mode.
 
-**A teammate joins** — one command (install pulls the corpus when the remote
-already carries one; `--vault` pins where the vault shell lives):
+**A teammate joins** — two commands (tool install → fabric + join; install
+pulls the corpus when the remote already carries one; `--vault` pins where
+the vault shell lives):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/scripts/wiki-fabric.sh | bash -s -- \
-  --corpus git@github.com:your-org/wiki-fabric-corpus.git \
-  --vault ~/knowledge/vault
+uv tool install wiki-fabric --with mcp     # any platform (POSIX fallback: the curl one-liner, see Teams)
+wf install --corpus git@github.com:your-org/wiki-fabric-corpus.git --vault ~/knowledge/vault
 ```
 
 Manual join (existing install): wire the remote + pull:

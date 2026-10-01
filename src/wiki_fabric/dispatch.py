@@ -591,6 +591,8 @@ def _install(argv):
     if env_dir:
         install_dir = Path(env_dir).expanduser()
     with_graphify = False
+    corpus_url = None
+    vault_path = None
     it = iter(argv)
     for a in it:
         if a == "--repo":
@@ -599,6 +601,10 @@ def _install(argv):
             install_dir = Path(next(it))
         elif a == "--with-graphify":
             with_graphify = True
+        elif a == "--corpus":
+            corpus_url = next(it)
+        elif a == "--vault":
+            vault_path = next(it)
 
     print("")
     print("═══════════════════════════════════════════")
@@ -617,9 +623,75 @@ def _install(argv):
         install_dir.mkdir(parents=True)
     from .skeleton import ensure_fabric_skeleton
     ensure_fabric_skeleton(install_dir, with_graphify=with_graphify)
+    # parity with the bash install: the fabric IS a git repo from the first
+    # command — sync init needs commits to publish the initial corpus, and
+    # local history lets you diff/revert knowledge.
+    if not (install_dir / ".git").exists():
+        _owner = (os.environ.get("WIKI_FABRIC_OWNER") or "")
+        subprocess.run(["git", "init", "-q"], cwd=install_dir,
+                       capture_output=True)
+        subprocess.run(["git", "add", "-A"], cwd=install_dir, capture_output=True)
+        if subprocess.run(["git", "-c", f"user.name={_owner or 'wf'}",
+                           "-c", f"user.email={_owner or 'wf'}@fabric.local",
+                           "commit", "-q", "-m", "chore: initialize fabric"],
+                          cwd=install_dir, capture_output=True).returncode == 0:
+            print("\033[0;32m✓\033[0m  Fabric initialized as a git repo (corpus sync ready)")
+    if vault_path:
+        vault_line = (Path(install_dir) / "fabric.yaml")
+        txt = vault_line.read_text()
+        vault_line.write_text(txt.rstrip("\n") + f"\n\nvault:\n  path: {vault_path}\n")
+        print(f"\033[0;32m✓\033[0m  Vault location pinned: {vault_path}")
+    if corpus_url:
+        print("")
+        env = {**os.environ, "WIKI_FABRIC_DIR": str(install_dir)}
+        # teammate probe FIRST (parity with the bash two-way gate): a corpus
+        # branch on the remote + no local knowledge content ⇒ join (fetch +
+        # checkout) — never push an empty corpus over the team's source of truth.
+        probe = subprocess.run(["git", "ls-remote", corpus_url,
+                                "refs/heads/corpus"], env=env,
+                               capture_output=True, text=True)
+        remote_corpus = probe.stdout.strip()
+        # parity with the bash gate: scaffold/markup files (AGENTS/README/
+        # index; the ontology seed) are NOT knowledge content — a fresh
+        # skeleton must JOIN the team, not publish over the source of truth
+        _scaffold = {"AGENTS.md", "README.md", "index.md", "ontology.md"}
+        corpus_dir = install_dir / "corpus"
+        local_content = corpus_dir.is_dir() and any(
+            p.is_file() and p.name not in _scaffold
+            for p in corpus_dir.rglob("*.md"))
+        if remote_corpus and not local_content:
+            subprocess.run(["git", "-C", str(install_dir), "remote", "add",
+                            "corpus", corpus_url], capture_output=True)
+            if subprocess.run(["git", "-C", str(install_dir), "fetch", "-q",
+                               "corpus", "corpus"], env=env,
+                              capture_output=True).returncode == 0:
+                co = subprocess.run(["git", "-C", str(install_dir), "checkout",
+                                     "-q", "-B", "main", "corpus/corpus"],
+                                    env=env, capture_output=True)
+                if co.returncode == 0:
+                    print("\033[0;32m✓\033[0m  Team corpus checked out — the fabric "
+                          "carries the team's knowledge")
+                else:
+                    print("couldn't checkout corpus branch — fabric starts empty "
+                          "(wf sync pull later)", file=sys.stderr)
+            else:
+                print("couldn't fetch the corpus branch (access?) — fabric starts "
+                      "empty (wf sync pull later)", file=sys.stderr)
+            # the remote is wired; skip the lead path
+            print("")
+            return _install_print_next(install_dir)
+        r = subprocess.run([sys.executable, str(_harness("scripts/cmd/sync.py")),
+                            "init", corpus_url], env=env)
+        if r.returncode != 0:
+            print("corpus init failed — fabric usable without the remote; "
+                  "run: wf sync init <url> later", file=sys.stderr)
     print("")
     print("\033[0;32m✓\033[0m  Fabric initialized")
     print("")
+    return _install_print_next(install_dir)
+
+
+def _install_print_next(install_dir):
     print("Next steps:")
     print(f"  1. Add repos to {install_dir}/fabric.yaml")
     print("  2. wf bootstrap /path/to/my-project")

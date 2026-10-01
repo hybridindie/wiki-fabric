@@ -61,7 +61,17 @@ The corpus holds your project knowledge; the privacy default is deliberate.
 There are two joins, and which one applies depends on what you already
 have. The confusion usually starts here, so both are spelled out:
 
-### Join A — fresh machine (the one-liner; you have nothing yet)
+### Join A — fresh machine (you have nothing yet)
+
+```bash
+uv tool install wiki-fabric --with mcp     # the tool (all platforms, incl. Windows)
+wf install --corpus git@github.com:your-org/wiki-fabric-corpus.git \
+    --vault ~/knowledge/vault              # the fabric + the team join
+```
+
+`uv tool install` is the cross-platform path (the CLI is pure-python —
+Windows included). The one-liner below is the POSIX fallback (macOS/Linux;
+the bash installer needs a POSIX shell and doesn't run on Windows):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/scripts/wiki-fabric.sh | bash -s -- \
