@@ -646,6 +646,20 @@ def _install(argv):
         subprocess.run(["git", "init", "-q"], cwd=install_dir,
                        capture_output=True)
         subprocess.run(["git", "add", "-A"], cwd=install_dir, capture_output=True)
+        # identity: the ambient fabric's owner (the corpus sync name) —
+        # NEVER a bare _owner reference (undefined-var bug, wheel-smoke catch)
+        try:
+            from fabric_config import get_owner  # via skeleton-primed path
+        except Exception:
+            get_owner = None
+        _owner = None
+        try:
+            sys.path.insert(0, str(Path(__file__).resolve().parent
+                                   / "_harness" / "scripts" / "lib"))
+            from fabric_config import get_config, get_owner
+            _owner = get_owner(get_config())
+        except Exception:
+            _owner = None
         if subprocess.run(["git", "-c", f"user.name={_owner or 'wf'}",
                            "-c", f"user.email={_owner or 'wf'}@fabric.local",
                            "commit", "-q", "-m", "chore: initialize fabric"],
