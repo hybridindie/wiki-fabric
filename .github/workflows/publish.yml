@@ -45,8 +45,10 @@ jobs:
 
       - name: Build sdist + wheel
         run: |
-          uv pip install -q -U build       # the runner's preinstalled 'build' lacks __main__
-          uv run build --outdir dist       # console script via the venv
+          uv venv .build-venv                       # clean env: the runner's
+          uv pip install -q -U build --python .build-venv/bin/python  # preinstalled build pkg lacks __main__
+          .build-venv/bin/build --outdir dist
+          rm -rf .build-venv
           ls -la dist
 
       - name: Smoke the wheel
