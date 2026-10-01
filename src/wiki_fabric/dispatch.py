@@ -604,7 +604,12 @@ def _install(argv):
     print("═══════════════════════════════════════════")
     print("   Wiki Fabric — Install")
     print("═══════════════════════════════════════════")
-    if find_fabric() is not None:
+    # Contract: an EXPLICIT --dir never short-circuits — that's the user
+    # saying "create the fabric HERE" (the CI seed flow hit this:
+    # find_fabric resolved an ambient fabric and the --dir target silently
+    # got nothing). Only the AMBIENT resolution short-circuits.
+    explicit_dir = "--dir" in (argv or [])
+    if not explicit_dir and find_fabric() is not None:
         print(f"\033[0;32m✓\033[0m  Fabric already exists — run: wf status")
         print("   To point commands at another fabric: export WIKI_FABRIC_DIR=<path>")
         return 0

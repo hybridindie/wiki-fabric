@@ -68,12 +68,20 @@ def ensure_fabric_skeleton(fabric_dir, owner="sim", with_graphify=False):
     """Create the content skeleton + a starter fabric.yaml. Idempotent."""
     import yaml
     if owner == "sim":
-        # the one owner chain (#155-B): fabric_config OWNER_SENTINEL default
+        # the one owner chain (#155-B): fabric_config OWNER_SENTINEL default;
+        # fall back to git identity directly (packaged mode has no harness
+        # lib importable — and _sh takes ONE joined string, not argv)
         try:
+            import sys as _sys
+            _lib = pathlib.Path(__file__).resolve().parent / "_harness" / "scripts" / "lib"
+            if not _lib.is_dir():
+                _lib = pathlib.Path(__file__).resolve().parent.parent.parent / "scripts" / "lib"
+            if _lib.is_dir() and str(_lib) not in _sys.path:
+                _sys.path.insert(0, str(_lib))
             from fabric_config import get_config, get_owner, OWNER_SENTINEL
             owner = get_owner(get_config()) or OWNER_SENTINEL
         except Exception:
-            owner = _sh("git", "config", "--global", "user.name") or "you"
+            owner = _sh("git config --global user.name") or "you"
     fabric_dir = Path(fabric_dir)
     fabric_dir.mkdir(parents=True, exist_ok=True)
     for d in DIRECTORIES:
