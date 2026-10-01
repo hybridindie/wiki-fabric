@@ -173,6 +173,12 @@ _DEFAULTS = {
         "mining": {"min_projects": 2, "keyword_threshold": 0.05},
         "judgment": {"mining_threshold": 0.8, "near_band": 0.1},
         "context": {"max_items": 20, "nav_max_files": 5, "excluded_cap": 15},
+        "git_history": {
+            # Activity-bounded capture window (capture-git.py): the largest
+            # ladder window (6m→1d) whose item count fits the budget wins —
+            # shrinking the window, never truncating silently. "all" disables.
+            "since": "6m", "budget": 30,
+        },
         "synthesize": {"min_claims": 2},
         "export": {"topic_min_claims": 6},
     },
@@ -510,6 +516,28 @@ def get_repo_config(config, repo_name):
     for k, v in overlay_routing.items():
         merged.setdefault(k, v)
     merged.setdefault("routing", overlay_routing)
+    return merged
+
+
+def get_git_history_cfg(config, repo_name=None):
+    """Effective git-history capture knobs for a repo (capture-git.py).
+    Merge order: tuning.git_history defaults < repos.<slug>.git_history.
+    Overlay entries reach here through get_repo_config's discovery merge.
+    Keys: since (ladder window | ISO date), budget (int | "all").
+    Returns {} on unknown/unreadable config (callers keep their CLI defaults)."""
+    if config is None:
+        try:
+            config = get_config()
+        except Exception:
+            return {}
+    merged = dict(get_tuning(config, "git_history") or {})
+    if repo_name:
+        repo_cfg = get_repo_config(config, repo_name) or {}
+        gh_cfg = repo_cfg.get("git_history")
+        if isinstance(gh_cfg, dict):
+            merged.update(gh_cfg)
+        elif isinstance(gh_cfg, str):  # shorthand: git_history: all
+            merged = {"budget": gh_cfg}
     return merged
 
 

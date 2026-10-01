@@ -98,6 +98,63 @@ def provenance_relations(source_slug, source_path):
     return [rel]
 
 
+def stale_mark_derived_claims(source_path, file_hash, dry_run=None):
+    """sha256-drift → mechanical staleness trigger.
+
+    When an existing source record for this raw path carries a DIFFERENT
+    sha256, the source re-captured (PR updated, issue got comments, doc
+    changed) and every claim derived from the old revision is derived from
+    evidence that no longer exists. Stamps stale_after=today and flips
+    status → contested on those claims — consumer gates (wf context, wf
+    export, lint STALE-AFTER / REVIEW-AFTER) then exclude/hint until the new
+    revision is ingested and the claims re-verified. Deterministic, 0 tokens;
+    dry_run defaults to the module args_dry_run."""
+    if dry_run is None:
+        dry_run = args_dry_run
+    sources_dir = VAULT_ROOT / "evidence" / "sources"
+    if not sources_dir.exists():
+        return 0
+    try:
+        target_norm = source_path.resolve().as_posix()
+    except OSError:
+        target_norm = Path(str(source_path)).as_posix()
+    today = date.today().isoformat()
+    stamped = 0
+    for rec in sorted(sources_dir.glob("src-*.md")):
+        text = rec.read_text(encoding="utf-8", errors="replace")
+        m = re.search(r"^sha256:\s*([a-f0-9]{64})\s*$", text, re.MULTILINE)
+        if not m or m.group(1) == file_hash:
+            continue  # same revision → is_already_ingested anti-loop handles it
+        sm = re.search(r'^source_path:\s*"?([^"\n]+)"?\s*$', text, re.MULTILINE)
+        if not sm:
+            continue
+        raw_path = VAULT_ROOT / sm.group(1).strip()
+        try:
+            same = raw_path.resolve() == Path(target_norm).resolve()
+        except OSError:
+            same = raw_path.as_posix() == target_norm
+        if not same:
+            continue
+        # this record is the previous revision of the same raw path →
+        # stale its claims. The new revision's record is written fresh below.
+        for cp in (VAULT_ROOT / "evidence" / "claims").glob(f"claim-{rec.stem[4:]}-*.md"):
+            cs = cp.read_text(encoding="utf-8", errors="replace")
+            if "stale_after:" in cs:
+                continue
+            flipped = re.sub(r"^status: (?:supported|proposed)$",
+                             f"stale_after: {today}\nstatus: contested",
+                             cs, count=1, flags=re.MULTILINE)
+            if flipped == cs:
+                continue
+            cp.write_text(flipped, encoding="utf-8")
+            stamped += 1
+        break  # one record matches this raw path
+    if stamped:
+        print(f"Stale-stamped {stamped} claim(s) from the previous revision of "
+              f"{source_path.name} (sha256 drift → contested + stale_after; 0 tokens)")
+    return stamped
+
+
 def sanitize_wikilinks(text):
     """LLM text may contain shell/code fragments like [[ "$x" == "y" ]] which
     lint parses as wikilinks (broken → error, gates the commit). Body prose
@@ -275,6 +332,10 @@ def ingest_source(source_path, extract_claims=False, model=None, dry_run=False, 
     # Anti-loop: skip sources already ingested with the same hash — except
     # sources recorded with status: pending (never claim-extracted). Those are
     # completed by --pending mode: claims extracted, record flipped to ingested.
+    # (A DIFFERENT hash on the same raw path means the source re-captured —
+    # stale_mark_derived_claims() has mechanically stale-stamped that
+    # revision's claims above, before any skip decision.)
+    stale_mark_drift = stale_mark_derived_claims(source_path, file_hash)
     existing = is_already_ingested(source_path, file_hash)
     resuming = False
     if existing:

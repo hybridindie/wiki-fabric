@@ -47,6 +47,7 @@ EVIDENCE_RAW = VAULT_ROOT / "evidence" / "raw"
 
 SKIP_PREFIXES = ("chore", "docs", "style", "test", "ci", "build", "release")
 INTERESTING_PREFIXES = ("fix", "feat", "perf", "refactor", "revert")
+DEFAULT_BUDGET = 30
 
 
 
@@ -87,6 +88,110 @@ def since_date(since):
                  "m": timedelta(days=30 * n), "y": timedelta(days=365 * n)}[unit]
         return (datetime.now() - delta).strftime("%Y-%m-%d")
     return since  # assume YYYY-MM-DD
+
+
+# === Activity-bounded window (deterministic timeframe reduction) ===
+# Active repos produce more history than any window should carry into the
+# corpus: with a fixed window, --limit silently truncates the newest-first
+# list and the window collapses to a few days of coverage. Instead of
+# truncating, the window itself shrinks: the LARGEST ladder window whose
+# item count fits the budget wins. Same repo state -> same window -> same
+# captures. Deterministic, 0 tokens; chosen window + probe counts are
+# recorded in .last-capture so the reduction is auditable, not silent.
+
+WINDOW_LADDER = ("6m", "3m", "1m", "2w", "1w", "3d", "1d")
+
+
+def window_larger(a, b):
+    """True when window a spans a longer/earlier range than b (ISO compare)."""
+    return since_date(a) < since_date(b)
+
+
+def effective_window(count_fn, requested, budget):
+    """Pick the largest WINDOW_LADDER window whose activity fits the budget.
+
+    count_fn(iso_date) returns the item count in that window, or None when
+    activity can't be counted (gh auth, no history) — None disables the
+    reduction and keeps the requested window (old behavior).
+
+    Returns (window, counts) where counts maps probed window -> count."""
+    if budget in (None, "", "all"):
+        return requested, {}
+    try:
+        budget = int(budget)
+    except (TypeError, ValueError):
+        return requested, {}
+    requested_iso = since_date(requested)
+    n = count_fn(requested_iso)
+    if n is None:
+        return requested, {}
+    counts = {requested: n}
+    if n <= budget:
+        return requested, counts  # quiet repo: requested window fits
+    best = None
+    for cand in WINDOW_LADDER:
+        if cand == requested or window_larger(cand, requested):
+            continue  # supersets of an over-budget window are over too
+        n = count_fn(since_date(cand))
+        if n is None:
+            break
+        counts[cand] = n
+        if n <= budget:
+            best = cand
+            break
+    if best is None:
+        return "1d", counts  # everything counted is over budget: narrowest
+    return best, counts
+
+
+def make_local_counter(repo_path, requested_iso):
+    """One git-log scan over the requested window; interesting-commit counts
+    per candidate window come from memory, not more subprocesses."""
+    log = git("log", f"--since={requested_iso}", "--format=%H%x1f%ad%x1f%s%x1e",
+              "--date=short", cwd=repo_path)
+    if log is None:
+        return 0, None  # uncountable -> no window reduction
+    commits = [c.split("\x1f", 2) for c in log.strip().split("\x1e") if c.strip()]
+    interesting = [(adate, msg) for sha, adate, msg in commits
+                   if len((sha or "").split("\x1f")) != 99
+                   and commit_is_interesting(msg)]
+    def count_fn(iso):
+        return sum(1 for adate, _msg in interesting if adate >= iso)
+    return len(commits), count_fn
+
+
+def gh_search_count(repo, query):
+    """One cheap Search-API probe: total_count, not a listing."""
+    data = gh("api", "search/issues", "-f", f"q={query}", "-f", "per_page=1",
+              expect_json=True)
+    if isinstance(data, dict) and isinstance(data.get("total_count"), int):
+        return data["total_count"]
+    return None  # uncountable (auth, older gh, rate limit) -> no reduction
+
+
+def make_github_counter(repo, kind):
+    """Counts matching the list filters below: PRs merged in-window,
+    issues updated in-window (an old issue with new comments is activity)."""
+    qualifier = "merged" if kind == "pr" else "updated"
+    itype = "pr" if kind == "pr" else "issue"
+    def count_fn(iso):
+        return gh_search_count(repo, f"repo:{repo} {qualifier}:>={iso} type:{itype}")
+    return count_fn
+
+
+def gh_list_windowed(kind, repo, since_iso, limit, fields, qualifier):
+    """gh pr/issue list with a SERVER-side window: `--search` narrows before
+    `--limit` applies, so window and budget stop fighting (a fixed-window
+    list-then-filter collapsed to the newest few days on active repos).
+    Falls back to an unsearched list when the search form fails (older gh,
+    odd scopes) — capture degrades to client-side filtering, not to nothing."""
+    out = gh(kind, "list", "--repo", repo, "--state", "all",
+             "--search", f"{qualifier}:>={since_iso}",
+             "--limit", str(limit), "--json", fields, expect_json=True)
+    if out is None:
+        out = gh(kind, "list", "--repo", repo, "--state", "all",
+                 "--limit", str(limit), "--json", fields, expect_json=True)
+    return out or []
 
 
 def commit_is_interesting(message):
@@ -158,16 +263,17 @@ def capture_github(project, repo, since, limit, include_comments, dry_run):
     stats = {"new": 0, "changed": 0, "unchanged": 0}
 
     # --- Pull requests ---
-    prs = gh("pr", "list", "--repo", repo, "--state", "all", "--limit", str(limit),
-             "--json", "number,title,body,state,mergedAt,labels,url", expect_json=True)
+    pr_fields = "number,title,body,state,mergedAt,labels,url"
+    prs = gh_list_windowed("pr", repo, since_iso, limit, pr_fields, "merged")
     if prs is None:
         print("  Warning: could not list PRs (is gh authenticated for this repo?)", file=sys.stderr)
         print("  Hint: run 'gh auth status' to check, or clone the repo and use a local path instead:", file=sys.stderr)
         print("        wf capture %s --git /path/to/local/clone" % project, file=sys.stderr)
     else:
         for pr in prs:
+            num = pr["number"]
             merged = pr.get("mergedAt") or ""
-            if merged and merged[:10] < since_iso:
+            if merged and merged[:10] < since_iso:  # fallback-list path: client filter
                 continue
             num = pr["number"]
             sections = [
@@ -198,14 +304,14 @@ def capture_github(project, repo, since, limit, include_comments, dry_run):
             print(f"  PR #{num}: {status}")
 
     # --- Issues ---
-    issues = gh("issue", "list", "--repo", repo, "--state", "all", "--limit", str(limit),
-                "--json", "number,title,body,state,labels,url,createdAt", expect_json=True)
+    # updatedAt (not createdAt): an old issue with fresh comments is live
+    # activity — createdAt-only filtering never re-captured it.
+    issue_fields = "number,title,body,state,labels,url,createdAt,updatedAt"
+    issues = gh_list_windowed("issue", repo, since_iso, limit, issue_fields, "updated")
     if issues is not None:
         for issue in issues:
-            if issue.get("createdAt", "")[:10] < since_iso:
-                continue
-            # gh issue list includes PRs; skip ones with a PR marker
-            if any(k in (issue.get("body") or "") for k in ()) and False:
+            updated = (issue.get("updatedAt") or issue.get("createdAt") or "")[:10]
+            if updated < since_iso:  # fallback-list path: client filter
                 continue
             num = issue["number"]
             sections = [
@@ -239,22 +345,42 @@ def capture_github(project, repo, since, limit, include_comments, dry_run):
 
 # === Local git repo ===
 
-def capture_local(project, repo_path, since, limit, dry_run):
-    """Capture high-signal commits from a local git repo."""
+def capture_local(project, repo_path, since, budget, dry_run):
+    """Capture high-signal commits from a local git repo. Budget over the
+    interesting-commit count shrinks the window (effective_window) instead
+    of truncating the newest-first list."""
     dest_dir = EVIDENCE_RAW / project / "git"
-    since_iso = since_date(since)
     stats = {"new": 0, "changed": 0, "unchanged": 0}
 
-    log = git("log", f"--since={since_iso}", "-n", str(limit * 4), "--format=%H%x1f%ad%x1f%s%x1e",
-              "--date=short", cwd=repo_path)
-    if not log:
+    requested_iso = since_date(since)
+    scanned, count_fn = make_local_counter(repo_path, requested_iso)
+    if count_fn is None:
         print("  Warning: no git history readable (is it a git repo?)", file=sys.stderr)
         return stats
 
+    window, chosen = since, None
+    if budget not in (None, "", "all"):
+        try:
+            budget = int(budget)
+        except (TypeError, ValueError):
+            budget = DEFAULT_BUDGET
+        window, counts = effective_window(count_fn, since, budget)
+        chosen = counts.get(window)
+        if counts:
+            probe = "  ".join(f"{w}:{c}" for w, c in
+                              sorted(counts.items(), key=lambda kv: since_date(kv[0])))
+            print(f"  Activity probe: {probe}")
+        if window != since:
+            print(f"  Window reduced: {since} -> {window} "
+                  f"(budget {budget}, largest fitting ladder window)")
+    since_iso = since_date(window)
+
+    log = git("log", f"--since={since_iso}", "--format=%H%x1f%ad%x1f%s%x1e",
+              "--date=short", cwd=repo_path) or ""
     commits = [c.split("\x1f", 2) for c in log.strip().split("\x1e") if c.strip()]
     captured = 0
     for sha, adate, msg in commits:
-        if captured >= limit:
+        if captured >= budget:
             break
         if not commit_is_interesting(msg):
             continue
@@ -272,7 +398,9 @@ def capture_local(project, repo_path, since, limit, dry_run):
         status = write_capture(dest_dir / f"commit-{sha[:12]}.md", title, sections[:1], sections[1:], dry_run)
         stats[status.lower()] += 1
 
-    print(f"  Commits: scanned {len(commits)}, captured {captured} high-signal (prefixes: {', '.join(INTERESTING_PREFIXES)})")
+    print(f"  Commits: scanned {scanned}, captured {captured} high-signal within window {window}"
+          + (f" (fits budget: {chosen})" if chosen is not None else "")
+          + f" (prefixes: {', '.join(INTERESTING_PREFIXES)})")
     return stats
 
 
@@ -302,19 +430,32 @@ def state_path(project):
 
 
 def read_since_state(project, fallback="6m"):
-    """Last capture timestamp (YYYY-MM-DD) or the fallback window."""
+    """Last capture timestamp (YYYY-MM-DD) or the fallback window. A state
+    file written by an activity-bounded run carries a 'window=' stamp; the
+    recorded window (not today's default) is the incremental base, so a
+    quiet stretch never silently re-expands coverage."""
     try:
-        return state_path(project).read_text(encoding="utf-8").strip() or fallback
+        text = state_path(project).read_text(encoding="utf-8").strip()
+        for token in text.split():
+            if token.startswith("window="):
+                return token[len("window="):]
+        first = text.split()[0] if text else ""
+        return first or fallback
     except OSError:
         return fallback
 
 
-def write_since_state(project):
-    """Record this capture run — the next --since-state run looks back to here."""
+def write_since_state(project, window=None):
+    """Record this capture run — the next --since-state run looks back to here.
+    The chosen window travels along (window=<iso>) so window provenance and
+    the incremental base share one file."""
     try:
         sp = state_path(project)
         sp.parent.mkdir(parents=True, exist_ok=True)
-        sp.write_text(datetime.now().strftime("%Y-%m-%d"), encoding="utf-8")
+        stamp = datetime.now().strftime("%Y-%m-%d")
+        if window:
+            stamp += f" window={since_date(window)}"
+        sp.write_text(stamp, encoding="utf-8")
     except OSError:
         pass  # state file unwritable → the next run re-captures (fresh, not stale)
 
@@ -325,38 +466,88 @@ def github_repo_from_remote(repo_path):
     return wf_common.github_repo_from_remote(repo_path)
 
 
+def resolve_git_history_cfg(slug, since_arg, limit_arg):
+    """Effective git_history knobs for this capture. Tuning defaults <
+    repos.<slug>.git_history (overlay or fabric.yaml via get_repo_config).
+    Keys: since (ladder window | ISO date), budget (int | "all"). CLI flags
+    win over config when passed explicitly."""
+    import fabric_config as _fc
+    cfg = {}
+    try:
+        cfg = _fc.get_git_history_cfg(None, slug) or {}
+    except Exception:
+        pass  # config unreadable (tests, torn write) → CLI defaults
+    since = since_arg if since_arg != parser_default("since") else (cfg.get("since") or since_arg)
+    budget = limit_arg if limit_arg != parser_default("limit") else cfg.get("budget", parser_default("limit"))
+    return since, budget
+
+
+def parser_default(name):
+    """The shipped argparse default for a flag (single source of truth with
+    resolve_git_history_cfg: 'user passed it explicitly' beats config)."""
+    return {"since": "6m", "limit": DEFAULT_BUDGET}[name]
+
+
 def main():
     parser = argparse.ArgumentParser(description="Capture PR/issue/commit history into evidence/raw/")
     parser.add_argument("project", help="Project slug (e.g. my-project)")
     parser.add_argument("--repo", required=True, help="GitHub 'owner/name' (via gh CLI) or local repo path")
-    parser.add_argument("--since", default="6m", help="Lookback window: 30d, 6m, 1y, or YYYY-MM-DD (default 6m)")
+    parser.add_argument("--since", default=parser_default("since"), help="Lookback window: 30d, 6m, 1y, or YYYY-MM-DD (default 6m)")
     parser.add_argument("--since-state", action="store_true",
                         help="Since the last capture of this project (state marker; falls back to --since when never captured)")
-    parser.add_argument("--limit", type=int, default=30, help="Max PRs/issues to fetch (default 30)")
+    parser.add_argument("--limit", type=int, default=parser_default("limit"),
+                        help="Budget: max PRs/issues (or interesting commits) in the window (default 30; 'all' via config to disable)")
     parser.add_argument("--no-comments", action="store_true", help="Skip review/discussion comments")
     parser.add_argument("--churn", action="store_true", help="Also print a file-churn ranking (local repos)")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be captured")
     args = parser.parse_args()
 
     include_comments = not args.no_comments
+    state_base = None
     if args.since_state:
-        args.since = read_since_state(args.project, fallback=args.since)
+        state_base = read_since_state(args.project, fallback=args.since)
+        args.since = state_base
+    else:
+        args.since, args.limit = resolve_git_history_cfg(args.project, args.since, args.limit)
+        if isinstance(args.limit, str) and args.limit.lower() == "all":
+            args.limit = None
+        if args.limit is not None:
+            try:
+                args.limit = int(args.limit)
+            except (TypeError, ValueError):
+                args.limit = parser_default("limit")
 
+    # Activity-bounded window: when the requested window is over budget,
+    # shrink to the largest ladder window that fits (deterministic, 0 tokens).
+    # --since-state runs keep their recorded base (the state file already
+    # carries the audited window stamp).
+    repo_path = Path(args.repo).expanduser().resolve()
+    is_local = repo_path.exists() and (repo_path / ".git").exists()
+    def _count(iso):
+        if is_local:
+            _, fn = make_local_counter(repo_path, iso)
+            return fn(iso) if fn else None
+        return make_github_counter(args.repo, "pr")(iso)
+
+    chosen_window = args.since
+    if not args.since_state and args.limit not in (None, "", "all"):
+        window, _counts = effective_window(_count, args.since, args.limit)
+        chosen_window = window
+    args.since = chosen_window
     print(f"=== Capturing git history for {args.project} ===")
-    print(f"  Window: since {args.since}, limit {args.limit}")
+    print(f"  Window: since {args.since}, budget {args.limit if args.limit not in (None, 'all') else 'all'}")
     print()
 
-    repo = Path(args.repo).expanduser().resolve()
-    if repo.exists() and (repo / ".git").exists():
-        stats = capture_local(args.project, repo, args.since, args.limit, args.dry_run)
+    if is_local:
+        stats = capture_local(args.project, repo_path, args.since, args.limit, args.dry_run)
         if args.churn:
-            churn_report(repo, args.since)
+            churn_report(repo_path, args.since)
     else:
         stats = capture_github(args.project, args.repo, args.since, args.limit, include_comments, args.dry_run)
 
     total = stats["new"] + stats["changed"]
     if not args.dry_run:
-        write_since_state(args.project)
+        write_since_state(args.project, window=args.since)
     print()
     print(f"Capture summary: {stats['new']} new, {stats['changed']} changed, {stats['unchanged']} unchanged")
     if args.dry_run:
