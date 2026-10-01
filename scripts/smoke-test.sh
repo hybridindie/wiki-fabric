@@ -44,6 +44,20 @@ cd "${FABRIC}"
 # not a sibling vault of the temp dir.
 export WIKI_FABRIC_DIR="${FABRIC}"
 CORPUS="${FABRIC}/corpus"
+# the smoke copies the harness repo (which carries no content corpus — it's
+# gitignored user content): scaffold the floor before linting, or the
+# empty/missing-target guard (correctly) fails the run
+mkdir -p "${CORPUS}/evidence/claims" "${CORPUS}/evidence/sources" "${CORPUS}/registry"          "${CORPUS}/patterns" "${CORPUS}/concepts" "${CORPUS}/projects" "${CORPUS}/domains"          "${CORPUS}/global/entities"
+[[ -f "${CORPUS}/domains/ontology.md" ]] || cat > "${CORPUS}/domains/ontology.md" <<'ONTOLOGY'
+---
+type: ontology
+title: Domain Ontology
+---
+
+## Domains
+
+- `agent-systems`
+ONTOLOGY
 
 # 0. Python runner: prefer fabric venv (created by wf install), fall back to python3
 if [[ -x "${FABRIC}/.venv/bin/python" ]]; then
