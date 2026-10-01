@@ -54,6 +54,35 @@ def slugify(text):
     return re.sub(r'[^a-z0-9]+', '-', (text or "").lower()).strip('-')
 
 
+# Canonical project-slug transform (THE one; underscore repo dir names like
+# comfyui_mcp kebab-fold here). Before this seam, consumers derived slugs ad
+# hoc (raw name, replace('_','-') hacks, lazy-dash regexes) and the wiki grew
+# two trees per underscore-named project. Producers of claim slugs already
+# emit kebab (ingest slugifies the raw rel path); every consumer that needs
+# "the project's claims" or "the project's wiki node" derives the key HERE.
+PROJECT_SLUG_ALIASES = ("alpaca_agents",)  # none today; seam for legacy ids
+
+
+def project_slug(name):
+    """Canonical project slug: slugify of the repo/namespace name. Idempotent
+    (kebab input is returned as-is) and the single transform every
+    project-name → path/glob/compare site must use. Legacy aliases in
+    PROJECT_SLUG_ALIASES map here too (one entry: alias -> canonical)."""
+    s = slugify(name)
+    for alias in PROJECT_SLUG_ALIASES:
+        if s == slugify(alias):
+            return slugify(alias)
+    return s
+
+
+def claim_prefix_for_project(name):
+    """The claim-file prefix for a project: 'claim-' + canonical project slug
+    (+ '-' separator, ready to glob '...-*.md'). Matches ingest's
+    claim-<raw-rel-slug> for captures rooted at the project dir — which they
+    all are (evidence/raw/<project>/...)."""
+    return "claim-" + project_slug(name)
+
+
 def norm(s):
     """Normalize free text for fuzzy matching (query/synthesize/eval)."""
     return re.sub(r'[^a-z0-9]+', ' ', (s or "").lower()).strip()

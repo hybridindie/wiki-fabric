@@ -227,10 +227,16 @@ def main():
         from wiki_lib.deepdives import generate as _dd, _graph_path
         dd_root = _wiki_root() / "projects"
         active = set(get_all_repo_names(config))
+        # canonical slugs: repo names may be underscore-form (comfyui_mcp);
+        # every deep-dive tree + graph file keys on the canonical kebab slug.
+        from wf_common import project_slug as _psl
+        canonical = {_psl(p) for p in active}
         # reconcile: remove deep-dive trees for projects with no graph/repo
+        # (compare CANONICAL forms — raw-form membership left two trees for
+        # one project whenever the config key's form changed between runs)
         if dd_root.is_dir() and not args.dry_run:
             for sub in sorted(dd_root.glob("*/")):
-                if sub.name not in active or not _graph_path(sub.name).exists():
+                if _psl(sub.name) not in canonical or not _graph_path(_psl(sub.name)).exists():
                     for sub_p in sorted(sub.rglob("*.md")):
                         try:
                             sub_p.unlink()
@@ -238,7 +244,7 @@ def main():
                             pass  # best-effort (same reconcile contract as _reconcile_wiki_dir)
         for proj in sorted(active):
             try:
-                written, n_nodes = _dd(proj, dry_run=args.dry_run)
+                written, n_nodes = _dd(_psl(proj), dry_run=args.dry_run)
                 if written:
                     n_dd_pages += len(written)
                     print(f"  deep-dive: {proj} — {len(written)} page(s) from {n_nodes} nodes")

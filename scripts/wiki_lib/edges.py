@@ -25,7 +25,9 @@ def _compute_wiki_edges(topics, projects, min_shared=2):
     # Normalize projects: may be passed as slugs (from main) or dicts.
     def _proj_claims(p):
         if isinstance(p, str):
-            return [c.stem for c in (fabric_config.CORPUS_ROOT / "evidence" / "claims").glob(f"claim-{p}-*.md")]
+            from layout import claims_for_project
+            glob = claims_for_project(fabric_config.CORPUS_ROOT, p)
+            return [c.stem for c in glob.parent.glob(glob.name)]
         return [c.get("id") if isinstance(c, dict) else c for c in p.get("claims", [])]
 
     def _proj_slug(p):
@@ -158,14 +160,17 @@ def emit_citation_graph(topics, projects, dry_run=False):
                                 "domain": t["domain"], "claims": t_claims})
     for proj in projects:
         p_claims = []
-        for cp in sorted((fabric_config.CORPUS_ROOT / "evidence" / "claims").glob(f"claim-{proj}-*.md")):
+        from layout import claims_for_project
+        from wf_common import project_slug as _psl
+        c_glob = claims_for_project(fabric_config.CORPUS_ROOT, proj)
+        for cp in sorted(c_glob.parent.glob(c_glob.name)):
             tier = _claim_tier(cp)
             p_claims.append({"id": cp.stem, "tier": tier})
             _add_node(f"claim:{cp.stem}", cp.stem, "claim", tier=tier)
             _add_edge(f"project:{proj}", f"claim:{cp.stem}", "cites", tier=tier)
         if p_claims:
             _add_node(f"project:{proj}", proj, "project", claims=len(p_claims))
-            graph["projects"].append({"slug": proj, "claims": p_claims})
+            graph["projects"].append({"slug": _psl(proj), "claims": p_claims})
 
     # cross-page relations (topic<->topic, topic<->project)
     page_edges, _ = _compute_wiki_edges(topics, projects)

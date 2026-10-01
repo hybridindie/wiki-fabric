@@ -137,3 +137,15 @@ def claims_for_source(root, source_slug):
     """claim-<source_slug>-*.md glob pattern — the ingest/lint/promote join
     contract (source_slug is the raw rel path, <=80 chars)."""
     return claims(root) / f"{PREFIXES['claim']}{source_slug}-*.md"
+
+
+def claims_for_project(root, project):
+    """claim glob for a PROJECT (not a raw rel path): canonicalizes the
+    project name via wf_common.project_slug first — underscore repo names
+    (comfyui_mcp) and kebab keys resolve to the same claim set. Returns the
+    glob PATTERN path; .glob() it."""
+    try:
+        from wf_common import claim_prefix_for_project
+        return claims(root) / f"{claim_prefix_for_project(project)}-*.md"
+    except ImportError:
+        raise RuntimeError("layout.claims_for_project requires wf_common.project_slug")

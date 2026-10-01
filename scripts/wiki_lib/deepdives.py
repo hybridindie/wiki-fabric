@@ -30,8 +30,14 @@ _NOISE = ("test", "conftest", "fixture")
 
 
 def _graph_path(slug):
+    # canonical slug: graphify-bridge imports as comfyui_mcp-graph.json today,
+    # canonical runs as comfyui-mcp-graph.json — bridge writes both forms; the
+    # canonical form is authoritative (falls back to the raw form once, then
+    # import migrates forward).
     from fabric_config import CORPUS_ROOT
-    return CORPUS_ROOT / "global" / "graphs" / f"{slug}-graph.json"
+    from wf_common import project_slug
+    c = project_slug(slug)
+    return CORPUS_ROOT / "global" / "graphs" / f"{c}-graph.json"
 
 
 def _load_graph(slug):
@@ -54,7 +60,8 @@ def _load_graph(slug):
 
 def CORPUS_ROOT_HASH(slug):
     from fabric_config import CORPUS_ROOT
-    return CORPUS_ROOT / "global" / "graphs" / f"{slug}-graph.hash"
+    from wf_common import project_slug
+    return CORPUS_ROOT / "global" / "graphs" / f"{project_slug(slug)}-graph.hash"
 
 
 def _degree(nodes, links):
@@ -158,9 +165,12 @@ def _front(title, desc, slug, rev):
 
 
 def _claims_footnote(slug, max_n=8):
-    """Related evidence claims (footnoted citations), matched by project slug."""
+    """Related evidence claims (footnoted citations), matched by the canonical
+    project slug (project_slug seam — underscore repo names join kebab claims)."""
     from fabric_config import CORPUS_ROOT
-    claims = sorted((CORPUS_ROOT / "evidence" / "claims").glob(f"claim-{slug}-*.md"))
+    from layout import claims_for_project
+    glob = claims_for_project(CORPUS_ROOT, slug)
+    claims = sorted(glob.parent.glob(glob.name))
     out = []
     for c in claims[:max_n]:
         st = claim_statement(c)

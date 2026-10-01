@@ -437,7 +437,9 @@ def code_navigation(task, project=None, max_files=None):
             # earns a nav section only when the task names it (slug token)
             # or the caller pinned it — unless its hits are dense enough to
             # be genuinely task-specific (>=15% of its callable nodes).
-            task_names_repo = repo.lower() in toks or repo.replace("_", "-") in toks
+            from wf_common import project_slug
+            _psl = project_slug(repo)
+            task_names_repo = repo.lower() in toks or _psl in toks
             total_callable = sum(1 for n in g.get("nodes", []) if n.get("_callable") and n.get("source_file"))
             # dense = task-specific enough to stand without the pin: >= 8 hits
             # AND >= 5% of the repo's callable nodes (fixture graphs are small)

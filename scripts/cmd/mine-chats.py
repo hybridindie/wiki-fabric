@@ -194,7 +194,12 @@ def propose_candidates(transcript_path, takeaways, dry_run=False, project=None):
             print(f"  [DRY] would propose {cid}")
             proposed += 1
             continue
-        source_stem = f"{project}-chats-{transcript_path.stem}"  # links resolve to the ingested source page
+        # src-stem join: ingest slugifies the raw rel path (kebab — underscores
+        # fold), so 'comfyui_mcp/chats/x' ingests as src-comfyui-mcp-chats-x-md.
+        # The old raw f"{project}-chats-{stem}" broken the link on underscore
+        # projects; slugify(project + path) reproduces the real stem exactly.
+        from wf_common import slugify as _slugify
+        source_stem = _slugify(f"{project}/chats/{transcript_path.stem}")
         dest.write_text(f"""---
 type: pattern
 id: {cid}

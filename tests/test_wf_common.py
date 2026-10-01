@@ -93,9 +93,12 @@ class TestScriptsUseSharedHelpers(unittest.TestCase):
         assert offenders == [], f"scripts redefining norm/slugify: {offenders}"
 
     def test_bootstrap_keeps_variant(self):
-        """bootstrap-project's slugify collapses double dashes — intentionally local."""
+        """bootstrap-project's slugify must be the SHARED wf_common one (it
+        collapses double dashes, same as slugify's [^a-z0-9]+ rule); a local
+        re-def was the drift class (AGENTS.md import-shape rule)."""
         src = (Path(__file__).parent.parent / "scripts" / "cmd/bootstrap-project.py").read_text()
-        assert "def slugify" in src
+        assert "from wf_common import" in src and "slugify" in src
+        assert "def slugify" not in src
 
 
 class TestExplicitImportBootstrap(unittest.TestCase):

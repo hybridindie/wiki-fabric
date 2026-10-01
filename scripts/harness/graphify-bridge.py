@@ -204,8 +204,13 @@ def cmd_import(repos=None):
         if not g:
             continue
 
-        # Copy the graph into the fabric
-        dest = GRAPHS_DIR / f"{repo_name}-graph.json"
+        # Copy the graph into the fabric — under the CANONICAL project slug
+        # (wf_common.project_slug: comfyui_mcp -> comfyui-mcp). Consumers
+        # (deepdives/edges) resolve through the same seam, so one graph per
+        # project regardless of the repo dir/overlay namespace's form. The
+        # legacy raw-form file is removed once the canonical write lands.
+        from wf_common import project_slug as _psl
+        dest = GRAPHS_DIR / f"{_psl(repo_name)}-graph.json"
         dest.write_text(json.dumps(g))
         h = graph_hash(g)
         nodes = len(g.get("nodes", []))
@@ -213,9 +218,16 @@ def cmd_import(repos=None):
         communities = len(set(n.get("community_name", "") for n in g.get("nodes", []) if n.get("community_name")))
         print(f"  {repo_name}: {nodes} nodes, {links} links, {communities} communities → {dest.name} (hash: {h})")
 
-        # Write a hash file for staleness detection
-        hash_path = GRAPHS_DIR / f"{repo_name}-graph.hash"
+        # Write a hash file for staleness detection (canonical name)
+        hash_path = GRAPHS_DIR / f"{_psl(repo_name)}-graph.hash"
         hash_path.write_text(h)
+        legacy = GRAPHS_DIR / f"{repo_name}-graph.hash"
+        if dest.name != legacy.name.replace("-graph.hash", "-graph.json"):
+            try:
+                (GRAPHS_DIR / f"{repo_name}-graph.json").unlink(missing_ok=True)
+                legacy.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def cmd_enrich(repos=None):
@@ -291,7 +303,8 @@ def cmd_diff(repos=None):
 
     for repo_name in targets:
         graph_path = get_graph_path(repo_name)
-        hash_path = GRAPHS_DIR / f"{repo_name}-graph.hash"
+        from wf_common import project_slug as _psl
+        hash_path = GRAPHS_DIR / f"{_psl(repo_name)}-graph.hash"
 
         if not graph_path:
             print(f"  {repo_name}: no graph (skip)")
@@ -325,7 +338,8 @@ def cmd_status():
 
     for repo_name in _repo_targets():
         graph_path = get_graph_path(repo_name)
-        hash_path = GRAPHS_DIR / f"{repo_name}-graph.hash"
+        from wf_common import project_slug as _psl
+        hash_path = GRAPHS_DIR / f"{_psl(repo_name)}-graph.hash"
 
         if graph_path:
             g = load_graph(repo_name)

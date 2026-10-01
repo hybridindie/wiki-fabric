@@ -31,8 +31,9 @@ import re
 from fabric_config import get_config, FABRIC_ROOT, CORPUS_ROOT, get_all_repo_names, get_domain_signals, get_owner, OWNER_SENTINEL
 
 
-def slugify(text):
-    return re.sub(r'--+', '-', re.sub(r'[^a-z0-9]', '-', text.lower())).strip('-')
+# slugify: shared helper (wf_common) — local copies were the drift class; the
+# collapse-with-dashes form the prompt flow wants is what wf_common.slugify does.
+from wf_common import slugify
 
 
 def find_fabric_root():

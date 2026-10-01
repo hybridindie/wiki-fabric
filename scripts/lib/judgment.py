@@ -578,25 +578,46 @@ def effect_verdict(new_statement, existing_statement):
             "probabilities": out.get("probabilities")}
 
 
-def related_claim_pool(new_claim_path, max_n=12):
+def related_claim_pool(new_claim_path, max_n=12, _claims_root=None):
     """Candidate existing claims to compare against: same-source first, then
-    same-project claims (deterministic ordering, capped)."""
-    from fabric_config import CORPUS_ROOT
+    same-project claims (deterministic ordering, capped). Project cut is the
+    canonical slug seam, not a lazy-dash regex (those truncated at the first
+    dash: 'comfyui' out of comfyui-mcp). _claims_root overrides CORPUS_ROOT
+    (test seam)."""
+    from fabric_config import CORPUS_ROOT as _default_root
+    root = _claims_root or _default_root
+    from layout import claims_for_project, claims_for_source
     text = Path(new_claim_path).read_text(encoding="utf-8", errors="replace")
     m = re.search(r'\[\[(src-[\w-]+)\]\]', text)
     out = []
     if m:
         src_slug = m.group(1)
-        # claims citing the same source record (slug match on stem)
-        stem_prefix = src_slug.replace("-md", "")
-        for p in sorted((CORPUS_ROOT / "evidence" / "claims").glob(f"claim-{stem_prefix}-*.md")):
+        # claims citing the same source record: src-slug minus the 'src-' prefix
+        # IS the raw-rel slug — the claim glob is claim-<raw-rel-slug>-NNN
+        stem_prefix = src_slug[len("src-"):]
+        s_glob = claims_for_source(root, stem_prefix)
+        for p in sorted(s_glob.parent.glob(s_glob.name)):
             if p.resolve() != Path(new_claim_path).resolve():
                 out.append(p)
-    # topical neighbors: same project namespace
-    m2 = re.search(r"claim-([\w-]+?)-[\w-]+-md-\d+", Path(new_claim_path).stem)
-    if m2:
-        proj = m2.group(1)
-        for p in sorted((CORPUS_ROOT / "evidence" / "claims").glob(f"claim-{proj}-*.md")):
-            if p.resolve() != Path(new_claim_path).resolve() and p not in out:
-                out.append(p)
+    # topical neighbors: same project namespace. Structural parse: the raw
+    # rel slug's FIRST segment is the project dir (dash-free in raw tree
+    # names? no — could contain dashes; so fold candidates through the
+    # canonical slug: try each dash-prefix, keep the longest with hits).
+    stem = Path(new_claim_path).stem
+    if stem.startswith("claim-"):
+        body = stem[len("claim-"):]
+        cands = body.rsplit("-", 1)[0] if body.rsplit("-", 1)[-1].isdigit() else body
+        proj = None
+        parts = cands.split("-")
+        for cut in range(len(parts), 0, -1):
+            cand = "-".join(parts[:cut])
+            g = claims_for_project(root, cand)
+            if any(g.parent.glob(g.name)):
+                proj = cand
+                break
+        if proj:
+            g = claims_for_project(root, proj)
+            for p in sorted(g.parent.glob(g.name)):
+                if p.resolve() != Path(new_claim_path).resolve() and p not in out:
+                    out.append(p)
     return out[:max_n]

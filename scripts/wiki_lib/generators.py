@@ -6,7 +6,16 @@ from pathlib import Path
 
 import fabric_config
 from fabric_config import get_config, get_all_repo_names, get_repo_config, actor
-from wf_common import now_iso_utc, claim_statement
+from wf_common import now_iso_utc, claim_statement, claim_prefix_for_project, parse_frontmatter
+import layout as _layout
+_CORPUS = None  # resolved lazily: fabric_config.CORPUS_ROOT is stable at import in prod
+
+
+def _corpus():
+    global _CORPUS
+    if _CORPUS is None:
+        _CORPUS = fabric_config.CORPUS_ROOT
+    return _CORPUS
 from wiki_lib.diagrams import MERMAID_REPAIR_COMMENT, _mermaid_valid, _validate_and_repair_diagrams
 
 TODAY = date.today()
@@ -316,7 +325,16 @@ def _llm_topic_article(topic, claims, dry_run=False):
     for i, cp in enumerate(claims, 1):
         statement = claim_statement(cp)
         locator = re.search(r'locator: "?([^\n]+?)"?\s*$', cp.read_text(encoding="utf-8", errors="replace"), re.MULTILINE)
-        project = re.search(r"claim-([a-z0-9-]+?)-", cp.stem)
+        # claim-<raw-rel-slug>-NNN: the raw rel path's FIRST segment is the
+        # project — the only unambiguous cut is the frontmatter's project
+        # field (structural, not a regex guess over ambiguous dashes).
+        pfm, _ = parse_frontmatter(cp)
+        proj_field = str(pfm.get("project") or "")
+        pfm_slug = claim_prefix_for_project(proj_field).removeprefix("claim-") if proj_field else ""
+        m_proj = re.match(
+            rf"claim-({re.escape(pfm_slug)})-" if pfm_slug
+            else r"claim-([a-z0-9]+(?:-[a-z0-9]+)*?)-[a-z0-9-]+?-\d{3}$", cp.stem)
+        project = m_proj
         evidence_parts.append(
             f"[{i}] {statement if statement else cp.stem} "
             f"(from {project.group(1) if project else '?'}"
@@ -523,11 +541,8 @@ def _generate_project_article(project, config, dry_run=False, mode=None):
     rc = get_repo_config(config, project)
     if not rc:
         return None, 0
-    claims = sorted((fabric_config.CORPUS_ROOT / "evidence" / "claims").glob(f"claim-{project}-*.md"))
-    claims += sorted((fabric_config.CORPUS_ROOT / "evidence" / "claims").glob(f"claim-{project.replace('-', '_')}*.md"))
-    # dedup
-    seen = set()
-    claims = [c for c in claims if not (c.stem in seen or seen.add(c.stem))]
+    claims = sorted(_layout.claims_for_project(_corpus(), project).parent.glob(
+        _layout.claims_for_project(_corpus(), project).name))
     if not claims:
         return None, 0
     # staleness (calendar + evidence-version drift, #143)
@@ -558,7 +573,8 @@ def _generate_project_article(project, config, dry_run=False, mode=None):
             if topics_dir.is_dir():
                 for tf in sorted(topics_dir.glob("*.md")):
                     tf_text = tf.read_text(encoding="utf-8", errors="replace")
-                    if f"claim-{project}" in tf_text or f"claim-{project.replace('-','_')}" in tf_text:
+                    cp = claim_prefix_for_project(project)
+                    if cp in tf_text:
                         title_m = re.search(r"^title: (.+)$", tf_text, re.MULTILINE)
                         topic_links.append((tf.stem, title_m.group(1) if title_m else tf.stem))
 
