@@ -79,7 +79,12 @@ def print_report(report, project=None):
 
 
 def verify_claim(claim_path):
-    """Stamp last_verified=today, roll review_after forward by the tier interval."""
+    """Stamp last_verified=today, roll review_after forward by the tier interval.
+    A mechanical stale_after stamp (ingest's sha256-drift trigger) is CLEARED
+    here and a contested status demoted by it flips back: the stamp meant
+    "this claim cited a revision that no longer exists" — a passed mechanical
+    re-verify (sha + quote + locator) is exactly the proof it has re-grounded,
+    so keeping the stamp made successful verification report stale forever."""
     f = Path(claim_path)
     s = f.read_text(encoding="utf-8", errors="replace")
     tier = 90
@@ -96,6 +101,10 @@ def verify_claim(claim_path):
         s = re.sub(r"last_verified: \S+", f"last_verified: {TODAY.isoformat()}", s)
     else:
         s = s.replace("review_after:", f"last_verified: {TODAY.isoformat()}\nreview_after:", 1)
+    # clear the mechanical drift stamp + restore the status it demoted
+    if "stale_after:" in s and str(TODAY) >= s.split("stale_after:")[1].split("\n")[0].strip()[:10]:
+        s = re.sub(r"^stale_after: \S+\n", "", s, count=1, flags=re.MULTILINE)
+        s = re.sub(r"^status: contested$", "status: supported", s, count=1, flags=re.MULTILINE)
     f.write_text(s, encoding="utf-8")
     return tier, new_review
 
@@ -367,23 +376,52 @@ def auto_reverify(dry_run=False, project=None):
         f = Path(item["file"])
         if project and project not in f.name:
             continue
-        # parse frontmatter for source_ref
+        # parse frontmatter for source_ref — real YAML parse, not regexes:
+        # multi-line quotes carry \n escapes that the quote:"?(.*?)"? regex
+        # returned literally (literal backslash-n matched nothing), and the
+        # regex chain silently skipped every multi-line-quote claim.
         fm_text = f.read_text(encoding="utf-8", errors="replace")
-        src_match = re.search(r'source: "\[\[(src-[^\]]+)\]\]"', fm_text)
-        quote_match = re.search(r'quote: "?(.*?)"?\s*$', fm_text, re.MULTILINE)
-        locator_match = re.search(r'locator: "?([^\n]+?)"?\s*$', fm_text, re.MULTILINE)
-        if not src_match or not quote_match:
+        fm, _ = parse_frontmatter(f)
+        refs = fm.get("source_refs") or []
+        ref = refs[0] if refs and isinstance(refs[0], dict) else None
+        if not ref or not str(ref.get("source", "")).strip():
+            # legacy shape: source: "[[src-...]]" + bare quote/locator fields
+            src_match = re.search(r'source: "\[\[(src-[^\]]+)\]\]"', fm_text)
+            quote_match = re.search(r'quote: "?(.*?)"?\s*$', fm_text, re.MULTILINE)
+            if not src_match or not quote_match:
+                skipped += 1
+                continue
+            src_stem = src_match.group(1).strip("[]")
+            quote = quote_match.group(1).strip()
+            if quote.startswith('"') and quote.endswith('"'):
+                try:
+                    import yaml as _y
+                    _unq = _y.safe_load(quote)
+                    if isinstance(_unq, str):
+                        quote = _unq
+                except Exception:
+                    quote = quote.strip('"').replace('\\"', '"').replace("\\\\", "\\")
+        else:
+            src_stem = str(ref.get("source", "")).strip('"[]')
+            quote = str(ref.get("quote", "")).strip()
+        if not quote:
             skipped += 1
             continue
         # find the source record
-        src_stem = src_match.group(1).strip("[]")
         src_file = layout.sources(CORPUS_ROOT) / f"{src_stem}.md"
         if not src_file.exists():
             skipped += 1
             continue
         src_fm, src_body = parse_frontmatter(src_file)
-        src_path = FABRIC_ROOT / (src_fm.get("source_path") or "")
-        if not src_path.exists():
+        # source_path is CORPUS-relative (the layout contract); FABRIC_ROOT was
+        # the pre-nested-corpus layout — on it, every claim skipped as "no
+        # source" (verify-locators already resolved via CORPUS_ROOT; same fix).
+        src_rel = str(src_fm.get("source_path") or "")
+        src_path = (CORPUS_ROOT / src_rel) if src_rel else None
+        if not src_path or not src_path.exists():
+            legacy = FABRIC_ROOT / src_rel
+            src_path = legacy if legacy.exists() else src_path
+        if not src_path or not src_path.exists():
             skipped += 1
             continue
         # check sha256 drift
@@ -393,8 +431,7 @@ def auto_reverify(dry_run=False, project=None):
         if recorded[:12] != actual[:12]:
             skipped += 1  # source drifted — needs human review, can't auto-verify
             continue
-        # check quote still in source
-        quote = quote_match.group(1).strip()
+        # check quote still in source (quote already YAML-unescaped above)
         quote_clean = re.sub(r"L\d+:", "", quote).strip()
         src_text = src_path.read_text(encoding="utf-8", errors="replace")
         if quote_clean and quote_clean not in src_text:
