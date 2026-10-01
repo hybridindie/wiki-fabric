@@ -67,7 +67,18 @@ export default withMermaid(defineConfig({
         text: 'Using the Fabric',
         items: [
           { text: 'Configuration', link: '/configuration' },
-          { text: 'Optional Integrations', link: '/integrations' },
+          {
+            text: 'Optional Integrations',
+            collapsed: true,
+            items: [
+              { text: 'Overview', link: '/integrations' },
+              { text: 'Judgment (decision models)', link: '/integrations/judgment' },
+              { text: 'Graphify (code graph)', link: '/integrations/graphify' },
+              { text: 'Embeddings (re-rank)', link: '/integrations/embeddings' },
+              { text: 'Obsidian (two-way vault)', link: '/integrations/obsidian' },
+              { text: 'MCP (wf-mcp)', link: '/integrations/mcp' }
+            ]
+          },
           { text: 'Teams: Sharing the Vault', link: '/teams' },
           { text: 'Team Sync (commands)', link: '/sync' },
           { text: 'Examples', link: '/examples' }

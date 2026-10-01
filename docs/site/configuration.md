@@ -386,7 +386,7 @@ typed heads on Apple Silicon, upstream laya (torch/ONNX) on Linux/Windows,
 or the generic GGUF route via `llm.local_model`. Auto-picked by platform
 unless you pin `local_backend`. Every judgment records backend, model, and probability —
 low-variance judgment, not determinism; near-threshold values escalate to
-human review. See [Optional Integrations](./integrations#the-judgment-tier).
+human review. See [Judgment — the decision-model tier](./integrations/judgment).
 
 ## Domains
 

@@ -64,7 +64,7 @@ gate needs.
 ## Optional layers (off by default)
 
 Three optional additions sit on top of this deterministic base — see
-[Integrations](./integrations): the semantic re-rank boost
+[Integrations](./integrations) — each has its own deep page —: the semantic re-rank boost
 (integrations.embeddings, top-40 fusion), the System One fusion rerank
 (a local decision model — ollama's `/v1/systemone`, Tev/Nimble-class —
 judging which top-k lexical candidates actually answer the question;

@@ -225,7 +225,7 @@ wf hook install --extract-claims   # doc-drift commits auto-capture + auto-inges
 | Python | 3.11+ (uv installs its own) |
 | git | any recent version |
 | LLM endpoint | anything OpenAI-compatible — Ollama (`curl -fsSL https://ollama.com/install.sh \| sh`) is the zero-config default; see [Configuration](./configuration) for OpenAI/OpenRouter/etc. |
-| Local models (optional) | the judgment tier needs no extra — `ollama pull tev1:latest` (local-first default). On-device extraction weights: `pip install -e ".[local]"` (dev) or `uv tool install --reinstall wiki-fabric --with laya` — see [Integrations](./integrations#setting-up-the-local-backends) |
+| Local models (optional) | the judgment tier needs no extra — `ollama pull tev1:latest` (local-first default). On-device extraction weights: `pip install -e ".[local]"` (dev) or `uv tool install --reinstall wiki-fabric --with laya` — see [Integrations](./integrations/judgment#the-four-backends-pick-per-machine) |
 | **Git hooks** | **required for the freshness guarantee** — `wf hook install` per project (drift-gated: unchanged docs cost 0 tokens; LLM only with `--extract-claims`) |
 | Platform | macOS / Linux (Windows untested; git hooks are POSIX-verified only) |
 

@@ -312,7 +312,7 @@ of wiki folders, no "let me catch you up" prompt engineering.
 
 ## 6. Maintenance
 
-Keeping the fabric current is mostly deterministic. (Graphify — an optional integration, see [Integrations](./integrations) — builds a code call-graph so the fabric can detect when code changes invalidate stored claims.)
+Keeping the fabric current is mostly deterministic. (Graphify — an optional integration, see [its page](./integrations/graphify) — builds a code call-graph so the fabric can detect when code changes invalidate stored claims.)
 
 ```mermaid
 flowchart TD
@@ -379,7 +379,7 @@ seconds, no LLM): `graphify update` in each connected repo, then
 `graphify-bridge --import` to sync hashes and `--diff` to see which claims
 reference symbols that moved. The fabric's own repo appears in the bridge once
 it has a `repos:` entry pointing at `.` — its self-graph lives in
-`graphify-out/` (see [Integrations](./integrations)).
+`graphify-out/` (see [Integrations](./integrations/graphify)).
 
 **Scenario — docs went stale.** You refactor `gather_reads` into
 `collect_reads`; the claim "gather_reads makes O(N) reads ~O(1)" now points at a
