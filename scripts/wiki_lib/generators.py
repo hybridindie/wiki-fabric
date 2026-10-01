@@ -8,14 +8,12 @@ import fabric_config
 from fabric_config import get_config, get_all_repo_names, get_repo_config, actor
 from wf_common import now_iso_utc, claim_statement, claim_prefix_for_project, parse_frontmatter
 import layout as _layout
-_CORPUS = None  # resolved lazily: fabric_config.CORPUS_ROOT is stable at import in prod
 
 
 def _corpus():
-    global _CORPUS
-    if _CORPUS is None:
-        _CORPUS = fabric_config.CORPUS_ROOT
-    return _CORPUS
+    """Resolved at CALL time (never cached): tests monkeypatch
+    fabric_config.CORPUS_ROOT per-test; a cached first-read broke them."""
+    return fabric_config.CORPUS_ROOT
 from wiki_lib.diagrams import MERMAID_REPAIR_COMMENT, _mermaid_valid, _validate_and_repair_diagrams
 
 TODAY = date.today()
@@ -119,7 +117,7 @@ def _enrich_page(path, config, mode, related_links=None):
         + re.findall(r"^\[\d+\]\s+(claim-[a-z0-9-]+)", body, re.MULTILINE))
     takeaways, sources = [], {}
     for cs in cite_ids:
-        cp = fabric_config.CORPUS_ROOT / "evidence" / "claims" / f"{cs}.md"
+        cp = _layout.claims(_corpus()) / f"{cs}.md"
         if not cp.exists():
             continue
         st = claim_statement(cp)
@@ -207,7 +205,7 @@ def _source_hash(src_ref):
         return _src_cache[src_ref]
     out = None
     try:
-        src_dir = fabric_config.CORPUS_ROOT / "evidence" / "sources"
+        src_dir = _layout.sources(_corpus())
         p = src_dir / f"{src_ref}.md"
         if p.exists():
             m = re.search(r"^sha256:\s*(\S+)", p.read_text(encoding="utf-8", errors="replace"), re.M)
@@ -222,7 +220,7 @@ def _source_hash(src_ref):
 def _raw_current_hash(src_ref):
     """sha256 of the raw file behind a source record right now (None = missing)."""
     try:
-        src_dir = fabric_config.CORPUS_ROOT / "evidence" / "sources"
+        src_dir = _layout.sources(_corpus())
         p = src_dir / f"{src_ref}.md"
         s = p.read_text(encoding="utf-8", errors="replace")
         sp_m = re.search(r"^source_path:\s*(\S+)", s, re.M)
@@ -415,7 +413,7 @@ def _generate_topic_article(topic, mode="mechanical", dry_run=False):
     slug = re.sub(r"[^a-z0-9-]+", "-", title.lower()).strip("-")
     claims = []
     for cs in topic["claims"]:
-        cp = fabric_config.CORPUS_ROOT / "evidence" / "claims" / f"{cs}.md"
+        cp = _layout.claims(_corpus()) / f"{cs}.md"
         if cp.exists():
             claims.append(cp)
     if not claims:
@@ -558,8 +556,8 @@ def _generate_project_article(project, config, dry_run=False, mode=None):
             current.append((cp, st))
 
     # decisions
-    decisions_dir = fabric_config.CORPUS_ROOT / "projects" / project / "decisions"
-    decisions = sorted((decisions_dir := fabric_config.CORPUS_ROOT / "projects" / project / "decisions").glob("*.md")) if decisions_dir.is_dir() else []
+    decisions_dir = _layout.projects(_corpus()) / project / "decisions"
+    decisions = sorted(decisions_dir.glob("*.md")) if decisions_dir.is_dir() else []
 
     slug = re.sub(r"[^a-z0-9-]+", "-", project).strip("-")
 
@@ -580,7 +578,7 @@ def _generate_project_article(project, config, dry_run=False, mode=None):
 
             # gather insight takeaways for this project
             insight_takeaways = []
-            for ins_file in sorted((fabric_config.CORPUS_ROOT / "evidence" / "insights").glob("*.md")):
+            for ins_file in sorted((_layout.insights(_corpus())).glob("*.md")):
                 ins_text = ins_file.read_text(encoding="utf-8", errors="replace")
                 if project in ins_text:
                     for line in ins_text.splitlines():

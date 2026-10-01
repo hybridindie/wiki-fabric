@@ -21,6 +21,8 @@ from datetime import date, timedelta
 
 from fabric_config import FABRIC_ROOT, CORPUS_ROOT
 
+import layout
+
 TODAY = date.today()
 
 def _parse_date(s):
@@ -206,7 +208,7 @@ def verify_locators(dry_run=False, project=None, limit=None):
 
     0 tokens, deterministic. Returns dict of counts."""
     from wf_common import parse_frontmatter, sha256_file
-    claims_dir = CORPUS_ROOT / "evidence" / "claims"
+    claims_dir = layout.claims(CORPUS_ROOT)
     checked = fixed = kept = contested = skipped = restored = 0
     contested_files = []
     restored_files = []
@@ -227,7 +229,7 @@ def verify_locators(dry_run=False, project=None, limit=None):
         if not m or not quote:
             skipped += 1
             continue
-        src_page = CORPUS_ROOT / "evidence" / "sources" / (str(ref.get("source", "")).strip('"[]').lower() + ".md")
+        src_page = layout.sources(CORPUS_ROOT) / (str(ref.get("source", "")).strip('"[]').lower() + ".md")
         if not src_page.exists():
             skipped += 1
             continue
@@ -375,7 +377,7 @@ def auto_reverify(dry_run=False, project=None):
             continue
         # find the source record
         src_stem = src_match.group(1).strip("[]")
-        src_file = CORPUS_ROOT / "evidence" / "sources" / f"{src_stem}.md"
+        src_file = layout.sources(CORPUS_ROOT) / f"{src_stem}.md"
         if not src_file.exists():
             skipped += 1
             continue

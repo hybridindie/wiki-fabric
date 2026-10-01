@@ -31,6 +31,8 @@ from pathlib import Path
 from wf_common import yaml_scalar
 from fabric_config import FABRIC_ROOT, CORPUS_ROOT, get_config
 
+import layout
+
 # Transient signals: low durable value
 _TRANSIENT = [
     (r"\b\d+\s+open PRs?\b", "PR-count snapshot"),
@@ -130,7 +132,7 @@ def llm_takeaways(transcript_path):
 
 def write_insight_page(transcript_path, takeaways, dry_run=False, project=None):
     """One chat-insights page per transcript, grouped by classification."""
-    out_dir = CORPUS_ROOT / "evidence" / "insights"
+    out_dir = layout.insights(CORPUS_ROOT)
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = transcript_path.stem.replace("chat-", "insight-", 1)
     out = out_dir / f"{stem}.md"
@@ -175,7 +177,7 @@ def propose_candidates(transcript_path, takeaways, dry_run=False, project=None):
     by wf gate via promote-patterns.list_pending)."""
     import hashlib
     from datetime import date
-    out_dir = CORPUS_ROOT / "patterns" / "_inbox"
+    out_dir = layout.patterns_inbox(CORPUS_ROOT)
     out_dir.mkdir(parents=True, exist_ok=True)
     proposed = 0
     for t in takeaways:
@@ -239,7 +241,7 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    chats_dir = CORPUS_ROOT / "evidence" / "raw" / args.project / "chats"
+    chats_dir = layout.evidence_raw(CORPUS_ROOT) / args.project / "chats"
     if not chats_dir.is_dir():
         print(f"No chats captured for {args.project} — run: wf capture chat {args.project}", file=sys.stderr)
         return 2
@@ -268,11 +270,11 @@ def main():
               + ("  [DRY]" if args.dry_run else ""))
     print(f"\n{total_durable} durable takeaway(s) across {len(transcripts)} session(s)")
     if not args.dry_run and total_durable:
-        print(f"Insight pages: {CORPUS_ROOT / 'evidence' / 'insights'}/ — "
+        print(f"Insight pages: {layout.evidence(CORPUS_ROOT) / 'insights'}/ — "
               f"review before feeding experience events or promotion.")
     if args.propose:
         print(f"Pattern candidates staged: {total_proposed} → "
-              f"{CORPUS_ROOT / 'patterns' / '_inbox'}/ (wf gate lists them)")
+              f"{layout.patterns(CORPUS_ROOT) / '_inbox'}/ (wf gate lists them)")
     return 0
     if total_proposed and not args.dry_run:
         try:

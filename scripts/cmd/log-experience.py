@@ -29,7 +29,9 @@ from wf_common import slugify, yaml_scalar, now_iso_utc as _now_iso
 from fabric_config import FABRIC_ROOT
 from fabric_config import CORPUS_ROOT, VAULT_ROOT
 
-PROJECTS_DIR = VAULT_ROOT / "projects"
+import layout
+
+PROJECTS_DIR = layout.projects(VAULT_ROOT)
 
 
 def get_projects():

@@ -39,6 +39,8 @@ from systemone import systemone_rank
 from fabric_config import FABRIC_ROOT
 from fabric_config import CORPUS_ROOT, VAULT_ROOT
 
+import layout
+
 try:
     import yaml
     HAVE_YAML = True
@@ -142,7 +144,7 @@ def load_thread_index():
     no-op cleanly, same pattern as graphify gating)."""
     try:
         import json as _json
-        return _json.loads((VAULT_ROOT / "registry" / "threads.json").read_text(encoding="utf-8"))
+        return _json.loads((layout.registry(VAULT_ROOT) / "threads.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None  # no/partial thread index → lineage section omitted
 
@@ -657,7 +659,7 @@ def generate_answer(query, scored, pages, query_type, symbol_hits=None, thread_h
 
 def save_synthesis(query, answer, pages):
     """Save the answer as a synthesis page."""
-    synth_dir = VAULT_ROOT / "syntheses"
+    synth_dir = layout.syntheses(VAULT_ROOT)
     synth_dir.mkdir(parents=True, exist_ok=True)
 
     slug = re.sub(r'[^a-z0-9]+', '-', norm(query))[:60]

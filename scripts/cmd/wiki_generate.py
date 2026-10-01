@@ -47,6 +47,8 @@ from pathlib import Path
 from fabric_config import CORPUS_ROOT, get_config
 from wf_common import parse_frontmatter
 
+import layout
+
 def _wiki_root():
     from fabric_config import get_vault_path
     v = get_vault_path()
@@ -58,7 +60,7 @@ def _now():
 
 
 def _runs_dir():
-    d = CORPUS_ROOT / "evidence" / "traces" / "wiki-runs"
+    d = layout.wiki_runs(CORPUS_ROOT)
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -94,7 +96,7 @@ def build_outline(project=None, min_claims=6):
     title, slug, ordered section list, and the claim set each section must
     cite (the reconciliation baseline). Pure graph reads — 0 tokens."""
     concepts = []
-    for c in sorted((CORPUS_ROOT / "concepts").glob("concept-*.md")):
+    for c in sorted((layout.concepts(CORPUS_ROOT)).glob("concept-*.md")):
         s = c.read_text(encoding="utf-8", errors="replace")
         title = re.search(r"^title: (.+)$", s, re.MULTILINE)
         claims = re.findall(r"\[\[(claim-[\w-]+)\]\]", s)

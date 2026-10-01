@@ -34,9 +34,11 @@ from wf_common import parse_frontmatter, slugify, yaml_scalar
 from fabric_config import CORPUS_ROOT, get_config, actor
 from wf_common import now_iso_utc as _dt_iso
 
-CONCEPTS_DIR = CORPUS_ROOT / "concepts"
-PROPOSALS_DIR = CORPUS_ROOT / "registry" / "question-proposals"
-QUESTIONS_DIR = CORPUS_ROOT / "questions"
+import layout
+
+CONCEPTS_DIR = layout.concepts(CORPUS_ROOT)
+PROPOSALS_DIR = layout.registry(CORPUS_ROOT) / "question-proposals"
+QUESTIONS_DIR = layout.questions(CORPUS_ROOT)
 
 OPEN_Q_HEADER = "## Open Questions"
 OPEN_Q_NONE = ("_none identified_", "_None identified_")
@@ -70,7 +72,7 @@ def harvest_concept(concept_path, dry_run=False):
     # confidence claims → P1 (unverified ground), high → P2 (backlog).
     confs = []
     for c in (claims or []):
-        cp = CORPUS_ROOT / "evidence" / "claims" / f"{str(c).strip('[]').split('|')[0]}.md"
+        cp = layout.claims(CORPUS_ROOT) / f"{str(c).strip('[]').split('|')[0]}.md"
         if cp.exists():
             cfm, _ = parse_frontmatter(cp)
             if isinstance(cfm, dict):

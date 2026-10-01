@@ -97,7 +97,7 @@ def ensure_fabric_skeleton(fabric_dir, owner="sim", with_graphify=False):
             shutil.copy(src, ag)
     # content floor: the domain ontology seed (parity with the bash install
     # flow — without it a fresh corpus is "empty" by the lint contract)
-    onto = fabric_dir / "corpus" / "domains" / "ontology.md"
+    onto = fabric_dir / "corpus" / "domains" / "ontology.md"  # scaffold seed, pre-layout root — guard-exempt
     if not onto.exists():
         onto.parent.mkdir(parents=True, exist_ok=True)
         onto.write_text("""---

@@ -19,6 +19,8 @@ from datetime import date, datetime
 from wf_common import parse_frontmatter
 from fabric_config import CORPUS_ROOT, VAULT_ROOT
 
+import layout
+
 # The golden-eval attester ships with the harness (references/), not the corpus.
 _HARNESS = Path(__file__).resolve().parent.parent.parent
 
@@ -26,8 +28,8 @@ _HARNESS = Path(__file__).resolve().parent.parent.parent
 def _sys_executable():
     """Python interpreter for subprocess eval/attester calls (venv-aware)."""
     return sys.executable
-PROMOTION_QUEUE = VAULT_ROOT / "registry" / "promotion-queue.md"
-PROMOTIONS_DIR = VAULT_ROOT / "registry" / "promotions"
+PROMOTION_QUEUE = layout.registry(VAULT_ROOT) / "promotion-queue.md"
+PROMOTIONS_DIR = layout.registry(VAULT_ROOT) / "promotions"
 
 def write_frontmatter(path, fm, body):
     # shared writer since #154 (wf_common — one dump convention)
@@ -124,8 +126,8 @@ def promote_dossier(dossier_path, dry_run=False):
         return False
     print(f"Gate: {gate_detail}")
     
-    pattern_path = VAULT_ROOT / "patterns" / f"pattern-{pattern_slug}.md"
-    anti_path = VAULT_ROOT / "anti-patterns" / f"anti-pattern-{pattern_slug}.md"
+    pattern_path = layout.patterns(VAULT_ROOT) / f"pattern-{pattern_slug}.md"
+    anti_path = layout.anti_patterns(VAULT_ROOT) / f"anti-pattern-{pattern_slug}.md"
     
     if not dry_run:
         from fabric_config import get_config, actor
@@ -143,7 +145,7 @@ def promote_dossier(dossier_path, dry_run=False):
             write_frontmatter(pattern_path, pfm, pbody)
             print(f"Updated pattern: {pattern_path} (verified by {_human})")
 
-        anti_path_actual = VAULT_ROOT / "anti-patterns" / f"anti-pattern-{pattern_slug}.md"
+        anti_path_actual = layout.anti_patterns(VAULT_ROOT) / f"anti-pattern-{pattern_slug}.md"
         if anti_path_actual.exists():
             afm, abody = parse_frontmatter(anti_path_actual)
             afm["status"] = "recommended"
@@ -169,7 +171,7 @@ def promote_dossier(dossier_path, dry_run=False):
         # Gate evidence in the timeline (#139): every accept/reject carries
         # its score evidence (dossier-level edit_apply_report analogue).
         try:
-            log = VAULT_ROOT / "registry" / "log.md"
+            log = layout.registry(VAULT_ROOT) / "log.md"
             with open(log, "a") as f:
                 f.write(f"\n## {_at}\n* **promotion-apply | {_human}**\n")
                 f.write(f"- {dossier_path.name}: behavior-gate {gate_detail}\n")
@@ -226,7 +228,7 @@ def reject_dossier(dossier_path, reason, dry_run=False):
     except Exception as e:
         print(f"warn: tombstone not written: {e}", file=sys.stderr)
     # registry timeline: the corpus log records the decision
-    log = VAULT_ROOT / "registry" / "log.md"
+    log = layout.registry(VAULT_ROOT) / "log.md"
     with open(log, "a") as f:
         f.write(f"\n## {_at[:10]}\n* **promotion-reject | {_human}**\n")
         f.write(f"- {dossier_path.stem}: {reason.strip()[:140]}\n")
@@ -294,7 +296,7 @@ def main():
     if args.promote:
         dossier_path = PROMOTIONS_DIR / args.promote
         if not dossier_path.exists():
-            dossier_path = VAULT_ROOT / "registry" / "promotions" / args.promote
+            dossier_path = layout.registry(VAULT_ROOT) / "promotions" / args.promote
         if not dossier_path.exists():
             print(f"Error: Dossier not found: {args.promote}", file=sys.stderr)
             sys.exit(1)
@@ -304,7 +306,7 @@ def main():
     if args.reject:
         dossier_path = PROMOTIONS_DIR / args.reject
         if not dossier_path.exists():
-            dossier_path = VAULT_ROOT / "registry" / "promotions" / args.reject
+            dossier_path = layout.registry(VAULT_ROOT) / "promotions" / args.reject
         if not dossier_path.exists():
             print(f"Error: Dossier not found: {args.reject}", file=sys.stderr)
             sys.exit(1)

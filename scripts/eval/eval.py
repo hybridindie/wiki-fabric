@@ -25,6 +25,8 @@ from ingest import extract_claims
 from wf_common import norm
 from eval_core import concept_match
 
+import layout
+
 _HARNESS = Path(__file__).resolve().parent.parent.parent
 
 EVAL_DIR = _HARNESS / "evaluations"
@@ -214,7 +216,7 @@ def main():
     print(f"Overall: {'PASS' if all_pass else 'FAIL'}")
 
     # Record in log (corpus timeline, not harness)
-    log_path = _CORPUS / "registry" / "log.md"
+    log_path = layout.registry(_CORPUS) / "log.md"
     with open(log_path, "a") as f:
         f.write(f"\n## {date.today().isoformat()}\n* **eval | formal golden corpus**\n")
         f.write(f"- Total extracted: {total_extracted}, golden: {total_golden}, covered: {total_covered}\n")

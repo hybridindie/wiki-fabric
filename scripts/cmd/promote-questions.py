@@ -23,8 +23,10 @@ from datetime import date
 from wf_common import parse_frontmatter
 from fabric_config import CORPUS_ROOT
 
-PROPOSALS_DIR = CORPUS_ROOT / "registry" / "question-proposals"
-QUESTIONS_DIR = CORPUS_ROOT / "questions"
+import layout
+
+PROPOSALS_DIR = layout.registry(CORPUS_ROOT) / "question-proposals"
+QUESTIONS_DIR = layout.questions(CORPUS_ROOT)
 
 
 def list_pending():

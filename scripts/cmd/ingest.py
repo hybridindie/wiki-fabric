@@ -395,8 +395,8 @@ title: {title}
 description: "Captured upstream source: {title.lower()}"
 generated: {{ by: "{_actor}", at: "{_dt_iso()}" }}
 tags: []
-resource: "evidence/raw/{source_path.relative_to(VAULT_ROOT / 'evidence' / 'raw').as_posix() if 'evidence/raw' in str(source_path) else source_path.name}"
-source_path: evidence/raw/{source_path.relative_to(VAULT_ROOT / 'evidence' / 'raw').as_posix() if 'evidence/raw' in str(source_path) else source_path.name}
+resource: "evidence/raw/{source_path.relative_to(_layout.evidence_raw(VAULT_ROOT)).as_posix() if 'evidence/raw' in str(source_path) else source_path.name}"
+source_path: evidence/raw/{source_path.relative_to(_layout.evidence_raw(VAULT_ROOT)).as_posix() if 'evidence/raw' in str(source_path) else source_path.name}
 sha256: {file_hash}
 captured: {date.today().isoformat()}
 summary: "[[sum-{source_slug}]]"
@@ -494,7 +494,7 @@ scope: staging
 
 | Source | raw file | sha256 | record |
 |---|---|---|---|
-| {source_path.name} | `evidence/raw/{source_path.relative_to(VAULT_ROOT / 'evidence' / 'raw').as_posix() if 'evidence/raw' in str(source_path) else source_path.name}` | `{file_hash[:12]}...` | `src-{source_slug}` |
+| {source_path.name} | `evidence/raw/{source_path.relative_to(_layout.evidence_raw(VAULT_ROOT)).as_posix() if 'evidence/raw' in str(source_path) else source_path.name}` | `{file_hash[:12]}...` | `src-{source_slug}` |
 
 ## Pages created (staging)
 

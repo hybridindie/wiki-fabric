@@ -34,6 +34,8 @@ from pathlib import Path
 import systemone
 from fabric_config import CORPUS_ROOT
 
+import layout
+
 
 def _statement(path):
     from wf_common import claim_statement
@@ -120,7 +122,7 @@ def main():
 
     paths = [Path(c) for c in args.claims]
     if args.source:
-        claims_dir = CORPUS_ROOT / "evidence" / "claims"
+        claims_dir = layout.claims(CORPUS_ROOT)
         paths = sorted(claims_dir.glob(f"claim-{args.source}-*.md"),
                        key=lambda p: p.stat().st_mtime, reverse=True)[:args.newest]
 

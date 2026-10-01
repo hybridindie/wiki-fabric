@@ -45,6 +45,8 @@ except ImportError:
 # Eval fixtures + harness code live with the HARNESS (evaluations/, scripts/,
 # schemas/); the registry timeline is corpus content. Split homes.
 from fabric_config import CORPUS_ROOT as _CORPUS
+
+import layout
 _HARNESS = Path(__file__).resolve().parent.parent.parent
 EVAL_DIR = _HARNESS / "evaluations" / "behavior"
 
@@ -371,7 +373,7 @@ def main():
             print("(zero-LLM mode: manifest-level compliance. Run --llm to probe a real model.)")
 
     if args.record:
-        log = _CORPUS / "registry" / "log.md"
+        log = layout.registry(_CORPUS) / "log.md"
         with open(log, "a") as f:
             f.write(f"\n## {date.today().isoformat()}\n* **eval-behavior | utility {utility:.0%} ({passed}/{total})**\n")
             for r in results:

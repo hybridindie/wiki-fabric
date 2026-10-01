@@ -31,12 +31,14 @@ from pathlib import Path
 from fabric_config import CORPUS_ROOT, get_config
 from wf_common import parse_frontmatter
 
+import layout
+
 POSITIVE = re.compile(r"\b(pass(ed)?|success(ful)?|positive|fixed|works|shipped)\b", re.I)
 NEGATIVE = re.compile(r"\b(fail(ed|ure)?|negative|regress(ed|ion)?|broke|revert)\b", re.I)
 
 
 def _events(project=None):
-    base = CORPUS_ROOT / "projects"
+    base = layout.projects(CORPUS_ROOT)
     dirs = [base / project] if project else sorted(d for d in base.iterdir() if d.is_dir()) if base.is_dir() else []
     out = []
     for d in dirs:
@@ -47,12 +49,12 @@ def _events(project=None):
 
 
 def _receipt_for(rid, project):
-    for base in ([CORPUS_ROOT / "projects" / project / "receipts"] if project else []) + \
-                sorted(p / "receipts" for p in (CORPUS_ROOT / "projects").iterdir() if p.is_dir()):
+    for base in ([layout.projects(CORPUS_ROOT) / project / "receipts"] if project else []) + \
+                sorted(p / "receipts" for p in (layout.projects(CORPUS_ROOT)).iterdir() if p.is_dir()):
         p = base / f"{rid}.json"
         if p.exists():
             return p
-    return CORPUS_ROOT / "registry" / "receipts" / f"{rid}.json"
+    return layout.receipts(CORPUS_ROOT) / f"{rid}.json"
 
 
 def _delivered_pages(receipt_path):

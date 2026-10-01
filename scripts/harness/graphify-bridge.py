@@ -48,8 +48,10 @@ except ImportError:
 
 from wf_common import parse_frontmatter
 
-GRAPHS_DIR = VAULT_ROOT / "global" / "graphs"
-CLAIMS_DIR = VAULT_ROOT / "evidence" / "claims"
+import layout
+
+GRAPHS_DIR = layout.make(VAULT_ROOT, "global") / "graphs"
+CLAIMS_DIR = layout.claims(VAULT_ROOT)
 
 # Relevant edge types for fabric expansion
 EXPAND_EDGE_TYPES = {"calls", "imports", "imports_from", "uses", "references", "inherits"}

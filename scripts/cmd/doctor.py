@@ -30,6 +30,8 @@ from pathlib import Path
 
 from fabric_config import FABRIC_ROOT, CORPUS_ROOT, get_config, get_llm_config
 
+import layout
+
 
 def check_result(name, passed, detail, fix=None):
     return {"check": name, "passed": passed, "detail": detail, "fix": fix}
@@ -147,7 +149,7 @@ def main():
         results.append(check_result("vault_structure", False, f"check failed: {e}"))
 
     # ---- 6. corpus log (the G4 gate reads it)
-    log = CORPUS_ROOT / "registry" / "log.md"
+    log = layout.registry(CORPUS_ROOT) / "log.md"
     if log.exists():
         text = log.read_text()
         entries = text.count("* **")

@@ -9,6 +9,8 @@ from fabric_config import get_config, get_all_repo_names, actor, get_vault_path
 from wiki_lib.generators import _staleness, _claim_tier
 from wf_common import now_iso_utc
 
+import layout
+
 TODAY = date.today()
 def _compute_wiki_edges(topics, projects, min_shared=2):
     """Compute the wiki's cross-page network from grounded latent edges.
@@ -48,7 +50,7 @@ def _compute_wiki_edges(topics, projects, min_shared=2):
                 claim_projects.setdefault(cid, set()).add(pslug)
     # claim -> source
     claim_source = {}
-    for cp in (fabric_config.CORPUS_ROOT / "evidence" / "claims").glob("claim-*.md"):
+    for cp in (layout.claims(fabric_config.CORPUS_ROOT)).glob("claim-*.md"):
         m = re.search(r'resource: "\[\[(src-[^\]]+)\]\]"',
                       cp.read_text(encoding="utf-8", errors="replace"))
         if m:
@@ -112,7 +114,7 @@ def emit_citation_graph(topics, projects, dry_run=False):
     import json
 
     claim_sources = {}
-    for cp in sorted((fabric_config.CORPUS_ROOT / "evidence" / "claims").glob("claim-*.md")):
+    for cp in sorted((layout.claims(fabric_config.CORPUS_ROOT)).glob("claim-*.md")):
         s = cp.read_text(encoding="utf-8", errors="replace")
         m = re.search(r'resource: "\[\[(src-[^\]]+)\]\]"', s)
         claim_sources[cp.stem] = m.group(1) if m else None
@@ -145,7 +147,7 @@ def emit_citation_graph(topics, projects, dry_run=False):
         _add_node(f"topic:{t['slug']}", t["title"], "topic", domain=t.get("domain"), claims=len(t["claims"]))
         t_claims = []
         for cs in t["claims"]:
-            cp = fabric_config.CORPUS_ROOT / "evidence" / "claims" / f"{cs}.md"
+            cp = layout.claims(fabric_config.CORPUS_ROOT) / f"{cs}.md"
             if not cp.exists():
                 continue
             tier = _claim_tier(cp)
@@ -182,7 +184,7 @@ def emit_citation_graph(topics, projects, dry_run=False):
             tkind = "project" if e["target"] in proj_slugs else "topic"
             _add_edge(src, f"{tkind}:{e['target']}", e["kind"], weight=e["weight"])
 
-    out_path = fabric_config.CORPUS_ROOT / "registry" / "wiki-graph.json"
+    out_path = layout.registry(fabric_config.CORPUS_ROOT) / "wiki-graph.json"
     if not dry_run:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(json.dumps(graph, indent=2), encoding="utf-8")

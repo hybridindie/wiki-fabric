@@ -25,6 +25,8 @@ except ImportError:
 from fabric_config import get_config, get_ignores, is_ignored, CORPUS_ROOT
 from wf_common import parse_frontmatter, SKIP_PARTS
 
+import layout
+
 
 def _default_root():
     """Root to index — paths.py (#152). The harness tree is NEVER a fabric
@@ -37,7 +39,7 @@ def _default_root():
         return find_corpus_root(own)
     # Isolated-fabric heuristic (eval-stability copies the script into a flat
     # temp fabric): content dirs at the root AND no corpus/ subdir.
-    if (own / "patterns").is_dir() or (own / "evidence").is_dir():
+    if (own / "patterns").is_dir() or (own / "evidence").is_dir():  # layout detection probe, not a compose — guard-exempt
         if not (own / "corpus").is_dir():
             return own  # isolated fabric (content at its root)
     return find_corpus_root(own)
@@ -46,7 +48,7 @@ def _default_root():
 # The catalog is a corpus artifact; the old harness-root default detached it
 # from the corpus.
 VAULT_ROOT = _default_root()
-INDEX_PATH = VAULT_ROOT / "registry" / "catalog.json"
+INDEX_PATH = layout.registry(VAULT_ROOT) / "catalog.json"
 
 # SKIP_PARTS: shared corpus-walk exclusion set (wf_common, #155-C) — the
 # catalog should see the same corpus the retrievers see. Extra, index-only
@@ -187,7 +189,7 @@ def build_catalog(categories):
 
 def write_catalog(registry):
     import json
-    out = VAULT_ROOT / "registry" / "catalog.json"
+    out = layout.registry(VAULT_ROOT) / "catalog.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(registry, indent=2, ensure_ascii=False))
     return out
@@ -199,7 +201,7 @@ def build_thread_index():
     files_touched, pr), claims join via originated_in/decided_in relations.
     Rebuildable, no hand-maintenance; absent captures → clean no-op."""
     from wf_common import parse_frontmatter as _pf
-    raw = VAULT_ROOT / "evidence" / "raw"
+    raw = layout.evidence_raw(VAULT_ROOT)
     nodes = []
     if raw.is_dir():
         for p in sorted(raw.rglob("*.md")):
@@ -232,7 +234,7 @@ def build_thread_index():
     # target slug must match ingest's truncation (source_slug[:80]) — long
     # chat-capture filenames otherwise never join (sim finding #11)
     edges = []
-    claims_dir = VAULT_ROOT / "evidence" / "claims"
+    claims_dir = layout.claims(VAULT_ROOT)
     if claims_dir.is_dir():
         for cp in sorted(claims_dir.glob("claim-*.md")):
             fm, _ = parse_frontmatter(cp)
@@ -267,7 +269,7 @@ def build_thread_index():
         "nodes": nodes,
         "edges": edges,
     }
-    out = VAULT_ROOT / "registry" / "threads.json"
+    out = layout.registry(VAULT_ROOT) / "threads.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return out, len(nodes), len(edges)
@@ -291,7 +293,7 @@ def main():
         from fabric_config import CORPUS_ROOT
         root_arg = str(CORPUS_ROOT)
     VAULT_ROOT = Path(root_arg).resolve()
-    INDEX_PATH = VAULT_ROOT / "registry" / "catalog.json"
+    INDEX_PATH = layout.registry(VAULT_ROOT) / "catalog.json"
 
     categories = scan_vault()
     registry = build_catalog(categories)

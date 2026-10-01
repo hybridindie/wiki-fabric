@@ -41,14 +41,16 @@ from collections import Counter, defaultdict
 from fabric_config import get_config, CORPUS_ROOT, resolve_repo_path, get_all_repo_names, get_domain_signals
 from wf_common import parse_frontmatter
 
+import layout
+
 CORPUS = CORPUS_ROOT
 # The domain ontology is a per-fabric, synced artifact (content path), not harness.
-ONTOLOGY_PATH = CORPUS / "domains" / "ontology.md"
-ONTOLOGY_DIR = CORPUS / "domains"
-CLAIMS_DIR = CORPUS / "evidence" / "claims"
-SOURCES_DIR = CORPUS / "evidence" / "sources"
-PROJECTS_DIR = CORPUS / "projects"
-PROPOSALS_DIR = CORPUS / "registry" / "domain-proposals"
+ONTOLOGY_PATH = layout.domains(CORPUS) / "ontology.md"
+ONTOLOGY_DIR = layout.domains(CORPUS)
+CLAIMS_DIR = layout.claims(CORPUS)
+SOURCES_DIR = layout.sources(CORPUS)
+PROJECTS_DIR = layout.projects(CORPUS)
+PROPOSALS_DIR = layout.registry(CORPUS) / "domain-proposals"
 
 # Domain signal lookup — built from fabric.yaml domains.signals
 # A dependency/tag matching a signal → that domain gets a score

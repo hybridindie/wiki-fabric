@@ -27,8 +27,10 @@ from datetime import date
 
 from fabric_config import get_config, FABRIC_ROOT, VAULT_ROOT, resolve_repo_path, get_all_repo_names, get_repo_graph_dir, get_ignores, is_ignored
 
+import layout
+
 VAULT_ROOT = VAULT_ROOT
-ENTITIES_DIR = VAULT_ROOT / "global" / "entities"
+ENTITIES_DIR = layout.make(VAULT_ROOT, "global") / "entities"
 
 # Directories to skip
 SKIP_DIRS = {".git", ".obsidian", ".opencode", "node_modules", ".venv", "venv",
@@ -270,7 +272,7 @@ def enrich_claims_with_code_locators(symbols, dry_run=False):
 
     # Find claims mentioning indexed symbols
     enriched = 0
-    for claim_path in (VAULT_ROOT / "evidence" / "claims").glob("claim-*.md"):
+    for claim_path in layout.claims(VAULT_ROOT).glob("claim-*.md"):
         text = claim_path.read_text()
         body = text
 

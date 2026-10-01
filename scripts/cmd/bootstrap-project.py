@@ -35,6 +35,8 @@ from fabric_config import get_config, FABRIC_ROOT, CORPUS_ROOT, get_all_repo_nam
 # collapse-with-dashes form the prompt flow wants is what wf_common.slugify does.
 from wf_common import slugify
 
+import layout
+
 
 def find_fabric_root():
     # Content root — the canonical chain lives in fabric_config (composed of
@@ -77,7 +79,7 @@ def detect_available_domains():
 
 def detect_available_skills():
     """Load available skills from the fabric's skills directory."""
-    skills_dir = CORPUS_ROOT / "skills"
+    skills_dir = layout.skills(CORPUS_ROOT)
     if not skills_dir.exists():
         return []
     return sorted(
@@ -479,7 +481,7 @@ def _bootstrap_agent_configs(harness_root, fabric_root):
         },
         "instructions_add": [str(fabric_root / "AGENTS.md"), ".wiki-overlay.md"],
         "watcher_ignore_add": ["evidence/raw/**", ".obsidian/**"],
-        "skills_paths_add": [str(harness_root / "system" / "opencode" / "skills")]
+        "skills_paths_add": [str(harness_root / "system" / "opencode" / "skills")]  # harness assets, not corpus — guard-exempt
     }
 
     oc_candidates = [Path("opencode.json"), Path(".opencode/opencode.json")]

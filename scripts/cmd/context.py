@@ -53,6 +53,8 @@ from fabric_config import CORPUS_ROOT, VAULT_ROOT
 from fabric_config import get_config, get_ignores, is_ignored, get_tuning
 from wf_common import parse_frontmatter
 
+import layout
+
 
 # corpus walk exclusions are shared (wf_common.SKIP_PARTS/corpus_walk, #155-C)
 
@@ -618,9 +620,9 @@ def write_receipt(manifest, project):
     try:
         rid = receipt_id(manifest)
         if project:
-            base = VAULT_ROOT / "projects" / project / "receipts"
+            base = layout.projects(VAULT_ROOT) / project / "receipts"
         else:
-            base = VAULT_ROOT / "registry" / "receipts"
+            base = layout.registry(VAULT_ROOT) / "receipts"
         base.mkdir(parents=True, exist_ok=True)
         out = base / f"{rid}.json"
         out.write_text(json.dumps(build_receipt(manifest, rid, VAULT_ROOT, project),

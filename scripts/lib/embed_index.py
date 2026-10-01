@@ -27,7 +27,8 @@ def _corpus_fingerprint(corpus_root):
     from wf_common import claim_statement
     h = hashlib.sha256()
     n = 0
-    for p in sorted((Path(corpus_root) / "evidence" / "claims").glob("claim-*.md")):
+    from layout import claims
+    for p in sorted(claims(corpus_root).glob("claim-*.md")):
         h.update(p.stem.encode())
         h.update(claim_statement(p).encode())
         n += 1
@@ -61,7 +62,8 @@ def load_or_build(corpus_root, model_name=None, rebuild=False):
     # build
     from wf_common import claim_statement
     texts, ids = [], []
-    for p in sorted((corpus_root / "evidence" / "claims").glob("claim-*.md")):
+    from layout import claims
+    for p in sorted(claims(corpus_root).glob("claim-*.md")):
         st = claim_statement(p)
         if len(st) > 20:
             texts.append(st)

@@ -24,6 +24,7 @@ from pathlib import Path
 
 from fabric_config import get_config, get_ignores, is_ignored
 from wf_common import sha256_file as sha256
+import layout
 
 import sys
 import re
@@ -766,7 +767,7 @@ def _section_sources(state):
                 state.errors.append("SOURCE-DRIFT %s: %s != %s" % (rel, sh[:12], actual[:12]))
         if fm.get("type") == "source" and str(fm.get("status")) == "ingested" and not is_tpl(rel):
             slug = rel.stem[4:] if rel.stem.startswith("src-") else rel.stem
-            claims_dir = state.vault / "evidence" / "claims"
+            claims_dir = layout.claims(state.vault)
             found = claims_dir.is_dir() and any(claims_dir.glob(f"claim-{slug}-*.md"))
             if not found:
                 state.warnings.append("SOURCE-EMPTY %s: ingested with zero claims (recover: wf ingest --reclaim <project>)" % rel)
@@ -800,7 +801,7 @@ def _section_orphans(state):
 
 def _section_conflicts(state):
     """6b. sync conflicts (unresolved block commit/push)."""
-    conflicts_dir = state.vault / "registry" / "conflicts"
+    conflicts_dir = layout.registry(state.vault) / "conflicts"
     if conflicts_dir.exists():
         for cp in conflicts_dir.glob("**/*.md"):
             fm, _, err = parse_frontmatter(cp)
@@ -812,8 +813,8 @@ def _section_conflicts(state):
 def _section_receipts(state):
     """6c. context receipts: envelope + required fields."""
     import json as _json
-    receipts_dirs = [state.vault / "registry" / "receipts"]
-    projects_root = state.vault / "projects"
+    receipts_dirs = [layout.registry(state.vault) / "receipts"]
+    projects_root = layout.projects(state.vault)
     if projects_root.is_dir():
         receipts_dirs.extend(sorted(projects_root.glob("*/receipts")))
     for receipts_dir in receipts_dirs:

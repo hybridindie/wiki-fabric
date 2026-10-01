@@ -32,13 +32,15 @@ from extract_backends import llm_config, LLM_TEMPERATURE
 from fabric_config import get_local_model
 from wf_common import STOPWORDS, parse_frontmatter, norm
 
+import layout
+
 # Generic words filtered from concept NAMES (distinct from retrieval STOPWORDS —
 # here they pollute a title, not a score; #155 audit: was two inline copies)
 CONCEPT_NAME_FILTER = STOPWORDS | {
     "per", "not", "must", "can", "cannot", "only", "all", "each",
 }
 
-CLAIMS_DIR = VAULT_ROOT / "evidence" / "claims"
+CLAIMS_DIR = layout.claims(VAULT_ROOT)
 CONCEPTS_BASE = VAULT_ROOT
 
 MIN_CLAIMS = get_tuning(None, 'synthesize', 'min_claims', 2)
@@ -221,7 +223,7 @@ def write_concept_page(concept_slug, cluster, synthesis, domain):
 
     # Determine output path based on primary domain
     primary_domain = domain_list[0] if domain_list else "agent-systems"
-    concepts_dir = VAULT_ROOT / "concepts"
+    concepts_dir = layout.concepts(VAULT_ROOT)
     concepts_dir.mkdir(parents=True, exist_ok=True)
     concept_path = concepts_dir / f"concept-{concept_slug}.md"
 

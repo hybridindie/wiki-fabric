@@ -24,8 +24,10 @@ from datetime import date
 from fabric_config import CORPUS_ROOT, get_config
 from wf_common import parse_frontmatter
 
-ONTOLOGY_PATH = CORPUS_ROOT / "domains" / "ontology.md"
-PROPOSALS_DIR = CORPUS_ROOT / "registry" / "domain-proposals"
+import layout
+
+ONTOLOGY_PATH = layout.domains(CORPUS_ROOT) / "ontology.md"
+PROPOSALS_DIR = layout.registry(CORPUS_ROOT) / "domain-proposals"
 
 
 def list_pending_proposals():

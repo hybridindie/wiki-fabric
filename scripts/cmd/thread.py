@@ -24,7 +24,9 @@ from pathlib import Path
 from wf_common import parse_frontmatter
 from fabric_config import CORPUS_ROOT
 
-THREADS_PATH = CORPUS_ROOT / "registry" / "threads.json"
+import layout
+
+THREADS_PATH = layout.registry(CORPUS_ROOT) / "threads.json"
 
 
 def load_index():

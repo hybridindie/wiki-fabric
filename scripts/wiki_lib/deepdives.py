@@ -24,6 +24,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 
 
 from wf_common import claim_statement
+
+import layout
 from wiki_lib.diagrams import _mermaid_valid, MERMAID_REPAIR_COMMENT
 
 _NOISE = ("test", "conftest", "fixture")
@@ -37,7 +39,7 @@ def _graph_path(slug):
     from fabric_config import CORPUS_ROOT
     from wf_common import project_slug
     c = project_slug(slug)
-    return CORPUS_ROOT / "global" / "graphs" / f"{c}-graph.json"
+    return layout.global_graphs(CORPUS_ROOT) / f"{c}-graph.json"
 
 
 def _load_graph(slug):
@@ -61,7 +63,7 @@ def _load_graph(slug):
 def CORPUS_ROOT_HASH(slug):
     from fabric_config import CORPUS_ROOT
     from wf_common import project_slug
-    return CORPUS_ROOT / "global" / "graphs" / f"{project_slug(slug)}-graph.hash"
+    return layout.global_graphs(CORPUS_ROOT) / f"{project_slug(slug)}-graph.hash"
 
 
 def _degree(nodes, links):
@@ -289,7 +291,7 @@ def generate(slug, dry_run=False, wiki_root=None):
     if wiki_root is None:
         from wiki_lib.generators import _wiki_root as wr
         wiki_root = wr()
-    out_dir = wiki_root / "projects" / slug
+    out_dir = wiki_root / "projects" / slug  # wiki OUTPUT vault (resolver-owned), not the corpus — guard-exempt
     written = []
 
     arch = render_architecture(slug, nodes, links, rev)

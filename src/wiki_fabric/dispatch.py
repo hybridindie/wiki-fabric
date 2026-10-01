@@ -16,6 +16,14 @@ import sys
 from pathlib import Path
 from typing import Callable
 
+try:
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / 'scripts' / 'lib'))
+except Exception:
+    pass
+
+import layout
+
 # --- script/asset resolution (dev tree or packaged _harness) --------------
 
 # Subprocess timeout tiers — mirror wf_common.TIMEOUT_* (packaged dispatch
@@ -449,7 +457,7 @@ def _status(argv):
                           ("Patterns", "patterns/pattern-*.md"),
                           ("Entity pages", "global/entities/entity-*.md")):
         counts[name] = len(list(croot.glob(pattern)))
-    projects = sum(1 for d in (croot / "projects").iterdir() if d.is_dir()) if (croot / "projects").is_dir() else 0
+    projects = sum(1 for d in (layout.projects(croot)).iterdir() if d.is_dir()) if (layout.projects(croot)).is_dir() else 0
     print("")
     print("  Inventory:")
     print(f"    Claims:             {counts['Claims']}")
@@ -491,7 +499,7 @@ def _status(argv):
         print("\033[0;32m✓\033[0m  Gate:   clear")
 
     # Graphify
-    graphs = croot / "global" / "graphs"
+    graphs = layout.global_graphs(croot)
     if graphs.is_dir() and any(graphs.glob("*.json")):
         print("\033[0;32m✓\033[0m  Graphify: graphs imported")
     else:

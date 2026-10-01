@@ -27,6 +27,8 @@ from wf_common import parse_frontmatter, yaml_scalar
 from fabric_config import FABRIC_ROOT
 from fabric_config import CORPUS_ROOT, VAULT_ROOT
 
+import layout
+
 try:
     from sentence_transformers import SentenceTransformer
     HAS_EMBEDDINGS = True
@@ -41,9 +43,9 @@ except ImportError:
     HAS_NUMPY = False
 
 
-EXPERIENCE_DIR = VAULT_ROOT / "projects"
-PROMOTIONS_DIR = VAULT_ROOT / "registry" / "promotions"
-PROMOTION_QUEUE = VAULT_ROOT / "registry" / "promotion-queue.md"
+EXPERIENCE_DIR = layout.projects(VAULT_ROOT)
+PROMOTIONS_DIR = layout.registry(VAULT_ROOT) / "promotions"
+PROMOTION_QUEUE = layout.registry(VAULT_ROOT) / "promotion-queue.md"
 
 MIN_PROJECTS = 2
 OUTPUT_DIR = PROMOTIONS_DIR
@@ -226,7 +228,7 @@ def cluster_events_keyword(events, min_projects=2, _keyword_threshold=None):
 def extract_experience_events():
     """Extract all experience events from projects/*/experience-events/"""
     events = []
-    for exp_file in (VAULT_ROOT / "projects").rglob("experience-events/*.md"):
+    for exp_file in (layout.projects(VAULT_ROOT)).rglob("experience-events/*.md"):
         fm, body = parse_frontmatter(exp_file)
         if fm.get("type") == "experience-event":
             fm["_file"] = exp_file
@@ -863,7 +865,7 @@ def main():
         # content as a revision proposal, not an overwrite (human review
         # records the slow-update justification).
         pattern_content = generate_pattern_file(cluster_key, events)
-        pattern_path = VAULT_ROOT / "patterns" / f"pattern-{cluster_key}.md"
+        pattern_path = layout.patterns(VAULT_ROOT) / f"pattern-{cluster_key}.md"
         pattern_path.parent.mkdir(parents=True, exist_ok=True)
         if pattern_path.exists():
             from wf_common import parse_frontmatter

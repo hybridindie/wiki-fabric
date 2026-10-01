@@ -25,7 +25,9 @@ from pathlib import Path
 
 from fabric_config import CORPUS_ROOT, get_config
 
-MANIFEST_PATH = CORPUS_ROOT / "registry" / "wiki-export-manifest.json"
+import layout
+
+MANIFEST_PATH = layout.registry(CORPUS_ROOT) / "wiki-export-manifest.json"
 HARVEST_DIR_NAME = "obsidian"
 
 # files inside the vault that are generated outputs (export targets)
@@ -151,7 +153,7 @@ def harvest_before_export(dry_run=False, project=None):
             harvested.append(rel)
     if not dry_run:
         if harvested:
-            out_dir = CORPUS_ROOT / "evidence" / "raw" / (project or "vault") / HARVEST_DIR_NAME
+            out_dir = layout.evidence_raw(CORPUS_ROOT) / (project or "vault") / HARVEST_DIR_NAME
             out_dir.mkdir(parents=True, exist_ok=True)
             stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
             for rel in harvested:

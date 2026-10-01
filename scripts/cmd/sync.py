@@ -47,6 +47,8 @@ def sh(*args, cwd=None, timeout=TIMEOUT_GIT):
     return _git_sh(*args, cwd=str(cwd or VAULT_ROOT), timeout=timeout)
 from fabric_config import FABRIC_ROOT
 from fabric_config import CORPUS_ROOT, VAULT_ROOT
+
+import layout
 import paths  # scripts/lib — single resolver home (#152)
 
 CONTENT_REMOTE_NAME = "corpus"
@@ -86,7 +88,7 @@ LOCAL_ONLY_PATHS = [
 # distribution, not local commits.
 def local_projects():
     """Project namespaces that exist locally."""
-    pd = VAULT_ROOT / "projects"
+    pd = layout.projects(VAULT_ROOT)
     if not pd.exists():
         return set()
     return {p.name for p in pd.iterdir() if p.is_dir() and not p.name.startswith(".")}
@@ -112,7 +114,7 @@ def describe_namespaces(names):
     """One-line description of each project namespace from its README frontmatter."""
     out = []
     for name in sorted(names):
-        readme = VAULT_ROOT / "projects" / name / "README.md"
+        readme = layout.projects(VAULT_ROOT) / name / "README.md"
         title = name
         owner = ""
         if readme.exists():
@@ -156,7 +158,7 @@ def validate_fabric():
     layout (outer .git tracks corpus/) — the migrate path handles that. A
     fresh corpus lacking the AGENTS.md marker gets it scaffolded."""
     harness = paths.find_harness_root()
-    registry = VAULT_ROOT / "registry"
+    registry = layout.registry(VAULT_ROOT)
     registry.mkdir(parents=True, exist_ok=True)
     if not (VAULT_ROOT / "AGENTS.md").exists():
         src_ag = harness / "AGENTS.md"
@@ -572,7 +574,7 @@ def cmd_push(message=None, pr=False, no_pr=False):
 
 
 def list_conflicts():
-    conflicts_dir = VAULT_ROOT / "registry" / "conflicts"
+    conflicts_dir = layout.registry(VAULT_ROOT) / "conflicts"
     if not conflicts_dir.exists():
         return []
     return sorted(str(p.relative_to(VAULT_ROOT)) for p in conflicts_dir.glob("**/*.md"))
@@ -778,7 +780,7 @@ def cmd_pull():
 
     # Merge failed: collect conflicts
     conflicted = [l[3:] for l in git_status() if l.startswith("UU ") or l.startswith("AA ")]
-    conflicts_dir = VAULT_ROOT / "registry" / "conflicts" / today
+    conflicts_dir = layout.registry(VAULT_ROOT) / "conflicts" / today
     conflicts_dir.mkdir(parents=True, exist_ok=True)
 
     for p in conflicted:

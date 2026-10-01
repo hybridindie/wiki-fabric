@@ -25,6 +25,8 @@ import json
 from datetime import date
 from pathlib import Path
 
+import layout
+
 
 
 def _gate_review():
@@ -80,8 +82,8 @@ def _recent_deliveries(limit=10):
     seen = {}
     if _C is None:
         return []
-    dirs = [_C / "registry" / "receipts"]
-    projects_root = _C / "projects"
+    dirs = [layout.registry(_C) / "receipts"]
+    projects_root = layout.projects(_C)
     if projects_root.is_dir():
         dirs.extend(sorted(projects_root.glob("*/receipts")))
     for d in dirs:
@@ -277,7 +279,7 @@ def main():
         _emit_deliveries(_recent_deliveries())
         sys.exit(0)
 
-    manifest_path = CORPUS_ROOT / "registry" / "pending-gate.md"
+    manifest_path = layout.registry(CORPUS_ROOT) / "pending-gate.md"
     if args.write_manifest:
         _write_manifest(manifest_path, sections, actionable)
         if actionable:

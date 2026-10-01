@@ -59,6 +59,8 @@ def sha256(path):
 
 from wf_common import now_iso_utc as now_iso
 
+import layout
+
 
 def import_bundle(bundle, scope, extract_claims=False, dry_run=False):
     bundle = Path(bundle).resolve()
@@ -66,7 +68,7 @@ def import_bundle(bundle, scope, extract_claims=False, dry_run=False):
         print(f"Error: bundle not found: {bundle}", file=sys.stderr)
         return 1
 
-    raw_dest = VAULT_ROOT / "evidence" / "raw" / f"{scope}-okf"
+    raw_dest = layout.evidence_raw(VAULT_ROOT) / f"{scope}-okf"
     raw_dest.mkdir(parents=True, exist_ok=True)
 
     # 1. Inventory + trust-tier distribution
@@ -112,7 +114,7 @@ def import_bundle(bundle, scope, extract_claims=False, dry_run=False):
         verdict, hits = screen_body(p, body)
         rel_dest = raw_dest / rel
         if verdict == "quarantine":
-            q_dest = VAULT_ROOT / "evidence" / "_inbox" / f"{scope}-okf" / rel
+            q_dest = layout.evidence_inbox(VAULT_ROOT) / f"{scope}-okf" / rel
             if not dry_run:
                 q_dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(p, q_dest)
@@ -129,7 +131,7 @@ def import_bundle(bundle, scope, extract_claims=False, dry_run=False):
         return 0
 
     # 3. Source record per imported concept (hash-anchored, immutable)
-    src_dir = VAULT_ROOT / "evidence" / "sources"
+    src_dir = layout.sources(VAULT_ROOT)
     src_dir.mkdir(parents=True, exist_ok=True)
     created_sources = 0
     for p, rel, fm, _ in concept_files:
@@ -199,7 +201,7 @@ Imported from OKF bundle `{bundle}`. Trust tier **recorded, not inherited**
         print(r.stdout[-500:] if r.stdout else "")
 
     # 5. Registry log entry (OKF §9 shape)
-    log = VAULT_ROOT / "registry" / "log.md"
+    log = layout.registry(VAULT_ROOT) / "log.md"
     log.parent.mkdir(parents=True, exist_ok=True)
     if not log.exists():
         log.write_text("---\ntype: log\ntitle: Log\ncreated: %s\nupdated: %s\n---\n\n# Log\n\nAppend-only timeline.\n"

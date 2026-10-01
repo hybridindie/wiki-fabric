@@ -38,6 +38,8 @@ import time
 import shutil
 import tempfile
 import argparse
+
+import layout
 import time
 import subprocess
 import statistics
@@ -355,7 +357,7 @@ def main():
             # the registry timeline is corpus content (OKF §9; the
             # compiler-eval gate reads CORPUS_ROOT/registry/log.md)
             from fabric_config import CORPUS_ROOT
-            log = CORPUS_ROOT / "registry" / "log.md"
+            log = layout.registry(CORPUS_ROOT) / "log.md"
             log.parent.mkdir(parents=True, exist_ok=True)
             with open(log, "a") as f:
                 f.write(f"\n## {date.today().isoformat()}\n* **eval-stability | {'PASS' if report['passed'] else 'FAIL'}**\n")

@@ -42,6 +42,8 @@ from pathlib import Path
 from datetime import date
 from eval_core import tokens
 
+import layout
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
@@ -161,7 +163,7 @@ def score_pr(pr, manifest, fabric):
     coverage = round(len(covered) / len(meaningful), 3) if meaningful else 0.0
 
     # graphify tier: did the AST index cover the touched files?
-    entities_dir = fabric / "global" / "entities"
+    entities_dir = layout.make(fabric, "global") / "entities"
     entity_pages = list(entities_dir.glob("entity-*.md")) if entities_dir.exists() else []
     touched_covered = 0
     for f in pr["files"]:

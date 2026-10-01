@@ -33,6 +33,8 @@ from datetime import date, datetime, timedelta
 
 from fabric_config import FABRIC_ROOT, CORPUS_ROOT, get_config, get_all_repo_names, get_repo_config, get_vault_path, actor
 from wf_common import now_iso_utc
+
+import layout
 from wiki_lib.diagrams import MERMAID_REPAIR_COMMENT, _mermaid_valid, _validate_and_repair_diagrams
 from wiki_lib.generators import (_enrich_page, _staleness, _cite_claim,
                                  _llm_topic_article, _llm_project_article,
@@ -60,7 +62,7 @@ def select_topics(min_claims=None):
         from fabric_config import get_tuning
         min_claims = get_tuning(None, "export", "topic_min_claims", 6)
     topics = []
-    for c in sorted((CORPUS_ROOT / "concepts").glob("concept-*.md")):
+    for c in sorted((layout.concepts(CORPUS_ROOT)).glob("concept-*.md")):
         s = c.read_text(encoding="utf-8", errors="replace")
         title = re.search(r"^title: (.+)$", s, re.MULTILINE)
         dom = re.search(r"^domain: \[(.*?)\]", s, re.MULTILINE)
@@ -98,8 +100,8 @@ def _concepts_exist():
     """True when the concept layer is already populated. export regenerates topics
     from existing concepts and does NOT re-synthesize on every run (concept
     synthesis is ~1 LLM call per cluster; bounded to first-run/repair)."""
-    return (CORPUS_ROOT / "concepts").exists() and list(
-        (CORPUS_ROOT / "concepts").glob("concept-*.md"))
+    return (layout.concepts(CORPUS_ROOT)).exists() and list(
+        (layout.concepts(CORPUS_ROOT)).glob("concept-*.md"))
 
 
 def _synthesize_concepts(config, dry_run=False):
@@ -128,7 +130,7 @@ def _rebuild_catalog(dry_run=False):
         _ri = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_ri)
         root = CORPUS_ROOT
         _ri.VAULT_ROOT = root
-        _ri.INDEX_PATH = root / "registry" / "catalog.json"
+        _ri.INDEX_PATH = layout.registry(root) / "catalog.json"
         categories = _ri.scan_vault()
         registry = _ri.build_catalog(categories)
         if dry_run:

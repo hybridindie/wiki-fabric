@@ -19,7 +19,7 @@ for _dir in (_HERE, _HERE.parent / "lib"):
 from pathlib import Path
 
 HARNESS_ROOT = Path(__file__).resolve().parent.parent.parent
-SKILLS_DIR = HARNESS_ROOT / "system" / "skills"
+SKILLS_DIR = HARNESS_ROOT / "system" / "skills"  # harness assets, not corpus — guard-exempt
 
 
 def _parse_skill(path):
