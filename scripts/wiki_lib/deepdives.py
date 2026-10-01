@@ -277,7 +277,12 @@ def render_tour(slug, nodes, links, rev, dry_run=False):
 
 def generate(slug, dry_run=False, wiki_root=None):
     """Render the deep-dive set for one project. Returns (pages_written, n_nodes).
-    Skips silently (returns ([], 0)) when the project has no graph."""
+    Skips silently (returns ([], 0)) when the project has no graph. The tree,
+    headings, and wikilinks key on the CANONICAL slug (project_slug) — a raw
+    underscore name rendered the same project into two wiki trees depending
+    on which form the caller passed."""
+    from wf_common import project_slug
+    slug = project_slug(slug)
     nodes, links, rev = _load_graph(slug)
     if nodes is None or not nodes:
         return [], 0
