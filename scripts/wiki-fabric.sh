@@ -374,7 +374,7 @@ updated: 2026-09-13
 
 # Domain Ontology
 
-The ontology is living — `python3 scripts/cmd/propose-domains.py` discovers new
+The ontology is living — `wf propose-domains` discovers new
 domains from evidence signals. Per-fabric artifact (synced via `wf sync`).
 New domains are proposed as pending-review dossiers and merged only after human
 review with `python3 scripts/cmd/promote-domains.py --apply`.

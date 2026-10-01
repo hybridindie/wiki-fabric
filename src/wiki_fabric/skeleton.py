@@ -95,6 +95,26 @@ def ensure_fabric_skeleton(fabric_dir, owner="sim", with_graphify=False):
         src = src if src.exists() else packaged
         if src.exists():
             shutil.copy(src, ag)
+    # content floor: the domain ontology seed (parity with the bash install
+    # flow — without it a fresh corpus is "empty" by the lint contract)
+    onto = fabric_dir / "corpus" / "domains" / "ontology.md"
+    if not onto.exists():
+        onto.parent.mkdir(parents=True, exist_ok=True)
+        onto.write_text("""---
+type: ontology
+title: Domain Ontology
+---
+
+# Domain Ontology
+
+The ontology is living — `wf propose-domains` discovers new domains from
+evidence signals; proposals merge only after human review
+(`wf promote-domains --apply`). Per-fabric artifact (synced via `wf sync`).
+
+## Domains
+
+- `agent-systems`
+""")
     cfg_path = fabric_dir / "fabric.yaml"
     if not cfg_path.exists():
         extra = ""
