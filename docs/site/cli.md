@@ -171,15 +171,15 @@ Scripts live in four subdirectories of `scripts/` — `cmd/` (entrypoints), `eva
 | `context.py` | Task → scoped context manifest with reasons (`--write-receipt` persists a receipt-v1 artifact) | 0 tokens |
 | `lint.py` | Deterministic checks (incl. `--okf` floor, `llm.local_model`) | 0 |
 | `synthesize.py` | Claims → concept pages (cloud or on-device route) | 1 per concept |
-| `log-experience.py` | Capture experience event | 0 |
-| `mine-promotions.py` | Cluster experience events → dossiers | 0 |
-| `promote.py` | Manage pattern promotion dossiers | 0 |
+| `log-experience.py` | Capture experience event (`wf log`) | 0 |
+| `mine-promotions.py` | Cluster experience events → dossiers (`wf mine promotions`) | 0 |
+| `promote.py` | Manage pattern promotion dossiers (`wf promote`) | 0 |
 | `propose-domains.py` | Discover + propose new domains (pending-review dossiers) | 0 |
 | `promote-domains.py` | Human-gated merge of a proposed domain into the ontology | 0 |
-| `gate.py` | Aggregate pending HITL decisions (`wf gate`) | 0 |
-| `rebuild-index.py` | Rebuild `registry/catalog.json` from files | 0 |
+| `gate.py` | Aggregate pending HITL decisions + notify adapters (`wf gate`) | +`--write-manifest`/notify |
+| `rebuild-index.py` | Rebuild `registry/catalog.json` from files (`wf rebuild-index`) | 0 |
 | `build-entity-index.py` | AST entity index from source repos | 0 |
-| `bootstrap-project.py` | Connect a new project to the fabric | 0 |
+| `bootstrap-project.py` | Connect a new project to the fabric (`wf bootstrap`) | 0 |
 | `ensure-local-model.py` | Check/download `llm.local_model` (`wf models ensure`) | 0 |
 | `review.py` | Staleness scan + re-verify loop (`wf review`) | 0 |
 | `export-wiki.py` | Human-layer wiki renderer (topics, projects, staleness, deep dives) | 0–1 per topic |

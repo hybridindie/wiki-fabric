@@ -11,7 +11,7 @@ gh repo clone hybridindie/wiki-fabric
 cd wiki-fabric
 uv venv && uv pip install -r pyproject.toml -e .[local]   # or uv sync
 uv run pytest tests/ -m "not live" -q
-uv run python scripts/cmd/lint.py .        # fabric self-check
+uv run wf lint                             # fabric self-check (the verb)
 ```
 
 Run the CLI straight from source — no shell scripts, no symlink needed:

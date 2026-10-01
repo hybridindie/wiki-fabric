@@ -27,17 +27,17 @@ promotion requires the human gate.
 
 ```bash
 # Dry-run the clustering (0 tokens — shows candidate clusters + judgments)
-python3 scripts/cmd/mine-promotions.py --dry-run     # add --judge to force, --no-judge to opt out
+wf mine promotions --dry-run     # add --judge to force, --no-judge to opt out
 
 # Generate dossiers for confirmed clusters
-python3 scripts/cmd/mine-promotions.py
+wf mine promotions
 
 # List dossiers, then promote after human review
-python3 scripts/cmd/promote.py --list
-python3 scripts/cmd/promote.py --promote <dossier-file>.md
+wf promote --list
+wf promote --promote <dossier-file>.md
 
 # Write usage counts onto pattern pages (deterministic, 0 tokens)
-python3 scripts/cmd/utility.py
+wf utility
 ```
 
 ## Procedure
@@ -80,12 +80,12 @@ Present each dossier with the 7-point checklist:
 
 **Compiler gate:** promotion refuses while the current compiler model lacks a
 recorded golden-corpus eval (G4). A model swap is a compiler change —
-re-evaluate first: `python3 scripts/eval/eval-stability.py --models <model> --record`.
+re-evaluate first: `wf eval stability --models <model> --record`.
 
 ### 5. Promote
 On approval:
 ```bash
-python3 scripts/cmd/promote.py --promote <dossier-file>.md
+wf promote --promote <dossier-file>.md
 wf lint
 ```
 This writes `patterns/pattern-<slug>.md` (or `anti-patterns/`, `skills/`) with

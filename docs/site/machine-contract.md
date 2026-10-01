@@ -56,7 +56,7 @@ edges and cites a claim for content.
 
 ### `registry/embed-index.json` — the optional semantic re-rank index
 
-Written by `scripts/lib/embed_index.py` when `integrations.embeddings.enabled`
+Written by the embeddings indexer (`scripts/lib/embed_index.py`) when `integrations.embeddings.enabled`
 and a query needs re-ranking: `{content_hash, model, n, vectors}` — a digest
 over all claim statements plus one vector per claim. Rebuilt only when the
 corpus fingerprint changes (the same no-op discipline as the export
@@ -74,7 +74,7 @@ interrupted run resumes from this file; completed pages are never redone.
 
 ### `registry/catalog.json` — what knowledge exists
 
-Rebuilt by `rebuild-index.py` from actual files (never hand-edited):
+Rebuilt by `wf rebuild-index` from actual files (never hand-edited):
 
 ```json
 {
@@ -110,7 +110,7 @@ every retrieval-relevant field a machine consumer needs; per-asset sidecars
 would triple Git-diff noise and create a second machine representation of
 each page — a second drift target. The invariant that keeps the registry
 honest: **it must be deletable and rebuildable from canonical files**
-(`rebuild-index.py`). The moment registry data can't be rebuilt, it has
+(`wf rebuild-index`). The moment registry data can't be rebuilt, it has
 become a hidden source of truth.
 
 **Schema versions are the compatibility boundary.** Machine surfaces carry
@@ -154,7 +154,7 @@ outside a repo). Enforced by lint's `RECEIPT` code.
 
 ### `registry/threads.json` → `wiki-fabric/threads-v1`
 
-Captured chats/PRs are graph nodes (#102): `rebuild-index.py` derives
+Captured chats/PRs are graph nodes (#102): `wf rebuild-index` derives
 `registry/threads.json` from `evidence/` alone — chat-session and
 pr-record nodes (session id, harness, project, files_touched, pr state)
 + claim→source provenance edges (`originated_in`/`decided_in`/
@@ -173,7 +173,7 @@ are tracked.
 
 `generated` (date-grain for byte-deterministic rebuilds), `total`, `counts`,
 `pages[]` (`id`, `stem`, `path`, `type`, `title`, `scope`, optional
-`description` + freshness/lifecycle fields). Rebuilt by `rebuild-index.py`;
+`description` + freshness/lifecycle fields). Rebuilt by `wf rebuild-index`;
 never hand-edited.
 
 ## Two linters, two roles
@@ -192,7 +192,7 @@ What belongs where:
   `okf.export_exclude` (paths skipped by `wf okf export`) and
   `okf.okflint_exclude` (extra paths merged into the okflint manifest at
   validate time). Edit your fabric.yaml — never the shipped base.
-- `lint.py` — the fabric's own rules, including SLOW-REGION and trust gates
+- `wf lint` (`scripts/cmd/lint.py`) — the fabric's own rules, including SLOW-REGION and trust gates
   that okflint knows nothing about.
 
 ### Compatibility policy

@@ -418,9 +418,9 @@ fabric's own pages never store credentials; lint has no secret scanner yet
 |-----------|------------------------|----------|
 | `ingest --extract-claims` on a **cloud-routed** repo | raw document text | your `base_url` endpoint |
 | `ingest --extract-claims` on a **`extract: local`** repo | nothing (on-device) | — |
-| `synthesize.py` cloud route | sanitized claim statements | your endpoint |
-| `synthesize.py` local route | nothing | — |
-| `mine-promotions.py` dossier | experience events (cloud route) | your endpoint |
+| `wf synthesize`-class stages (cloud route) | sanitized claim statements | your endpoint |
+| local-route stages | nothing | — |
+| dossier generation (cloud route) | experience events | your endpoint |
 | `wf query` | **nothing** — deterministic retrieval, 0 tokens | — |
 | `wf context` | **nothing** — deterministic compilation | — |
 | `wf models ensure` | model download request | huggingface.co (metadata + weights only) |

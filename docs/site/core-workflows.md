@@ -68,7 +68,7 @@ flowchart LR
     subgraph "Docs capture"
         D1["README, docs/, ADRs<br/>(what the system does)"] --> RAW
     end
-    subgraph "Git capture — capture-git.py"
+    subgraph "Git capture — wf capture --git"
         G1["PR descriptions<br/>+ review threads"] --> RAW
         G2["Issues<br/>(bug reports, feature debates)"] --> RAW
         G3["High-signal commits<br/>(reverts, fix/feat/perf)"] --> RAW
@@ -224,9 +224,9 @@ averaging it.
 
 ```mermaid
 flowchart LR
-    W["Project work<br/>(real coding, debugging)"] --> LE["log-experience.py<br/>(capture observation)"]
+    W["Project work<br/>(real coding, debugging)"] --> LE["wf log<br/>(capture observation)"]
     LE --> EE["Experience events<br/>(problem → intervention → outcome)"]
-    EE --> M["mine-promotions.py<br/>(cluster by concept overlap)"]
+    EE --> M["wf mine promotions<br/>(cluster by concept overlap)"]
     M --> PD["Promotion dossier<br/>(evidence + conditions + boundary)"]
     PD --> HR["Human review<br/>(7-point checklist)"]
     HR --> P["Pattern promoted<br/>(maturity 2, status: recommended)"]
@@ -277,11 +277,11 @@ surface as warnings when they detect the setup.
 
 ```mermaid
 flowchart LR
-    A["bash bootstrap-project.py<br/>/path/to/project"] --> B[".wiki-overlay.md<br/>(project config)"]
+    A["wf bootstrap<br/>/path/to/project"] --> B[".wiki-overlay.md<br/>(project config)"]
     A --> C["opencode.json<br/>(additive merge, never overwrite)"]
     A --> D["projects/<slug>/<br/>(namespace in fabric)"]
     B --> E["Capture sources<br/>(evidence/raw/<repo>/)"]
-    E --> F["ingest.py --extract-claims"]
+    E --> F["wf ingest --extract-claims"]
     F --> G["Claims in fabric"]
     G --> H["Project work →<br/>experience events →<br/>patterns compound"]
 ```
@@ -317,10 +317,10 @@ Keeping the fabric current is mostly deterministic. (Graphify — an optional in
 ```mermaid
 flowchart TD
     subgraph "Keep Fabric Current"
-        RI["rebuild-index.py<br/>(catalog from actual files)"]
-        LINT["lint.py<br/>(0 errors gate)"]
-        EVAL["eval.py<br/>(golden corpus regression)"]
-        PD2["propose-domains.py<br/>(discover new domains)"]
+        RI["wf rebuild-index<br/>(catalog from actual files)"]
+        LINT["wf lint<br/>(0 errors gate)"]
+        EVAL["wf eval golden<br/>(golden corpus regression)"]
+        PD2["wf propose-domains<br/>(discover new domains)"]
     end
 
     subgraph "Graphify Integration (optional)"

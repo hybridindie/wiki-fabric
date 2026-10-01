@@ -156,7 +156,7 @@ The fabric's privacy tiering promises "sensitive repos extract on-device" —
 which is only honest if on-device models can actually extract claims at
 governance-grade quality. That's a testable claim, so it was tested. The
 findings below are recorded in `registry/log.md` with reproducible commands
-(`eval.py`, `eval-stability.py`).
+(`wf eval golden`, `wf eval stability`).
 
 ### The benchmark
 
@@ -216,7 +216,7 @@ a standard install) — grep for the model id to find the eval block:
 grep -B2 -A8 "gemma4:e4b-fixed" ~/.local/share/wiki-fabric/registry/log.md
 ```
 
-Each entry carries the command that produced it (`eval.py`, `eval-stability.py --record`),
+Each entry carries the command that produced it (`wf eval golden`, `wf eval stability --record`),
 so any number can be re-run to verify.
 
 ### Policy consequences
@@ -227,7 +227,7 @@ so any number can be re-run to verify.
   promotion.
 - `llm.local_model` defaults are models that **passed** the corpus; swapping
   them for untested small models is exactly the G4 lesson — re-run
-  `eval.py` + `eval-stability.py --record` first.
+  `wf eval golden` + `wf eval stability --record` first.
 - Extraction quality varies more by *prompt contract* than by model within a
   capability class — that's why the prompt is versioned, and prompt changes
   require re-baselining (the granularity-spec change was re-baselined against
@@ -260,7 +260,7 @@ pre-fetch with `wf models ensure`. Install the backends with
 `pip install -e ".[local]"`. GGUF is the recommended testing default: one
 model format runs identically on every platform.
 
-**The gate:** `promote.py` and `mine-promotions.py` **refuse to run** unless
+**The gate:** `wf promote` and `wf mine promotions` **refuse to run** unless
 `registry/log.md` contains a recorded compiler eval for the current compiler
 model. This enforces the G4 lesson — model swaps are compiler changes, and
 compiler changes require re-evaluation — as a hard gate instead of a docs

@@ -95,7 +95,7 @@ related_sessions:          # explicit continuations
   - "ses_other"
 ```
 
-`rebuild-index.py` derives `registry/threads.json` from `evidence/` alone:
+`wf rebuild-index` derives `registry/threads.json` from `evidence/` alone:
 nodes (sessions, PR records) + claim→source provenance edges (the
 `originated_in`/`decided_in`/`validated_in` relations on claims) +
 session→session continuity edges. `wf thread <id>` walks it; mining uses

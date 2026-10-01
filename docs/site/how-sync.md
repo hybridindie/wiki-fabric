@@ -50,7 +50,7 @@ Four design choices make this safe to leave on:
 The hook cycle also runs (`graphify-bridge.py
 --import → --enrich → --diff`) after code commits when the integration is
 active, and (4) writes the pending-decision manifest
-(`registry/pending-gate.md` via `gate.py --write-manifest`) so any harness's
+(`registry/pending-gate.md` via `wf gate --write-manifest`) so any harness's
 session-start can read pending human decisions without running commands.
 The harness fabric itself also self-captures in CI — an opt-in workflow
 (`fabric-refresh.yml`, gated on the `WIKI_FABRIC_REFRESH=1` repo variable)

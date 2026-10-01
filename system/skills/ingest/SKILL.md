@@ -7,7 +7,7 @@ description: Ingest a raw source into the evidence fabric via `wf ingest` — cr
 # Ingest Skill
 
 Runs the ingest pipeline from AGENTS.md. CLI-first: use `wf ingest` (or
-`python3 scripts/cmd/ingest.py`) — the script handles source records, hashes, and
+`wf ingest`) — the script handles source records, hashes, and
 claim extraction; the skill adds judgment for classification and change-sets.
 
 ## When to Use
@@ -65,7 +65,7 @@ classification is a self-preference risk — the model that extracted the claim
 is grading its own work. Run:
 
 ```bash
-python3 scripts/cmd/verify-effects.py <new-claim>.md ...
+wf verify-effects <new-claim>.md ...
 # writes <claim>.effects.json (route, per-pair verdicts, confidence)
 ```
 
@@ -76,7 +76,7 @@ not the decision. When the tier is disabled, step 4 stands alone.
 
 ### 4a. If graphify is ACTIVE: enrich claims with code provenance
 When `fabric.yaml` has `integrations.graphify.enabled: true`, run
-`python3 scripts/harness/graphify-bridge.py --enrich` after writing claims — this
+`wf graphify enrich` after writing claims — this
 attaches `code_symbols` and `graph_edges` (calls/imports/rationale_for) to
 claims, linking documentation to the implementing code. When graphify is
 inactive, skip this step: claims carry only source_refs (locator + quote).
@@ -127,7 +127,7 @@ Apply manifest to canonical pages; run `rebuild-index.py`; then one commit:
 - Change-set directory ready for review
 - Updated `registry/catalog.json` (via rebuild-index.py### 5. If graphify is ACTIVE: enrich claims with code provenance
 When `fabric.yaml` has `integrations.graphify.enabled: true`, run
-`python3 scripts/harness/graphify-bridge.py --enrich` after writing claims — this
+`wf graphify enrich` after writing claims — this
 attaches `code_symbols` and `graph_edges` (calls/imports/rationale_for) to
 claims, linking documentation to the implementing code. When graphify is
 inactive, skip this step: claims carry only source_refs (locator + quote).

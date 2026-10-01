@@ -28,7 +28,7 @@ Available skills (wf skill <name> prints the full procedure):
   ingest     Ingest a raw source into the evidence fabric via `wf ingest` —
              creates source record, faithful summary, extracts claims, opens
              a change-set for review...
-  promote    Run the promotion pipeline via `mine-promotions.py` + `promote.py`
+  promote    Run the promotion pipeline via `wf mine promotions` + `wf promote`
              — cluster experience-events deterministically, generate dossiers...
 
 $ wf skill ingest      # prints the procedure (agents: read BEFORE the first
