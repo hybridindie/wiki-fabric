@@ -39,15 +39,15 @@ jobs:
         run: |
           cd harness
           uv venv
-          uv pip install -r requirements.txt pyyaml
-          WIKI_FABRIC_DIR="$(pwd)/../" uv run python scripts/cmd/lint.py ../corpuscorpus --okf
-          WIKI_FABRIC_DIR="$(pwd)/../" uv run python scripts/cmd/lint.py ../corpus
+          uv pip install pyyaml openai anthropic  # deps from pyproject (no requirements.txt)
+          WIKI_FABRIC_DIR="$(pwd)/../" uv run wf lint ../corpus --okf
+          WIKI_FABRIC_DIR="$(pwd)/../" uv run wf lint ../corpus
 
       - name: Catalog freshness (rebuild must be a no-op)
         run: |
           cd harness
           cp ../corpus/registry/catalog.json /tmp/catalog-before.json
-          WIKI_FABRIC_DIR="$(pwd)/../" uv run python scripts/cmd/rebuild-index.py || true
+          WIKI_FABRIC_DIR="$(pwd)/../" uv run wf rebuild-index || true
           diff <(python3 -c "import json;d=json.load(open('/tmp/catalog-before.json'));print(json.dumps(d,sort_keys=True))") \
                <(python3 -c "import json;d=json.load(open('../corpus/registry/catalog.json'));print(json.dumps(d,sort_keys=True))") \
           && echo "catalog consistent" || (echo "catalog.json is stale — run rebuild-index (WIKI_FABRIC_DIR=vault) and commit" && exit 1)

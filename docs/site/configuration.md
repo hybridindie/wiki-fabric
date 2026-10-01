@@ -104,7 +104,7 @@ integrations:
     model: all-MiniLM-L6-v2
 
 # ─── Domain taxonomy ────────────────────────────────────────────────────────
-# Drives classification + context scoping. Grow with propose-domains.py.
+# Drives classification + context scoping. Grow with: wf propose-domains
 domains:
   agent-systems:
     signals: [agent, mcp, fastmcp, opencode, claude]

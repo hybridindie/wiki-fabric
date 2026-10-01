@@ -27,6 +27,6 @@ jobs:
 
         # compile on the next human/agent ingest pass
 
-        uv run python scripts/cmd/capture.py wiki-fabric --quiet || true
+        uv run wf capture wiki-fabric --quiet || true
 
-        uv run python scripts/cmd/lint.py . || true'
+        uv run wf lint || true'

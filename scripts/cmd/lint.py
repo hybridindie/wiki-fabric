@@ -870,6 +870,18 @@ def main():
         print(sha256(positional[1]))
         return
 
+    # A lint target that doesn't exist must NOT read as "clean" — CI gates
+    # (corpus lint workflow) would pass on a mis-resolved path (audit
+    # finding, 2026-09-30: relative `../corpus` + wrong cwd = pages 0, rc 0).
+    if not vault.is_dir():
+        print(f"lint: target does not exist: {vault}", file=sys.stderr)
+        print("1 error(s), 0 warning(s)")
+        return 1
+    if only_okf is False and not any(vault.rglob("*.md")):
+        print(f"lint: no markdown pages under {vault} — empty corpus isn't clean",
+              file=sys.stderr)
+        return 1
+
     # --okf: OKF v0.2 conformance floor (§11). Suppresses wiki-fabric profile
     # checks (orphans, hash drift, maturity gates) entirely.
     if only_okf:

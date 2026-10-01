@@ -141,4 +141,4 @@ domains:
     signals: [agent, mcp, fastmcp, opencode, claude]
   web-systems:
     signals: [fastapi, flask, react, nextjs, supabase, postgresql]
-  # Add domains as your evidence grows (propose-domains.py will suggest them)
+  # Add domains as your evidence grows (wf propose-domains will suggest them)

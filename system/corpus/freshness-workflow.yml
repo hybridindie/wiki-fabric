@@ -51,7 +51,7 @@ jobs:
           cd harness
           uv venv
           uv pip install pyyaml openai anthropic
-          WIKI_FABRIC_DIR="$(pwd)/../" uv run python scripts/cmd/freshness-job.py || DRIFT=1
+          WIKI_FABRIC_DIR="$(pwd)/../" uv run wf freshness || DRIFT=1
           echo "WIKI_FABRIC_DRIFT=${DRIFT:-0}" >> "$GITHUB_ENV"
 
       - name: Commit refreshed evidence
