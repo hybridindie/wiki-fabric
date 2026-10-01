@@ -39,8 +39,12 @@ jobs:
       - name: Stability evaluation (deterministic gates)
         run: uv run wf eval stability --skip-llm
 
-      - name: Fabric lint (0 errors gate)
-        run: uv run wf lint
+      - name: Fabric lint (0 errors gate, seeded corpus — the repo carries no
+          content corpus; the smoke covers the empty case)
+        run: |
+          SEED=$(mktemp -d)
+          uv run wf install --dir "$SEED" >/dev/null
+          WIKI_FABRIC_DIR="$SEED" uv run wf lint "$SEED/corpus"
 
       - name: OKF v0.2 conformance (floor gate)
         if: matrix.python-version == '3.12'
