@@ -125,6 +125,59 @@ def _load_policy_profile(name="default-coding-agent"):
 args_judge_borderline = False  # --judge-borderline in main() (#29 item 4)
 
 
+def _page_domains(pg):
+    """The page's declared domain(s): `domain: [a, b]` (list/str) or null.
+    Declaration, not path — pages under domains/ derive scope by path upstream."""
+    d = pg["fm"].get("domain") or ()
+    if isinstance(d, str):
+        return {d.strip().strip("[]").split(",")[0].strip()}
+    if isinstance(d, list):
+        return {str(x).strip() for x in d if str(x).strip()}
+    return set()
+
+
+def _ontology_domains(pages):
+    """Domain names known to the ontology (domains/ontology.md '## Domains'
+    bullets), with declared aliases folded (Aliases map: `alias -> canonical`).
+    An alias list lets a domain carry alternate spellings (godot <- godot-systems)
+    without re-tagging pages; the canonical name is what matches. Empty ontology
+    → empty set (pages with domain: stay global until domains are approved)."""
+    names, alias_map = set(), {}
+    for pg in pages:
+        if pg["posix"] == "domains/ontology.md":
+            in_aliases = False
+            for line in pg["body"].splitlines():
+                s = line.strip()
+                if s.startswith("## "):
+                    in_aliases = s.strip("# ").lower() == "aliases"
+                    continue
+                if in_aliases:
+                    m = re.match(r"-\s+`?([a-z0-9-]+)`?\s*(?:->|←)\s*`?([a-z0-9-]+)`?", s)
+                    if m:
+                        alias_map[m.group(1)] = m.group(2)
+                    continue
+                m = re.match(r"- \*\*([a-z0-9-]+)\*\*", s)
+                if m:
+                    names.add(m.group(1))
+            break
+    names |= alias_map.keys()  # aliases are matchable spellings
+    _ontology_domains.aliases = alias_map
+    return names
+
+
+def _page_domain_canonical(pg, domain_names):
+    """The page's declared domains, resolved through the ontology's alias map —
+    returns CANONICAL names only. A declaration naming an unknown/aliasless
+    domain binds to nothing (the vocabulary gate stays honest)."""
+    alias_map = getattr(_ontology_domains, "aliases", {})
+    out = set()
+    for d in _page_domains(pg):
+        c = alias_map.get(d, d)
+        if c in domain_names:
+            out.add(c)
+    return out
+
+
 def select_context(pages, task, paths, project, today, max_items=20):
     """Deterministic selection: project > domain > global, each with a reason.
 
@@ -134,6 +187,7 @@ def select_context(pages, task, paths, project, today, max_items=20):
     """
     task_toks = tokens(task)
     path_list = [p.strip().strip("/").lower() for p in paths if p.strip()]
+    domain_names = _ontology_domains(pages)
     selected, excluded = [], []
 
     def body_tokens(page):
@@ -235,14 +289,31 @@ def select_context(pages, task, paths, project, today, max_items=20):
             if len(toks) >= 1 and any(len(t) >= 4 for t in toks):
                 reason = f"domain match: {', '.join(sorted(toks)[:3])}"
                 priority = "P2-domain"
+        elif scope == "global" and (_page_domain_canonical(pg, domain_names)
+                                    or pg["type"] == "ontology"):
+            # DOMAIN-BOUND global page: a concept/pattern whose `domain:` field
+            # names an ontology-known domain (or the ontology itself) is a
+            # domain-tier artifact by declaration — the ontology is the
+            # vocabulary, the field is the binding. Pages merely STORED in
+            # concepts/ are global (path-scope); the declaration is what
+            # promotes them into P2. This closes the bubble-up gap: all 34
+            # concepts carried domain: but scope-derivation is path-only.
+            toks = task_toks & (body_tokens(pg) | tokens(pg["stem"]))
+            if len(toks) >= 1 and any(len(t) >= 4 for t in toks):
+                reason = f"domain match: {', '.join(sorted(toks)[:3])}"
+                priority = "P2-domain"
         else:  # global
             # Policies/patterns apply broadly: include the significant ones
-            # (patterns, anti-patterns, skills) that textually relate OR are canonical
+            # that textually relate. Types derive from the P3 TIER LIST (single
+            # truth — the hardcoded ('pattern','anti-pattern','skill') tuple
+            # omitted 'concept', which the tier list declares, so every concept
+            # silently never scored: no reason, no exclusion record).
             status = str(fm.get("status") or "").lower()
-            if pg["type"] in ("pattern", "anti-pattern", "skill") and status in ("", "recommended", "standard", "candidate"):
+            p3_types = next((set(types) for t, types in tiers if t.endswith("global")), set())
+            if pg["type"] in p3_types and status in ("", "recommended", "standard", "candidate", "proposed", "supported"):
                 toks = task_toks & (body_tokens(pg) | tokens(pg["stem"]))
                 if len(toks) >= 1 and any(len(t) >= 4 for t in toks):
-                    reason = f"global pattern match: {', '.join(sorted(toks)[:3])}"
+                    reason = f"global match ({pg['type']}): {', '.join(sorted(toks)[:3])}"
                     priority = "P3-global"
 
         if priority:

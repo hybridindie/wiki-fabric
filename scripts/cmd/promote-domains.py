@@ -10,6 +10,7 @@
 #   python3 scripts/cmd/promote-domains.py --apply <dossier-file>      # merge one
 #   python3 scripts/cmd/promote-domains.py --apply <dossier-file> --dry-run
 
+import re
 import sys
 import sys as _s, pathlib as _p
 _HERE = _p.Path(__file__).resolve().parent
@@ -71,6 +72,31 @@ def add_domain_to_ontology(domain, desc):
     return True
 
 
+def add_alias_to_ontology(alias, canonical):
+    """Record an alias spelling under '## Aliases' (alias -> canonical). The
+    context-manifest domain tier folds aliases before matching, so pages
+    declaring the alias bind to the canonical domain without re-tagging.
+    Returns False (silently fine) when already recorded."""
+    if not ONTOLOGY_PATH.exists():
+        return False
+    text = ONTOLOGY_PATH.read_text(encoding="utf-8")
+    if re.search(rf"^\s*-\s*`?{re.escape(alias)}`?\s*(?:->|←)", text, re.MULTILINE):
+        return False
+    if "## Aliases" not in text:
+        text = text.replace("## Domains", "## Aliases\n\n## Domains", 1)
+    lines = text.split("\n")
+    idx = None
+    for i, line in enumerate(lines):
+        if line.strip() == "## Aliases":
+            idx = i + 1
+            break
+    if idx is None:
+        return False  # ontology lacks both sections: malformed, refuse
+    lines.insert(idx, f"- `{alias}` -> `{canonical}`")
+    ONTOLOGY_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return True
+
+
 def apply_proposal(dossier_path, dry_run=False):
     from fabric_config import actor
     fm, body = parse_frontmatter(dossier_path)
@@ -78,6 +104,7 @@ def apply_proposal(dossier_path, dry_run=False):
         print(f"Not a pending proposal (status={fm.get('status')})")
         return False
     domain = str(fm.get("domain", "")).strip()
+    aliases = [a.strip() for a in (fm.get("aliases") or []) if str(a).strip()]
     if not domain:
         print("No 'domain' field in dossier frontmatter")
         return False
@@ -88,6 +115,9 @@ def apply_proposal(dossier_path, dry_run=False):
     added = add_domain_to_ontology(domain, desc)
     if not added:
         print(f"Domain '{domain}' already in ontology; marking dossier merged anyway")
+    for a in aliases:
+        if add_alias_to_ontology(a, domain):
+            print(f"  alias recorded: {a} -> {domain}")
     _cfg = get_config()
     _human = actor(_cfg, "human")
     fm["status"] = "merged"
