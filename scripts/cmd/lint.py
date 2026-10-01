@@ -880,6 +880,7 @@ def main():
     if only_okf is False and not any(vault.rglob("*.md")):
         print(f"lint: no markdown pages under {vault} — empty corpus isn't clean",
               file=sys.stderr)
+        print("1 error(s), 0 warning(s)")
         return 1
 
     # --okf: OKF v0.2 conformance floor (§11). Suppresses wiki-fabric profile
