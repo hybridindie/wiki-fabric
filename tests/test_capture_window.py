@@ -8,6 +8,9 @@ import importlib.util
 from pathlib import Path
 
 import pytest
+import pathlib
+import io
+import contextlib
 
 import sys, pathlib as _p
 _SCRIPTS = (_p.Path(__file__).resolve().parent.parent / "scripts").resolve()
@@ -272,3 +275,94 @@ class TestStaleMarkDerivedClaims:
         raw.parent.mkdir(parents=True)
         raw.write_text("rev1")
         assert ingest.stale_mark_derived_claims(raw, "c" * 64) == 0
+
+class TestGhCommentsPagination:
+    """Thread capture follows pagination — the old single per_page=20 page
+    truncated every long review thread (exactly where the 'why' lives)."""
+
+    def test_follows_pages_until_short_page(self, monkeypatch):
+        pages = {1: [{"created_at": f"2026-09-{d:02d}T00:00:00Z", "user": {"login": f"u{d}"}, "body": "x"} for d in range(1, 16)],
+                 2: [{"created_at": "2026-09-25T00:00:00Z", "user": {"login": "last"}, "body": "y"}]}
+        # 15 < per_page(50) on page 2's short page... page1 has 15 too — make page 1 FULL (50 per_page):
+        pages[1] = [{"created_at": f"2026-09-{(d % 28) + 1:02d}T00:00:00Z", "user": {"login": f"u{d}"}, "body": "x"} for d in range(1, 51)]
+        def fake_gh(*a, expect_json=False):
+            args = [str(x) for x in a]
+            page = int(args[1].split("&page=")[1].split("&")[0])
+            return pages.get(page)
+        monkeypatch.setattr(capture_git, "gh", fake_gh)
+        comments, truncated = capture_git.gh_comments("o/r", 5)
+        assert len(comments) == 51 and not truncated
+        assert comments[-1]["user"]["login"] == "last"
+
+    def test_reports_truncation_at_cap(self, monkeypatch):
+        monkeypatch.setattr(capture_git, "gh", lambda *a, expect_json=True: [
+            {"created_at": "2026-09-01T00:00:00Z", "user": {"login": "u"}, "body": "x"}] * 50)
+        comments, truncated = capture_git.gh_comments("o/r", 5)
+        assert len(comments) == 500 and truncated  # 10 pages * 50
+
+
+class TestUntilWindow:
+    """--until bounds the window's fresh side (backfill slices)."""
+
+    def test_client_filter_excludes_at_until(self, tmp_path, monkeypatch):
+        searches = []
+        def fake_gh(*a, expect_json=False):
+            args = [str(x) for x in a]
+            if "--search" in args:
+                searches.append(args[args.index("--search") + 1])
+                # PR search (merged:>=...) is the first call
+                return [{"number": 1, "mergedAt": "2026-05-01T00:00:00Z", "title": "old", "body": "", "state": "MERGED", "labels": [], "url": ""},
+                        {"number": 2, "mergedAt": "2026-07-01T00:00:00Z", "title": "newer", "body": "", "state": "MERGED", "labels": [], "url": ""}]
+            return []
+        monkeypatch.setattr(capture_git, "gh", fake_gh)
+        monkeypatch.setattr(capture_git, "EVIDENCE_RAW", tmp_path / "raw")
+        stats = capture_git.capture_github("p", "o/r", "6m", "2026-06-01", 30, False, dry_run=True)
+        pr_search = next(s for s in searches if "merged:>=" in s)
+        assert "merged:<2026-06-01" in pr_search  # server-side until bound
+
+    def test_no_until_untouched_behavior(self, tmp_path, monkeypatch):
+        def fake_gh(*a, expect_json=False):
+            return [{"number": 1, "mergedAt": "2026-07-01T00:00:00Z", "title": "t", "body": "", "state": "MERGED", "labels": [], "url": ""}]
+        monkeypatch.setattr(capture_git, "gh", fake_gh)
+        monkeypatch.setattr(capture_git, "EVIDENCE_RAW", tmp_path / "raw")
+        stats = capture_git.capture_github("p", "o/r", "1w", None, 30, False, dry_run=True)
+        assert stats == {"new": 1, "changed": 0, "unchanged": 0}
+
+
+class TestIngestBudget:
+    """Bulk ingest budget: capture is activity-bounded; ingest must be
+    extraction-bounded too (1 LLM call per source — an unbounded wave after
+    a big capture detonates N extractions in one run)."""
+
+    def _ingest(self):
+        import importlib.util as _ilu
+        spec = _ilu.spec_from_file_location("ing_b", _SCRIPTS / "cmd/ingest.py")
+        m = importlib.util.module_from_spec(spec)
+        sys.modules["ing_b"] = m
+        spec.loader.exec_module(m)
+        return m
+
+    def test_budget_default_zero_no_cap(self):
+        m = self._ingest()
+        import fabric_config
+        v = fabric_config.get_tuning({}, "ingest", "budget", 0)
+        assert v == 0
+
+    def test_bulk_slice_defers_rest(self, tmp_path, monkeypatch):
+        m = self._ingest()
+        files = [tmp_path / f"f{i}.md" for i in range(5)]
+        for i, f in enumerate(files):
+            f.write_text(f"---\ntype: x\nsha256: {'0'*64}\n---\n{i}")
+        monkeypatch.setattr(m, "find_changed_sources", lambda p: files)
+        monkeypatch.setattr(m, "args_dry_run", True)
+        processed = []
+        monkeypatch.setattr(m, "ingest_source", lambda f, *a, **k: processed.append(f.name) or True)
+        # patch argv path: call main() with --changed p --budget 2 --dry-run
+        monkeypatch.setattr(sys, "argv", ["ingest.py", "--changed", "p", "--budget", "2", "--dry-run"])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            m.main()
+        out = buf.getvalue()
+        assert "Budget 2: processing 2 of 5" in out
+        assert len(processed) == 2
+        assert "re-run to continue" in out

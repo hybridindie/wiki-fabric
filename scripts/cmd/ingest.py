@@ -25,7 +25,7 @@ import subprocess
 from pathlib import Path
 from datetime import date
 
-from fabric_config import get_config, VAULT_ROOT, actor, get_stage_route, is_local_route, ensure_local_model, get_local_model
+from fabric_config import get_config, VAULT_ROOT, actor, get_stage_route, is_local_route, ensure_local_model, get_local_model, get_tuning
 # Extraction layer lives in extract_backends (prompt, LLM backends, JSON
 # parsing/repair, locator verification). Re-exported here for backward
 # compatibility (tests + synthesize/eval import from ingest).
@@ -557,10 +557,21 @@ def main():
     parser.add_argument("--model", default=None, help="LLM model (default: $WIKI_LLM_MODEL or qwen2.5-coder:7b)")
     parser.add_argument("--workers", type=int, default=int(os.environ.get("WIKI_INGEST_WORKERS", "1")),
                         help="Concurrent extraction threads (default 1; cloud tiers tolerate 6-12)")
+    parser.add_argument("--budget", type=int, default=None,
+                        help="Max sources to process this run (bulk modes; default from tuning.ingest.budget). Excess stays for the next run — capture is bounded, ingest must be too.")
     args = parser.parse_args()
 
     global args_dry_run
     args_dry_run = args.dry_run
+
+    budget = args.budget
+    if budget is None:
+        try:
+            budget = int(get_tuning(get_config(), "ingest", "budget", 0) or 0)
+        except Exception:
+            budget = 0
+    if budget and budget < 0:
+        budget = 0
 
     if args.reclaim:
         n = reclaim_orphans(args.reclaim, dry_run=args.dry_run)
@@ -580,6 +591,11 @@ def main():
         if not pending:
             print(f"No pending sources for {project} — nothing to extract")
             return
+        if budget and len(pending) > budget:
+            deferred = len(pending) - budget
+            pending = pending[:budget]
+            print(f"Budget {budget}: processing {budget} of {budget + deferred} pending "
+                  f"(re-run to continue; each run is anti-loop safe)")
         print(f"=== Claim-extracting {len(pending)} pending sources for {project} "
               f"(workers: {args.workers}) ===\n")
         if args.workers <= 1 or args.dry_run:
@@ -615,6 +631,11 @@ def main():
         if not changed:
             print(f"No new or changed sources under evidence/raw/{project}/ — nothing to ingest")
             return
+        if budget and len(changed) > budget:
+            deferred = len(changed) - budget
+            changed = changed[:budget]
+            print(f"Budget {budget}: processing {budget} of {budget + deferred} new/changed "
+                  f"(re-run to continue; each run is anti-loop safe)")
         print(f"=== Ingesting {len(changed)} new/changed sources for {project} "
               f"(workers: {args.workers}) ===\n")
         if args.workers <= 1 or args.dry_run:

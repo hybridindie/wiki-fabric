@@ -33,11 +33,16 @@ Per-type required fields. A page lacking required fields fails `scripts/cmd/lint
 
 | Field | Notes |
 |---|---|
-| `kind` | `doc`, `article`, `chat-transcript`, `test-log`, `pdf`, `video` |
+| `kind` | `doc`, `article`, `chat-transcript`, `chat-session`, `pr-record`, `commit`, `test-log`, `pdf`, `video` |
 | `source_path` | relative path into `raw/` |
 | `sha256` | content hash of the raw file (recomputed on refresh) |
 | `captured` | date |
 | `summary` | `[[link]]` to the `source-summary` |
+
+Capture-specific source kinds:
+- **`pr-record`** (capture-git, github route): adds `source_repo` (`owner/name`), `pr` (number), `pr_state`, `merged_at` (date, when merged), quoted `title`. Graph nodes for threads (#102).
+- **`commit`** (capture-git, local route): metadata only — the commit sha-truncated stem + date + message body; no extra fields beyond `source_path`/`sha256`.
+- **`chat-session`** (capture-chat): adds `session` (id), `harness` (source harness), `session_started`, `files_touched`, `related_sessions`. The mutable thread layer under `evidence/raw/<slug>/chats/`.
 
 ## `source-summary`
 

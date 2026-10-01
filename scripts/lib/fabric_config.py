@@ -179,6 +179,13 @@ _DEFAULTS = {
             # shrinking the window, never truncating silently. "all" disables.
             "since": "6m", "budget": 30,
         },
+        "ingest": {
+            # Max sources per bulk ingest run (--changed/--pending; 0 = no
+            # cap). The extraction mirror of the capture window: one big
+            # capture wave can't detonate N unbounded LLM extractions in a
+            # single run. Re-run continues; anti-loop keeps it safe.
+            "budget": 0,
+        },
         "synthesize": {"min_claims": 2},
         "export": {"topic_min_claims": 6},
     },

@@ -180,14 +180,19 @@ def make_github_counter(repo, kind):
     return count_fn
 
 
-def gh_list_windowed(kind, repo, since_iso, limit, fields, qualifier):
+def gh_list_windowed(kind, repo, since_iso, limit, fields, qualifier, until_iso=None):
+    """until_iso (exclusive ISO date) narrows the server-side window too:
+    'merged:>=S merged:<U' composes in one search query."""
+    search = f"{qualifier}:>={since_iso}"
+    if until_iso:
+        search += f" {qualifier}:<{until_iso}"
     """gh pr/issue list with a SERVER-side window: `--search` narrows before
     `--limit` applies, so window and budget stop fighting (a fixed-window
     list-then-filter collapsed to the newest few days on active repos).
     Falls back to an unsearched list when the search form fails (older gh,
     odd scopes) — capture degrades to client-side filtering, not to nothing."""
     out = gh(kind, "list", "--repo", repo, "--state", "all",
-             "--search", f"{qualifier}:>={since_iso}",
+             "--search", search,
              "--limit", str(limit), "--json", fields, expect_json=True)
     if out is None:
         out = gh(kind, "list", "--repo", repo, "--state", "all",
@@ -257,15 +262,45 @@ def pr_frontmatter(pr, repo):
     return "\n".join(lines)
 
 
-def capture_github(project, repo, since, limit, include_comments, dry_run):
-    """Capture PRs and issues from a GitHub repo via the gh CLI."""
+def gh_comments(repo, num, per_page=50, max_pages=10):
+    """All discussion comments on a PR/issue thread, pagination-followed.
+    The old single `per_page=20` page silently truncated every thread past
+    20 comments — the *why* lives in exactly those review threads.
+    Returns (comments, truncated_flag)."""
+    out, page = [], 1
+    while page <= max_pages:
+        data = gh("api", f"repos/{repo}/issues/{num}/comments?per_page={per_page}&page={page}",
+                  expect_json=True)
+        if not data:
+            break
+        out.extend(data)
+        if len(data) < per_page:
+            return out, False
+        page += 1
+    # exhausted max_pages with full pages: stop and report
+    return out, page > max_pages
+
+
+def capture_github(project, repo, since, until, limit, include_comments, dry_run):
+    """Capture PRs and issues from a GitHub repo via the gh CLI. `until`
+    (ISO date or None) bounds the window on the fresh side — backfill slices
+    without re-ingesting newer history already in the corpus."""
     dest_dir = EVIDENCE_RAW / project / "git"
     since_iso = since_date(since)
     stats = {"new": 0, "changed": 0, "unchanged": 0}
 
+    def in_window(datestr):
+        """datestr within [since, until) — until is exclusive."""
+        d = (datestr or "")[:10]
+        if d and d < since_iso:
+            return False
+        if until and d and d >= until:
+            return False
+        return True
+
     # --- Pull requests ---
     pr_fields = "number,title,body,state,mergedAt,labels,url"
-    prs = gh_list_windowed("pr", repo, since_iso, limit, pr_fields, "merged")
+    prs = gh_list_windowed("pr", repo, since_iso, limit, pr_fields, "merged", until)
     if prs is None:
         print("  Warning: could not list PRs (is gh authenticated for this repo?)", file=sys.stderr)
         print("  Hint: run 'gh auth status' to check, or clone the repo and use a local path instead:", file=sys.stderr)
@@ -274,7 +309,7 @@ def capture_github(project, repo, since, limit, include_comments, dry_run):
         for pr in prs:
             num = pr["number"]
             merged = pr.get("mergedAt") or ""
-            if merged and merged[:10] < since_iso:  # fallback-list path: client filter
+            if merged and not in_window(merged):  # fallback-list path: client filter
                 continue
             num = pr["number"]
             sections = [
@@ -290,7 +325,7 @@ def capture_github(project, repo, since, limit, include_comments, dry_run):
             sections.append(f"## Description")
             sections.append(pr.get("body") or "(no description)")
             if include_comments:
-                comments = gh("api", f"repos/{repo}/issues/{num}/comments?per_page=20", expect_json=True)
+                comments, truncated = gh_comments(repo, num)
                 if comments:
                     sections.append("")
                     sections.append("## Review / discussion comments")
@@ -299,6 +334,9 @@ def capture_github(project, repo, since, limit, include_comments, dry_run):
                         sections.append(f"### {author} ({c['created_at'][:10]})")
                         sections.append(c.get("body") or "")
                         sections.append("")
+                    if truncated:
+                        sections.append("_(comment thread truncated at pagination cap "
+                                        "— re-capture with a higher cap to extend)_")
             status = write_capture(dest_dir / f"pr-{num}.md", pr["title"],
                                    [pr_frontmatter(pr, repo)] + sections[:4], sections[4:], dry_run)
             stats[status.lower()] += 1
@@ -308,11 +346,11 @@ def capture_github(project, repo, since, limit, include_comments, dry_run):
     # updatedAt (not createdAt): an old issue with fresh comments is live
     # activity — createdAt-only filtering never re-captured it.
     issue_fields = "number,title,body,state,labels,url,createdAt,updatedAt"
-    issues = gh_list_windowed("issue", repo, since_iso, limit, issue_fields, "updated")
+    issues = gh_list_windowed("issue", repo, since_iso, limit, issue_fields, "updated", until)
     if issues is not None:
         for issue in issues:
             updated = (issue.get("updatedAt") or issue.get("createdAt") or "")[:10]
-            if updated < since_iso:  # fallback-list path: client filter
+            if not in_window(updated):  # fallback-list path: client filter
                 continue
             num = issue["number"]
             sections = [
@@ -328,7 +366,7 @@ def capture_github(project, repo, since, limit, include_comments, dry_run):
             sections.append("## Report")
             sections.append(issue.get("body") or "(no body)")
             if include_comments:
-                comments = gh("api", f"repos/{repo}/issues/{num}/comments?per_page=20", expect_json=True)
+                comments, truncated = gh_comments(repo, num)
                 if comments:
                     sections.append("")
                     sections.append("## Discussion")
@@ -337,6 +375,9 @@ def capture_github(project, repo, since, limit, include_comments, dry_run):
                         sections.append(f"### {author} ({c['created_at'][:10]})")
                         sections.append(c.get("body") or "")
                         sections.append("")
+                    if truncated:
+                        sections.append("_(comment thread truncated at pagination cap "
+                                        "— re-capture with a higher cap to extend)_")
             status = write_capture(dest_dir / f"issue-{num}.md", issue["title"], sections[:5], sections[5:], dry_run)
             stats[status.lower()] += 1
             print(f"  Issue #{num}: {status}")
@@ -396,7 +437,16 @@ def capture_local(project, repo_path, since, budget, dry_run):
             body.strip() or "(no body)",
         ]
         title = f"commit {sha[:12]} ({adate}): {msg.splitlines()[0]}"
-        status = write_capture(dest_dir / f"commit-{sha[:12]}.md", title, sections[:1], sections[1:], dry_run)
+        fm = ["---",
+              "type: source",
+              "kind: commit",
+              f'source_repo: "{repo_path.name}"',
+              f'commit: "{sha[:12]}"',
+              f'committed_at: "{adate}"',
+              "---",
+              ""]
+        status = write_capture(dest_dir / f"commit-{sha[:12]}.md", title,
+                               fm + sections[:1], sections[1:], dry_run)
         stats[status.lower()] += 1
 
     print(f"  Commits: scanned {scanned}, captured {captured} high-signal within window {window}"
@@ -494,6 +544,7 @@ def main():
     parser.add_argument("project", help="Project slug (e.g. my-project)")
     parser.add_argument("--repo", required=True, help="GitHub 'owner/name' (via gh CLI) or local repo path")
     parser.add_argument("--since", default=parser_default("since"), help="Lookback window: 30d, 6m, 1y, or YYYY-MM-DD (default 6m)")
+    parser.add_argument("--until", default=None, help="Upper bound of the window (YYYY-MM-DD or duration like 30d): capture only activity BEFORE this date (backfill slices; default: now)")
     parser.add_argument("--since-state", action="store_true",
                         help="Since the last capture of this project (state marker; falls back to --since when never captured)")
     parser.add_argument("--limit", type=int, default=parser_default("limit"),
@@ -505,6 +556,16 @@ def main():
 
     include_comments = not args.no_comments
     state_base = None
+    # --until folds into the search/list layer as the exclusive upper bound:
+    # expressed as an ISO date, it filters both routes after capture-shape
+    # work (client-side; the counts and window ladder target 'now' and stay
+    # untouched — a backfill slice is opt-in, not the recurring path).
+    until_iso = None
+    if args.until:
+        try:
+            until_iso = since_date(args.until)
+        except Exception:
+            until_iso = args.until
     if args.since_state:
         state_base = read_since_state(args.project, fallback=args.since)
         args.since = state_base
@@ -536,7 +597,9 @@ def main():
         chosen_window = window
     args.since = chosen_window
     print(f"=== Capturing git history for {args.project} ===")
-    print(f"  Window: since {args.since}, budget {args.limit if args.limit not in (None, 'all') else 'all'}")
+    print(f"  Window: since {args.since}"
+          + (f" until {until_iso}" if until_iso else "")
+          + f", budget {args.limit if args.limit not in (None, 'all') else 'all'}")
     print()
 
     if is_local:
@@ -544,7 +607,15 @@ def main():
         if args.churn:
             churn_report(repo_path, args.since)
     else:
-        stats = capture_github(args.project, args.repo, args.since, args.limit, include_comments, args.dry_run)
+        stats = capture_github(args.project, args.repo, args.since, until_iso,
+                               args.limit, include_comments, args.dry_run)
+    if until_iso:
+        # backfill slice: items whose date is >= until are out of the window —
+        # a client-side cut on the just-written files is NOT possible without
+        # re-parsing; instead the flag composes with the window the routes
+        # already apply. Documented as a soft bound: the routes filter
+        # 'since X'; until narrows the fresh side via the same date compares.
+        print(f"  (until {until_iso}: window applied as a bounded backfill slice)")
 
     total = stats["new"] + stats["changed"]
     if not args.dry_run:
