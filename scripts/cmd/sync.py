@@ -228,6 +228,12 @@ def cmd_migrate(remote_url=None):
         sys.exit(1)
     url = remote_url or (sh("remote", "get-url", CONTENT_REMOTE_NAME) or "")
     if url:
+        # the scp-style ssh URL mis-reports on pushes from nested aliases —
+        # normalize to ssh:// form once (measured: alias-push hits a GitHub
+        # "not a valid repository name" error; ssh:// does not)
+        m = re.match(r"^git@github\.com:([^/]+/.+)$", url)
+        if m:
+            url = f"ssh://git@github.com/{m.group(1)}"
         print(f"Corpus remote: {url}")
     sh("init", "-q", "-b", "main")
     sh("add", "-A")
