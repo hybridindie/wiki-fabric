@@ -45,7 +45,7 @@ jobs:
 
       - name: Build sdist + wheel
         run: |
-          uvx --from build build --outdir dist   # ephemeral tool env: the runner's
+          uvx --from build pyproject-build --outdir dist   # ephemeral tool env: the runner's
           ls -la dist                            # preinstalled 'build' lacks __main__
 
       - name: Smoke the wheel
