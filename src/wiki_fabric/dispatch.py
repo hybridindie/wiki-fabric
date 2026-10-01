@@ -466,6 +466,21 @@ def _status(argv):
     else:
         print("\033[1;33m⚠\033[0m  Lint: has errors")
 
+    # Gate (HITL) — loud: a status that hides pending decisions isn't status
+    try:
+        sys.path.insert(0, str(harness_root() / "scripts" / "cmd"))
+        import gate as _gate_mod
+        sections, actionable = _gate_mod.gate()
+    except Exception:
+        sections, actionable = {}, False
+    if actionable:
+        parts = [f"{k}: {len(v[1]) if isinstance(v, tuple) else v}"
+                 for k, v in sections.items()
+                 if isinstance(v, tuple) and v[1] or (not isinstance(v, tuple) and v)]
+        print(f"\033[1;33m⚠\033[0m  Gate:   pending — {', '.join(parts) or 'items'} → wf gate")
+    else:
+        print("\033[0;32m✓\033[0m  Gate:   clear")
+
     # Graphify
     graphs = croot / "global" / "graphs"
     if graphs.is_dir() and any(graphs.glob("*.json")):

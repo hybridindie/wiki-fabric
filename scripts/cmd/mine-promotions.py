@@ -709,6 +709,23 @@ def parse_frontmatter_str(text):
         return {}, text
 
 
+def _notify_created(names, sections_hint=None):
+    """Loudness contract (2026-09-30): a dossier entering a queue is an event
+    the human must hear about at creation time — not only at the next gate
+    run. Delegates to gate._notify (adapters: default terminal+macOS, or
+    fabric.yaml notify). Fire-and-forget."""
+    try:
+        import gate
+        class _S:  # sections-shaped stand-in: {k: (pending, list, err)}
+            pass
+        hint = sections_hint or {"promotions": len(names)}
+        sections = {k: (1, names, None) for k in hint}
+        sections = {k: (len(names), names, None) for k in hint}
+        gate._notify(None, sections, summary=hint)
+    except Exception as e:
+        print(f"[notify] non-fatal: {e}", file=sys.stderr)
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Mine promotion candidates from experience events")
@@ -837,6 +854,7 @@ def main():
         dossier_path = Path(args.output_dir) / f"promotion-{cluster_key}.md"
         dossier_path.write_text(dossier)
         print(f"Created dossier: {dossier_path} (route: {route or 'cloud'})")
+        _notify_created([dossier_path.name], sections_hint={"promotions": 1})
         
         # Generate pattern file — but never overwrite a pattern's protected
         # slow-lane content (SkillOpt S4): if the pattern already exists and

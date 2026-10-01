@@ -109,6 +109,36 @@ the agent re-reads both claims before finalizing relations.
 - **Never authority.** A judge score supports a check; provenance, scope,
   and human gates still decide.
 
+## The loudness contract (gate notifications)
+
+Pending human decisions reach you where you stand (the "gate
+notifications" surface):
+
+- **Terminal banner + bell** — the no-setup default. Every verb that
+  *creates* a pending decision (a fresh promotion dossier, a staged
+  pattern candidate from `wf mine chats --propose`) prints a stderr line
+  (`human decisions pending — promotions: 1 (wf gate)`) and rings the
+  terminal bell. `wf status` carries a persistent **Gate:** line
+  (`⚠ Gate: pending — promotions: 1 → wf gate` / `✓ Gate: clear`).
+- **macOS notification center** (default on darwin, `kind: macos`) —
+  `display notification … sound name "Pop"`, best-effort.
+- **Webhook** (`kind: webhook`, reads `WF_GATE_WEBHOOK_URL` unless
+  `url_env` names another variable) — POST the manifest + summary.
+
+Adapter config (opt-in/alternative; `notify: []` silences ALL of them —
+the manifest stays the record either way):
+
+```yaml
+notify:
+  - kind: webhook
+    url_env: WF_GATE_WEBHOOK_URL
+  - kind: macos      # default-on for macOS
+  - kind: terminal   # default-on everywhere
+```
+
+Notification failure never fails the emitting command (fire-and-forget);
+the durable record is always `registry/pending-gate.md` + the queues.
+
 Config (see [Configuration](./configuration#judgment-tier)):
 
 ```yaml

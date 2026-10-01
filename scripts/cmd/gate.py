@@ -183,11 +183,14 @@ def _emit_deliveries(deliveries):
     print("\n  Review: was the manifest right? Link outcomes: wf log --project <slug> --receipt <id>")
 
 
-def _notify(manifest_path, sections, _log_prefix="[gate notify]"):
-    """Gate notification seam (#67): push pending decisions to where the human is.
-
-    Opt-in via fabric.yaml notify: adapters — the payload is the manifest
-    content (selection facts: what, why, evidence), never hidden reasoning.
+def _notify(manifest_path, sections, _log_prefix="[gate notify]", summary=None):
+    """Gate notification seam (#67, loudness round 2026-09-30): push pending
+    decisions to where the human is. Adapters (fabric.yaml notify:):
+      kind: webhook   url_env (default WF_GATE_WEBHOOK_URL)
+      kind: macos     osascript display notification (macOS only)
+      kind: terminal  stderr banner + bell — the always-on default
+    Opt-out: notify: [] (silences terminal too — the manifest stays the record).
+    Payload: selection facts (what, why, evidence), never hidden reasoning.
     Deterministic, fire-and-forget; notification failure never fails the gate."""
     import urllib.request
     from fabric_config import get_config as _get_config
@@ -196,26 +199,64 @@ def _notify(manifest_path, sections, _log_prefix="[gate notify]"):
     except Exception as e:
         print(f"{_log_prefix} disabled (config unreadable: {e})", file=sys.stderr)
         return
-    for adapter in (cfg.get("notify") or []):
-        if not isinstance(adapter, dict) or adapter.get("kind") != "webhook":
+    adapters = cfg.get("notify")
+    summary = summary or {k: len(v[1]) for k, v in sections.items() if isinstance(v, tuple) and v[1]}
+    if adapters is None:
+        # no config → the no-setup default: terminal banner (+ macOS bump if possible)
+        _notify_terminal(summary, _log_prefix)
+        if sys.platform == "darwin":
+            _notify_macos(summary, _log_prefix)
+        return
+    for adapter in adapters or []:
+        if not isinstance(adapter, dict):
             continue
-        import os
-        url_env = adapter.get("url_env", "WF_GATE_WEBHOOK_URL")
-        url = os.environ.get(url_env)
-        if not url:
-            continue
-        try:
-            payload = json.dumps({
-                "kind": "wiki-fabric-gate",
-                "manifest": manifest_path.read_text(encoding="utf-8", errors="replace")[:8000],
-                "summary": {k: len(v[1]) for k, v in sections.items() if v[1]},
-            }).encode()
-            req = urllib.request.Request(url, data=payload,
-                                         headers={"Content-Type": "application/json"})
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                print(f"{_log_prefix} webhook {url} -> {resp.status}")
-        except Exception as e:
-            print(f"{_log_prefix} webhook failed: {e}")
+        kind = adapter.get("kind")
+        if kind == "webhook":
+            import os
+            url_env = adapter.get("url_env", "WF_GATE_WEBHOOK_URL")
+            url = os.environ.get(url_env)
+            if not url:
+                continue
+            try:
+                payload = json.dumps({
+                    "kind": "wiki-fabric-gate",
+                    "manifest": manifest_path.read_text(encoding="utf-8", errors="replace")[:8000] if manifest_path and manifest_path.exists() else "",
+                    "summary": summary,
+                }).encode()
+                req = urllib.request.Request(url, data=payload,
+                                             headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    print(f"{_log_prefix} webhook {url} -> {resp.status}")
+            except Exception as e:
+                print(f"{_log_prefix} webhook failed: {e}")
+        elif kind == "macos":
+            _notify_macos(summary, _log_prefix)
+        elif kind == "terminal":
+            _notify_terminal(summary, _log_prefix)
+
+
+def _notify_terminal(summary, _log_prefix="[gate notify]"):
+    """stderr banner + bell: reaches the user of THIS command, every time."""
+    if not summary:
+        return
+    hits = ", ".join(f"{k}: {n}" for k, n in summary.items() if n)
+    sys.stderr.write(f"\a{_log_prefix} human decisions pending — {hits} "
+                     f"(wf gate)\n")
+
+
+def _notify_macos(summary, _log_prefix="[gate notify]"):
+    """macOS notification center via osascript (best-effort)."""
+    if sys.platform != "darwin" or not summary:
+        return
+    try:
+        import subprocess
+        hits = ", ".join(f"{n} {k}" for k, n in list(summary.items())[:3] if n)
+        script = (
+            'display notification "' + hits.replace('"', "'") +
+            ' — run: wf gate" with title "wiki-fabric" sound name "Pop"')
+        subprocess.run(["osascript", "-e", script], capture_output=True, timeout=5)
+    except Exception:
+        pass
 
 def main():
     import argparse

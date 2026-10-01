@@ -269,6 +269,15 @@ def main():
         print(f"Pattern candidates staged: {total_proposed} → "
               f"{CORPUS_ROOT / 'patterns' / '_inbox'}/ (wf gate lists them)")
     return 0
+    if total_proposed and not args.dry_run:
+        try:
+            import gate
+            sections = {"pattern-candidates": (total_proposed,
+                                               [f"chat:{args.project}"], None)}
+            gate._notify(None, sections,
+                         summary={"pattern-candidates": total_proposed})
+        except Exception as e:
+            print(f"[notify] non-fatal: {e}", file=sys.stderr)
 
 
 if __name__ == "__main__":
