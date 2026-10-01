@@ -545,10 +545,9 @@ The {len(set(ev.get('project', '') for ev in events))} projects are independent 
 
 ## Proposed asset changes
 
-1. Create global pattern: `global/patterns/pattern-{cluster_key}.md`
-2. Create global anti-pattern: `global/anti-patterns/anti-pattern-{cluster_key}.md`
-3. Create skill: `global/skills/{cluster_key}.md`
-4. Create template: `global/templates/experiment-{cluster_key}.md`
+1. Create pattern: `patterns/pattern-{cluster_key}.md`
+2. Create anti-pattern: `anti-patterns/anti-pattern-{cluster_key}.md`
+3. Create skill: `skills/{cluster_key}.md`
 
 ## Required review
 
@@ -741,7 +740,9 @@ def main():
     args = parser.parse_args()
     
     global MIN_PROJECTS, OUTPUT_DIR
-    MIN_PROJECTS = args.min_projects or get_tuning(config, 'mining', 'min_projects', 2)
+    from fabric_config import get_config as _gcfg, get_tuning as _gtuning
+    _config = _gcfg()
+    MIN_PROJECTS = args.min_projects or _gtuning(_config, 'mining', 'min_projects', 2)
     OUTPUT_DIR = Path(args.output_dir)
     
     print(f"Mining promotions (min projects: {MIN_PROJECTS}, embeddings: {args.use_embeddings})...")

@@ -173,7 +173,11 @@ Imported from OKF bundle `{bundle}`. Trust tier **recorded, not inherited**
     #     "<scope>") with extract: local runs extraction on-device.
     if extract_claims and created_sources:
         import subprocess
-        ing = VAULT_ROOT / "scripts" / "cmd/ingest.py"
+        # ingest.py lives in the HARNESS (scripts ship with the tool), never
+        # in the corpus — VAULT_ROOT/"scripts" existed in no shipped layout,
+        # so the follow-up extraction silently no-op'd on standard installs.
+        from fabric_config import HARNESS_ROOT
+        ing = HARNESS_ROOT / "scripts" / "cmd" / "ingest.py"
         cmd = [sys.executable, str(ing), "--pending", f"{scope}-okf", "--extract-claims"]
         try:
             from fabric_config import get_config, get_stage_route, is_local_route

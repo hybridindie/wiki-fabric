@@ -260,10 +260,12 @@ def okf_conformance(vault):
     # compiler, not the bundle — they don't participate in OKF conformance.
     # Exception: fixture bundles passed via --root (tests) — any .md under
     # the vault root is a concept there.
-    CONCEPT_DIR_PREFIXES = (
-        "evidence", "patterns", "anti-patterns", "skills", "concepts",
-        "global", "registry", "domains", "projects", "syntheses",
-    )
+    # layout segments (single truth) — the OKF §11 conformance set
+    import layout
+    CONCEPT_DIR_PREFIXES = tuple(str(layout.seg(n))
+        for n in ("evidence", "patterns", "anti_patterns", "skills",
+                  "concepts", "global", "registry", "domains", "projects",
+                  "syntheses"))
     for p, rel in md_files(vault):
         posix = rel.as_posix()
         in_concept_dir = posix.startswith(CONCEPT_DIR_PREFIXES)

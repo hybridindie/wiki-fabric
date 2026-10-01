@@ -89,6 +89,7 @@ export default withMermaid(defineConfig({
         items: [
           { text: 'Skills (on-demand procedures)', link: '/skills' },
           { text: 'CLI & Scripts', link: '/cli' },
+          { text: 'Corpus Layout', link: '/corpus-layout' },
           { text: 'Model Policy & Evals', link: '/evals' },
           { text: 'OKF v0.2 Conformance', link: '/okf' },
           { text: 'Governance', link: '/governance' },

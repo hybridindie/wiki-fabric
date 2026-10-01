@@ -21,9 +21,11 @@ from pathlib import Path
 from datetime import date
 from wf_common import parse_frontmatter
 from fabric_config import CORPUS_ROOT
+import layout
 
-INBOX_DIR = CORPUS_ROOT / "patterns" / "_inbox"
-PATTERNS_DIR = CORPUS_ROOT / "patterns"
+INBOX_DIR = layout.patterns_inbox(CORPUS_ROOT)
+PATTERNS_DIR = layout.patterns(CORPUS_ROOT)
+ANTI_PATTERNS_DIR = layout.anti_patterns(CORPUS_ROOT)
 
 
 def list_pending():
@@ -39,14 +41,18 @@ def list_pending():
 
 
 def apply_candidate(p, dry_run=False):
-    """Move one inbox candidate into canonical patterns/ (status: candidate
-    kept — the pattern maturity gates still apply from here)."""
+    """Move one inbox candidate into its canonical dir (status: candidate
+    kept — the pattern maturity gates still apply from here). type:
+    anti-pattern pages go to anti-patterns/ (they never landed there before —
+    the unconditional patterns/ dest made promote.py unable to see them)."""
     fm, _ = parse_frontmatter(p)
-    if fm.get("type") != "pattern":
-        print(f"Not a pattern candidate: {p}")
+    if fm.get("type") not in ("pattern", "anti-pattern"):
+        print(f"Not a pattern/anti-pattern candidate: {p}")
         return False
-    cid = fm.get("id") or p.stem
-    dest = PATTERNS_DIR / f"{cid}.md"
+    if fm.get("type") == "anti-pattern":
+        dest = ANTI_PATTERNS_DIR / f"{fm.get('id') or p.stem}.md"
+    else:
+        dest = PATTERNS_DIR / f"{fm.get('id') or p.stem}.md"
     if dry_run:
         print(f"[dry-run] would move {p.name} -> {dest}")
         return True

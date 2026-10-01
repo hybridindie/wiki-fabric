@@ -31,9 +31,10 @@ from fabric_config import CORPUS_ROOT, VAULT_ROOT
 from wf_common import parse_frontmatter, sha256_file as sha256
 from fabric_config import FABRIC_ROOT
 from fabric_config import CORPUS_ROOT
+import layout
 
-PROJECTS_DIR = VAULT_ROOT / "projects"
-EVIDENCE_RAW = VAULT_ROOT / "evidence" / "raw"
+PROJECTS_DIR = layout.projects(VAULT_ROOT)
+EVIDENCE_RAW = layout.evidence_raw(VAULT_ROOT)
 args_quiet = False
 
 

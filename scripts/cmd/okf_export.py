@@ -137,13 +137,18 @@ def export(out_dir, scope="all", dry_run=False, root=None):
         print(f"[DRY RUN] would export to {out}")
         return 0
 
-    # Scope roots
+    # Scope roots (segment names via layout — single truth, Tier-2)
     if scope == "all":
         roots = [VAULT_ROOT]
     elif scope == "global":
-        roots = [VAULT_ROOT / d for d in ("patterns", "anti-patterns", "skills", "concepts", "global", "registry", "schemas", "system", "evidence") if (VAULT_ROOT / d).exists()]
+        import layout as _layout
+        roots = [_layout.make(VAULT_ROOT, d) for d in (
+            "patterns", "anti_patterns", "skills", "concepts", "global",
+            "registry", "evidence") if _layout.make(VAULT_ROOT, d).exists()]
     else:
-        one = [VAULT_ROOT / "projects" / scope, VAULT_ROOT / "evidence" / "raw" / scope]
+        import layout as _layout
+        one = [_layout.projects(VAULT_ROOT) / scope,
+               _layout.evidence_raw(VAULT_ROOT) / scope]
         roots = [r for r in one if r.exists()]
         if not roots:
             print(f"Error: unknown scope {scope!r}", file=sys.stderr)

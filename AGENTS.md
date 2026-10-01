@@ -100,6 +100,12 @@ persistent memory layer.
 Two trees: the **harness** (shipped here) and the **fabric** (gitignored user
 content; fresh clones carry `.gitkeep`ed skeletons of the content dirs).
 
+- **Canonical layout doc**: `docs/site/corpus-layout.md` — dir → producer →
+  consumer map, naming prefixes, and the coordination checklist for adding a
+  directory. Every second-level dir name is declared once in
+  `scripts/lib/layout.py` (`SEGMENTS`) — compose paths via `layout`, never
+  re-spell `"evidence/claims"`-style literals at call sites (the accessor
+  raises on undeclared names).
 - **Content (fabric)**: `evidence/` (sources, summaries, claims), `patterns/`,
   `skills/`, `concepts/`, `domains/`, `projects/` — these paths are the OKF
   bundle layout and are load-bearing (scope model, lint, okflint)

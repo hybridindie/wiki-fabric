@@ -30,6 +30,7 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 from fabric_config import get_config, resolve_repo_path, FABRIC_ROOT, CORPUS_ROOT
+import layout
 
 MARKDOWN_FENCE = re.compile(r"```")
 def _parse_since(since):
@@ -595,7 +596,7 @@ def main():
         print(f"Unknown project {args.project!r} (no repos entry / dir)", file=sys.stderr)
         return 2
     _set_rel_root(project_root)
-    raw_dir = CORPUS_ROOT / "evidence" / "raw" / args.project / "chats"
+    raw_dir = layout.raw_slug_dir(CORPUS_ROOT, args.project, "chats")
     since_ms = _parse_since(args.since)
 
     print(f"=== Capturing chat sessions for {args.project} ===")

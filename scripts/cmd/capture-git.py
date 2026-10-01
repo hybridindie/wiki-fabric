@@ -42,8 +42,9 @@ import wf_common
 from wf_common import sha256_file as sha256
 from fabric_config import FABRIC_ROOT
 from fabric_config import CORPUS_ROOT, VAULT_ROOT
+import layout
 
-EVIDENCE_RAW = VAULT_ROOT / "evidence" / "raw"
+EVIDENCE_RAW = layout.evidence_raw(VAULT_ROOT)
 
 SKIP_PREFIXES = ("chore", "docs", "style", "test", "ci", "build", "release")
 INTERESTING_PREFIXES = ("fix", "feat", "perf", "refactor", "revert")

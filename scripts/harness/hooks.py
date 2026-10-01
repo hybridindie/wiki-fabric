@@ -41,9 +41,14 @@ _CHECKOUT_MARKER_END = "# wf-checkout-hook-end"
 
 # Directories whose changes should never re-trigger capture (they ARE the fabric output).
 # Shell ERE, anchored per path segment prefix.
+# composed from layout segments (single truth) + non-fabric dirs graphify-out,
+# .wiki-fabric (harness-local integration dirs)
+import layout as _layout
 _FABRIC_OUTPUT_DIRS = (
-    "evidence/|registry/|patterns/|anti-patterns/|skills/|concepts/|projects/|"
-    "global/|domains/|syntheses/|graphify-out/|\\.wiki-fabric/"
+    "|".join(re.escape(str(_layout.seg(n)) + "/") for n in (
+        "evidence", "registry", "patterns", "anti_patterns", "skills",
+        "concepts", "projects", "global", "domains", "syntheses"))
+    + "|graphify-out/|\\.wiki-fabric/"
 )
 
 _PYTHON_DETECT = """\

@@ -27,7 +27,7 @@ Per-type required fields. A page lacking required fields fails `scripts/cmd/lint
 - **`resource`**: on `source` pages it equals `source_path` (bundle-relative path into `evidence/raw/`); on `entity`/`concept` pages it is the upstream URL when one exists; absent for purely abstract pages. OKF §6.2: absolute URL, `/`-rooted, or relative path.
 - **`status` mapping**: page `status` is the OKF lifecycle (`draft|stable|deprecated`). It is distinct from type-specific workflow statuses — where a type already has a status field with a *different* vocabulary (claim, decision, change-set, experiment, promotion-dossier), the type-specific field keeps its name and meaning and the OKF lifecycle `status` is **omitted** (no collision). Types whose native status IS the lifecycle (pattern, anti-pattern) map directly.
 - **`stale_after`**: machine-checkable staleness. `review_after` (date-only, human review reminder) and `stale_after` (instant, consumer gate) may coexist; lint warns on overdue `stale_after` the same as REVIEW-AFTER.
-- **Type vocabulary stays closed** (`VALID_TYPES` in `lint.py`). OKF permits open types; we tolerate unknown types on import (see «OKF Alignment», `registry/epics/okf-alignment.md`) and expect consumers to tolerate ours. Closed vocab is a governed-ontology feature, not an OKF violation.
+- **Type vocabulary stays closed** (`VALID_TYPES` in `lint.py`). OKF permits open types; we tolerate unknown types on import (see the OKF conformance decisions in `docs/site/okf.md`) and expect consumers to tolerate ours. Closed vocab is a governed-ontology feature, not an OKF violation.
 
 ## `source`
 

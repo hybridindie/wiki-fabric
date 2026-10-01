@@ -5,8 +5,11 @@
 # Scope: fabric concepts only. evidence/raw/ holds immutable upstream captures
 # (AGENTS.md Raw layer: "capture by copy, immutable") and evaluations/fixtures/
 # are test scaffolds — neither are OKF concepts, so F001 does not apply there.
+# Scope: fabric concepts only. evidence/raw/ holds immutable upstream captures
+# (AGENTS.md Raw layer: "capture by copy, immutable") and evaluations/fixtures/
+# are test scaffolds — neither are OKF concepts, so F001 does not apply there.
 # registry/index.md is our catalog hub named by convention; it carries type
-# frontmatter (non-root index exception documented in registry/epics/okf-alignment.md).
+# frontmatter (non-root index exception documented in docs/site/okf.md).
 okf_version: "0.2"
 base:
   roots:

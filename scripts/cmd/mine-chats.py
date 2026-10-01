@@ -9,7 +9,7 @@
 #   default   : heuristic classification only, 0 tokens
 #
 # Output (both modes): a chat-insights page per session under
-#   evidence/insights/<project>/ — takeaways classified durable|maybe|transient
+#   evidence/insights/ — takeaways classified durable|maybe|transient
 #   with rationale. NOTHING is auto-promoted: patterns/anti-patterns still go
 #   through the normal human-gated pipeline (these proposals are inputs).
 #

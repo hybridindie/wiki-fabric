@@ -47,6 +47,17 @@ _MLX_ENSURE_DONE = False
 
 import threading as _threading
 from wf_common import slugify, yaml_scalar, sha256_file as sha256, now_iso_utc as _dt_iso
+import layout as _layout
+# thin aliases: call sites pass VAULT_ROOT explicitly (module attr stays
+# monkeypatchable for tests), helpers resolve roots at call time. `claims_dir`
+# (not `claims`) — ingest_source() has a local claims list by that name.
+evidence_raw = _layout.evidence_raw
+sources = _layout.sources
+source_summaries = _layout.source_summaries
+claims_dir = _layout.claims
+claims_for_source = _layout.claims_for_source
+change_sets = _layout.change_sets
+registry = _layout.registry
 _LOG_LOCK = _threading.Lock()
 
 # main() sets this from argv (global). Module-level default so ingest_source()
@@ -111,7 +122,7 @@ def stale_mark_derived_claims(source_path, file_hash, dry_run=None):
     dry_run defaults to the module args_dry_run."""
     if dry_run is None:
         dry_run = args_dry_run
-    sources_dir = VAULT_ROOT / "evidence" / "sources"
+    sources_dir = sources(VAULT_ROOT)
     if not sources_dir.exists():
         return 0
     try:
@@ -137,7 +148,7 @@ def stale_mark_derived_claims(source_path, file_hash, dry_run=None):
             continue
         # this record is the previous revision of the same raw path →
         # stale its claims. The new revision's record is written fresh below.
-        for cp in (VAULT_ROOT / "evidence" / "claims").glob(f"claim-{rec.stem[4:]}-*.md"):
+        for cp in claims_dir(VAULT_ROOT).glob(claims_for_source(VAULT_ROOT, rec.stem[4:]).name):
             cs = cp.read_text(encoding="utf-8", errors="replace")
             if "stale_after:" in cs:
                 continue
@@ -202,7 +213,7 @@ last_verified: {date.today().isoformat()}
 
 def is_already_ingested(source_path, file_hash):
     """Check if a source record with this sha256 already exists (anti-loop)."""
-    sources_dir = VAULT_ROOT / "evidence" / "sources"
+    sources_dir = sources(VAULT_ROOT)
     if not sources_dir.exists():
         return False
     for rec in sources_dir.glob("src-*.md"):
@@ -222,11 +233,11 @@ def find_pending_sources(project_slug):
 def _sources_with_status(project_slug, status):
     """Source records for a project with the given status, resolved to their
     raw paths. Shared by --pending and --reclaim (#93)."""
-    raw_dir = VAULT_ROOT / "evidence" / "raw" / project_slug
+    raw_dir = evidence_raw(root=VAULT_ROOT) / project_slug
     if not raw_dir.exists():
         return []
     pending_paths = set()
-    sources_dir = VAULT_ROOT / "evidence" / "sources"
+    sources_dir = sources(VAULT_ROOT)
     if sources_dir.exists():
         for rec in sources_dir.glob("src-*.md"):
             text = rec.read_text(encoding="utf-8", errors="replace")
@@ -251,19 +262,19 @@ def find_orphaned_sources(project_slug):
     """#93 recovery: sources recorded as `ingested` but with zero claim files
     (claim-<slug>-*.md). Silent orphans from the pre-fix resume flip or an
     outage — recoverable by flipping back to pending (--reclaim)."""
-    claims_dir = VAULT_ROOT / "evidence" / "claims"
+    claims_glob = claims_dir(VAULT_ROOT)
     orphans = []
     for rec in _sources_with_status(project_slug, "ingested"):
         # rec is the raw file path; find its record to get the slug
         text_of = rec
         slug = None
         try:
-            rel = rec.relative_to(VAULT_ROOT / "evidence" / "raw")
+            rel = rec.relative_to(evidence_raw(VAULT_ROOT))
             slug = slugify(rel.as_posix())[:80]
         except ValueError:
             slug = slugify(rec.name)[:80]
-        rec_path = VAULT_ROOT / "evidence" / "sources" / f"src-{slug}.md"
-        if rec_path.exists() and not list(claims_dir.glob(f"claim-{slug}-*.md")):
+        rec_path = sources(VAULT_ROOT) / f"src-{slug}.md"
+        if rec_path.exists() and not list(claims_glob.glob(f"claim-{slug}-*.md")):
             orphans.append((rec_path, rec))
     return orphans
 
@@ -298,11 +309,11 @@ def find_changed_sources(project_slug):
     Compares each file under evidence/raw/<slug>/ against every sha256 recorded
     in evidence/sources/. A file with no matching hash is new or changed.
     """
-    raw_dir = VAULT_ROOT / "evidence" / "raw" / project_slug
+    raw_dir = evidence_raw(root=VAULT_ROOT) / project_slug
     if not raw_dir.exists():
         return []
     known_hashes = set()
-    sources_dir = VAULT_ROOT / "evidence" / "sources"
+    sources_dir = sources(VAULT_ROOT)
     if sources_dir.exists():
         for rec in sources_dir.glob("src-*.md"):
             m = re.search(r"sha256:\s*([a-f0-9]{64})", rec.read_text(encoding="utf-8", errors="replace"))
@@ -353,15 +364,15 @@ def ingest_source(source_path, extract_claims=False, model=None, dry_run=False, 
     print(f"Project namespace: {namespace}")
 
     try:
-        rel_path = source_path.relative_to(VAULT_ROOT / "evidence" / "raw")
+        rel_path = source_path.relative_to(evidence_raw(VAULT_ROOT))
         source_slug = slugify(rel_path.as_posix())
     except ValueError:
         source_slug = slugify(source_path.name)
     source_slug = source_slug[:80]
 
-    source_record_path = VAULT_ROOT / "evidence" / "sources" / f"src-{source_slug}.md"
-    summary_path = VAULT_ROOT / "evidence" / "source-summaries" / f"sum-{source_slug}.md"
-    change_dir = VAULT_ROOT / "evidence" / "traces" / "change-sets" / f"{date.today().isoformat()}-{source_slug}"
+    source_record_path = sources(VAULT_ROOT) / f"src-{source_slug}.md"
+    summary_path = source_summaries(VAULT_ROOT) / f"sum-{source_slug}.md"
+    change_dir = change_sets(VAULT_ROOT) / f"{date.today().isoformat()}-{source_slug}"
 
     print(f"\nSource record: {source_record_path}")
     print(f"Source summary: {summary_path}")
@@ -373,7 +384,7 @@ def ingest_source(source_path, extract_claims=False, model=None, dry_run=False, 
 
     # 1. Source record (skipped when resuming a pending source — it exists)
     title = source_path.stem.replace('-', ' ').replace('_', ' ').title()
-    (VAULT_ROOT / "evidence" / "sources").mkdir(parents=True, exist_ok=True)
+    sources(VAULT_ROOT).mkdir(parents=True, exist_ok=True)
     if resuming:
         print("  (resuming — source record exists)")
     else:
@@ -411,15 +422,15 @@ Faithful summary: [[sum-{source_slug}]].
             print("No claims extracted", file=sys.stderr)
 
     # 3. Write claim files
-    (VAULT_ROOT / "evidence" / "claims").mkdir(parents=True, exist_ok=True)
+    claims_dir(VAULT_ROOT).mkdir(parents=True, exist_ok=True)
     for i, claim in enumerate(claims):
-        claim_path = VAULT_ROOT / "evidence" / "claims" / f"claim-{source_slug}-{i:03d}.md"
+        claim_path = claims_dir(VAULT_ROOT) / f"claim-{source_slug}-{i:03d}.md"
         claim_path.write_text(claim_frontmatter(claim, source_slug, i,
                                                 provenance=provenance_relations(source_slug, source_path)))
         print(f"  Claim {i+1}: {claim_path}")
 
     # 4. Summary
-    (VAULT_ROOT / "evidence" / "source-summaries").mkdir(parents=True, exist_ok=True)
+    source_summaries(VAULT_ROOT).mkdir(parents=True, exist_ok=True)
     claim_lines = "\n".join(
         f"- {c.get('statement', c.get('s', ''))[:80]} (locator: {c.get('locator', c.get('loc', 'N/A'))})"
         for c in claims
@@ -518,7 +529,7 @@ parent: "[[{change_set_id}]]"
     print("Created source record, summary, change-set manifest and diff")
 
     # 6. Log
-    log_path = VAULT_ROOT / "registry" / "log.md"
+    log_path = registry(VAULT_ROOT) / "log.md"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     if not log_path.exists():
         log_path.write_text(
@@ -633,7 +644,7 @@ def main():
         if "evidence/raw" in str(source_path):
             source_path = VAULT_ROOT / source_path
         else:
-            source_path = VAULT_ROOT / "evidence" / "raw" / source_path
+            source_path = evidence_raw(VAULT_ROOT) / source_path
 
     # Stage routing (single-source mode): a --project with a local extract
     # route runs the extraction on-device too, matching --pending/--changed.

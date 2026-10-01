@@ -5,7 +5,7 @@
 # ingest skill). This command runs the JUDGMENT TIER as the independent
 # second opinion: for each new claim, judge it against its related existing
 # claims (same-source first, then same-project) via the decision model's
-# `choice` head. Verdicts are written to <claim>.effects.json next to the
+# `choice` head. Verdicts are written to registry/effects/<claim>.effects.json
 # claim for the agent to reconcile — the tier verifies, the agent owns the
 # final relations edit (human gate via the change-set flow still applies).
 #
@@ -89,10 +89,13 @@ def verify_claim(claim_path, max_pairs=12, min_confidence=0.6):
     return report
 
 
-def write_report(claim_path, report):
-    """Verdicts live beside the claim (audit artifact, consumed by the agent
-    during effect classification)."""
-    out = claim_path.with_suffix(".effects.json")
+def write_report(claim_path, report, registry_root=None):
+    """Verdicts are machine artifacts, never beside pages (layout contract):
+    registry/effects/<claim-stem>.effects.json (audit artifact, consumed by
+    the agent during effect classification; claims dirs stay .md-only)."""
+    from layout import effects
+    out = effects(registry_root) / f"{claim_path.stem}.effects.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, indent=1, sort_keys=True) + "\n",
                    encoding="utf-8")
     return out

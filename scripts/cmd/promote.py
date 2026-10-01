@@ -159,18 +159,12 @@ def promote_dossier(dossier_path, dry_run=False):
         fm["reviewed_by"] = _human
         write_frontmatter(dossier_path, fm, dossier_path.read_text().split("\n---\n", 2)[2])
         
-        # Update promotion queue
+        # Update promotion queue (fail-soft: it's a human-maintained checklist)
         update_promotion_queue(pattern_path.stem.replace("pattern-", ""), "recommended")
         
-        # Update pattern index
+        # Update pattern index (registry views are derived)
         update_indexes()
         
-        # Update skill index
-        
-        
-        # Update promotion queue
-        update_promotion_queue_file()
-
         print(f"Promoted pattern: {pattern_path.name}")
         # Gate evidence in the timeline (#139): every accept/reject carries
         # its score evidence (dossier-level edit_apply_report analogue).
@@ -242,9 +236,17 @@ def reject_dossier(dossier_path, reason, dry_run=False):
     return True
 
 def update_promotion_queue(pattern_slug, new_status):
-    """Update promotion-queue.md"""
+    """Update promotion-queue.md's observational-count row. Fail-soft: the
+    queue is a human-maintained checklist (system/skills/promote/SKILL.md) —
+    absent is normal (first promotion, or a fabric that never adopted it);
+    a promotion must not die on it (was a NameError path before)."""
     queue_path = PROMOTION_QUEUE
-    text = queue_path.read_text()
+    try:
+        text = queue_path.read_text()
+    except OSError:
+        print("  promotion-queue.md not found — skipping queue row update "
+              "(human-maintained checklist; create it per system/skills/promote/SKILL.md)")
+        return
     
     # Update the table row
     old_row = f"| [[pattern-{pattern_slug}]] | 1 (observed)"

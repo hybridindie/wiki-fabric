@@ -4,17 +4,20 @@ import re
 import socket
 from datetime import date
 
-ATOM_PATHS = (
-    "evidence/claims/",
-    "concepts/", "patterns/", "anti-patterns/", "skills/", "syntheses/",
-    "domains/", "projects/", "global/", "questions/",
-)
-EVIDENCE_PATHS = (
-    "evidence/raw/", "evidence/sources/", "evidence/source-summaries/",
-    "evidence/experiments/", "evidence/traces/", "evidence/_inbox/",
-    "evidence/insights/",
-)
-REGISTRY_PATHS = ("registry/",)
+# Plane classification via layout segments (single truth — a dir rename
+# updates planes automatically; literal strings here were the drift class).
+import layout as _layout
+
+def _pfx(*names):
+    return tuple(str(_layout.seg(n)) + "/" for n in names)
+
+ATOM_PATHS = _pfx("evidence_claims", "concepts", "patterns", "anti_patterns",
+                  "skills", "syntheses", "domains", "projects", "global",
+                  "questions")
+EVIDENCE_PATHS = _pfx("evidence_raw", "evidence_sources", "evidence_source_summaries",
+                      "evidence_experiments", "evidence_traces", "evidence_inbox",
+                      "evidence_insights")
+REGISTRY_PATHS = _pfx("registry")
 
 
 

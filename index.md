@@ -14,7 +14,7 @@ without special tooling.
 * [README.md](README.md) - Project overview and quick start
 * [schemas/frontmatter.md](schemas/frontmatter.md) - Per-type frontmatter contracts
 * [schemas/ontology.md](schemas/ontology.md) - Live domain taxonomy
-* [registry/epics/okf-alignment.md](registry/epics/okf-alignment.md) - OKF v0.2 alignment epic & status
+* [docs/site/okf.md](docs/site/okf.md) - OKF v0.2 conformance: decisions & status
 * [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution workflow and gates
 
 ## Fabric content layout
