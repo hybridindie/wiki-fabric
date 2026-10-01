@@ -36,7 +36,9 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Deps
-        run: uv pip install . build
+        run: |
+          uv venv
+          uv pip install . build
 
       - name: Prep harness tree
         run: python3 scripts/pkg/prep-package.py
