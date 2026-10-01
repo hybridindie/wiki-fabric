@@ -82,7 +82,7 @@ curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/script
 What this actually does, step by step (this is *why* the result is correct
 on both leader and teammate machines):
 
-1. Installs the harness at `./wiki-fabric` in your cwd and the `wf` shim.
+1. Installs the harness to **`~/wiki-fabric`** (the standard home — never littered into whatever directory you ran the command from) and the `wf` shim to `~/.local/bin`.
 2. Creates the fabric dir (`$WIKI_FABRIC_DIR` or `~/.local/share/wiki-fabric`)
    and its config + skeleton.
 3. **Reads the remote**: `git ls-remote <corpus-url> refs/heads/corpus`.
