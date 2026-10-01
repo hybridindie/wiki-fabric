@@ -32,7 +32,10 @@ system. It uses the **gh CLI** (checked at run time — install gh and run
 
 1. Create the corpus repo — `<owner>/wiki-fabric-corpus`, **private** by
    default (`--public` to flip). Prompts before creating unless `-y`.
-2. Publish your fabric's corpus as the source of truth (`sync init` + push).
+2. Publish your fabric's corpus as the source of truth: `sync init` makes
+   the corpus a standalone git repo (`<fabric>/corpus/.git`), commits the
+   content, and pushes to the remote's `main` (remote root == corpus content
+   — no prefix/branch aliasing).
 3. Print the teammate one-liner — teammates inherit the team's knowledge
    from their first install command.
 
@@ -50,14 +53,13 @@ wf sync push -m "ingested upstream docs"   # commit + push corpus changes
 wf sync pull          # fetch + merge; conflicts → review queue
 ```
 
-**Branches, in one table:** knowledge lives on the remote's **`corpus`
-branch only**. Your local fabric works on its own `main`; push does
-`git push corpus HEAD:refs/heads/corpus` (rejected — never force-pushed —
-when the remote moved; pull first), pull does
-`git merge corpus/corpus --allow-unrelated-histories` into your main. Team
-mode adds one **per-push branch** `sync/<machine>-<stamp>` whose PR squash
-merges back to `corpus`. Full model + rationale:
-[Teams › The branch model](/teams#the-branch-model).
+**Branches, in one line:** there aren't any — the corpus is a **standalone
+repo** (`<fabric>/corpus/`, cloned or init'd in place); the remote's root IS
+the corpus content. Push = `git push origin main` from inside the corpus
+(rejected when the remote moved — pull first, never force); pull = plain
+merge. Team mode adds a per-push branch `sync/<machine>-<stamp>` whose PR
+squash-merges to main. Full model + rationale:
+[Teams › The branch model](/teams#the-branch-model-there-isnt-one).
 
 **Team mode (PR-gated distribution):** `fabric.yaml → sync: {mode: team,
 evidence_prs: auto}`. Every push opens one PR (branch `sync/<machine>-<stamp>`,

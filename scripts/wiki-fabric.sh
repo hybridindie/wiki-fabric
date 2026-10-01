@@ -629,10 +629,13 @@ cmd_install() {
     # The fabric is a git repo — `wf sync init` needs commits to publish the
     # initial corpus, and a local history lets you diff/revert knowledge.
     if [[ ! -d "${fabric_dir}/.git" ]]; then
+        # outer git: machine-local shell ONLY (fabric.yaml history) — content
+        # lives in the standalone corpus/ repo (initialized by sync init/migrate
+        # or a teammate clone). corpus/ must be ignored here from day one.
+        (cd "${fabric_dir}" && echo "corpus/" >> .gitignore 2>/dev/null || true)
         (cd "${fabric_dir}" && git init -q && git add -A && \
          git -c user.name="${owner:-wf}" -c user.email="${owner:-wf}@fabric.local" \
-             commit -q -m "chore: initialize fabric" 2>/dev/null || true)
-        ok "Fabric initialized as a git repo (corpus sync ready: wf sync init <url>)"
+             commit -q -m "chore: initialize fabric shell" 2>/dev/null || true)
     fi
 
     # Ensure uv + python, then sync dependencies into the HARNESS venv
@@ -682,7 +685,7 @@ cmd_install() {
         # branch and this fabric is fresh, PULL it — running init would push
         # an empty corpus as the "source of truth" and clobber the team.
         local remote_corpus_head=""
-        remote_corpus_head=$(git -C "${fabric_dir}" ls-remote "${corpus_url}" refs/heads/corpus 2>/dev/null | cut -f1)
+        remote_corpus_head=$(git -C "${fabric_dir}" ls-remote "${corpus_url}" refs/heads/main 2>/dev/null | cut -f1)
         # Fresh = no knowledge content: scaffold dirs (evidence/, projects/,
         # registry/, ...) contain nothing a teammate needs. Real content =
         # claims/patterns/concepts/domain ontology files.
@@ -692,14 +695,18 @@ cmd_install() {
             | head -1)
 
         if [[ -n "${remote_corpus_head}" && -z "${local_corpus_content}" ]]; then
-            info "Team corpus found on remote — pulling it (branch: corpus)..."
-            (cd "${fabric_dir}" && git remote add corpus "${corpus_url}" 2>/dev/null || true)
-            if (cd "${fabric_dir}" && git fetch -q corpus corpus 2>/dev/null); then
-                (cd "${fabric_dir}" && git checkout -q -B main corpus/corpus 2>/dev/null || \
-                 git reset -q --hard corpus/corpus 2>/dev/null || true)
-                ok "Team corpus checked out — the fabric carries the team's knowledge"
+            info "Team corpus found on remote — cloning it (standalone corpus repo)..."
+            # the corpus IS a standalone repo now: clone in place — content at
+            # corpus/ root, remote wired (named corpus), push/pull plain git
+            local tmp_clone="${fabric_dir}/.corpus-join-tmp"
+            rm -rf "${tmp_clone}"
+            if git clone --depth 50 "${corpus_url}" "${tmp_clone}" 2>/dev/null; then
+                rm -rf "${fabric_dir}/corpus"
+                mv "${tmp_clone}" "${fabric_dir}/corpus"
+                ok "Team corpus cloned — the fabric carries the team's knowledge"
             else
-                warn "Could not fetch corpus branch — fabric starts empty (wf sync pull later)"
+                rm -rf "${tmp_clone}"
+                warn "Could not clone the corpus remote (access?) — fabric starts empty (wf sync pull later)"
             fi
         else
             # Lead-machine case: no remote corpus (or local content wins) —
@@ -1215,7 +1222,7 @@ case "${1:-help}" in
         shift
         fdir=$(find_fabric)
         if [[ -z "${1:-}" ]]; then
-            err "Usage: wf sync {setup [name] | init <git-url> | status | push [-m msg] | pull}"
+            err "Usage: wf sync {setup [name] | init <git-url> | migrate [url] | status | push [-m msg] | pull}"
             exit 1
         fi
         export WIKI_FABRIC_DIR="${fdir}"

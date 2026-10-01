@@ -636,7 +636,13 @@ def _install(argv):
     # command — sync init needs commits to publish the initial corpus, and
     # local history lets you diff/revert knowledge.
     if not (install_dir / ".git").exists():
-        _owner = (os.environ.get("WIKI_FABRIC_OWNER") or "")
+        # outer git = machine-local shell ONLY (fabric.yaml history). Content
+        # lives in the standalone corpus/ repo (sync init/migrate/teammate
+        # clone) — corpus/ is ignored here from day one.
+        gi = install_dir / ".gitignore"
+        if "corpus/" not in (gi.read_text() if gi.exists() else ""):
+            with open(gi, "a") as f:
+                f.write("corpus/\n")
         subprocess.run(["git", "init", "-q"], cwd=install_dir,
                        capture_output=True)
         subprocess.run(["git", "add", "-A"], cwd=install_dir, capture_output=True)
@@ -657,7 +663,7 @@ def _install(argv):
         # branch on the remote + no local knowledge content ⇒ join (fetch +
         # checkout) — never push an empty corpus over the team's source of truth.
         probe = subprocess.run(["git", "ls-remote", corpus_url,
-                                "refs/heads/corpus"], env=env,
+                                "refs/heads/main"], env=env,
                                capture_output=True, text=True)
         remote_corpus = probe.stdout.strip()
         # parity with the bash gate: scaffold/markup files (AGENTS/README/
@@ -669,24 +675,29 @@ def _install(argv):
             p.is_file() and p.name not in _scaffold
             for p in corpus_dir.rglob("*.md"))
         if remote_corpus and not local_content:
-            subprocess.run(["git", "-C", str(install_dir), "remote", "add",
-                            "corpus", corpus_url], capture_output=True)
-            if subprocess.run(["git", "-C", str(install_dir), "fetch", "-q",
-                               "corpus", "corpus"], env=env,
-                              capture_output=True).returncode == 0:
-                co = subprocess.run(["git", "-C", str(install_dir), "checkout",
-                                     "-q", "-B", "main", "corpus/corpus"],
-                                    env=env, capture_output=True)
-                if co.returncode == 0:
-                    print("\033[0;32m✓\033[0m  Team corpus checked out — the fabric "
-                          "carries the team's knowledge")
-                else:
-                    print("couldn't checkout corpus branch — fabric starts empty "
-                          "(wf sync pull later)", file=sys.stderr)
-            else:
-                print("couldn't fetch the corpus branch (access?) — fabric starts "
-                      "empty (wf sync pull later)", file=sys.stderr)
-            # the remote is wired; skip the lead path
+            # the corpus IS a standalone repo: clone it in place — content at
+            # corpus/ root, origin wired, ready for push/pull (no checkout gymnastics)
+            import shutil as _shutil
+            tmp_clone = install_dir.parent / (install_dir.name + "-corpus-join")
+            if tmp_clone.exists():
+                _shutil.rmtree(tmp_clone)
+            clone = subprocess.run(["git", "clone", "--depth", "50", corpus_url,
+                                    str(tmp_clone)], env=env, capture_output=True, text=True)
+            # rename origin → corpus (the name every later sync op resolves)
+            if clone.returncode == 0:
+                subprocess.run(["git", "-C", str(tmp_clone), "remote", "rename",
+                                "origin", "corpus"], capture_output=True)
+            if clone.returncode == 0:
+                # replace the scaffolded corpus with the team's
+                corpus_dir = install_dir / "corpus"
+                if corpus_dir.exists():
+                    _shutil.rmtree(corpus_dir)
+                _shutil.move(str(tmp_clone), str(corpus_dir))
+                print("\033[0;32m✓\033[0m  Team corpus cloned — the fabric carries the team's knowledge")
+                print("")
+                return _install_print_next(install_dir)
+            print("couldn't clone the corpus remote (access?) — fabric starts "
+                  "empty (wf sync pull later)", file=sys.stderr)
             print("")
             return _install_print_next(install_dir)
         r = subprocess.run([sys.executable, str(_harness("scripts/cmd/sync.py")),

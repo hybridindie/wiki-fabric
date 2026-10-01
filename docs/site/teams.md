@@ -69,9 +69,20 @@ wf install --corpus git@github.com:your-org/wiki-fabric-corpus.git \
     --vault ~/knowledge/vault              # the fabric + the team join
 ```
 
-`uv tool install` is the cross-platform path (the CLI is pure-python —
-Windows included). The one-liner below is the POSIX fallback (macOS/Linux;
-the bash installer needs a POSIX shell and doesn't run on Windows):
+What happens:
+
+1. The harness installs to **`~/.wiki-fabric`** (the standard home — never
+   littered into whatever directory you ran the command from) and the `wf`
+   shim to `~/.local/bin`.
+2. The fabric dir is created (`$WIKI_FABRIC_DIR` or `~/.local/share/wiki-fabric`)
+   with its config + skeleton.
+3. The remote is probed (`git ls-remote … refs/heads/main`): a corpus exists
+   ⇒ **`corpus/` is cloned from the team repo** — the clone *is* the corpus
+   (its origin pre-wired for your first `sync push`). No corpus on the
+   remote ⇒ you're the lead; your (empty) corpus publishes.
+
+The one-liner below is the POSIX-only fallback (macOS/Linux — the bash
+installer needs a POSIX shell and doesn't run on Windows):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/scripts/wiki-fabric.sh | bash -s -- \
@@ -79,40 +90,20 @@ curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/script
   --vault ~/knowledge/vault
 ```
 
-What this actually does, step by step (this is *why* the result is correct
-on both leader and teammate machines):
-
-1. Installs the harness to **`~/.wiki-fabric`** (the standard home — never littered into whatever directory you ran the command from) and the `wf` shim to `~/.local/bin`.
-2. Creates the fabric dir (`$WIKI_FABRIC_DIR` or `~/.local/share/wiki-fabric`)
-   and its config + skeleton.
-3. **Reads the remote**: `git ls-remote <corpus-url> refs/heads/corpus`.
-   - **A corpus branch exists** → *teammate path*: the remote is added, the
-     corpus branch is fetched, and your fabric checks it out
-     (`git checkout -B main corpus/corpus`) — **your local `main` becomes the
-     corpus content**. Your fabric starts already carrying the team's
-     knowledge; the corpus remote now tracks it for push/pull.
-   - **No corpus branch** → *lead path*: your (empty) local corpus is
-     published as the initial source of truth.
-
-The direction is decided **automatically, by content**, not by a mode flag:
-remote-has-knowledge beats local-has-nothing. A *lead* re-running install
-is protected too — if your local corpus has real content and the remote
-doesn't (yet), the local side wins and publishes.
-
 ### Join B — existing install (the two-step)
 
-You already have a harness and a fabric (maybe you used the fabric solo
-first). Wiring the team corpus is two commands:
+You already have a harness + a fabric (used it solo first):
 
 ```bash
-git remote add corpus git@github.com:your-org/wiki-fabric-corpus.git
-wf sync pull                      # first pull checks out the corpus branch content
+wf sync migrate git@github.com:your-org/wiki-fabric-corpus.git   # legacy layout → standalone corpus repo
+# — or, if the corpus is already standalone:
+git -C <fabric>/corpus remote add corpus git@github.com:your-org/wiki-fabric-corpus.git
+wf sync pull
 ```
 
-`wf sync pull` fetches `corpus/corpus` and **merges it into your local
-main** (`--allow-unrelated-histories` — two fabrics that grew independently
-can still join safely). Anything that conflicts lands in the review queue
-(below) rather than blocking the join.
+`wf sync pull` merges `origin/main` into your local corpus main; anything
+that conflicts lands in the review queue (below) rather than blocking the
+join.
 
 ### What "joining" does NOT do
 
@@ -122,42 +113,44 @@ can still join safely). Anything that conflicts lands in the review queue
 - It does **not** fork your git history into a submodule or a separate
   checkout — the corpus *is* your fabric's content, now wired to a remote.
 
-## The branch model
+## The branch model: there isn't one
 
-Knowledge moves on **one named branch: `corpus`** — not on `main`, not on
-feature branches. Your local fabric keeps working on its own `main`;
-sync is branch-to-branch:
+**The corpus is a standalone git repo** — `corpus/` inside your fabric
+directory *is* the team repo, cloned or initialized in place. The remote's
+root is the corpus content exactly; sync is plain git against it:
 
 ```text
-   local fabric (main) ──push──▶ remote (corpus)
-        ▲                            │
-        └──────merge at pull─────────┘
+   fabric/
+     ├─ fabric.yaml      machine-local (gitignored, own shell history)
+     └─ corpus/          ← THE team repo (a .git of its own)
+          ├─ registry/
+          ├─ patterns/
+          └─ projects/   ← remote root == exactly this
 ```
 
-| Operation | What runs | What lands where |
+| Operation | What runs | Notes |
 |---|---|---|
-| `wf sync push` (solo mode) | commits local corpus changes, then `git push corpus HEAD:refs/heads/corpus` | replaces the **corpus tip** when your history contains the remote's; a rejected push (remote ahead) exits with the pull instruction — never force-pushed |
-| `wf sync pull` | `git fetch corpus corpus`, then `git merge corpus/corpus --allow-unrelated-histories` | remote work merges **into your main**; per-file conflicts → `registry/conflicts/<date>/` + review queue |
-| `wf sync push` (team mode) | same commit, then pushes a **per-push branch** `sync/<machine>-<yyyymmdd-hhmm>` and opens **one PR** against the corpus branch | the PR is the change-set receipt; evidence-only PRs auto-merge on green CI, anything touching atoms waits for human review |
+| `wf sync push` (solo) | commit + `git push origin main` — rejected when the remote moved (pull first, never force) | local main ⇆ remote main |
+| `wf sync pull` | `git fetch` + `git merge origin/main` into local main | conflicts → review queue |
+| `wf sync push` (team) | one **per-push branch** `sync/<machine>-<stamp>` + a PR against `main` | the PR is the receipt; evidence-only auto-merges on green CI |
+| teammate join | `wf install --corpus URL` **clones the corpus** — content arrives as the clone; origin pre-wired | no checkout gymnastics |
 
-**Why a per-push branch in team mode:** the PR is the audit artifact — a
-reviewable diff, an actor trail, a CI verdict — and squash-merging back to
-`corpus` keeps the shared branch linear. Solo mode keeps direct pushes
-(sticky default); `--pr` / `--no-pr` override per invocation; `sync.mode:
-team` in fabric.yaml flips the default.
+**Why no branches beyond main:** the corpus is *content* — there's no dev
+vs release version of a fact, so a second long-lived branch would be a
+second queue with no meaning. Governance lives in the gates (review queue,
+CI lint, conflict block), not in branch topology. The old model (your local
+main mirrored onto a remote `corpus` branch — the team's tip under an
+alias) was retired 2026-10-01; `wf sync migrate` moves an existing fabric
+to the standalone layout in one command.
 
-**Why one shared branch at all:** the corpus is *content*, not a codebase —
-there's no "development" and "release" version of a fact. The governance
-gates (review queue, CI lint, conflict block) are what keep a push honest;
-a second long-lived branch would just be a second queue with no meaning.
-
-## Day-to-day sync
+## Day-to-day sync## Day-to-day sync
 
 ```bash
-wf sync status        # ahead/behind + uncommitted corpus changes + conflicts
-wf sync push -m "ingested upstream docs"   # commit + push corpus changes
+wf sync status        # ahead/behind vs the remote (plus uncommitted changes + conflicts)
+wf sync push -m "ingested upstream docs"   # commit + push (rejected if remote moved — pull first)
 wf sync pull          # fetch + merge; conflicts → review queue
 wf sync resolve <c> --strategy ours|theirs|union   # interactive diff resolver
+wf sync migrate [url] # one-time: legacy layout → standalone corpus repo
 ```
 
 The freshness loop runs underneath on every machine: hooks capture doc and

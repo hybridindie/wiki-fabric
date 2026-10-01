@@ -51,20 +51,19 @@ jobs:
           cd harness
           uv venv
           uv pip install pyyaml openai anthropic
-          WIKI_FABRIC_DIR="$(pwd)/../" uv run wf freshness || DRIFT=1
+          WIKI_FABRIC_DIR="$(pwd)/" uv run wf freshness || DRIFT=1
           echo "WIKI_FABRIC_DRIFT=${DRIFT:-0}" >> "$GITHUB_ENV"
 
       - name: Commit refreshed evidence
         run: |
-          cd ../
           git config user.name "wiki-fabric freshness"
           git config user.email "freshness@wiki-fabric.local"
-          git add evidence/ registry/ || true
+          git add evidence/ registry/ patterns/ projects/ || true
           if git diff --cached --quiet; then
             echo "no evidence changes"
           else
             git commit -m "freshness cycle: upstream evidence refresh (sha256-gated)"
-            git push origin HEAD:main || echo "push failed (conflict) — resolve at next sync"
+            git push origin main || echo "push rejected (remote ahead) — the next cycle merges first"
           fi
 
       - name: Gate is live (drift needs a human)

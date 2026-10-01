@@ -11,7 +11,7 @@
 # different lifecycles and different remotes.
 #
 # Usage:
-#   wf sync init <git-url>       # set up the content remote (creates corpus branch)
+#   wf sync init <git-url>       # set up the content remote (standalone corpus repo)
 #   wf sync status               # show local vs remote divergence
 #   wf sync push                 # commit + push local content changes
 #   wf sync pull                 # fetch + merge remote content; conflicts → review queue
@@ -94,7 +94,7 @@ def local_projects():
 
 def remote_projects():
     """Project namespaces that exist on the remote corpus."""
-    listing = sh("ls-tree", "--name-only", f"{CONTENT_REMOTE_NAME}/corpus", "--", "projects/")
+    listing = sh("ls-tree", "--name-only", f"{CONTENT_REMOTE_NAME}/main", "--", "projects/")
     if not listing:
         return set()
     return {l.strip().rstrip("/").split("/")[-1] for l in listing.splitlines() if l.strip()}
@@ -150,10 +150,11 @@ def get_remote():
 
 
 def validate_fabric():
-    """Refuse to sync a non-fabric directory. A fresh corpus may lack the
-    AGENTS.md marker — scaffold it from the harness rather than failing
-    (same gap install-time teammate onboarding hit; the corpus needs the
-    marker for git validation, the harness clone has the source)."""
+    """Refuse to sync a non-corpus directory. Under the standalone-repo model
+    the CORPUS (VAULT_ROOT) is the git repo: valid = a .git present here (its
+    own, init'd by sync init/migrate or a teammate clone) OR the legacy outer
+    layout (outer .git tracks corpus/) — the migrate path handles that. A
+    fresh corpus lacking the AGENTS.md marker gets it scaffolded."""
     harness = paths.find_harness_root()
     registry = VAULT_ROOT / "registry"
     registry.mkdir(parents=True, exist_ok=True)
@@ -162,8 +163,11 @@ def validate_fabric():
         if src_ag.exists():
             shutil.copy(src_ag, VAULT_ROOT / "AGENTS.md")
             print(f"Scaffolded corpus/AGENTS.md (from harness) — sync marker")
-    if not (VAULT_ROOT / "AGENTS.md").exists() or not registry.exists():
-        print("Error: not in a wiki-fabric root (missing AGENTS.md + registry/)", file=sys.stderr)
+    corpus_is_git = (VAULT_ROOT / ".git").exists()
+    legacy_outer = (VAULT_ROOT.parent / ".git").exists()
+    if not corpus_is_git and not legacy_outer:
+        print("Error: the corpus is not a git repo — run: wf sync init <url> "
+              "(or wf sync migrate for a legacy layout)", file=sys.stderr)
         sys.exit(1)
 
 
@@ -209,43 +213,90 @@ def scaffold_freshness_workflow():
     return True
 
 
+def cmd_migrate(remote_url=None):
+    """Legacy A-layout → standalone corpus repo (2026-10-01 model):
+    the fabric's outer git tracked corpus/*; the standalone corpus/ gets its
+    own git (content AT ROOT — no prefix), pushes to the team remote's main.
+    The old remote corpus branch stays as archive."""
+    if (VAULT_ROOT / ".git").exists():
+        print("Already standalone (corpus/.git present) — nothing to migrate.")
+        return
+    outer = VAULT_ROOT.parent
+    if not (outer / ".git").exists():
+        print("No outer git tracking the corpus either — run: wf sync init <url>",
+              file=sys.stderr)
+        sys.exit(1)
+    url = remote_url or (sh("remote", "get-url", CONTENT_REMOTE_NAME) or "")
+    if url:
+        print(f"Corpus remote: {url}")
+    sh("init", "-q", "-b", "main")
+    sh("add", "-A")
+    if subprocess.run(["git", "-c", "user.name=wiki-fabric", "-c",
+                       "user.email=wf@corpus.local", "commit", "-q",
+                       "-m", "migrate: standalone corpus repo"],
+                      cwd=str(VAULT_ROOT), capture_output=True).returncode == 0:
+        print("Committed the corpus (standalone history begins here)")
+    if url:
+        sh("remote", "add", CONTENT_REMOTE_NAME, url)
+        print("Pushing to the team remote (branch: main)...")
+        if sh("push", "-u", CONTENT_REMOTE_NAME, "HEAD:refs/heads/main") is None:
+            print("Push failed (check access) — content is committed locally; "
+                  "retry: wf sync push", file=sys.stderr)
+    # outer: untrack corpus/ (worktree stays) + ignore
+    subprocess.run(["git", "rm", "-r", "-q", "--cached", "corpus"],
+                   cwd=str(outer), capture_output=True)
+    gi = outer / ".gitignore"
+    line = "corpus/"
+    try:
+        txt = gi.read_text() if gi.exists() else ""
+        if line not in txt.splitlines():
+            gi.write_text(txt.rstrip("\n") + f"\n{line}\n")
+            subprocess.run(["git", "add", str(gi)], cwd=str(outer), capture_output=True)
+            subprocess.run(["git", "commit", "-q", "-m", "migrate: corpus content moved to a standalone repo (corpus/)"],
+                           cwd=str(outer), capture_output=True)
+    except Exception as e:
+        print(f"(outer gitignore update skipped: {e})")
+    print()
+    print("✓ Migration complete — the corpus is a standalone git repo at " + str(VAULT_ROOT))
+    print("  Outer git: corpus/ untracked (machine config only). Old remote")
+    print("  'corpus' branch is the archive; new distribution branch: main.")
+
+
 def cmd_init(remote_url):
+    """Lead machine: make the corpus a standalone git repo + publish it as
+    the team's source of truth (remote root == corpus content, plain git)."""
     validate_fabric()
     scaffold_ci_workflow()
     scaffold_freshness_workflow()
-    if get_remote():
-        print(f"Corpus remote already set: {get_remote()}")
-        print(f"Change it with: git remote set-url {CONTENT_REMOTE_NAME} <url>")
-        sys.exit(1)
 
-    # Verify the remote is reachable and is (or can be) a corpus
-    ok = sh("ls-remote", remote_url, "HEAD") is not None
-    if not ok:
+    # Verify the remote is reachable
+    if sh("ls-remote", remote_url, "HEAD") is None and not remote_url.startswith("/"):
         print(f"Error: cannot reach remote {remote_url} (does it exist? do you have access?)", file=sys.stderr)
         sys.exit(1)
 
-    sh("remote", "add", CONTENT_REMOTE_NAME, remote_url)
+    if not (VAULT_ROOT / ".git").exists():
+        sh("init", "-q", "-b", "main")
+        print("Initialized the corpus as a standalone git repo")
+    if sh("remote", "get-url", CONTENT_REMOTE_NAME) is None:
+        sh("remote", "add", CONTENT_REMOTE_NAME, remote_url)
 
-    # Push the full corpus as the initial source of truth
-    print(f"Pushing initial corpus to {remote_url} (branch: corpus)...")
-    local_head = sh("rev-parse", "HEAD")
-    if not local_head:
-        print("Error: local repo has no commits — commit your fabric first", file=sys.stderr)
-        sys.exit(1)
-    if sh("push", CONTENT_REMOTE_NAME, f"{local_head.strip()}:refs/heads/corpus") is None:
+    # Commit everything (a fresh corpus has work to publish; an existing one
+    # commits pending content so the push is complete)
+    sh("add", "-A")
+    if subprocess.run(["git", "-c", "user.name=wiki-fabric", "-c",
+                       "user.email=wf@corpus.local", "commit", "-q",
+                       "-m", "sync init: publish corpus",
+                       "--allow-empty"], cwd=str(VAULT_ROOT),
+                      capture_output=True).returncode == 0:
+        print("Committed corpus content")
+    if sh("push", "-u", CONTENT_REMOTE_NAME, "HEAD:refs/heads/main") is None:
         print("Error: push failed (check access rights)", file=sys.stderr)
-        sh("remote", "remove", CONTENT_REMOTE_NAME)
         sys.exit(1)
-    sh("fetch", CONTENT_REMOTE_NAME, "corpus")
+    sh("fetch", CONTENT_REMOTE_NAME, "main")
 
     print()
     print(f"✓ Corpus remote configured: {CONTENT_REMOTE_NAME} → {remote_url}")
-    print("  Team members: clone your fabric, then:")
-    print(f"    git remote add corpus {remote_url}")
-    print(f"    git fetch corpus corpus && git checkout corpus")
-
-
-
+    print("  Teammates join with: wf install --corpus " + remote_url)
 
 def cmd_setup(name=None, private=True, yes=False):
     """First-class corpus setup: create (or adopt) the GitHub corpus repo and
@@ -324,9 +375,9 @@ def cmd_status():
         print("No corpus remote configured. Set one up: wf sync init <git-url>")
         sys.exit(1)
 
-    sh("fetch", CONTENT_REMOTE_NAME, "corpus")
+    sh("fetch", CONTENT_REMOTE_NAME, "main")
     local = sh("rev-parse", "HEAD")
-    remote_head = sh("rev-parse", f"{CONTENT_REMOTE_NAME}/corpus")
+    remote_head = sh("rev-parse", f"{CONTENT_REMOTE_NAME}/main")
 
     ahead = (sh("rev-list", "--count", f"{remote_head}..{local}") or "0").strip()
     behind = (sh("rev-list", "--count", f"{local}..{remote_head}") or "0").strip()
@@ -387,8 +438,35 @@ def cmd_status():
 
 
 
+def _corpus_push():
+    """Push the corpus repo's HEAD to its origin main (the standalone-repo
+    model: no branch aliasing — the remote root IS the corpus)."""
+    out = sh("push", CONTENT_REMOTE_NAME, "HEAD:refs/heads/main")
+    return out
+    # (None = failure; cmd_push's caller surfaces "remote has newer — pull first")
+
+
+def _legacy_layout_check(operation):
+    """The standalone-repo model (2026-10-01): a corpus WITHOUT its own .git
+    but inside an outer repo tracking it is the LEGACY layout — sync ops
+    would silently touch the OUTER git (wrong tree, prefix games). Loud
+    one-time advice; the user runs: wf sync migrate."""
+    if (VAULT_ROOT / ".git").exists():
+        return
+    outer = VAULT_ROOT.parent
+    if not (outer / ".git").exists():
+        return
+    tracked = subprocess.run(["git", "ls-files", "corpus/"], cwd=str(outer),
+                             capture_output=True, text=True).stdout.strip()
+    if tracked:
+        print(f"⚠  legacy layout detected (outer git tracks corpus/) — sync "
+              f"{operation} would touch the OUTER repo. Run once: wf sync migrate",
+              file=sys.stderr)
+
+
 def cmd_push(message=None, pr=False, no_pr=False):
     validate_fabric()
+    _legacy_layout_check("push")
     if not get_remote():
         print("No corpus remote. Run: wf sync init <git-url>", file=sys.stderr)
         sys.exit(1)
@@ -396,8 +474,8 @@ def cmd_push(message=None, pr=False, no_pr=False):
     # LOUD pre-check: fetch and compare. Pushing over a moved remote is the
     # multi-writer failure mode — be loud BEFORE the push, not after git
     # rejects it (#'s team-sync hardening).
-    sh("fetch", CONTENT_REMOTE_NAME, "corpus")
-    remote_head = sh("rev-parse", f"{CONTENT_REMOTE_NAME}/corpus")
+    sh("fetch", CONTENT_REMOTE_NAME, "main")
+    remote_head = sh("rev-parse", f"{CONTENT_REMOTE_NAME}/main")
     local_head = sh("rev-parse", "HEAD")
     # behind = remote has commits local lacks. Ancestor check, not sha
     # equality: after a sync pull (merge), local HEAD is a merge commit whose
@@ -407,13 +485,13 @@ def cmd_push(message=None, pr=False, no_pr=False):
     behind = None
     ahead = 0
     if remote_head and local_head:
-        anc = sh("merge-base", "--is-ancestor", f"{CONTENT_REMOTE_NAME}/corpus", "HEAD")
+        anc = sh("merge-base", "--is-ancestor", f"{CONTENT_REMOTE_NAME}/main", "HEAD")
         if anc is not None:
             behind = 0
-            ahead_n = sh("rev-list", "--count", f"{CONTENT_REMOTE_NAME}/corpus..HEAD")
+            ahead_n = sh("rev-list", "--count", f"{CONTENT_REMOTE_NAME}/main..HEAD")
             ahead = int(ahead_n) if ahead_n else 0
         else:
-            behind = int(sh("rev-list", "--count", f"HEAD..{CONTENT_REMOTE_NAME}/corpus") or 0)
+            behind = int(sh("rev-list", "--count", f"HEAD..{CONTENT_REMOTE_NAME}/main") or 0)
     if behind:  # None (unknown) or > 0
         print("", file=sys.stderr)
         print("══════════════════════════════════════════════════════", file=sys.stderr)
@@ -452,7 +530,7 @@ def cmd_push(message=None, pr=False, no_pr=False):
         # PR unless local is AHEAD of the remote (committed, unpushed work
         # from an earlier interrupted push still needs a PR).
         if use_pr_mode(pr=pr, no_pr=no_pr):
-            remote_now = (sh("rev-parse", f"{CONTENT_REMOTE_NAME}/corpus") or "").strip()
+            remote_now = (sh("rev-parse", f"{CONTENT_REMOTE_NAME}/main") or "").strip()
             head_now = (sh("rev-parse", "HEAD") or "").strip()
             ahead_n = sh("rev-list", "--count", f"{remote_now}..{head_now}") if remote_now and head_now else "0"
             if (ahead_n or "0").strip() == "0":
@@ -478,7 +556,7 @@ def cmd_push(message=None, pr=False, no_pr=False):
         push_via_pr(changes, message)
         return
 
-    if sh("push", CONTENT_REMOTE_NAME, f"{head.strip()}:refs/heads/corpus") is None:
+    if _corpus_push() is None:
         print("Error: push rejected — remote has newer commits. Run: wf sync pull", file=sys.stderr)
         sys.exit(1)
     print("Pushed corpus to remote.")
@@ -558,7 +636,6 @@ def cmd_resolve(conflict, strategy, message=None):
     unblocks; the resolution is committed so the push carries the decision.
     Interactive flow (#14): with no strategy given, show both versions and
     prompt for the choice (requires a TTY)."""
-    validate_fabric()
     conflict_file = VAULT_ROOT / conflict
     if not conflict_file.exists() and conflict.startswith("corpus/"):
         # conflict paths are recorded relative to the VAULT root; VAULT_ROOT
@@ -639,12 +716,13 @@ def cmd_resolve(conflict, strategy, message=None):
     print("  'ours' (your resolution already carries the union) — then push.")
 def cmd_pull():
     validate_fabric()
+    _legacy_layout_check("pull")
     if not get_remote():
         print("No corpus remote. Run: wf sync init <git-url>", file=sys.stderr)
         sys.exit(1)
 
-    sh("fetch", CONTENT_REMOTE_NAME, "corpus")
-    remote_head = sh("rev-parse", f"{CONTENT_REMOTE_NAME}/corpus")
+    sh("fetch", CONTENT_REMOTE_NAME, "main")
+    remote_head = sh("rev-parse", f"{CONTENT_REMOTE_NAME}/main")
     local_head = sh("rev-parse", "HEAD")
 
     if remote_head == local_head:
@@ -668,7 +746,7 @@ def cmd_pull():
     # share a remote but no common ancestor are still the same corpus)
     today = date.today().isoformat()
     result = subprocess.run(
-        ["git", "merge", f"{CONTENT_REMOTE_NAME}/corpus", "--no-edit", "--allow-unrelated-histories",
+        ["git", "merge", f"{CONTENT_REMOTE_NAME}/main", "--no-edit", "--allow-unrelated-histories",
          "-m", f"sync pull from {CONTENT_REMOTE_NAME} ({today})"],
         cwd=str(VAULT_ROOT), capture_output=True, text=True,
     )
@@ -693,7 +771,7 @@ def cmd_pull():
     for p in conflicted:
         # Ours (pre-merge) / theirs (incoming) / joint index file preserved
         ours = sh("show", f"HEAD~1:{p}") if sh("show", f"HEAD~1:{p}") is not None else ""
-        theirs = sh("show", f"{CONTENT_REMOTE_NAME}/corpus:{p}") or ""
+        theirs = sh("show", f"{CONTENT_REMOTE_NAME}/main:{p}") or ""
         slug = re.sub(r"[^a-z0-9]+", "-", p.lower()).strip("-")[:80]
         joint = VAULT_ROOT / p
         joint_text = joint.read_text(encoding="utf-8", errors="replace") if joint.exists() else ""
@@ -722,7 +800,7 @@ def cmd_pull():
 
 def main():
     parser = argparse.ArgumentParser(description="Share the corpus via a git remote (source-of-truth sync)")
-    parser.add_argument("command", choices=["setup", "init", "status", "push", "pull", "resolve"], help="Sync operation")
+    parser.add_argument("command", choices=["setup", "init", "migrate", "status", "push", "pull", "resolve"], help="Sync operation")
     parser.add_argument("remote", nargs="?", help="Git URL for `init`")
     parser.add_argument("name", nargs="?", help="Corpus repo name for `setup` (default: wiki-fabric-corpus)")
     parser.add_argument("-m", "--message", help="Commit message for push")
@@ -743,6 +821,8 @@ def main():
             print("Error: `wf sync init` requires a git URL", file=sys.stderr)
             sys.exit(1)
         cmd_init(args.remote)
+    elif args.command == "migrate":
+        cmd_migrate(args.remote)
     elif args.command == "status":
         cmd_status()
     elif args.command == "push":

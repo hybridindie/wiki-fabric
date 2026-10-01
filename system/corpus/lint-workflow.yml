@@ -1,13 +1,13 @@
 name: Corpus lint
 
-# The vault's own CI: the knowledge corpus is the source of truth for the
-# team — every push must pass the governance floor. Runs the harness's
-# deterministic lint (0-error gate) + OKF v0.2 conformance floor against
-# this repo. Knowledge checks, not code checks.
+# The corpus repo's own CI: this repo IS the team knowledge (remote root ==
+# corpus content — no prefix/branch games under the standalone-repo model).
+# Every push must pass the governance floor, not just machines where someone
+# remembers to run lint.
 
 on:
   push:
-    branches: [main, corpus]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -35,28 +35,31 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
-      - name: Lint corpus (0-error gate)
+      - name: Deps
         run: |
           cd harness
           uv venv
-          uv pip install pyyaml openai anthropic  # deps from pyproject (no requirements.txt)
-          WIKI_FABRIC_DIR="$(pwd)/../" uv run wf lint ../corpus --okf
-          WIKI_FABRIC_DIR="$(pwd)/../" uv run wf lint ../corpus
+          uv pip install pyyaml openai anthropic
+
+      - name: Lint corpus (0-error gate)
+        run: |
+          cd harness
+          WIKI_FABRIC_DIR="$(pwd)/" uv run wf lint "$(dirname "$(pwd)")"
 
       - name: Catalog freshness (rebuild must be a no-op)
         run: |
           cd harness
-          cp ../corpus/registry/catalog.json /tmp/catalog-before.json
-          WIKI_FABRIC_DIR="$(pwd)/../" uv run wf rebuild-index || true
-          diff <(python3 -c "import json;d=json.load(open('/tmp/catalog-before.json'));print(json.dumps(d,sort_keys=True))") \
-               <(python3 -c "import json;d=json.load(open('../corpus/registry/catalog.json'));print(json.dumps(d,sort_keys=True))") \
-          && echo "catalog consistent" || (echo "catalog.json is stale — run rebuild-index (WIKI_FABRIC_DIR=vault) and commit" && exit 1)
+          CORPUS="$(dirname "$(pwd)")"
+          cp "$CORPUS/registry/catalog.json" /tmp/catalog-before.json 2>/dev/null || echo "{}" > /tmp/catalog-before.json
+          WIKI_FABRIC_DIR="$(pwd)/" uv run wf rebuild-index || true
+          python3 -c "import json,sys; a=json.load(open('/tmp/catalog-before.json')); b=json.load(open(sys.argv[1]+'/registry/catalog.json')); sys.exit(0 if json.dumps(a,sort_keys=True)==json.dumps(b,sort_keys=True) else 1)" "$CORPUS" || { echo "catalog.json is stale — run: wf rebuild-index (WIKI_FABRIC_DIR=<fabric>) and commit"; exit 1; }
+          echo "catalog consistent"
 
       - name: Sync conflicts block (deterministic)
         run: |
-          if ls ../corpus/registry/conflicts/*/ 2>/dev/null | grep -q .; then
+          if ls "$(dirname "$(pwd)")/registry/conflicts/" 2>/dev/null | grep -q .; then
             echo "Unresolved sync conflicts present — resolve then push"
-            ls ../corpus/registry/conflicts/
+            ls "$(dirname "$(pwd)")/registry/conflicts/"
             exit 1
           else
             echo "no unresolved conflicts"

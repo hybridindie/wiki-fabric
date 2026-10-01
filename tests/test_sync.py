@@ -3,7 +3,10 @@
 Run: python3 -m pytest tests/test_sync.py -v
 """
 
+import os
+import subprocess
 import sys
+import unittest
 import unittest.mock as mock
 import importlib.util
 from pathlib import Path
@@ -232,3 +235,78 @@ class TestResolveInteractive:
             pass
         out = capsys.readouterr().out
         assert "ours (this machine)" in out and "theirs (remote)" in out
+
+
+class TestStandaloneCorpusModel(unittest.TestCase):
+    """2026-10-01: the corpus is a standalone git repo (corpus/ owns the git;
+    remote root == corpus content — no branch aliasing)."""
+
+    def setUp(self):
+        import tempfile, shutil, subprocess
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        fab = self.tmp / "fabric"
+        corpus = fab / "corpus"
+        (corpus / "registry" / "promotions").mkdir(parents=True)
+        (corpus / "patterns").mkdir()
+        (corpus / "patterns" / "pattern-demo.md").write_text(
+            "---\ntype: pattern\n---\nbody\n")
+        (corpus / "registry" / "catalog.json").write_text("{}")
+        (fab / "AGENTS.md").write_text("---\ntype: index\n---\nmarker\n")
+        (corpus / "AGENTS.md").write_text("---\ntype: index\n---\nmarker\n")
+        subprocess.run(["git", "init", "-q", "-b", "main", str(fab)], check=True)
+        subprocess.run(["git", "-C", str(fab), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(fab), "-c", "user.email=t@t",
+                        "-c", "user.name=t", "commit", "-qm", "legacy"],
+                       check=True, capture_output=True)
+        self.fab, self.corpus = fab, corpus
+        patches = [
+            mock.patch.object(sync, "VAULT_ROOT", corpus),
+            mock.patch.dict(os.environ, {"WIKI_FABRIC_DIR": str(fab)}),
+        ]
+        for p in patches:
+            p.start(); self.addCleanup(p.stop)
+
+    def test_migrate_creates_standalone_corpus(self):
+        fab, corpus = self.fab, self.corpus
+        sync.cmd_migrate(None)
+        self.assertTrue((corpus / ".git").is_dir())
+        head = subprocess.run(["git", "-C", str(corpus), "rev-parse", "HEAD"],
+                              capture_output=True, text=True).stdout.strip()
+        self.assertTrue(head, "corpus has its own history")
+        tracked = subprocess.run(["git", "-C", str(fab), "ls-files", "corpus/"],
+                                 capture_output=True, text=True).stdout.strip()
+        self.assertFalse(tracked, "outer no longer tracks corpus content")
+        self.assertIn("corpus/", (fab / ".gitignore").read_text())
+        sync.cmd_migrate(None)  # double-migrate is a no-op (no raise)
+
+    def test_migrate_wires_remote_and_pushes(self):
+        import subprocess, tempfile
+        remote = tempfile.mkdtemp()
+        self.addCleanuplambda = None
+        subprocess.run(["git", "init", "-q", "--bare", remote], check=True)
+        sync.cmd_migrate(remote)
+        r = subprocess.run(["git", "-C", str(self.corpus), "ls-remote", remote,
+                            "refs/heads/main"], capture_output=True, text=True)
+        self.assertIn("refs/heads/main", r.stdout)
+
+    def test_push_after_migrate_no_legacy_warning(self):
+        import tempfile
+        remote = tempfile.mkdtemp()
+        subprocess.run(["git", "init", "-q", "--bare", remote], check=True)
+        sync.cmd_init(remote)
+        (self.corpus / "patterns" / "pattern-two.md").write_text(
+            "---\ntype: pattern\n---\nbody\n")
+        sync.cmd_push("second")
+        # reaching here without SystemExit + remote updated = no legacy block
+        r = subprocess.run(["git", "-C", str(self.corpus), "ls-remote", remote,
+                            "refs/heads/main"], capture_output=True, text=True)
+        self.assertTrue(r.stdout.strip())
+
+    def test_validate_fabric_rejects_non_git_content_dir(self):
+        import shutil
+        shutil.rmtree(self.fab / ".git", ignore_errors=True)
+        shutil.rmtree(self.corpus / ".git", ignore_errors=True)
+        with self.assertRaises(SystemExit) as ei:
+            sync.validate_fabric()
+        self.assertEqual(ei.exception.code, 1)
