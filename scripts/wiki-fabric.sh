@@ -17,10 +17,10 @@ set -euo pipefail
 
 # === Constants ===
 FABRIC_REPO="${WIKI_FABRIC_REPO:-https://github.com/hybridindie/wiki-fabric.git}"
-# Harness clone default: $HOME/wiki-fabric (deterministic, out of the way —
+# Harness clone default: ~/.wiki-fabric (deterministic, out of the way —
 # the old cwd-default littered whatever directory the reader happened to be
 # in; the harness home is findable from every resolver chain. --dir overrides.)
-DEFAULT_DIR="${HOME}/wiki-fabric"
+DEFAULT_DIR="${HOME}/.wiki-fabric"
 SCRIPT_NAME="wf"
 # Harness root, resolved once at parse time to an ABSOLUTE path. BASH_SOURCE is
 # relative when invoked as 'bash scripts/wiki-fabric.sh', so computing this lazily
@@ -140,18 +140,20 @@ find_harness() {
         echo "${DEFAULT_DIR}"
         return 0
     fi
-    if [[ -d "${HOME}/wiki-fabric/scripts" ]]; then
-        echo "${HOME}/wiki-fabric"
+    if [[ -d "${HOME}/.wiki-fabric/scripts" ]]; then
+        echo "${HOME}/.wiki-fabric"
         return 0
     fi
     # The installed CLI is a copy — BASH_SOURCE points at ~/.local/bin. The
     # fabric may still sit beside a harness clone (dev layout): <sibling>/wiki-fabric.
     if [[ -n "${WIKI_FABRIC_DIR:-}" ]]; then
-        local sibling_harness="$(dirname "${WIKI_FABRIC_DIR}")/wiki-fabric"
-        if [[ -d "${sibling_harness}/scripts" ]]; then
-            echo "${sibling_harness}"
-            return 0
-        fi
+        for sibling_name in ".wiki-fabric" "wiki-fabric"; do
+            local sibling_harness="$(dirname "${WIKI_FABRIC_DIR}")/${sibling_name}"
+            if [[ -d "${sibling_harness}/scripts" ]]; then
+                echo "${sibling_harness}"
+                return 0
+            fi
+        done
     fi
     return 1
 }

@@ -42,7 +42,7 @@ Install/update are owned by uv (`uv tool upgrade wiki-fabric`) — no CLI/harnes
 **Alternative (one-liner, dev mode):**
 
 ```bash
-# installs uv if missing, clones the harness to ~/wiki-fabric, creates
+# installs uv if missing, clones the harness to ~/.wiki-fabric, creates
 # the fabric at ~/.local/share/wiki-fabric, installs the wf CLI at ~/.local/bin/
 curl -fsSL https://raw.githubusercontent.com/hybridindie/wiki-fabric/main/scripts/wiki-fabric.sh | bash
 ```
@@ -54,14 +54,14 @@ Install flags:
 | `--corpus <git-url>` | Point the fabric at a team-shared corpus. **Teammate join:** if the remote already carries a corpus, it's pulled at install — the fabric carries the team's knowledge from the first command. **Lead machine:** publishes the initial corpus. See [Team Sync](./sync) |
 | `--vault <path>` | Pin where the Obsidian vault shell lives (written to fabric.yaml so every later `wf` call resolves the same place) |
 | `--with-graphify` | Enable the graphify integration (see [Integrations](./integrations)) |
-| `--dir <path>` | Harness clone location (default `~/wiki-fabric`) |
+| `--dir <path>` | Harness clone location (default `~/.wiki-fabric`) |
 | `--repo <url>` | Install from a fork |
 | `--interactive` | Walk through provider/model/routing config (prompts for everything — see [Configuration](./configuration)) |
 | `--no-vault` | Skip creating the Obsidian output vault |
 
 **What the one-liner actually does:** checks for **uv** (Astral's Python
 package manager) and installs it if missing, clones the **harness** (the code —
-this repo) to `~/wiki-fabric` (use `--dir` to choose
+this repo) to `~/.wiki-fabric` (use `--dir` to choose
 another spot), creates the **fabric** (your content
 + config) at `~/.local/share/wiki-fabric/` (XDG data dir), sets up the venv in
 the harness, and symlinks `wf` into `~/.local/bin/`. Everything Python runs
