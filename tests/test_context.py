@@ -853,14 +853,21 @@ class TestDomainHubs:
              mock.patch.object(fc, "_default_vault_root", return_value=wiki), \
              mock.patch.object(m, "CORPUS_ROOT", tmp_path), \
              mock.patch.object(m, "_wiki_root", return_value=wiki):
+            # seed the ontology the topics declare against (shared parser shape)
+            (tmp_path / "domains").mkdir(exist_ok=True)
+            (tmp_path / "domains" / "ontology.md").write_text(
+                "## Domains\n- **agent-systems** — x\n- **godot** — y\n\n"
+                "## Aliases\n- `godot-systems` -> `godot`\n")
             topics = [
                 {"slug": "tok", "title": "Token", "domain": "agent-systems", "claims": ["c1"]},
                 {"slug": "mesh", "title": "Mesh", "domain": "godot-systems", "claims": ["c2"]},
             ]
             hubs = m._generate_domain_hubs(topics, dry_run=False)
         assert len(hubs) == 2
+        assert (wiki / "domains" / "godot.md").exists()      # alias folded to canonical
+        assert not (wiki / "domains" / "godot-systems.md").exists()
         agent = (wiki / "domains" / "agent-systems.md")
-        godot = (wiki / "domains" / "godot-systems.md")
+        godot = (wiki / "domains" / "godot.md")  # canonical hub name (alias folded)
         assert agent.exists() and godot.exists()
         agent_txt = agent.read_text()
         assert "[[tok]]" in agent_txt

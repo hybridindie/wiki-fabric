@@ -49,6 +49,7 @@ except ImportError:
 
 from fabric_config import FABRIC_ROOT
 from wf_common import tokens, RETRIEVAL
+import ontology as _ontology_mod
 from fabric_config import CORPUS_ROOT, VAULT_ROOT
 from fabric_config import get_config, get_ignores, is_ignored, get_tuning
 from wf_common import parse_frontmatter
@@ -137,45 +138,26 @@ def _page_domains(pg):
 
 
 def _ontology_domains(pages):
-    """Domain names known to the ontology (domains/ontology.md '## Domains'
-    bullets), with declared aliases folded (Aliases map: `alias -> canonical`).
-    An alias list lets a domain carry alternate spellings (godot <- godot-systems)
-    without re-tagging pages; the canonical name is what matches. Empty ontology
-    → empty set (pages with domain: stay global until domains are approved)."""
-    names, alias_map = set(), {}
+    """Thin shim over the shared ontology parser (scripts/lib/ontology.py —
+    one parse dialect every consumer imports). Finds domains/ontology.md in
+    the page set; returns matchable spellings; alias map rides on the fn for
+    _page_domain_canonical."""
     for pg in pages:
         if pg["posix"] == "domains/ontology.md":
-            in_aliases = False
-            for line in pg["body"].splitlines():
-                s = line.strip()
-                if s.startswith("## "):
-                    in_aliases = s.strip("# ").lower() == "aliases"
-                    continue
-                if in_aliases:
-                    m = re.match(r"-\s+`?([a-z0-9-]+)`?\s*(?:->|←)\s*`?([a-z0-9-]+)`?", s)
-                    if m:
-                        alias_map[m.group(1)] = m.group(2)
-                    continue
-                m = re.match(r"- \*\*([a-z0-9-]+)\*\*", s)
-                if m:
-                    names.add(m.group(1))
-            break
-    names |= alias_map.keys()  # aliases are matchable spellings
-    _ontology_domains.aliases = alias_map
-    return names
+            onto = _ontology_mod.parse(pg["body"])
+            _ontology_domains.aliases = onto["aliases"]
+            return _ontology_mod.all_spellings(onto)
+    _ontology_domains.aliases = {}
+    return set()
 
 
 def _page_domain_canonical(pg, domain_names):
-    """The page's declared domains, resolved through the ontology's alias map —
-    returns CANONICAL names only. A declaration naming an unknown/aliasless
-    domain binds to nothing (the vocabulary gate stays honest)."""
+    """The page's declared domains → canonical names through the shared
+    resolver. A declaration naming an unknown/aliasless domain binds to
+    nothing (the vocabulary gate stays honest)."""
     alias_map = getattr(_ontology_domains, "aliases", {})
-    out = set()
-    for d in _page_domains(pg):
-        c = alias_map.get(d, d)
-        if c in domain_names:
-            out.add(c)
-    return out
+    onto = {"aliases": alias_map, "domains": domain_names - set(alias_map.keys())}
+    return _ontology_mod.canonicalize(_page_domains(pg), onto)
 
 
 def select_context(pages, task, paths, project, today, max_items=20):

@@ -25,6 +25,7 @@ from pathlib import Path
 from fabric_config import get_config, get_ignores, is_ignored
 from wf_common import sha256_file as sha256
 import layout
+import ontology
 
 import sys
 import re
@@ -504,6 +505,22 @@ def check_actors(fm, rel):
     return problems
 
 
+_ONTOLOGY_VOCAB_CACHE = {}
+
+def _ontology_vocab(state, domains_dir):
+    """Parse the ontology once per lint run (shared parser) for the
+    vocabulary gate. Missing ontology → empty vocab → every declaration
+    warns (the gate must not silently pass a vocabulary-less corpus)."""
+    key = str(domains_dir)
+    if key not in _ONTOLOGY_VOCAB_CACHE:
+        op = domains_dir / "ontology.md"
+        try:
+            _ONTOLOGY_VOCAB_CACHE[key] = ontology.parse(op.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            _ONTOLOGY_VOCAB_CACHE[key] = {"domains": set(), "aliases": {}, "tags": set()}
+    return _ONTOLOGY_VOCAB_CACHE[key]
+
+
 def check_ignore_config(config):
     """Deterministic ignore.* checks. Invalid regex patterns are skipped
     silently by get_ignores (so capture/lint can't crash) — but they should be
@@ -659,6 +676,19 @@ def _section_invariants(state):
                 for prob in check_citations(fm, rel, body2):
                     state.errors.append(prob)
         t = fm.get("type")
+        if t not in ("ontology", "index", "log", "registry") and fm.get("domain"):
+            # vocabulary gate: a declared domain must resolve through the
+            # ontology alias map to a KNOWN canonical domain. The ontology is
+            # the vocabulary single-truth; a declaration naming anything else
+            # binds nowhere (context) and is invisible to hubs — surface it
+            # where drift happens. Warning tier: the corpus predates the gate
+            # and re-tagging 34+ pages is a migration, not a lint fix.
+            onto = _ontology_vocab(state, layout.domains(state.vault))
+            res = ontology.canonicalize(fm.get("domain"), onto)
+            if not res and str(fm.get("domain")).strip():
+                state.warnings.append(
+                    "VOCABULARY %s: domain %r resolves to no ontology domain "
+                    "(## Domains / ## Aliases) — bind or re-tag" % (rel, fm.get("domain")))
         if t == "claim":
             if not fm.get("id"):
                 state.errors.append("CLAIM %s: missing id" % rel)

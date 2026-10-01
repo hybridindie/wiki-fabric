@@ -617,19 +617,32 @@ def _cold_start_vocabulary(fabric_root, harness_root, project_root, project_slug
             if detected:
                 top = [d for d, _ in detected.most_common(3)]
                 print(f"  Cold-start vocabulary: structural scan detected {top}")
-                header = ('---\ntype: ontology\ntitle: Domain Ontology\n'
-                          f'created: {date.today().isoformat()}\n---\n\n## Domains\n')
-                onto_src = ontology.read_text() if ontology.exists() else header
-                if "## Domains" in onto_src:
-                    onto_src = onto_src.replace(
-                        "## Domains",
-                        "## Domains\n\n"
-                        + "\n".join(f"- `{d}` (proposed, structural scan of {project_slug})"
-                                    for d in top) + "\n",
-                        1)
+                                # proposals are DOSSIERS (the sanctioned staging shape —
+                # backtick bullets inside ## Domains parsed nowhere and looked
+                # merged-but-weren't); promote-domains --apply merges them.
+                prop_dir = None
+                for cand in (fabric_root / "corpus" / "registry" / "domain-proposals",
+                             fabric_root / "registry" / "domain-proposals"):
+                    if cand.parent.exists():
+                        prop_dir = cand
+                        break
+                if prop_dir is not None:
+                    prop_dir.mkdir(parents=True, exist_ok=True)
+                    for d in top:
+                        dp = prop_dir / f"domain-{d}.md"
+                        if dp.exists():
+                            continue
+                        dp.write_text(
+                            f"---\ntype: change-set\ndomain: {d}\nstatus: proposed\n"
+                            f"created: {date.today().isoformat()}\n---\n\n"
+                            f"# Domain Proposal: {d}\n\n"
+                            f"Structural scan of {project_slug} (bootstrap cold start).\n")
                     ontology.parent.mkdir(parents=True, exist_ok=True)
-                    ontology.write_text(onto_src)
-                    print(f"  Ontology: proposed {top} (human review: promote-domains --apply)")
+                    if not ontology.exists():
+                        ontology.write_text(
+                            '---\ntype: ontology\ntitle: Domain Ontology\n'
+                            f'created: {date.today().isoformat()}\n---\n\n## Domains\n')
+                    print(f"  Domain proposals staged: {top} (human review: promote-domains --apply)")
                 return top
             else:
                 print("  No structural signals detected — project runs without domains")

@@ -148,10 +148,11 @@ def export(out_dir, scope="all", dry_run=False, root=None):
     else:
         import layout as _layout
         one = [_layout.projects(VAULT_ROOT) / scope,
-               _layout.evidence_raw(VAULT_ROOT) / scope]
+               _layout.evidence_raw(VAULT_ROOT) / scope,
+               _layout.domains(VAULT_ROOT) / scope]
         roots = [r for r in one if r.exists()]
         if not roots:
-            print(f"Error: unknown scope {scope!r}", file=sys.stderr)
+            print(f"Error: unknown scope {scope!r} (project slug or domain name)", file=sys.stderr)
             return 1
 
     ig = _user_ignores(VAULT_ROOT if root else None)

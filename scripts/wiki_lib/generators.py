@@ -705,6 +705,28 @@ def _generate_index(topics, projects, dry_run=False):
     return out
 
 
+_ONTOLOGY_VOCAB = None
+
+def _ontology_vocab_cache():
+    """Ontology machine-shape, cached per process (wiki export runs are
+    batch; the corpus does not change mid-export)."""
+    global _ONTOLOGY_VOCAB
+    if _ONTOLOGY_VOCAB is None:
+        import ontology as _o
+        try:
+            _ONTOLOGY_VOCAB = _o.parse(
+                (_layout.domains(fabric_config.CORPUS_ROOT) / "ontology.md")
+                .read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            _ONTOLOGY_VOCAB = {"domains": set(), "aliases": {}, "tags": set()}
+    return _ONTOLOGY_VOCAB
+
+
+def _spelled_domains(raw):
+    """topic['domain'] raw string ('agent-systems, godot-systems') -> list."""
+    return [d.strip() for d in re.split(r"[,\s]+", raw or "") if d.strip()]
+
+
 def _generate_domain_hubs(topics, dry_run=False):
     """Generate one wiki/domains/<domain>.md hub per domain.
 
@@ -723,9 +745,13 @@ def _generate_domain_hubs(topics, dry_run=False):
         if tfile.exists():
             m = re.search(r"^SUMMARY:\s*(.+)$", tfile.read_text(encoding="utf-8", errors="replace"), re.MULTILINE)
             summary = m.group(1).strip() if m else ""
-        doms = re.findall(r"[a-z0-9-]+", t.get("domain") or "")
-        if not doms:
-            doms = ["misc"]
+        # canonical resolve through the ontology (aliases fold; an alias
+        # spelling used to mint its own hub — agent-systems.md/godot-systems.md
+        # — diverging from the ontology vocabulary)
+        import ontology as _o
+        onto = _ontology_vocab_cache()
+        resolved = sorted(_o.canonicalize(_spelled_domains(t.get("domain")), onto))
+        doms = resolved or ["misc"]
         for d in doms:
             hubs.setdefault(d, {})[t["slug"]] = {
                 "title": t["title"], "summary": summary,

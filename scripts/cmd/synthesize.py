@@ -33,6 +33,18 @@ from fabric_config import get_local_model
 from wf_common import STOPWORDS, parse_frontmatter, norm
 
 import layout
+import ontology as _ontology_sp
+
+
+def _ontology_for_vocab():
+    """Load the corpus ontology for vocabulary binding (canonical domains +
+    aliases + shared tags). Missing ontology → empty vocabulary → no domain
+    field (honest unbound)."""
+    onto_path = layout.domains(VAULT_ROOT) / "ontology.md"
+    try:
+        return _ontology_sp.parse(onto_path.read_text(encoding="utf-8", errors="replace"))
+    except OSError:
+        return {"domains": set(), "aliases": {}, "tags": set()}
 
 # Generic words filtered from concept NAMES (distinct from retrieval STOPWORDS —
 # here they pollute a title, not a score; #155 audit: was two inline copies)
@@ -204,25 +216,40 @@ def synthesize_concept(cluster, concept_slug):
     }
 
 
-def write_concept_page(concept_slug, cluster, synthesis, domain):
-    """Write a type:concept page."""
+def _detect_domains(cluster, onto):
+    """Domain binding from the ONTOLOGY vocabulary (was: a hardcoded keyword
+    heuristic stamping alias spellings — godot-systems/agent-systems — onto
+    every concept regardless of the ontology). Match order, all alias-aware:
+    1. each claim's own project/stem tokens against ontology domain names +
+       shared tag set (claim mentioning 'godot' → domain 'godot' if known)
+    2. fallback: the shared tag set token with the strongest stem match
+    3. nothing matches → NO domain field (unbound; the lint vocabulary gate
+       and context both treat unbound honestly — a hardcode was worse: it
+       bound every concept to a vocabulary that could be wrong)."""
+    from wf_common import tokens as _tok
+    spellings = _ontology_sp.all_spellings(onto)
+    canon = {a: c for a, c in onto["aliases"].items()}
+    canon.update({d: d for d in onto["domains"]})
+    hits = set()
+    for c in cluster:
+        toks = _tok(str(c.get("stem", "")) + " " + str(c.get("statement", ""))[:400])
+        for sp in sorted(spellings):
+            if sp in toks or any(sp in t for t in toks if len(t) >= len(sp) >= 4):
+                hits.add(canon.get(sp, sp))
+    return sorted(h for h in hits if h in onto["domains"])[:3]
+
+
+def write_concept_page(concept_slug, cluster, synthesis, domain=None):
+    """Write a type:concept page. Legacy `domain` arg ignored (was a hardcoded
+    'agent-systems' stamp every call site passed); ontology vocabulary rules."""
     today = date.today().isoformat()
     claim_links = "\n".join(f'  - "[[{c["stem"]}]]"' for c in cluster)
 
-    # Find domain from cluster claims (keyword heuristic against known domains)
-    domains = set()
-    for c in cluster:
-        stem = c["stem"].lower()
-        if any(k in stem for k in ("godot", "game", "engine", "chunk", "scene")):
-            domains.add("godot-systems")
-        else:
-            domains.add("agent-systems")
-    if not domains:
-        domains.add("agent-systems")
-    domain_list = sorted(domains)
-
-    # Determine output path based on primary domain
-    primary_domain = domain_list[0] if domain_list else "agent-systems"
+    domains = _detect_domains(cluster, _ontology_for_vocab())
+    # concept pages stay flat in concepts/ (the domains/<d>/concepts home is a
+    # doc contract no writer implements yet — layout keeps one truth per dir);
+    # the domain BINDING travels in frontmatter.
+    primary_domain = domains[0] if domains else None
     concepts_dir = layout.concepts(VAULT_ROOT)
     concepts_dir.mkdir(parents=True, exist_ok=True)
     concept_path = concepts_dir / f"concept-{concept_slug}.md"
@@ -242,8 +269,7 @@ def write_concept_page(concept_slug, cluster, synthesis, domain):
 
     concept_path.write_text(f"""---
 type: concept
-title: {_concept_title_scalar(synthesis, concept_slug)}
-domain: [{", ".join(domain_list)}]
+title: {_concept_title_scalar(synthesis, concept_slug)}{chr(10) + "domain: [" + ", ".join(domains) + "]" if domains else ""}
 claims:
 {chr(10).join(f'  - "[[{c["stem"]}]]"' for c in cluster)}
 created: {today}
@@ -337,7 +363,7 @@ def synthesize_uncovered(cfg=None, threshold=0.4, min_claims=2, dry_run=False):
         if dry_run:
             continue
         synthesis = synthesize_concept(cluster, slug)
-        path = write_concept_page(slug, cluster, synthesis, "agent-systems")
+        path = write_concept_page(slug, cluster, synthesis)
         written.append(path)
         print(f"  concept: {path.name} ({len(cluster)} claims)", file=sys.stderr)
     return written
@@ -415,7 +441,7 @@ def main():
         synthesis = synthesize_concept(cluster, slug)
 
         # Write concept page
-        concept_path = write_concept_page(slug, cluster, synthesis, "agent-systems")
+        concept_path = write_concept_page(slug, cluster, synthesis)
         print(f"  Created: {concept_path.relative_to(VAULT_ROOT)}")
         print()
 

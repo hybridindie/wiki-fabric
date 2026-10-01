@@ -117,11 +117,13 @@ def scan_repo_tech_stack(repo_path, signal_lookup):
         for f in repo_path.glob(pattern):
             signals["devops"] += 1
 
-    # GDScript (godot signal)
+    # GDScript (godot signal) — canonical spelling (the tech-stack scanner's
+    # old 'godot-systems' vs the structural scanner's 'godot' split one domain
+    # into two score keys; alias-folding now absorbs it, but emit canonical)
     for ext in [".gd"]:
         count = sum(1 for f in repo_path.rglob(f"*{ext}") if ".godot" not in str(f))
         if count > 0:
-            signals["godot-systems"] += min(count, 5)
+            signals["godot"] += min(count, 5)
 
     return signals
 
@@ -150,16 +152,23 @@ def scan_source_tags(signal_lookup):
     return signals
 
 
-def load_ontology_domains():
-    """Parse existing domains from ontology.md. Tolerant of a not-yet-seeded
-    ontology: a missing file means no domains are declared yet."""
+def load_ontology():
+    """The ontology's machine shape via the shared parser (scripts/lib/
+    ontology.py): canonical domains + alias map + shared tag set. Tolerant of
+    a not-yet-seeded ontology: a missing file means no vocabulary is declared
+    yet (aliases map empty — nothing binds)."""
     if not ONTOLOGY_PATH.exists():
-        return set()
-    text = ONTOLOGY_PATH.read_text()
-    domains = set()
-    for m in re.finditer(r'-\s+\*\*(\w[\w-]*)\*\*', text):
-        domains.add(m.group(1))
-    return domains
+        return {"domains": set(), "aliases": {}, "tags": set()}
+    import ontology as _o
+    return _o.parse(ONTOLOGY_PATH.read_text())
+
+
+def load_ontology_domains():
+    """Every spelling ALREADY KNOWN — canonical names + alias keys. A scanner
+    emitting an alias spelling (godot-systems) must not re-propose it now that
+    the canonical name (godot) exists; the known-check is alias-aware."""
+    import ontology as _o
+    return _o.all_spellings(load_ontology())
 
 
 def compute_domain_scores(config):

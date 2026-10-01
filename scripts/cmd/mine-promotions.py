@@ -579,6 +579,21 @@ Notes:         Auto-generated from {len(set(ev.get('project', '') for ev in even
 def generate_pattern_file(cluster_key, events):
     """Generate a pattern file template."""
     projects = list(set(ev.get("project", "") for ev in events))
+    # domain binding from the ontology vocabulary over the cluster's event text
+    # (was hardcoded domain: [agent-systems] on every generated pattern)
+    import ontology as _onto
+    try:
+        _onto_data = _onto.parse((_layout.domains(CORPUS_ROOT) / "ontology.md")
+                                 .read_text(encoding="utf-8", errors="replace"))
+    except OSError:
+        _onto_data = {"domains": set(), "aliases": {}, "tags": set()}
+    from wf_common import tokens as _tok
+    _toks = set()
+    for ev in events:
+        _toks |= _tok(str(ev.get("problem", "")) + " " + str(ev.get("intervention", "")))
+    _hits = {sp for sp in _onto.all_spellings(_onto_data)
+             if sp in _toks or any(sp in tk for tk in _toks if len(tk) >= len(sp) >= 4)}
+    event_domains = ", ".join(sorted(_onto.canonicalize(_hits, _onto_data)))
     
     # Build the pattern file content using string concatenation to avoid f-string indentation issues
     lines = []
@@ -587,7 +602,7 @@ def generate_pattern_file(cluster_key, events):
     lines.append(f"id: pattern-{cluster_key}")
     lines.append(f"title: {cluster_key.replace('_', '-').title()}")
     lines.append("scope: global")
-    lines.append("domain: [agent-systems]")
+    lines.append("domain: [" + event_domains + "]")
     lines.append("status: candidate")
     lines.append("maturity: 1")
     lines.append("maturity_evidence:")

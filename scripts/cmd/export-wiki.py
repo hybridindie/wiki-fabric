@@ -70,7 +70,7 @@ def select_topics(min_claims=None):
         if len(claims) >= min_claims:
             topics.append({
                 "file": c, "title": title.group(1).strip() if title else c.stem,
-                "domain": dom.group(1) if dom else "agent-systems",
+                "domain": dom.group(1) if dom else "",  # unbound: hub falls to misc, no hardcoded vocabulary
                 "claims": claims, "body": s.split("---", 2)[2] if s.startswith("---") else s,
             })
     for t in topics:

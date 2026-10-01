@@ -68,7 +68,11 @@ def add_domain_to_ontology(domain, desc):
     if any(f"**{domain}**" in l for l in lines):
         return False  # already present
     lines.insert(insert_idx, bullet)
-    ONTOLOGY_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    text = "\n".join(lines) + "\n"
+    # keep the frontmatter updated: truthful (the ontology is a living page)
+    text = re.sub(r"^updated: .*$", f"updated: {date.today().isoformat()}",
+                  text, count=1, flags=re.MULTILINE)
+    ONTOLOGY_PATH.write_text(text, encoding="utf-8")
     return True
 
 

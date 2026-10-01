@@ -34,6 +34,27 @@ import layout
 PROJECTS_DIR = layout.projects(VAULT_ROOT)
 
 
+import ontology as _onto_mod
+import fabric_config as _fc
+
+
+def _event_domain(text):
+    """Domain binding from the ONTOLOGY vocabulary (shared parser, alias-folded);
+    was a hardcoded domain: [agent-systems] on every event. No ontology →
+    unbound (empty field; the lint vocabulary gate explains)."""
+    try:
+        onto = _onto_mod.parse((layout.domains(CORPUS_ROOT) / "ontology.md")
+                               .read_text(encoding="utf-8", errors="replace"))
+    except OSError:
+        return ""
+    from wf_common import tokens as _tok
+    toks = _tok(text)
+    hits = [sp for sp in sorted(_onto_mod.all_spellings(onto))
+            if sp in toks or any(sp in tk for tk in toks if len(tk) >= len(sp) >= 4)]
+    canon = _onto_mod.canonicalize(hits, onto)
+    return ", ".join(sorted(canon))
+
+
 def get_projects():
     """List available project namespaces."""
     if not PROJECTS_DIR.exists():
@@ -75,7 +96,7 @@ def write_event(project, problem, intervention, conditions, outcomes, evidence, 
         f"description: {yaml_scalar(f'Experience event in {project}: {problem[:100]}')}",
         f"generated: {{ by: \"{_actor()}\", at: \"{_now_iso()}\" }}",
         f"project: {project}",
-        "domain: [agent-systems]",
+        "domain: [" + _event_domain(problem) + "]",
         f"observed_problem: {yaml_scalar(problem)}",
     ]
 
