@@ -134,6 +134,7 @@ root is the corpus content exactly; sync is plain git against it:
 |---|---|---|
 | `wf sync push` (solo) | commit + `git push origin main` — rejected when the remote moved (pull first, never force) | local main ⇆ remote main |
 | `wf sync pull` | `git fetch` + `git merge origin/main` into local main | conflicts → review queue |
+| `wf sync commit-drift [--dry-run]` | stage + commit hook-accumulated drift with a plane-classified summary (never pushes) | clean worktree |
 | `wf sync push` (team) | one **per-push branch** `sync/<machine>-<stamp>` + a PR against `main` | the PR is the receipt; evidence-only auto-merges on green CI |
 | teammate join | `wf install --corpus URL` **clones the corpus** — content arrives as the clone; origin pre-wired | no checkout gymnastics |
 

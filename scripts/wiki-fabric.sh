@@ -1222,7 +1222,7 @@ case "${1:-help}" in
         shift
         fdir=$(find_fabric)
         if [[ -z "${1:-}" ]]; then
-            err "Usage: wf sync {setup [name] | init <git-url> | migrate [url] | status | push [-m msg] | pull}"
+            err "Usage: wf sync {setup [name] | init <git-url> | migrate [url] | status | push [-m msg] | pull | commit-drift [--dry-run]}"
             exit 1
         fi
         export WIKI_FABRIC_DIR="${fdir}"
@@ -1284,7 +1284,7 @@ case "${1:-help}" in
         echo "  context --task \"<task>\"             Compile a task context manifest (0 tokens)"
         echo "  log --project <slug>              Log an experience event"
         echo "  models ensure [--model <hf-id>] [--yes]  Check the local model; offer download if missing"
-        echo "  sync {init|status|push|pull}      Share the corpus with a team via a git remote"
+        echo "  sync {init|status|push|pull|commit-drift}   Share the corpus (commit-drift: stage + commit hook drift)"
         echo "  hook {install|uninstall|status}   Git post-commit auto-capture+ingest in a project"
         echo "                                    (--extract-claims: LLM runs on drift)"
         echo "  skill [--list] [<name>]           Print the procedure for a workflow (ingest, promote) — universal across agent harnesses"

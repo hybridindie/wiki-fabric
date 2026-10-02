@@ -406,6 +406,76 @@ def cmd_setup(name=None, private=True, yes=False):
     print(f"    --corpus git@github.com:{full}.git")
 
 
+def cmd_commit_drift(message=None, dry_run=False, quiet=False):
+    """#160 S5: the drift-wave ritual, formalized. Hooks accumulate hook
+    churn (capture/ingest/reverify/enrich writes) between human commits;
+    this stages + commits it with a plane-classified summary (Atom/Evidence/
+    Risky breakdown from sync policy). Local-only by design: you run
+    `commit-drift` then `push` explicitly — never pushes.
+    Exits 0 (nothing or committed), 1 (git failure)."""
+    validate_fabric()
+    _legacy_layout_check("commit-drift")
+    from sync_lib import policy as _policy
+
+    # porcelain: staged vs unstaged (drift is typically unstaged, but never
+    # clobber a deliberate partial stage — merge them)
+    # --untracked-files=all: porcelain collapses an untracked DIR into one
+    # entry ('?? evidence/') — the drift wave is usually exactly that
+    out = sh("status", "--porcelain", "--untracked-files=all") or ""
+    changes = [l for l in out.splitlines() if l.strip()]
+    if not changes:
+        if not quiet:
+            print("No drift to commit — the worktree is clean.")
+        return 0
+
+    paths = [l[3:].strip('"') for l in changes]
+    by_plane = {}
+    for _p in paths:
+        kind = _policy.classify_change(_p)
+        by_plane[kind] = by_plane.get(kind, 0) + 1
+    plane = _policy.classify_changes(paths)
+    plane_tag = {"atom": "knowledge-update", "evidence": "evidence-capture",
+                 "registry": "registry-drift", "other": "knowledge-update"}[plane]
+
+    counts = ", ".join(f"{v} {k}(s)" for k, v in sorted(by_plane.items()))
+    sample = "; ".join(p for p in paths[:3])
+    msg = message or (
+        f"drift [{plane_tag}]: {counts} — "
+        f"{sample}{' +{} more'.format(len(paths) - 3) if len(paths) > 3 else ''}")
+    if dry_run:
+        print(f"[dry-run] would commit {len(paths)} file(s) [{plane_tag}: {counts}]")
+        print(f"  message: {msg}")
+        return 0
+
+    sh("add", "-A")
+    # '--quiet' rc: 0 = no staged changes (git_sh: stdout '' — a real result),
+    # 1 = staged changes (git_sh returns None). None == HAS staged changes.
+    if sh("diff", "--cached", "--quiet") is None:
+        pass  # staged changes present → proceed
+    elif _staged_empty():
+        if not quiet:
+            print("Nothing staged after add -A — hook churn already committed upstream?")
+        return 0
+    # git_sh returns None on rc!=0 (hook reject, protected paths); '' on success
+    r = sh("commit", "-q", "-m", msg)
+    if r is None and not _committed():
+        print(f"commit failed — inspect: git -C {VAULT_ROOT} status", file=sys.stderr)
+        return 1
+    if not quiet:
+        print(f"Drift committed: {len(paths)} file(s) [{plane_tag}: {counts}]")
+        print(f"  {msg[:120]}")
+        print("Next: wf sync push (explicit — commit-drift never pushes)")
+    return 0
+
+
+def _staged_empty():
+    return not (sh("diff", "--cached", "--name-only") or "").strip()
+
+
+def _committed():
+    return not (sh("status", "--porcelain") or "").strip()
+
+
 def cmd_status():
     validate_fabric()
     remote = get_remote()
@@ -845,7 +915,7 @@ def cmd_pull():
 
 def main():
     parser = argparse.ArgumentParser(description="Share the corpus via a git remote (source-of-truth sync)")
-    parser.add_argument("command", choices=["setup", "init", "migrate", "status", "push", "pull", "resolve"], help="Sync operation")
+    parser.add_argument("command", choices=["setup", "init", "migrate", "status", "push", "pull", "resolve", "commit-drift"], help="Sync operation")
     parser.add_argument("remote", nargs="?", help="Git URL for `init`")
     parser.add_argument("name", nargs="?", help="Corpus repo name for `setup` (default: wiki-fabric-corpus)")
     parser.add_argument("-m", "--message", help="Commit message for push")
@@ -857,6 +927,8 @@ def main():
                         help="push: open a PR for this push even in solo mode (#100 receipts/ownership trail)")
     parser.add_argument("--no-pr", action="store_true",
                         help="push: direct push even in team mode (explicit opt-out)")
+    parser.add_argument("--dry-run", action="store_true", help="commit-drift: show the plane + message, write nothing")
+    parser.add_argument("--quiet", action="store_true", help="commit-drift: exit-0 report only when drift existed")
     args = parser.parse_args()
 
     if args.command == "setup":
@@ -874,6 +946,8 @@ def main():
         cmd_push(args.message, pr=args.pr, no_pr=args.no_pr)
     elif args.command == "pull":
         cmd_pull()
+    elif args.command == "commit-drift":
+        cmd_commit_drift(message=args.message, dry_run=args.dry_run, quiet=args.quiet)
     elif args.command == "resolve":
         conflict = args.conflict_file or args.remote
         if not conflict:
