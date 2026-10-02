@@ -56,6 +56,12 @@ REL_TYPES = {
 }
 EXCLUDE_DIRS = {".git", ".obsidian", ".opencode", "__pycache__", ".pytest_cache", ".venv", "venv", "node_modules", "graphify-out", "docs/site", "wiki", "build", "dist", "src"}
 EXCLUDE_DIR_PREFIXES = ("evidence/traces", "system/always-on")
+# harness-installed agent-file outputs: generated at wf harness install (no
+# frontmatter by design — they're instructions for a specific harness, not
+# fabric concepts). Committed into connected repos, they appear at vault roots.
+EXCLUDE_FILES = {"CLAUDE.md", "PI.md", "copilot-instructions.md",
+                 ".copilot-instructions.md", ".cursorrules", ".windsurfrules",
+                 "AGENTS.md", "GEMINI.md", "AGENTS"}
 TEMPLATE_DIRS = {"global/templates", "schemas", "templates"}
 HUB_KINDS = {"ontology", "registry", "index", "log"}
 LINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]")
@@ -168,6 +174,8 @@ def md_files(vault):
         if skip:
             continue
         rel_posix = rel.as_posix()
+        if rel.name in EXCLUDE_FILES:
+            continue  # harness-installed agent outputs (generated)
         if any(rel_posix.startswith(pref) for pref in EXCLUDE_DIR_PREFIXES):
             continue
         if "raw" in parts:
