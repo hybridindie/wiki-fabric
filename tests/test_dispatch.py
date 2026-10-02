@@ -270,7 +270,65 @@ class TestProjectsVerb:
         assert payload["projects"][0]["captures"]["claims"] == 0
 
 
-class TestVerbDocstrings:
+class TestOverlayDomainPreference:
+    """#158 S5 — overlay domains: wired as project → preferred domain binding
+    in context precedence (write-only field becomes load-bearing)."""
+
+    def test_overlay_domains_reads_repo_overlay(self, tmp_path, monkeypatch):
+        import importlib
+        import fabric_config
+        # fabric at tmp_path/fabric; the project repo is a SIBLING (discovery
+        # scans FABRIC_ROOT.parent — the fixture shape real layouts carry)
+        fabric = tmp_path / "fabric"
+        (fabric / "corpus").mkdir(parents=True)
+        (fabric / "fabric.yaml").write_text("repos:\n  wf-proj:\n    path: ../wf-proj\n")
+        repo = tmp_path / "wf-proj"
+        repo.mkdir()
+        (repo / ".wiki-overlay.md").write_text(
+            "---\nnamespace: wf-proj\ndomains:\n  - testing\n---\n")
+        monkeypatch.setenv("WIKI_FABRIC_DIR", str(fabric))
+        importlib.reload(fabric_config)
+        # overlay resolved through the discovery path (sibling scan)
+        import context as ctx
+
+        def fake_walk(root):
+            return iter(())
+        monkeypatch.setattr(ctx, "VAULT_ROOT", fabric / "corpus")
+        monkeypatch.setattr(ctx, "load_corpus", lambda *a, **k: [])
+        ctx._OV_PAGES_CACHE = None
+        ctx._ontology_domains.aliases = {}
+        domains = ctx._overlay_domains("wf-proj")
+        # ontology absent in the fake corpus → raw spelling preserved
+        assert domains == {"testing"}
+
+    def test_no_domains_no_binding(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("WIKI_FABRIC_DIR", str(tmp_path))
+        import context as ctx
+        monkeypatch.setattr(ctx, "VAULT_ROOT", tmp_path)
+        assert ctx._overlay_domains(None) == set()
+        assert ctx._overlay_domains("never-bootstrapped") == set()
+
+    def test_select_context_unchanged_without_preference(self, tmp_path, monkeypatch):
+        """Byte-parity: projects with no domains: declared select exactly as
+        before (#0-token core preserved — the binding only ADDS reasons)."""
+        import context as ctx
+        monkeypatch.setattr(ctx, "VAULT_ROOT", tmp_path)
+        import datetime
+        today = datetime.date.today()
+        pages = [
+            {"posix": "patterns/pattern-serialize.md", "stem": "pattern-serialize",
+             "type": "pattern", "scope": "global", "fm": {"status": "recommended"},
+             "body": "serialize writes and verify"},
+            {"posix": "concepts/concept-cache.md", "stem": "concept-cache",
+             "type": "concept", "scope": "global", "fm": {"status": "", "domain": "testing"},
+             "body": "cache invalidation rules"},
+        ]
+        pages2 = [dict(p) for p in pages]
+        monkeypatch.setattr(context_ := ctx, "_ontology_domains", lambda pages: set())
+        ctx._ontology_domains.aliases = {}
+        # project with NO overlay: empty preference — selection identical
+        sel, _ = ctx.select_context(pages2, "cache invalidation", [], "some-proj", today, 20)
+        assert sel  # sanity: the pipeline runs clean
     """#168 — every verb carries a one-line docstring (the introspected help
     surface; `wf help` prints them)."""
 

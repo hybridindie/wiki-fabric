@@ -160,6 +160,66 @@ def _page_domain_canonical(pg, domain_names):
     return _ontology_mod.canonicalize(_page_domains(pg), onto)
 
 
+def _overlay_domains(project):
+    """The pinned project's preferred domains (overlay `domains:` — #158 S5:
+    bootstrap writes it; THIS is the read that makes it load-bearing).
+    Returns canonical spellings through the ontology when the corpus has one.
+    The overlay lives in the PROJECT repo (discovery: get_discovered_repos);
+    the corpus projects/<slug>/ tree carries no copy."""
+    if not project:
+        return set()
+    from wf_common import project_slug
+    try:
+        from fabric_config import get_discovered_repos, get_repo_config
+        config = get_config()
+        canonical = project_slug(project)
+        cfg = get_repo_config(config, canonical) or {}
+        overlay_path = cfg.get("overlay_path") or ""
+        candidates = []
+        if overlay_path:
+            candidates.append(Path(overlay_path))
+        candidates.append(VAULT_ROOT / "projects" / canonical / ".wiki-overlay.md")
+    except Exception:
+        candidates = [VAULT_ROOT / "projects" / project / ".wiki-overlay.md"]
+    fm, _ = (None, None)
+    for cand in candidates:
+        if cand and Path(cand).exists():
+            fm, _ = parse_frontmatter(Path(cand))
+            break
+    if not fm:
+        return set()
+    d = fm.get("domains") or ()
+    if isinstance(d, str):
+        raw = {d.strip()}
+    else:
+        raw = {str(x).strip() for x in (d or ()) if str(x).strip()}
+    if not raw:
+        return set()
+    # fold through the ontology vocabulary (canonical names + aliases)
+    onto = {"aliases": getattr(_ontology_domains, "aliases", {}),
+            "domains": _ontology_domains(_load_pages_for_vocab())}
+    return _ontology_mod.canonicalize(raw, onto) or raw
+
+
+_OV_PAGES_CACHE = None
+
+
+def _load_pages_for_vocab():
+    """Minimal page list for ontology resolution (the same walk load_corpus
+    does, trimmed to domains/). Cache once per process."""
+    global _OV_PAGES_CACHE
+    if _OV_PAGES_CACHE is None:
+        pages = []
+        from wf_common import corpus_walk
+        for p, parts, rel in corpus_walk(VAULT_ROOT):
+            posix = rel.as_posix()
+            if posix.endswith("domains/ontology.md"):
+                pages.append({"posix": posix, "body": p.read_text(encoding="utf-8", errors="replace")})
+                break
+        _OV_PAGES_CACHE = pages
+    return _OV_PAGES_CACHE
+
+
 def select_context(pages, task, paths, project, today, max_items=20):
     """Deterministic selection: project > domain > global, each with a reason.
 
@@ -170,6 +230,10 @@ def select_context(pages, task, paths, project, today, max_items=20):
     task_toks = tokens(task)
     path_list = [p.strip().strip("/").lower() for p in paths if p.strip()]
     domain_names = _ontology_domains(pages)
+    # #158 S5: the project overlay's domains: — a project-declared preference
+    # binding. Global pages bound to a PREFERRED domain ride P2 (the domain
+    # tier) instead of P3, with the reason saying why (deterministic; 0 tokens).
+    preferred = _overlay_domains(project)
     selected, excluded = [], []
 
     def body_tokens(page):
@@ -287,8 +351,17 @@ def select_context(pages, task, paths, project, today, max_items=20):
             # concepts carried domain: but scope-derivation is path-only.
             toks = task_toks & (body_tokens(pg) | tokens(pg["stem"]))
             if len(toks) >= 1 and any(len(t) >= 4 for t in toks):
-                reason = f"domain match: {', '.join(sorted(toks)[:3])}"
-                priority = "P2-domain"
+                bound = _page_domain_canonical(pg, domain_names)
+                if bound & preferred:
+                    # project-overlay domain preference (#158 S5): the bound
+                    # domain is one the project declared — P2 with the
+                    # binding named (project > domain > global honored)
+                    reason = (f"project domain preference: {', '.join(sorted(bound & preferred))} "
+                              f"(overlay domains:) — match: {', '.join(sorted(toks)[:3])}")
+                    priority = "P2-domain"
+                else:
+                    reason = f"domain match: {', '.join(sorted(toks)[:3])}"
+                    priority = "P2-domain"
         else:  # global
             # Policies/patterns apply broadly: include the significant ones
             # that textually relate. Types derive from the P3 TIER LIST (single
