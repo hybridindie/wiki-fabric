@@ -86,6 +86,7 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 | `wf status` | Fabric health + inventory counts |
 | `wf doctor [--json]` | Environment diagnosis: endpoint reachability, model resolution (phantom compiler_model), compiler-eval readiness, judgment-tier availability, vault drift, gate — each failure names its fix |
 | `wf completions {bash\|zsh\|fish}` | Emit a shell completion script on stdout — verbs + subcommands (`mine chats\|promotions`, `eval behavior\|…`, `sync …`) + common flags per verb. Install: `eval "$(wf completions bash)"` (bash); `wf completions zsh > "${fpath[1]}/_wf" && compinit` (zsh); `wf completions fish > ~/.config/fish/completions/wf.fish` (fish). Static generation — never breaks offline |
+| `wf status --json` | The inventory/provenance surface as JSON for agents/hooks: fabric/vault paths, CLI mode, LLM config, inventory counts + connected repos, per-repo capture provenance (last capture, window, git/chats counts), lint health, gate sections, graphify state |
 | `wf vault [PATH]` | Scaffold/audit the Obsidian output vault |
 | `wf update` | Tool upgrade + auxiliary refresh (hooks reinstall from config, entity index, catalog) — packaged mode prints `uv tool upgrade wiki-fabric`; see [Upgrading wf](./upgrading) |
 | `wf bootstrap <project-path>` | Connect a project to the fabric |

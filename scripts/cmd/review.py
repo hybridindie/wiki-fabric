@@ -192,6 +192,8 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="Staleness review: check + re-verify")
     parser.add_argument("--check", action="store_true", help="Full staleness report")
+    parser.add_argument("--json", action="store_true",
+                        help="Machine-readable output (report dict for --check/--verify-sources/--auto-reverify; issue #164)")
     parser.add_argument("--project", help="Limit to a project slug")
     parser.add_argument("--verify", metavar="CLAIM", help="Re-verify a claim (path or id)")
     parser.add_argument("--verify-all", action="store_true", help="Re-verify all overdue claims")
@@ -224,16 +226,23 @@ def main():
     if args.verify_sources:
         from pathlib import Path as _P
         counts = {"refreshed": 0, "fresh": 0, "drifted": 0, "expired": 0, "none": 0}
+        outcomes = []
         for sp in sorted(layout.sources(CORPUS_ROOT).glob("src-*.md")):
             if args.project and args.project not in sp.stem:
                 continue
             outcome, detail = expire_or_reverify_source(sp, dry_run=args.dry_run)
             counts[outcome] = counts.get(outcome, 0) + 1
+            outcomes.append({"source": sp.name, "outcome": outcome, "detail": detail})
             if outcome in ("drifted", "expired"):
                 print(f"  {outcome.upper()}: {sp.name} — {detail}")
         print(f"Sources: {counts['refreshed']} refreshed, {counts['fresh']} fresh, "
               f"{counts['drifted']} drifted, {counts['expired']} expired"
               + (" [DRY RUN]" if args.dry_run else ""))
+        if args.json:
+            import json
+            print(json.dumps({"mode": "verify-sources", "counts": counts,
+                              "dry_run": bool(args.dry_run),
+                              "outcomes": outcomes}, indent=2))
         return 0
 
     if args.verify_locators:
@@ -251,9 +260,13 @@ def main():
         return 0
 
     if args.auto_reverify:
-        verified, skipped, _ = auto_reverify(dry_run=False, project=args.project)
+        import json as _json
+        verified, skipped, sketch = auto_reverify(dry_run=False, project=args.project, _collect=True)
         print(f"Auto-reverified: {verified} (source unchanged, quote verified)")
         print(f"Skipped: {skipped} (source drifted, no source, or quote not found — needs human review)")
+        if args.json:
+            print(_json.dumps({"mode": "auto-reverify", "verified": verified,
+                               "skipped": skipped, "skipped_files": sketch}, indent=2))
         return 0
 
     if args.verify_all:
@@ -269,6 +282,13 @@ def main():
     # default: report
     report = scan()
     print_report(report, args.project)
+    if args.json:
+        import json
+        print(json.dumps({"mode": "report", "date": TODAY.isoformat(),
+                          "project": args.project,
+                          "current": report["current"],
+                          "due": report["due"], "overdue": report["overdue"],
+                          "stale": report["stale"]}, indent=2))
     return 0
 
 
@@ -454,11 +474,13 @@ def verify_locators(dry_run=False, project=None, limit=None):
             "restored": restored, "restored_files": restored_files}
 
 
-def auto_reverify(dry_run=False, project=None):
+def auto_reverify(dry_run=False, project=None, _collect=False):
     """Mechanically re-verify claims whose source hasn't drifted:
     1. source sha256 matches recorded value → source is unchanged
     2. claim's quote still appears in the source text → claim holds
-    Stamps last_verified + review_after. 0 tokens. Returns (verified, skipped, failed)."""
+    Stamps last_verified + review_after. 0 tokens. Returns (verified, skipped, failed).
+    _collect=True returns failed as the list of skipped file NAMES (for --json);\
+    otherwise it stays a count (the historical shape)."""
     import hashlib
     from wf_common import parse_frontmatter
     report = scan()
@@ -467,6 +489,7 @@ def auto_reverify(dry_run=False, project=None):
     if not dry_run and not project:
         pass
     verified, skipped, failed = 0, 0, 0
+    skipped_files: list = []
     for item in candidates:
         if item["type"] != "claim":
             continue
@@ -487,6 +510,7 @@ def auto_reverify(dry_run=False, project=None):
             quote_match = re.search(r'quote: "?(.*?)"?\s*$', fm_text, re.MULTILINE)
             if not src_match or not quote_match:
                 skipped += 1
+                if _collect: skipped_files.append(f.name)
                 continue
             src_stem = src_match.group(1).strip("[]")
             quote = quote_match.group(1).strip()
@@ -503,11 +527,13 @@ def auto_reverify(dry_run=False, project=None):
             quote = str(ref.get("quote", "")).strip()
         if not quote:
             skipped += 1
+            if _collect: skipped_files.append(f.name)
             continue
         # find the source record
         src_file = layout.sources(CORPUS_ROOT) / f"{src_stem}.md"
         if not src_file.exists():
             skipped += 1
+            if _collect: skipped_files.append(f.name)
             continue
         src_fm, src_body = parse_frontmatter(src_file)
         # source_path is CORPUS-relative (the layout contract); FABRIC_ROOT was
@@ -520,6 +546,7 @@ def auto_reverify(dry_run=False, project=None):
             src_path = legacy if legacy.exists() else src_path
         if not src_path or not src_path.exists():
             skipped += 1
+            if _collect: skipped_files.append(f.name)
             continue
         # check sha256 drift
         from wf_common import sha256_file
@@ -527,6 +554,7 @@ def auto_reverify(dry_run=False, project=None):
         actual = sha256_file(src_path)
         if recorded[:12] != actual[:12]:
             skipped += 1  # source drifted — needs human review, can't auto-verify
+            if _collect: skipped_files.append(f.name)
             continue
         # check quote still in source (quote already YAML-unescaped above)
         quote_clean = re.sub(r"L\d+:", "", quote).strip()
@@ -541,12 +569,13 @@ def auto_reverify(dry_run=False, project=None):
             norm_q = _normalize_for_match(quote_clean)
             if norm_q and norm_q not in norm_src and norm_q[:int(len(norm_q)*0.6)] not in norm_src:
                 skipped += 1
+                if _collect: skipped_files.append(f.name)
                 continue
         # verified: source unchanged, quote present
         if not dry_run:
             verify_claim(f)
         verified += 1
-    return verified, skipped, failed
+    return (verified, skipped, skipped_files) if _collect else (verified, skipped, failed)
 
 
 if __name__ == "__main__":

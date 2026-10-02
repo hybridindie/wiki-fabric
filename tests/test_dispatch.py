@@ -14,6 +14,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import wiki_fabric.dispatch as dispatch
 
+_ROOT = Path(__file__).resolve().parent.parent
+
 
 class TestVerbs:
     def test_all_expected_verbs_registered(self):
@@ -140,6 +142,105 @@ COMP_WORDS=(wf revie ""); COMP_CWORD=1; _wf_completions; echo "VERB:${{COMPREPLY
     def test_requires_shell_arg(self, capsys):
         assert dispatch.main(["completions"]) == 1
         assert "Usage: wf completions" in capsys.readouterr().err
+
+
+class TestJsonSurfaces:
+    """#164 — ingest/review --json: machine-readable results for HITL/CI."""
+
+    def test_ingest_not_found_json(self, tmp_path, monkeypatch):
+        import subprocess, json
+        import fabric_config, importlib
+        (tmp_path / "corpus").mkdir()
+        (tmp_path / "fabric.yaml").write_text("repos: {}\n")
+        monkeypatch.setenv("WIKI_FABRIC_DIR", str(tmp_path))
+        importlib.reload(fabric_config)
+        r = subprocess.run(
+            [sys.executable, str(_ROOT / "scripts/cmd/ingest.py"),
+             "/nope/missing.md", "--json"],
+            capture_output=True, text=True,
+            env={"WIKI_FABRIC_DIR": str(tmp_path), "PATH": "/usr/bin:/bin",
+                 "PYTHONPATH": str(_ROOT / "scripts/lib")},
+            cwd=str(tmp_path))
+        assert r.returncode == 1
+        payload = json.loads(_last_json(r.stdout))
+        assert payload["mode"] == "source"
+        assert payload["results"][0]["status"] == "not-found"
+
+    def test_review_check_json(self, tmp_path, monkeypatch):
+        import subprocess, json
+        corpus = tmp_path / "corpus"
+        (corpus / "evidence" / "claims").mkdir(parents=True)
+        (corpus / "evidence" / "claims" / "claim-x-000.md").write_text(
+            "---\ntype: claim\nid: claim-x-000\nstatement: x\n"
+            "review_after: 2026-01-01\nstatus: supported\n---\n\n# t\n")
+        (tmp_path / "fabric.yaml").write_text("repos: {}\n")
+        monkeypatch.setenv("WIKI_FABRIC_DIR", str(tmp_path))
+        r = subprocess.run(
+            [sys.executable, str(_ROOT / "scripts/cmd/review.py"),
+             "--check", "--json"],
+            capture_output=True, text=True,
+            env={"WIKI_FABRIC_DIR": str(tmp_path), "PATH": "/usr/bin:/bin",
+                 "PYTHONPATH": str(_ROOT / "scripts/lib")},
+            cwd=str(tmp_path))
+        assert r.returncode == 0
+        payload = json.loads(_last_json(r.stdout))
+        assert payload["mode"] == "report"
+        assert len(payload["stale"]) == 1
+        assert payload["overdue"] == []
+
+
+def _last_json(text):
+    """Extract the last complete JSON object printed on mixed stdout (the
+    outermost payload — inner nested objects also start with '{')."""
+    import json as _j
+    dec = _j.JSONDecoder()
+    best = None
+    for i, ch in enumerate(text):
+        if ch == "{":
+            try:
+                obj, end = dec.raw_decode(text[i:])
+                cand = text[i:i + end]
+                if best is None or len(cand) > len(best):
+                    best = cand
+            except _j.JSONDecodeError:
+                continue
+    return best
+
+
+class TestStatusJson:
+    """#165 — wf status --json: the inventory/provenance machine surface."""
+
+    def test_status_json_shape(self, tmp_path, monkeypatch):
+        import subprocess, json
+        # dev-tree dispatch, fabric as tmp sibling layout: fabric root with corpus/
+        fabric = tmp_path
+        corpus = fabric / "corpus"
+        (corpus / "evidence" / "claims").mkdir(parents=True)
+        (corpus / "fabric.yaml").write_text("")  # content marker
+        (fabric / "fabric.yaml").write_text("repos: {}\n")
+        r = subprocess.run(
+            [sys.executable, "-c",
+             f"import sys; sys.path.insert(0, {str(_ROOT / 'src')!r});"
+             "from wiki_fabric.dispatch import main; sys.exit(main(['status', '--json']))"],
+            capture_output=True, text=True,
+            env={"WIKI_FABRIC_DIR": str(fabric), "PATH": "/usr/bin:/bin",
+                 "HOME": str(tmp_path)},
+            cwd=str(_ROOT))
+        assert r.returncode == 0
+        payload = json.loads(r.stdout)
+        assert set(payload) >= {"fabric", "vault", "cli", "llm", "inventory",
+                                "lint", "gate", "graphify"}
+        assert payload["inventory"]["claims"] == 0
+        assert isinstance(payload["inventory"]["repos"], list)
+
+    def test_status_prose_unchanged(self, capsys):
+        # the default stays prose (byte-shape): no '{' json leading
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = dispatch.main(["status", "--json"])
+        assert rc == 0
+        assert buf.getvalue().lstrip().startswith("{")
 
 
 class TestFindFabric:

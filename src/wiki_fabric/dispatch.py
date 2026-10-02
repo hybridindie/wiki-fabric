@@ -396,6 +396,94 @@ def _vault_dir(fabric_dir: Path) -> Path:
 @verb("status")
 def _status(argv):
     fdir = _require_fabric()
+    want_json = "--json" in argv
+    if want_json:
+        argv = [a for a in argv if a != "--json"]
+    if not want_json:
+        _status_prose(fdir)
+        return 0
+    import json as _json
+    payload = {"fabric": str(fdir)}
+    vault = _vault_dir(fdir)
+    vault_ok = vault.is_dir() and (vault / "index.md").exists()
+    payload["vault"] = {"path": str(vault), "fresh": bool(vault_ok)}
+    if os.environ.get("WF_PACKAGED") == "1":
+        from . import __version__
+        payload["cli"] = {"mode": "packaged", "version": __version__}
+    else:
+        payload["cli"] = {"mode": "dev"}
+    fabric_yaml = fdir / "fabric.yaml"
+    cfg = {}
+    try:
+        import yaml
+        cfg = yaml.safe_load(fabric_yaml.read_text()) or {}
+    except Exception:
+        cfg = {}
+    llm = cfg.get("llm") or {}
+    payload["llm"] = {"model": llm.get("model"), "compiler_model": llm.get("compiler_model") or llm.get("model"),
+                      "local_model": llm.get("local_model")}
+    croot = corpus_root(fdir)
+    counts = {}
+    for name, pattern in (("claims", "evidence/claims/claim-*.md"),
+                          ("sources", "evidence/sources/src-*.md"),
+                          ("concepts", "concepts/concept-*.md"),
+                          ("patterns", "patterns/pattern-*.md"),
+                          ("entity_pages", "global/entities/entity-*.md")):
+        counts[name] = len(list(croot.glob(pattern)))
+    projects_n = sum(1 for d in (layout.projects(croot)).iterdir() if d.is_dir()) if (layout.projects(croot)).is_dir() else 0
+    try:
+        sys.path.insert(0, str(harness_root() / "scripts" / "lib"))
+        import fabric_config as fc
+        discovered = len(fc.get_discovered_repos(fc.get_config()))
+        repo_names = sorted(fc.get_all_repo_names(fc.get_config()))
+    except Exception:
+        discovered, repo_names = 0, []
+    payload["inventory"] = {**counts, "projects_connected": projects_n,
+                            "discovered": discovered, "repos": repo_names}
+    # capture provenance per repo (#156 → machine surface #165)
+    provenance = {}
+    try:
+        if "fc" not in dir():
+            import fabric_config as fc
+        from wf_common import project_slug as _psl
+        for repo in list(fc.get_all_repo_names(fc.get_config())):
+            raw = layout.evidence_raw(croot) / _psl(repo)
+            mark = raw / "git" / ".last-capture"
+            last = window = ""
+            if mark.exists():
+                parts = mark.read_text().strip().split()
+                last = parts[0] if parts else ""
+                for tok in parts[1:]:
+                    if tok.startswith("window="):
+                        window = tok[len("window="):]
+            chats = raw / "chats"
+            n_chats = len(list(chats.glob("*.md"))) if chats.is_dir() else 0
+            n_git = len(list((raw / "git").glob("*.md"))) if (raw / "git").is_dir() else 0
+            if last or n_chats or n_git:
+                provenance[repo] = {"last_capture": last or None, "window_since": window or None,
+                                    "git_files": n_git, "chat_files": n_chats}
+    except Exception:
+        pass
+    payload["capture_provenance"] = provenance
+    r = subprocess.run([_python(fdir), str(_harness("scripts/cmd/lint.py")), str(croot)],
+                       capture_output=True)
+    payload["lint"] = {"ok": r.returncode == 0}
+    try:
+        sys.path.insert(0, str(harness_root() / "scripts" / "cmd"))
+        import gate as _gate_mod
+        sections, actionable = _gate_mod.gate()
+        payload["gate"] = {"actionable": bool(actionable),
+                           "sections": {k: (len(v[1]) if isinstance(v, tuple) else v)
+                                        for k, v in sections.items()}}
+    except Exception:
+        payload["gate"] = {"actionable": False, "sections": {}}
+    graphs = layout.global_graphs(croot)
+    payload["graphify"] = {"graphs_imported": bool(graphs.is_dir() and any(graphs.glob("*.json")))}
+    print(_json.dumps(payload, indent=2))
+    return 0
+
+
+def _status_prose(fdir):
     print("")
     print("════════════════════════════════════════════")
     print("   Wiki Fabric — Status")

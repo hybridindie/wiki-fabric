@@ -63,6 +63,30 @@ _LOG_LOCK = _threading.Lock()
 # main() sets this from argv (global). Module-level default so ingest_source()
 # stays callable as a library entry point (tests, evals) without a NameError.
 args_dry_run = False
+args_json = False
+_json_results = []  # per-source outcome dicts (--json surface, #164)
+
+
+def _record_json(status, source=None, **kw):
+    """Append a per-source outcome for the --json surface (issue #164).
+    Prose output is unchanged when --json is absent."""
+    if args_json:
+        _json_results.append({"status": status, "source": str(source) if source else None, **kw})
+        return True
+    return False
+
+
+def _emit_json(mode, extra=None):
+    import json
+    ingested = sum(1 for r in _json_results if r.get("status") == "ingested")
+    skipped = sum(1 for r in _json_results if r.get("status") in ("skipped", "not-found", "failed"))
+    payload = {"mode": mode, "ingested": ingested, "skipped": skipped,
+               "results": _json_results}
+    if args_dry_run:
+        payload["dry_run"] = True
+    if extra:
+        payload.update(extra)
+    print(json.dumps(payload, indent=2))
 
 
 
@@ -373,6 +397,7 @@ def ingest_source(source_path, extract_claims=False, model=None, dry_run=False, 
     source_path = source_path.resolve()
     if not source_path.exists():
         print(f"Error: Source file not found: {source_path}", file=sys.stderr)
+        _record_json("not-found", source_path)
         return False
 
     file_hash = sha256(source_path)
@@ -397,6 +422,7 @@ def ingest_source(source_path, extract_claims=False, model=None, dry_run=False, 
             print(f"Skipped — already ingested as {existing.name} (matching sha256)")
             print("  (anti-loop: unchanged sources are never re-ingested. If claims are "
                   "missing, run: wf ingest --pending <project> --extract-claims)")
+            _record_json("skipped", source_path, reason="already-ingested", record=existing.name)
             return False
 
     namespace = namespace or find_project_namespace(Path.cwd())
@@ -419,6 +445,9 @@ def ingest_source(source_path, extract_claims=False, model=None, dry_run=False, 
 
     if args_dry_run:
         print("  (dry run — no files written)")
+        _record_json("ingested", source_path, slug=source_slug, dry_run=True,
+                     claims=0, record=str(source_record_path), summary=str(summary_path),
+                     changeset=str(change_dir))
         return True
 
     # 1. Source record (skipped when resuming a pending source — it exists)
@@ -569,6 +598,11 @@ parent: "[[{change_set_id}]]"
 
     print("Created source record, summary, change-set manifest and diff")
 
+    _record_json("ingested", source_path, slug=source_slug, claims=len(claims),
+                 record=str(source_record_path), summary=str(summary_path),
+                 changeset=str(change_dir), stale_marked=stale_mark_drift,
+                 resumed=resuming)
+
     # 6. Log
     log_path = registry(VAULT_ROOT) / "log.md"
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -600,10 +634,14 @@ def main():
                         help="Concurrent extraction threads (default 1; cloud tiers tolerate 6-12)")
     parser.add_argument("--budget", type=int, default=None,
                         help="Max sources to process this run (bulk modes; default from tuning.ingest.budget). Excess stays for the next run — capture is bounded, ingest must be too.")
+    parser.add_argument("--json", action="store_true",
+                        help="Machine-readable result (mode, ingested/skipped counts, per-source outcomes)")
     args = parser.parse_args()
 
     global args_dry_run
     args_dry_run = args.dry_run
+    global args_json
+    args_json = args.json
 
     budget = args.budget
     if budget is None:
@@ -631,6 +669,8 @@ def main():
         pending = find_pending_sources(project)
         if not pending:
             print(f"No pending sources for {project} — nothing to extract")
+            if args_json:
+                _emit_json("pending", {"deferred_to_next_run": 0})
             return
         if budget and len(pending) > budget:
             deferred = len(pending) - budget
@@ -656,6 +696,8 @@ def main():
                     results.append(fut.result())
         ingested = sum(1 for r in results if r)
         print(f"\nIngest summary: {ingested} ingested, {len(results) - ingested} skipped")
+        if args_json:
+            _emit_json("pending")
         return
 
     if args.changed:
@@ -671,6 +713,8 @@ def main():
         changed = find_changed_sources(project)
         if not changed:
             print(f"No new or changed sources under evidence/raw/{project}/ — nothing to ingest")
+            if args_json:
+                _emit_json("changed", {"deferred_to_next_run": 0})
             return
         if budget and len(changed) > budget:
             deferred = len(changed) - budget
@@ -696,6 +740,8 @@ def main():
                     results.append(fut.result())
         ingested = sum(1 for r in results if r)
         print(f"\nIngest summary: {ingested} ingested, {len(results) - ingested} skipped")
+        if args_json:
+            _emit_json("changed")
         return
 
     if not args.source:
@@ -720,7 +766,11 @@ def main():
 
     ok = ingest_source(source_path, args.extract_claims, args.model, args.dry_run, args.project)
     if not ok:
+        if args_json:
+            _emit_json("source")
         sys.exit(1)
+    if args_json:
+        _emit_json("source")
 
 
 if __name__ == "__main__":

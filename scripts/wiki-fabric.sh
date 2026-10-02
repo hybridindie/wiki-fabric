@@ -909,13 +909,17 @@ try:
 except ModuleNotFoundError as e:
     print(f"wiki_fabric not importable ({e}) — run: wf update", file=sys.stderr)
     raise SystemExit(1)
-sys.exit(main(["status"]))
-'
+sys.exit(main(["status"] + sys.argv[2:]))
+' "$@"
     dispatch_rc=$?
     if [[ "${dispatch_rc}" -ne 0 ]]; then
         return "${dispatch_rc}"
     fi
     # bash-side extra: CLI sync (this harness script vs the installed wf)
+    # skipped in --json mode: the machine surface must stay parseable (#165)
+    if [[ " $* " == *" --json "* ]]; then
+        return 0
+    fi
     local cli_state
     cli_state="$(cli_sync_state)"
     case "${cli_state}" in
@@ -977,7 +981,7 @@ case "${1:-help}" in
         cmd_update
         ;;
     status)
-        cmd_status
+        cmd_status "$@"
         ;;
     doctor)
         fdir="$(find_fabric)"
