@@ -209,7 +209,10 @@ def sanitize_wikilinks(text):
     return text.replace("[[", "\\[\\[")
 
 
-def claim_frontmatter(claim, source_slug, idx, provenance=None):
+def claim_frontmatter(claim, source_slug, idx, provenance=None, project=None):
+    """project: the claim's owning repo (canonical) — the per-repo cut every
+    consumer guesses from the stem was lossy (lazy-dash class twice over);
+    the field is the honest source (`wf_common.project_slug`)."""
     quote = clean_quote(claim.get('quote', ''))
     statement = claim.get('statement', '')
     rels = list(provenance or [])
@@ -231,7 +234,7 @@ verified:
     at: "{_dt_iso()}"
 status: {claim.get('st', claim.get('status', 'proposed'))}
 confidence: {claim.get('conf', claim.get('confidence', 'medium'))}
-evidence_strength: {claim.get('ev', claim.get('evidence_strength', 'primary'))}
+{f"project: {yaml_scalar(project)}" if project else ""}{"" if not project else chr(10)}evidence_strength: {claim.get('ev', claim.get('evidence_strength', 'primary'))}
 source_refs:
   - source: "[[src-{source_slug}]]"
     locator: {yaml_scalar(claim.get('loc', claim.get('locator', 'N/A')))}
@@ -463,7 +466,8 @@ Faithful summary: [[sum-{source_slug}]].
     for i, claim in enumerate(claims):
         claim_path = claims_dir(VAULT_ROOT) / f"claim-{source_slug}-{i:03d}.md"
         claim_path.write_text(claim_frontmatter(claim, source_slug, i,
-                                                provenance=provenance_relations(source_slug, source_path)))
+                                                provenance=provenance_relations(source_slug, source_path),
+                                                project=namespace))
         print(f"  Claim {i+1}: {claim_path}")
 
     # 4. Summary

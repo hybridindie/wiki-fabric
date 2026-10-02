@@ -130,6 +130,17 @@ def _thread_graph():
         return ({}, {}, set())  # thread index unavailable → keyword clustering only
 
 
+def _pair_judgment_repo(ea, eb):
+    """The judgment routing repo for a pair: same non-empty project → that repo
+    (per-repo judgment block routes locally-routed repos' own-repo pairs);
+    cross-repo pairs (or unknown projects) → None (global judgment truth —
+    both events are corpus-level, the global tier is the shared surface)."""
+    pa, pb = str(ea.get("project") or "").strip(), str(eb.get("project") or "").strip()
+    if pa and pa == pb:
+        return pa
+    return None
+
+
 def _judged_context(ea, eb):
     """#103b: thread context string for judgment prompts — what structure
     says about the pair beyond their wording. Empty when unconnected."""
@@ -343,7 +354,9 @@ def cluster_events_judged(events, min_projects=2, threshold=None):
                     assigned.get(ea.get("_file")) is not None:
                 continue
             try:
-                same, p = same_recurrence(_text(ea), _text(eb), threshold=threshold, context=_judged(ea, eb))
+                _pair_repo = _pair_judgment_repo(ea, eb)
+                same, p = same_recurrence(_text(ea), _text(eb), threshold=threshold,
+                                          context=_judged(ea, eb), repo=_pair_repo)
             except JudgmentUnavailable as e:
                 # Tier degraded mid-run (missing key, backend gone): fall back
                 # to the deterministic keyword result rather than crashing —
@@ -409,7 +422,9 @@ def _split_incoherent_clusters(base, _text, threshold, route):
                 keep.append(ev)
                 continue
             try:
-                same, p = same_recurrence(_text(rep), _text(ev), threshold=threshold, context=_judged_context(rep, ev))
+                same, p = same_recurrence(_text(rep), _text(ev), threshold=threshold,
+                                          context=_judged_context(rep, ev),
+                                          repo=_pair_judgment_repo(rep, ev))
             except JudgmentUnavailable as e:
                 print(f"Judgment tier degraded mid-split ({str(e)[:80]}) — keeping cluster as-is")
                 return base

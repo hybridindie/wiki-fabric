@@ -530,6 +530,9 @@ def auto_reverify(dry_run=False, project=None):
             continue
         # check quote still in source (quote already YAML-unescaped above)
         quote_clean = re.sub(r"L\d+:", "", quote).strip()
+        # per-repo routing note: auto-reverify is mechanical (no judgment
+        # calls) — repo context affects only judgment-tier flows (verify-
+        # effects, mining refinement), nothing here.
         src_text = src_path.read_text(encoding="utf-8", errors="replace")
         if quote_clean and quote_clean not in src_text:
             # fuzzy: try normalized

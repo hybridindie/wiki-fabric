@@ -64,11 +64,15 @@ class JudgmentUnavailable(Exception):
     """Raised when the judgment tier is requested but not configured/reachable."""
 
 
-def judgment_config(config=None):
-    """Merged integrations.judgment dict; disabled by default."""
+def judgment_config(config=None, repo=None):
+    """Merged judgment dict — with `repo`, the per-repo override
+    (repos.<slug>.integrations.judgment) merges over the global block
+    (#156-adjacent seam: privacy-tiered repos can run judgment local/keep it
+    off while the fabric runs it globally, and vice versa). Disabled by
+    default."""
     config = config or get_config()
-    integ = get_integrations(config)
-    cfg = integ.get("judgment") or {}
+    from fabric_config import get_integration_cfg
+    cfg = get_integration_cfg(config, "judgment", repo)
     if not isinstance(cfg, dict):
         cfg = {"enabled": bool(cfg)}
     cfg.setdefault("enabled", False)
@@ -78,16 +82,18 @@ def judgment_config(config=None):
     return cfg
 
 
-def is_judgment_active(config=None):
-    """True only when explicitly enabled in fabric.yaml (same rule as
-    graphify/embeddings)."""
-    return is_integration_active(config or get_config(), "judgment")
+def is_judgment_active(config=None, repo=None):
+    """True only when explicitly enabled — globally OR for this repo (the
+    per-repo override wins; same rule family as graphify/embeddings)."""
+    from fabric_config import is_integration_active as _act
+    return _act(config or get_config(), "judgment", repo)
 
 
-def judgment_route(config=None):
-    cfg = judgment_config(config)
-    if not is_judgment_active(config):
-        raise JudgmentUnavailable("integrations.judgment.enabled is false")
+def judgment_route(config=None, repo=None):
+    cfg = judgment_config(config, repo)
+    if not is_judgment_active(config, repo):
+        which = f" (repos.{repo})" if repo else ""
+        raise JudgmentUnavailable(f"integrations.judgment.enabled is false{which}")
     return cfg.get("route", "cloud")
 
 
@@ -216,32 +222,37 @@ def _ask_laya(q):
 
 # ---- question constructors (typed; shared by all routes) ----
 
-def score(question, state, rubric=None):
-    """Ordered rubric score with probabilities + confidence."""
+def score(question, state, rubric=None, repo=None):
+    """Ordered rubric score with probabilities + confidence. `repo`: per-repo
+    judgment routing (same seam as noul/choice)."""
     return _ask({"kind": "score", "question": question, "state": state,
-                 "rubric": rubric or {}})
+                 "rubric": rubric or {}}, repo)
 
 
-def choice(question, state, options):
-    """One of the options with probabilities + confidence."""
+def choice(question, state, options, repo=None):
+    """One of the options with probabilities + confidence. `repo`: per-repo
+    judgment routing (same seam as noul)."""
     return _ask({"kind": "choice", "question": question, "state": state,
-                 "options": list(options)})
+                 "options": list(options)}, repo)
 
 
-def _ask(q):
-    route = judgment_route()
+def _ask(q, repo=None):
+    """Route per CALL: the caller's repo thread wins (per-repo integration
+    config, #156-adjacent), else the global judgment route."""
+    route = judgment_route(repo=repo)
     if route == "cloud":
         return _ask_cloud(q)
     return _ask_local(q)
 
 
-def noul(question, state, false_desc=None, true_desc=None):
+def noul(question, state, false_desc=None, true_desc=None, repo=None):
     """P(yes) for a yes/no judgment (0.0..1.0). Criteria descriptions
     (false_desc/true_desc) dramatically sharpen laya's separation —
     live-calibrated: criteria phrasing separates 0.97 vs 0.19; abstract
-    phrasing only 0.3–0.6 vs 0.19."""
+    phrasing only 0.3–0.6 vs 0.19. `repo` threads the per-repo judgment
+    config (route/enable) through the call."""
     out = _ask({"kind": "noul", "question": question, "state": state,
-                "false_desc": false_desc, "true_desc": true_desc})
+                "false_desc": false_desc, "true_desc": true_desc}, repo)
     return float(out.get("value", 0.0))
 
 
@@ -512,8 +523,10 @@ def is_near_threshold(p, threshold):
     return abs(p - threshold) <= _near_band()
 
 
-def same_recurrence(item_a, item_b, threshold=None, config=None, context=None):
+def same_recurrence(item_a, item_b, threshold=None, config=None, context=None, repo=None):
     """Pairwise 'same recurring pattern?' judgment for cluster refinement.
+    `repo`: per-repo judgment config (route/enable) — mining threads the
+    events' project so a per-repo judgment block routes its own pairs.
     Returns (same: bool, probability: float). Threshold defaults to
     MINING_THRESHOLD_DEFAULT (0.8) — live-calibrated on Laya: true paraphrase
     pairs score ~0.93, unrelated pairs ~0.75, so 0.6 would wrongly merge
@@ -527,7 +540,7 @@ def same_recurrence(item_a, item_b, threshold=None, config=None, context=None):
     if context:
         state = f"{state}\n\n{context}"
     p = noul("Do these two records describe the same recurring problem and intervention?",
-             state)
+             state, repo=repo)
     return (p >= threshold, p)
 
 # ---- Effect verification (ingest, #29 wiring A) ----------------------------

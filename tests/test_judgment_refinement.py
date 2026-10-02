@@ -39,7 +39,7 @@ def judged(prob=0.9, unavailable=False, capture=None, answers=None):
             yield
     else:
         if answers is not None:
-            def fake_noul(q, s):
+            def fake_noul(q, s, false_desc=None, true_desc=None, repo=None):
                 return answers.pop(0) if answers else prob
             with mock.patch.object(judgment, "judgment_route", return_value="cloud"), \
                  mock.patch.object(judgment, "noul", side_effect=fake_noul):
@@ -92,7 +92,7 @@ class TestG4Judge:
                                        side_effect=judgment.JudgmentUnavailable("disabled")):
                     yield
             else:
-                def fake_noul(q, s):
+                def fake_noul(q, s, false_desc=None, true_desc=None, repo=None):
                     capture.append(q)
                     return prob
                 with mock.patch.object(judgment, "judgment_route", return_value="cloud"), \
@@ -111,7 +111,7 @@ class TestG4Judge:
 
         @contextlib.contextmanager
         def capture_judged():
-            def fake_noul(q, s):
+            def fake_noul(q, s, false_desc=None, true_desc=None, repo=None):
                 calls.append(q)
                 return 0.9
             with mock.patch.object(judgment, "judgment_route", return_value="cloud"), \

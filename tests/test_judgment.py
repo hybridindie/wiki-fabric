@@ -71,7 +71,7 @@ class TestQuestionShapes:
 
     def test_score_and_choice_route_to_ask(self):
         calls = []
-        with mock.patch.object(judgment, "_ask", side_effect=lambda q: calls.append(q) or {"value": 1}):
+        with mock.patch.object(judgment, "_ask", side_effect=lambda q, repo=None: calls.append(q) or {"value": 1}):
             judgment.score("How good?", "state", rubric={"1": "bad", "5": "great"})
             judgment.choice("Which?", "state", ["a", "b"])
         assert calls[0]["kind"] == "score"

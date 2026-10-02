@@ -42,11 +42,28 @@ def _statement(path):
     return claim_statement(path), path.read_text(encoding="utf-8", errors="replace")
 
 
+def claim_repo(claim_path):
+    """The claim's own project, for per-repo judgment routing: the
+    frontmatter `project:` field (stamped at ingest since this fix) is the
+    honest cut; stems are lossy (the lazy-dash class hit this exact parse
+    twice). Legacy claims without the field get None → global routing."""
+    from wf_common import parse_frontmatter, project_slug
+    p = Path(claim_path)
+    try:
+        fm, _ = parse_frontmatter(p)
+    except OSError:
+        return None
+    proj = str(fm.get("project") or "").strip()
+    return project_slug(proj) or None if proj and proj != '""' else None
+
+
 def verify_claim(claim_path, max_pairs=12, min_confidence=0.6):
-    """Judge one new claim against its related pool. Returns a report dict."""
+    """Judge one new claim against its related pool (per-repo judgment routing:
+    the claim's repo decides enable/route; None → global). Returns a report dict."""
     from judgment import (effect_verdict, related_claim_pool,
                           judgment_route, JudgmentUnavailable)
-    route = judgment_route()
+    _repo = claim_repo(claim_path)
+    route = judgment_route(repo=_repo)
     statement, _ = _statement(claim_path)
     pool = related_claim_pool(claim_path, max_n=max_pairs)
     pairs = []

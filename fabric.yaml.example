@@ -99,6 +99,9 @@ repos:
 # Optional integrations — all off by default; enable explicitly.
 # When active, skills gain graph-aware steps (see system/skills/*/SKILL.md).
 integrations:
+  # per-repo overrides: repos.<slug>.integrations.<name> deep-merges over
+  # these (e.g. a privacy repo runs judgment {enabled: true, route: local}
+  # while the fabric keeps it off); judgment/graphify route per repo
   graphify:
     enabled: false                       # true → call-graph staleness, claim enrichment, graph expansion
     graph_dir: graphify-out

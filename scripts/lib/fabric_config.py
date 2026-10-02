@@ -206,10 +206,42 @@ def get_integrations(config):
     return merged
 
 
-def is_integration_active(config, name):
-    """True when an optional integration is explicitly enabled in fabric.yaml."""
+def is_integration_active(config, name, repo=None):
+    """True when an optional integration is enabled. With `repo`, the per-repo
+    override (repos.<slug>.integrations.<name>) wins over the global
+    integrations.<name> — a privacy-tiered repo can run an integration the
+    fabric keeps off globally (and vice versa). No repo or no repo config →
+    the global truth (unchanged behavior)."""
+    if repo:
+        enabled = get_integration_cfg(config, name, repo).get("enabled")
+        if enabled is not None:
+            return bool(enabled)
     integ = get_integrations(config)
     return bool((integ.get(name) or {}).get("enabled", False))
+
+
+def get_integration_cfg(config, name, repo=None):
+    """Effective integration config for a repo: repos.<slug>.integrations.<name>
+    (overlay or fabric.yaml repos entry, via get_repo_config) merged OVER the
+    global integrations.<name> (get_integrations includes shipped defaults).
+    Mirrors get_repo_graph_dir's precedence chain (#159-adjacent; the judgment
+    seam). Deep merge — a repo overriding `route` keeps the global cloud_model.
+    Returns {} when the integration has no config at all."""
+    global_cfg = get_integrations(config).get(name)
+    if not isinstance(global_cfg, dict):
+        global_cfg = {"enabled": bool(global_cfg)} if global_cfg else {}
+    if not repo:
+        return dict(global_cfg)
+    repo_cfg = get_repo_config(config, repo) or {}
+    repo_integ = repo_cfg.get("integrations") or {}
+    ri = repo_integ.get(name)
+    if ri is None:
+        ri = (repo_cfg.get("routing") or {}).get(f"integrations.{name}")  # routing-dotted alternative
+    if not isinstance(ri, dict):
+        ri = {"enabled": bool(ri)} if ri is not None else {}
+    merged = dict(global_cfg)
+    merged.update(ri)
+    return merged
 
 
 def _find_config_file():
@@ -522,6 +554,10 @@ def get_discovered_repos(config):
             "path": str(overlay.parent),
             "discovered": True,
             "routing": fm.get("routing") or {},
+            # per-repo integration overrides travel in the overlay too (the
+            # overlay IS the project's config) — consumers resolve through
+            # get_integration_cfg (repo block folds over global)
+            "integrations": fm.get("integrations") or {},
             "overlay_path": str(overlay),
             "_orig_ns": raw_ns,  # lint: non-canonical namespace advisory
         }
