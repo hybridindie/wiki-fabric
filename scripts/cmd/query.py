@@ -645,7 +645,7 @@ def generate_answer(query, scored, pages, query_type, symbol_hits=None, thread_h
     lines.append("## Suggested next action")
     lines.append("")
     if patterns and any(p["status"] == "candidate" for p in patterns):
-        lines.append("A candidate pattern is pending review — promote it: `python3 scripts/cmd/promote.py --list`")
+        lines.append("A candidate pattern is pending review — promote it: `wf promote --list`")
     elif questions:
         lines.append(f"Investigate: [[{questions[0]['title']}]] (priority: {questions[0]['priority']})")
     elif evidence_claims:

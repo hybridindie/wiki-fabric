@@ -96,7 +96,7 @@ def main():
                     "compiler_eval", ok,
                     why if ok else f"{compiler} has no recorded PASS eval — "
                     "mine/promote will refuse",
-                    fix=f"python3 scripts/eval/eval-stability.py --models {compiler} --record"))
+                    fix=f"wf eval stability --models {compiler} --record"))
             except Exception as e:
                 results.append(check_result("compiler_eval", False, f"check failed: {e}"))
 

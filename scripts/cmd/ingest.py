@@ -543,7 +543,7 @@ scope: staging
 
 ## Lint
 
-- Run: `python3 scripts/cmd/lint.py .`
+- Run: `wf lint --okf`
 
 ## Log
 

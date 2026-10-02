@@ -288,7 +288,7 @@ def main():
     print(f"  Project total: {event_count} events")
 
     if event_count >= 2:
-        print(f"\n  Tip: run `python3 scripts/cmd/mine-promotions.py` to check for cross-project patterns.")
+        print(f"\n  Tip: run `wf mine promotions` to check for cross-project patterns.")
 
 
 if __name__ == "__main__":

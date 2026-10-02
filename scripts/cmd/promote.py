@@ -180,8 +180,7 @@ def promote_dossier(dossier_path, dry_run=False):
         # Self-describing next steps (graphify provenance + usage feedback)
         from fabric_config import is_integration_active, get_config as _gc
         if is_integration_active(get_config(), "graphify"):
-            print("Next (graphify active): python3 scripts/harness/graphify-bridge.py --enrich "
-                  "— attach code provenance to code-adjacent patterns.")
+            print("Next (graphify active): wf graphify enrich  # attach code provenance")
         print("Track usage on the pattern page (usage: retrieved/applied counts) — "
               "a pattern read but never applied is too abstract.")
         return True

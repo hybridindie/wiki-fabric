@@ -237,7 +237,7 @@ created: {today}
 - **Evidence**: auto-proposed from claim/source tech-stack signals.
 - **Decision requested**: approve to add `{domain}` to `domains/ontology.md`, or reject.
 
-Review: `python3 scripts/cmd/promote-domains.py --apply <domain-proposal-{slug}>`
+Review: `wf promote-domains --apply <domain-proposal-{slug}>`
 """
     path.write_text(dossier, encoding="utf-8")
     return path, True
@@ -340,7 +340,7 @@ def main():
             print(f"  ✎ proposal dossier: {path.relative_to(CORPUS)}")
     print(f"\nWrote {written} proposal dossier(s) to registry/domain-proposals/")
     print("The ontology is unchanged. To merge after human review:")
-    print(f"  python3 scripts/cmd/promote-domains.py --apply <dossier>")
+    print(f"  wf promote-domains --apply <dossier>")
 
 
 if __name__ == "__main__":

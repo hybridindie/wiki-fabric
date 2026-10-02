@@ -250,7 +250,7 @@ def main():
 
     if new + changed > 0 and not args.dry_run and not args.quiet:
         print(f"\nNext: ingest the captured sources:")
-        print(f"  python3 scripts/cmd/ingest.py --extract-claims evidence/raw/{args.project}/<file>.md")
+        print(f"  wf ingest --changed {args.project} --extract-claims")
 
     if args.dry_run:
         print("\n[DRY RUN] No files written")

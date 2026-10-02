@@ -855,7 +855,7 @@ def main():
     if not ok:
         print(f"BLOCKED: {why}")
         print("Policy: dossier generation requires a recorded compiler eval for the compiler model.")
-        print("Run: python3 scripts/eval/eval-stability.py --models <compiler-model> --record")
+        print("Run: wf eval stability --models <compiler-model> --record")
         sys.exit(2)
 
     # Dossier stage routing: when every project in a cluster routes its dossier
@@ -941,12 +941,9 @@ def main():
     if _local_model is None or True:
         from fabric_config import is_integration_active
         if is_integration_active(_cfg, "graphify"):
-            print("\nNext (graphify active): python3 scripts/harness/graphify-bridge.py --enrich "
-                  "— attaches code provenance to code-adjacent dossiers before review.")
-
-    if suppressed:
-        print(f"\nRejected-buffer: {len(suppressed)} cluster(s) suppressed by tombstones: "
-              f"{', '.join(suppressed)} — review/overturn in patterns/_rejected/")
+            print(f"\n{len(suppressed)} cluster(s) suppressed by tombstones: "
+                  f"{', '.join(suppressed)} — review/overturn in patterns/_rejected/")
+            print("Next (graphify active): wf graphify enrich  # attach code provenance")
 
 
 if __name__ == "__main__":
