@@ -474,6 +474,33 @@ def _status(argv):
     print(f"    Discovered:         {discovered} (overlay auto-discovery)")
     print(f"    Entity pages:       {counts['Entity pages']}")
 
+    # Capture provenance per connected repo (#156): the active bounded window
+    # + last capture per channel — operators see the window-reduction without
+    # reading state files.
+    try:
+        from wf_common import project_slug as _psl
+        if "fc" not in dir():
+            import fabric_config as fc
+        for repo in list(fc.get_all_repo_names(fc.get_config())):
+            raw = layout.evidence_raw(croot) / _psl(repo)
+            mark = raw / "git" / ".last-capture"
+            window = last = ""
+            if mark.exists():
+                parts = mark.read_text().strip().split()
+                last = parts[0] if parts else ""
+                for tok in parts[1:]:
+                    if tok.startswith("window="):
+                        window = tok[len("window="):]
+            chats = raw / "chats"
+            n_chats = len(list(chats.glob("*.md"))) if chats.is_dir() else 0
+            n_git = len(list((raw / "git").glob("*.md"))) if (raw / "git").is_dir() else 0
+            if last or n_chats or n_git:
+                win = f", window since {window}" if window else ""
+                print(f"    Capture:            {repo} — last {last or 'never'}{win} "
+                      f"(git: {n_git}, chats: {n_chats})")
+    except Exception:
+        pass  # provenance is cosmetic — status must not break on it
+
     # Lint health
     print("")
     r = subprocess.run([_python(fdir), str(_harness("scripts/cmd/lint.py")), str(croot)],

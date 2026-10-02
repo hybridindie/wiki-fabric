@@ -284,10 +284,12 @@ def gh_comments(repo, num, per_page=50, max_pages=10):
 def capture_github(project, repo, since, until, limit, include_comments, dry_run):
     """Capture PRs and issues from a GitHub repo via the gh CLI. `until`
     (ISO date or None) bounds the window on the fresh side — backfill slices
-    without re-ingesting newer history already in the corpus."""
+    without re-ingesting newer history already in the corpus. stats carries
+    "threads_truncated" — pagination-cap hits, reported in the summary
+    (never silent: a truncated thread is a known incompleteness)."""
     dest_dir = EVIDENCE_RAW / project / "git"
     since_iso = since_date(since)
-    stats = {"new": 0, "changed": 0, "unchanged": 0}
+    stats = {"new": 0, "changed": 0, "unchanged": 0, "threads_truncated": 0}
 
     def in_window(datestr):
         """datestr within [since, until) — until is exclusive."""
@@ -337,6 +339,7 @@ def capture_github(project, repo, since, until, limit, include_comments, dry_run
                     if truncated:
                         sections.append("_(comment thread truncated at pagination cap "
                                         "— re-capture with a higher cap to extend)_")
+                        stats["threads_truncated"] += 1
             status = write_capture(dest_dir / f"pr-{num}.md", pr["title"],
                                    [pr_frontmatter(pr, repo)] + sections[:4], sections[4:], dry_run)
             stats[status.lower()] += 1
@@ -378,6 +381,7 @@ def capture_github(project, repo, since, until, limit, include_comments, dry_run
                     if truncated:
                         sections.append("_(comment thread truncated at pagination cap "
                                         "— re-capture with a higher cap to extend)_")
+                        stats["threads_truncated"] += 1
             status = write_capture(dest_dir / f"issue-{num}.md", issue["title"], sections[:5], sections[5:], dry_run)
             stats[status.lower()] += 1
             print(f"  Issue #{num}: {status}")
@@ -392,7 +396,7 @@ def capture_local(project, repo_path, since, budget, dry_run):
     interesting-commit count shrinks the window (effective_window) instead
     of truncating the newest-first list."""
     dest_dir = EVIDENCE_RAW / project / "git"
-    stats = {"new": 0, "changed": 0, "unchanged": 0}
+    stats = {"new": 0, "changed": 0, "unchanged": 0, "threads_truncated": 0}
 
     requested_iso = since_date(since)
     scanned, count_fn = make_local_counter(repo_path, requested_iso)
@@ -621,7 +625,8 @@ def main():
     if not args.dry_run:
         write_since_state(args.project, window=args.since)
     print()
-    print(f"Capture summary: {stats['new']} new, {stats['changed']} changed, {stats['unchanged']} unchanged")
+    print(f"Capture summary: {stats['new']} new, {stats['changed']} changed, {stats['unchanged']} unchanged"
+          + (f", {stats['threads_truncated']} thread(s) truncated at the comment-page cap" if stats.get("threads_truncated") else ""))
     if args.dry_run:
         print("[DRY RUN] No files written")
     elif total > 0:

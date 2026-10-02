@@ -2,7 +2,9 @@ import os, subprocess, sys
 from pathlib import Path
 
 fabric = Path(os.environ['WF_FABRIC'])
-slug = os.environ['WF_SLUG']
+sys.path.insert(0, str(fabric / 'scripts' / 'lib'))  # shared helpers (wf_common)
+from wf_common import project_slug as _psl  # canonical fold (#158 S3)
+slug = _psl(os.environ['WF_SLUG'])  # underscore repo dirs fold; capture/ingest resolve canonically
 py = sys.executable
 
 # 1. Capture (sha256 drift vs recorded sources; exit 2 == drift)

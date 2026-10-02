@@ -427,9 +427,22 @@ def save_config(config, path=None):
 
 
 def get_all_repo_names(config):
-    """Return list of configured repo names (explicit + discovered)."""
+    """Return list of configured repo CANONICAL names (explicit keys folded +
+    discovered overlays already canonical, #158 S1). One identity per repo:
+    a kebab explicit key and an underscore overlay namespace collapse to the
+    same entry; `auto_discover:` (a non-repo config key) never lists."""
     merged = get_discovered_repos(config)
-    names = list(config.get("repos", {}).keys())
+    try:
+        from wf_common import project_slug
+    except ImportError:
+        project_slug = lambda s: s
+    names = []
+    for k in config.get("repos", {}).keys():
+        if k == "auto_discover":
+            continue
+        c = project_slug(k)
+        if c not in names:
+            names.append(c)
     for slug in merged:
         if slug not in names:
             names.append(slug)
@@ -461,9 +474,13 @@ def _overlay_fingerprint():
 
 def get_discovered_repos(config):
     """Scan fabric siblings for project overlays. Returns {slug: repo_cfg} for
-    every sibling with a .wiki-overlay.md. Cached per-process on mtimes;
-    respects repos.auto_discover: false. Explicit repos entries always win on
-    key conflicts (see get_repo_config)."""
+    every sibling with a .wiki-overlay.md — keyed on the CANONICAL slug
+    (wf_common.project_slug: comfyui_mcp → comfyui-mcp, #158 S1). Before the
+    fold, an underscore namespace and a kebab fabric.yaml key were two repo
+    identities merged by no one; every consumer now addresses one name.
+    Cached per-process on mtimes; respects repos.auto_discover: false.
+    Explicit repos entries always win on key conflicts (see get_repo_config).
+    `_orig_ns` carries the raw namespace for the lint advisory."""
     global _OVERLAY_CACHE
     repos_cfg = config.get("repos") or {}
     if repos_cfg.get("auto_discover") is False:
@@ -472,13 +489,19 @@ def get_discovered_repos(config):
     if _OVERLAY_CACHE is not None and _OVERLAY_CACHE[0] == fp:
         return _OVERLAY_CACHE[1]
 
+    try:
+        from wf_common import project_slug
+    except ImportError:
+        _OVERLAY_CACHE = (fp, {})
+        return {}
+
     found = {}
     parent = FABRIC_ROOT.parent
     try:
         overlays = sorted(parent.glob("*/.wiki-overlay.md"))
     except OSError:
         overlays = []
-    for overlay in overlays:
+    for overlay in sorted(overlays, key=lambda o: o.stat().st_mtime if o.exists() else 0):
         try:
             text = overlay.read_text(encoding="utf-8", errors="replace")
             if not HAVE_YAML:
@@ -489,14 +512,18 @@ def get_discovered_repos(config):
             fm = yaml.safe_load(m.group(1)) or {}
         except Exception:
             continue  # torn/partial overlay mid-write → not discoverable this cycle
-        slug = str(fm.get("namespace") or "").strip()
-        if not slug or slug in found:
+        raw_ns = str(fm.get("namespace") or "").strip()
+        if not raw_ns:
+            continue
+        slug = project_slug(raw_ns)
+        if slug in found:
             continue  # sibling name collision: first found wins; lint flags ambiguity
         found[slug] = {
             "path": str(overlay.parent),
             "discovered": True,
             "routing": fm.get("routing") or {},
             "overlay_path": str(overlay),
+            "_orig_ns": raw_ns,  # lint: non-canonical namespace advisory
         }
     _OVERLAY_CACHE = (fp, found)
     return found
@@ -506,15 +533,26 @@ def get_repo_config(config, repo_name):
     """Effective per-repo config: explicit fabric.yaml entry merged over the
     discovered overlay (explicit wins on every key; routing from the overlay
     applies unless the fabric.yaml entry sets the same key). Returns {} for
-    unknown repos."""
+    unknown repos. `repo_name` is canonicalized first (#158 S1): a lookup by
+    'comfyui_mcp' and by 'comfyui-mcp' address the same identity — explicit
+    fabric.yaml keys are matched by their canonical fold too (a kebab key
+    configures the underscore-named overlay project)."""
+    try:
+        from wf_common import project_slug
+    except ImportError:
+        project_slug = lambda s: s
+    canonical = (project_slug(str(repo_name)) if repo_name else "") or repo_name
     repos_cfg = config.get("repos") or {}
-    explicit = repos_cfg.get(repo_name) or {}
-    discovered = get_discovered_repos(config).get(repo_name) or {}
+    # explicit tables: fold each key to canonical for the match
+    explicit_key = next((k for k in repos_cfg
+                         if k != "auto_discover" and project_slug(k) == canonical), None)
+    explicit = repos_cfg.get(explicit_key) if explicit_key else (repos_cfg.get(repo_name) or {})
+    discovered = get_discovered_repos(config).get(canonical) or {}
     if not explicit and not discovered:
         return {}
     merged = dict(discovered)
     overlay_routing = dict(discovered.get("routing") or {})
-    for k, v in explicit.items():
+    for k, v in (explicit or {}).items():
         merged[k] = v
         if isinstance(v, dict) and k == "routing":
             overlay_routing = {**overlay_routing, **v}  # explicit routing keys win

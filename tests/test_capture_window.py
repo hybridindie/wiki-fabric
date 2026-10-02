@@ -326,7 +326,8 @@ class TestUntilWindow:
         monkeypatch.setattr(capture_git, "gh", fake_gh)
         monkeypatch.setattr(capture_git, "EVIDENCE_RAW", tmp_path / "raw")
         stats = capture_git.capture_github("p", "o/r", "1w", None, 30, False, dry_run=True)
-        assert stats == {"new": 1, "changed": 0, "unchanged": 0}
+        assert {k: v for k, v in stats.items() if k != "threads_truncated"} == \
+            {"new": 1, "changed": 0, "unchanged": 0}
 
 
 class TestIngestBudget:

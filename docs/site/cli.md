@@ -20,7 +20,7 @@ can have different trust rules. The ones you'll touch daily are `claim`,
 
 | Type | Location | Purpose |
 |------|----------|---------|
-| `source` | `evidence/sources/` | Immutable bibliographic record + sha256 |
+| `source` | `evidence/sources/` | Immutable bibliographic record + sha256; capture kinds carry their own frontmatter contracts (`pr-record`: pr/merged_at; `chat-session`: session/harness; `commit`: commit/committed_at — see schemas/frontmatter.md §source) |
 | `source-summary` | `evidence/source-summaries/` | Faithful summary with locators, no inference |
 | `claim` | `evidence/claims/` | Atomic assertion with `source_refs` (locator + quote) + `code_symbols` + `graph_edges` |
 | `concept` | `concepts/` (unbound) or `domains/<domain>/concepts/` (bound; canonical via the ontology alias map) | Stable explanation built ONLY from linked claims |

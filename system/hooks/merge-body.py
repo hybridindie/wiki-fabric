@@ -31,14 +31,16 @@ subprocess.run([py, str(fabric / 'scripts/cmd/gate.py'), '--quiet', '--write-man
 #    GitHub remote; fire-and-forget — never blocks, failures just log.
 try:
     from fabric_config import get_config, get_all_repo_names, resolve_repo_path
+    from wf_common import project_slug as _psl
+    _slug_canon = _psl(slug)  # WF_SLUG = repo dirname (raw; underscore dirs fold to canonical)
     cfg = get_config()
 except Exception as _e:
     print(f'[wf hook] capture-git skipped (config unreadable: {_e})', flush=True)
     cfg = None
 if cfg is not None:
     for repo_name in get_all_repo_names(cfg):
-        if repo_name != slug:
-            continue  # this hook fires in the merged repo only
+        if repo_name != _slug_canon:
+            continue  # this hook fires in the merged repo only (canonical match, #158 S3)
         repo_path = resolve_repo_path(cfg, repo_name)
         if repo_path is None or not (repo_path / '.git').exists():
             continue

@@ -521,6 +521,101 @@ def _ontology_vocab(state, domains_dir):
     return _ONTOLOGY_VOCAB_CACHE[key]
 
 
+_CORPUS_SEGMENTS = ("evidence", "patterns", "anti-patterns", "skills", "concepts",
+                    "domains", "projects", "registry", "global", "syntheses", "questions")
+_REJOIN_RE = None
+
+
+def check_layout_respells(vault):
+    """#157 residue, commit-time layout guard (the pytest guard's fast regex
+    subset over the SHIPPED scripts, not the corpus): a corpus-path join
+    re-spelled in scripts/ drifts layout single-truth. Regex tier only (no
+    ast parse per lint run); the full AST guard lives in
+    tests/test_layout_guard.py and stays the authority."""
+    import re as _re
+    global _REJOIN_RE
+    if _REJOIN_RE is None:
+        _REJOIN_RE = _re.compile(
+            r"\b(?:CORPUS_ROOT|VAULT_ROOT)\s*/\s*['\"](?:"
+            + "|".join(_re.escape(s) for s in _CORPUS_SEGMENTS) + r")['\"]")
+    probs = []
+    scripts_dir = vault / "scripts" if (vault / "scripts").is_dir() else None
+    # the shipped scripts live in the HARNESS (not the corpus vault) — lint's
+    # target IS the harness root on corpus runs; probe both
+    for probe in (vault, vault.parent):
+        sd = probe / "scripts"
+        if not sd.is_dir():
+            continue
+        for f in sd.rglob("*.py"):
+            rel = f.relative_to(vault.parent if probe == vault.parent else vault).as_posix()
+            if rel in ("scripts/lib/layout.py", "scripts/lib/fabric_config.py",
+                       "scripts/lib/paths.py"):
+                continue
+            try:
+                text = f.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            for m in _REJOIN_RE.finditer(text):
+                line = text.count("\n", 0, m.start()) + 1
+                probs.append(f"LAYOUT-GUARD {rel}:{line}: corpus path re-spelled "
+                             f"outside layout.py — compose via layout ({m.group(0)[:44]})")
+        break  # one scan is enough
+    return probs
+
+
+def check_repo_identity(config):
+    """#158 S2: repo identity via the canonical slug. Errors: two config
+    sources whose canonical slugs COLLIDE (underscore overlay + kebab
+    fabric.yaml key with different bodies — they address one identity while
+    carrying two configs). Warnings: overlays whose namespace is a
+    non-canonical spelling (advisory; a --lineage-free rename fixes)."""
+    probs = []
+    try:
+        from wf_common import project_slug
+        import fabric_config as _fc
+        canonical = _fc.project_slug if hasattr(_fc, "project_slug") else project_slug
+        repos_cfg = (config.get("repos") or {}) if isinstance(config, dict) else {}
+        seen = {}
+        for k, v in repos_cfg.items():
+            if k == "auto_discover":
+                continue
+            c = canonical(k)
+            if c in seen and seen[c] != k:
+                probs.append(
+                    f"IDENTITY repos.{k}: canonical slug '{c}' collides with repos.{seen[c]} "
+                    f"(two config keys, one repo identity — rename one)")
+            seen.setdefault(c, k)
+        discovered = _fc.get_discovered_repos(config) if config is not None else {}
+        for c, rc in discovered.items():
+            orig = str(rc.get("_orig_ns") or "").strip()
+            if orig and orig != c:
+                probs.append(
+                    f"IDENTITY namespace '{orig}' is a non-canonical spelling of '{c}' "
+                    f"(advisory: rename the overlay namespace or add an alias; "
+                    f"lookups fold either way, new projects should use the canonical form)")
+            # cross-source collision: explicit key + discovered mapping to the same
+            # canonical with DIFFERENT declared paths → genuinely divergent configs
+            explicit = repos_cfg.get(orig) or repos_cfg.get(c)
+            if isinstance(explicit, dict) and explicit.get("path") and rc.get("path"):
+                from pathlib import Path as _P
+                from fabric_config import FABRIC_ROOT as _FR
+                pe = _P(explicit["path"].expanduser()) if isinstance(explicit["path"], _P) \
+                    else _P(str(explicit["path"])).expanduser()
+                if not pe.is_absolute():
+                    pe = (_FR / pe).resolve()
+                po = _P(rc["path"].expanduser()) if isinstance(rc["path"], _P) \
+                    else _P(str(rc["path"])).expanduser()
+                if not po.is_absolute():
+                    po = (_FR / po).resolve()
+                if pe.resolve() != po.resolve() and pe.exists() and po.exists():
+                    probs.append(
+                        f"IDENTITY repos.{c}: explicit path resolves to {pe} but overlay "
+                        f"declares {po} (two sources, one identity, different repos)")
+    except Exception:
+        pass  # config half-wired → structural lint still runs
+    return probs
+
+
 def check_ignore_config(config):
     """Deterministic ignore.* checks. Invalid regex patterns are skipped
     silently by get_ignores (so capture/lint can't crash) — but they should be
@@ -962,6 +1057,19 @@ def main():
         errors.extend(check_ignore_config(get_config()))
     except Exception:
         pass  # same half-config tolerance as above
+    try:
+        for prob in check_layout_respells(vault):
+            errors.append(prob)
+    except Exception:
+        pass  # layout guard is belt-and-braces; the pytest guard is the authority
+    try:
+        # #158 S2: identity problems split by severity — canonical collisions
+        # are errors (one identity, two configs); advisories are warnings
+        for prob in check_repo_identity(get_config()):
+            (errors if prob.startswith("IDENTITY repos.") and ("collides" in prob or "resolves to" in prob)
+             else warnings).append(prob) if isinstance(prob, str) else None
+    except Exception:
+        pass  # config half-wired → structural lint still runs
 
     # check sections (#124.3): each section a function on shared state
     state = LintState(vault, today, only_orphans=only_orphans)
