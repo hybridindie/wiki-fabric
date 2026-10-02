@@ -44,7 +44,7 @@ class TestDetection(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             (root / ".claude").mkdir()
-            (root / "GEMINI.md").touch()
+            (root / ".gemini").mkdir()   # own-output marker (GEMINI.md) removed: echo ≠ presence
             keys = [s["key"] for s in detect_installed(root)]
             assert "claude" in keys and "gemini" in keys
 

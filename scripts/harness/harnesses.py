@@ -14,6 +14,7 @@
 
 import json
 import os
+import re
 import sys
 import sys as _s, pathlib as _p
 _HERE = _p.Path(__file__).resolve().parent
@@ -34,7 +35,10 @@ SPECS = [
         "instructions": ["CLAUDE.md", "AGENTS.md"],
         "user_instructions": [".claude/CLAUDE.md", "CLAUDE.md"],
         "skills_dir": ".claude/skills",          # .claude/skills/<name>/SKILL.md
-        "detect": [".claude", "CLAUDE.md"],
+        # detect: the harness's OWN store (its dotdir) — never its/our OUTPUT
+        # files: CLAUDE.md is written BY install (self-detecting loop) and
+        # AGENTS.md is shared harness-agnostic fabric content (#158 S3 family)
+        "detect": [".claude"],
     },
     {
         "key": "opencode",
@@ -52,20 +56,21 @@ SPECS = [
         "name": "OpenAI Codex CLI",
         "instructions": ["AGENTS.md"],          # read natively
         "config": "codex.toml",                 # ~ only; skip project merge
-        "detect": [".codex", "AGENTS.md"],
+        "detect": [".codex"],                   # AGENTS.md output-echo removed (self-detect loop)
         "user_only": True,                      # no project-level config merge
     },
     {
         "key": "copilot",
         "name": "GitHub Copilot",
         "instructions": [".github/copilot-instructions.md"],
-        "detect": [".github/copilot-instructions.md", ".github"],
+        # .github alone is repo CI infra — matched every repo with workflows
+        "detect": [".github/copilot-instructions.md"],
     },
     {
         "key": "gemini",
         "name": "Gemini CLI",
         "instructions": ["GEMINI.md"],
-        "detect": ["GEMINI.md", ".gemini"],
+        "detect": [".gemini"],                  # GEMINI.md output-echo removed
     },
     {
         "key": "cursor",
@@ -101,7 +106,7 @@ SPECS = [
         "key": "pi",
         "name": "Pi",
         "instructions": ["AGENTS.md", "PI.md"],
-        "detect": [".pi", "PI.md"],
+        "detect": [".pi"],                      # PI.md output-echo removed
     },
 ]
 
@@ -168,20 +173,55 @@ def spec_by_key(key, project_root=None):
     return None
 
 
+# Harness-OWNED outputs (written by install itself) never prove presence —
+# they'd make every detection self-fulfilling. A detect pattern that names a
+# file our installer writes (CLAUDE.md, PI.md, copilot-instructions.md) or a
+# dotdir carrying our copies (.claude/, .opencode/) checks the USER-LEVEL
+# store instead (~/<pattern>), where the harness itself lives.
+_OWN_OUTPUT_DETECT = re.compile(
+    r"^(?:CLAUDE\.md|PI\.md|GEMINI\.md|AGENTS\.md|copilot-instructions\.md"
+    r"|\.claude/|\.opencode/|\.pi/)")
+
+
+def _detect_hits(spec, root):
+    """True when the harness is REALLY present: project-level patterns match,
+    except own-output patterns which resolve against the user's home store
+    (a harness is a machine-level app; its true home is ~)."""
+    for pat in spec.get("detect", []):
+        if _OWN_OUTPUT_DETECT.match(pat.rstrip("*")):
+            home = Path.home() / pat.lstrip("./").rstrip("/")
+            if home.exists():
+                return True
+            continue  # own-output in the project dir = echo, not presence
+        if list(root.glob(pat)):
+            return True
+    return False
+
+
 def detect_installed(project_root):
-    """Harnesses with a marker in this project. Returns [spec, ...] — always
-    includes the AGENTS.md-reading tools (they read the file we write anyway)."""
+    """Really-present harnesses: project-store detection with home-fallback
+    for our own-output patterns, plus the AGENTS.md-reading agents (they read
+    the file we write anyway — instructed once, harmless where absent)."""
     root = Path(project_root)
     found, agentic = [], []
+    seen_keys = set()
     for spec in all_specs(project_root):
-        hits = any(list(root.glob(pat)) for pat in spec.get("detect", []))
-        if hits:
+        if _detect_hits(spec, root):
             found.append(spec)
-        if "AGENTS.md" in spec.get("instructions", []):
-            agentic.append(spec)
+            seen_keys.add(spec["key"])
+            continue  # genuinely present → full install
+        instructions = spec.get("instructions") or []
+        if "AGENTS.md" in instructions:
+            # AGENTS-only tools: instruct via AGENTS.md (the file we write
+            # anyway) but NEVER their extra outputs (skill dirs, PI.md,
+            # copilot-instructions, CLAUDE.md) — those follow real presence.
+            scoped = dict(spec)
+            scoped["_install_scope"] = "agents-only"
+            agentic.append(scoped)
     for spec in agentic:
-        if spec not in found:
+        if spec["key"] not in seen_keys:
             found.append(spec)
+            seen_keys.add(spec["key"])
     return found
 
 
@@ -339,10 +379,14 @@ def main():
 
     total = 0
     for spec in targets:
-        written = install_instructions(spec, project_root, body, force=args.force)
-        written += install_skills(spec, project_root, harness_root, force=args.force)
-        written += install_plugin(spec, project_root, harness_root, force=args.force)
-        written += install_skills_paths(spec, project_root, force=args.force)
+        agents_only = spec.get("_install_scope") == "agents-only"
+        instructions_spec = spec if not agents_only else {
+            **spec, "instructions": ["AGENTS.md"]}
+        written = install_instructions(instructions_spec, project_root, body, force=args.force)
+        if not agents_only:  # skills/plugins follow REAL harness presence
+            written += install_skills(spec, project_root, harness_root, force=args.force)
+            written += install_plugin(spec, project_root, harness_root, force=args.force)
+            written += install_skills_paths(spec, project_root, force=args.force)
         if written:
             print(f"  {spec['name']}:")
             for w in written:

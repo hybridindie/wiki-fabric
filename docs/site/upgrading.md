@@ -27,10 +27,11 @@ uv tool upgrade wiki-fabric
 # 2. Refresh helpers after the tool lands
 wf update                 # idempotent post-upgrade pass: hook reinstall
                           # (--repos-from-config) + entity index + catalog rebuild
-wf harness install --force --all
-                          # refresh COPIED skills + instruction files into every
-                          # detected harness (.claude/skills, .opencode/skill,
-                          # AGENTS.md/CLAUDE.md/PI.md/copilot-instructions, ...)
+wf harness install         # DETECTED harnesses only (real presence: the
+                          # harness's own store, project-level or ~; own outputs
+                          # never prove presence). --all widens deliberately;
+                          # AGENTS.md-reading agents get instructed via AGENTS.md
+                          # without writing their harness-specific files
 wf hook status            # per repo: hook presence + version
 
 # 3. Corpus drift the upgrade surfaced (plane-classified; never pushes)
