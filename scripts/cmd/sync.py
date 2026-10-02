@@ -130,8 +130,19 @@ def describe_namespaces(names):
 
 
 def git_status():
-    out = sh("status", "--porcelain")
-    return [l for l in (out or "").splitlines() if l.strip()]
+    # --untracked-files=all: plain porcelain collapses an untracked DIRECTORY
+    # into one entry ('?? evidence/') — capture waves are exactly that shape,
+    # so counts/commit-drift/status all under-counted. Renames: porcelain
+    # 'R  old -> new' — the PATH the file lives at now is after ' -> '.
+    out = sh("status", "--porcelain", "--untracked-files=all")
+    lines = []
+    for l in (out or "").splitlines():
+        if not l.strip():
+            continue
+        if " -> " in l[3:]:
+            l = l[:3] + l[3:].split(" -> ")[-1]
+        lines.append(l)
+    return lines
 
 
 def is_content_path(path_str):
