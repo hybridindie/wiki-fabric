@@ -133,7 +133,8 @@ def write_event(project, problem, intervention, conditions, outcomes, evidence, 
     # into two projects is ONE evidence unit however many projects it spans.
     # project alone = the capture-side default; --lineage overrides (mined-from
     # an upstream doc/PR another project already captured).
-    lines.append(f"lineage: \"{(lineage or "").strip() or project}\"")
+    _lineage_val = (lineage or "").strip() or project
+    lines.append(f"lineage: \"{_lineage_val}\"")
     lines.append(f"created: {today}")
     lines.append(f"updated: {today}")
     lines.append("---")
