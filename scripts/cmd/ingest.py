@@ -23,7 +23,7 @@ import hashlib
 import json
 import subprocess
 from pathlib import Path
-from datetime import date
+from datetime import date, timedelta
 
 from fabric_config import get_config, VAULT_ROOT, actor, get_stage_route, is_local_route, ensure_local_model, get_local_model, get_tuning
 # Extraction layer lives in extract_backends (prompt, LLM backends, JSON
@@ -107,6 +107,42 @@ def provenance_relations(source_slug, source_path):
     else:
         return []
     return [rel]
+
+
+# Source staleness tiers (#160 S1): the SOURCE carries its own review window,
+# derived from the capture kind at ingest — git captures (PR/issue/commit
+# records age fastest: upstream history rewrites/moves) review sooner; stable
+# docs slower; chats live in the chat thread tier. 0 tokens, stamped once.
+SOURCE_REVIEW_TIERS = {
+    "pr-record": 30,       # merged_at + discussion churn — decays fast
+    "commit": 30,          # same decay family as PR records
+    "chat-session": 45,
+    "default": 180,        # docs/immutable captures: slow tier
+}
+
+
+def source_kind(source_path):
+    """Capture kind from the raw path shape (mirrors provenance_relations)."""
+    p = str(source_path).replace("\\", "/")
+    if "/git/pr-" in p:
+        return "pr-record"
+    if "/git/commit-" in p:
+        return "commit"
+    if "/git/issue-" in p:
+        return "pr-record"  # issue records share the PR decay family
+    if "/chats/" in p:
+        return "chat-session"
+    return "default"
+
+
+def source_staleness_stamps(source_path):
+    """Frontmatter lines: review_after by capture-kind tier. Emitted at record
+    creation; review --auto-reverify rolls it (sources are scan()-reported
+    natively — see review.py SOURCE tier wiring)."""
+    tier = SOURCE_REVIEW_TIERS.get(source_kind(source_path),
+                                  SOURCE_REVIEW_TIERS["default"])
+    after = (date.today() + timedelta(days=tier)).isoformat()
+    return f"review_after: {after}"
 
 
 def stale_mark_derived_claims(source_path, file_hash, dry_run=None):
@@ -398,6 +434,7 @@ tags: []
 resource: "evidence/raw/{source_path.relative_to(_layout.evidence_raw(VAULT_ROOT)).as_posix() if 'evidence/raw' in str(source_path) else source_path.name}"
 source_path: evidence/raw/{source_path.relative_to(_layout.evidence_raw(VAULT_ROOT)).as_posix() if 'evidence/raw' in str(source_path) else source_path.name}
 sha256: {file_hash}
+{source_staleness_stamps(source_path)}
 captured: {date.today().isoformat()}
 summary: "[[sum-{source_slug}]]"
 status: pending

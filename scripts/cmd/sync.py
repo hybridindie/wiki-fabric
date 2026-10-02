@@ -177,6 +177,32 @@ def validate_fabric():
 
 
 
+def scaffold_promotion_queue():
+    """#160 S3: the promotion checklist sync init promises (system/skills/
+    promote/SKILL.md; dossiers link [[promotion-queue]]). Scaffolds only when
+    absent — a human-maintained file, never overwritten."""
+    q = layout.registry(VAULT_ROOT) / "promotion-queue.md"
+    if q.exists():
+        return
+    q.write_text("""---
+type: registry
+title: Promotion Queue
+created: {d}
+updated: {d}
+---
+
+# Promotion Queue
+
+Human-maintained checklist of pattern candidates in flight (7-point review:
+independence, recurrence, evidence quality, applicability, counterexamples,
+cost-of-being-wrong, maturity). Dossiers live at `registry/promotions/`.
+
+| Pattern | Maturity | Dossier | Observation note |
+|---|---|---|---|
+""".replace("{d}", date.today().isoformat()), encoding="utf-8")
+    print(f"Scaffolded {q.relative_to(VAULT_ROOT)} (human-maintained checklist)")
+
+
 def scaffold_ci_workflow():
     """Write the corpus CI workflow (lint 0-error gate + OKF floor + catalog
     freshness + conflict block) into <corpus>/.github/workflows/ when absent.
@@ -276,6 +302,8 @@ def cmd_init(remote_url):
     validate_fabric()
     scaffold_ci_workflow()
     scaffold_freshness_workflow()
+    scaffold_promotion_queue()
+    layout.questions(VAULT_ROOT).mkdir(parents=True, exist_ok=True)  # #160 S4 plane scaffold
 
     # Verify the remote is reachable
     if sh("ls-remote", remote_url, "HEAD") is None and not remote_url.startswith("/"):
@@ -316,6 +344,8 @@ def cmd_setup(name=None, private=True, yes=False):
     validate_fabric()
     scaffold_ci_workflow()
     scaffold_freshness_workflow()
+    scaffold_promotion_queue()
+    layout.questions(VAULT_ROOT).mkdir(parents=True, exist_ok=True)  # #160 S4 plane scaffold
 
     # 1. gh CLI detection + auth
     def _run(args, timeout=TIMEOUT_API):

@@ -56,7 +56,7 @@ def harvest_concept(concept_path, dry_run=False):
     questions, in_section = [], False
     for line in body.splitlines():
         if line.startswith("## "):
-            in_section = line.strip() == "## Open Questions"
+            in_section = line.strip().lower() == "## open questions"  # case-insensitive heading
             continue
         if in_section and line.strip().startswith("- "):
             q = line.strip()[2:].strip()

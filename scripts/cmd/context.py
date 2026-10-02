@@ -196,6 +196,11 @@ def select_context(pages, task, paths, project, today, max_items=20):
         if status == "superseded":
             excluded.append({"stem": pg["stem"], "path": pg["posix"], "reason": "superseded"})
             continue
+        if status == "expired":
+            # #160 S2: upstream vanished (raw deleted) — the record is a
+            # tombstone with provenance, never retrieval input
+            excluded.append({"stem": pg["stem"], "path": pg["posix"], "reason": "expired (upstream gone)"})
+            continue
         if status == "deprecated":
             excluded.append({"stem": pg["stem"], "path": pg["posix"], "reason": "deprecated"})
             continue

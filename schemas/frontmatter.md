@@ -38,6 +38,7 @@ Per-type required fields. A page lacking required fields fails `scripts/cmd/lint
 | `sha256` | content hash of the raw file (recomputed on refresh) |
 | `captured` | date |
 | `summary` | `[[link]]` to the `source-summary` |
+| `review_after` | `YYYY-MM-DD` — capture-kind staleness tier, stamped at ingest (pr/commit 30d, chats 45d, docs 180d; #160 S1) |
 
 Capture-specific source kinds:
 - **`pr-record`** (capture-git, github route): adds `source_repo` (`owner/name`), `pr` (number), `pr_state`, `merged_at` (date, when merged), quoted `title`. Graph nodes for threads (#102).
@@ -49,7 +50,7 @@ Capture-specific source kinds:
 | Field | Notes |
 |---|---|
 | `source` | `[[link]]` to the source record |
-| `status: pending \| ingested` | `ingested` once a summary exists |
+| `status: pending \| ingested \| expired` | `ingested` once a summary exists; `expired` when the upstream source vanished (raw deleted; provenance preserved — tombstone semantics, #160 S2) |
 | `title` | faithful, no inference |
 
 ## `claim`

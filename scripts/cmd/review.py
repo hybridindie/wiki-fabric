@@ -33,11 +33,16 @@ def _parse_date(s):
         return None
 
 def scan():
-    """Scan claims, concepts, insights for staleness. Returns report dict."""
+    """Scan claims, concepts, insights, AND source records for staleness.
+    Sources carry their own review_after (ingest stamps a capture-kind tier
+    at record creation, #160 S1; records predating the tiers scan as current
+    — the SOURCE-STALE migration advisory comes from lint, not scan).
+    Returns report dict."""
     report = {"due": [], "overdue": [], "stale": [], "current": 0}
     for pattern, label in [("evidence/claims/claim-*.md", "claim"),
                            ("concepts/concept-*.md", "concept"),
-                           ("evidence/insights/*.md", "insight")]:
+                           ("evidence/insights/*.md", "insight"),
+                           ("evidence/sources/src-*.md", "source")]:
         for f in Path(CORPUS_ROOT).glob(pattern):
             s = f.read_text(encoding="utf-8", errors="replace")
             review = _parse_date(re.search(r"review_after: (\S+)", s).group(1)) if re.search(r"review_after:", s) else None
@@ -109,6 +114,80 @@ def verify_claim(claim_path):
     return tier, new_review
 
 
+def _reverify_source(src_path):
+    """#160 S1/S2: mechanical source re-verification (0 tokens): recompute the
+    raw sha256. Returns (state, detail):
+      'fresh'    — recorded == actual (roll review_after)
+      'drifted'  — raw changed upstream since capture (SOURCE-DRIFT at lint
+                   already flags claims; the record gains stale_after today)
+      'gone'     — raw file deleted (upstream vanished) → the source EXPIRES:
+                   status: expired, claims get stale_after (no re-ground)
+    Records predating the tier stamps gain review_after here (migration)."""
+    from wf_common import parse_frontmatter, sha256_file
+    import re as _re
+    f = Path(src_path)
+    fm, _ = parse_frontmatter(f)
+    raw = CORPUS_ROOT / str(fm.get("source_path") or "")
+    recorded = str(fm.get("sha256") or "")
+    if not recorded:
+        return "none", "no sha256 on record"
+    if not raw.exists():
+        return "gone", f"{fm.get('source_path')} missing (upstream vanished)"
+    actual = sha256_file(raw)
+    if actual[:12] != recorded[:12]:
+        return "drifted", f"sha256 {recorded[:12]} != {actual[:12]}"
+    return "fresh", actual[:12]
+
+
+def expire_or_reverify_source(src_path, dry_run=False):
+    """Apply the S1/S2 lifecycle to one source record. Fresh → roll
+    review_after by the capture-kind tier + clear today-stamped stale_after;
+    drifted → stamp stale_after (claims already handled by ingest's drift
+    trigger); gone → status: expired (raw is immutable/deleted, never
+    re-captured). Deterministic; returns (outcome, detail)."""
+    from datetime import timedelta
+    import re as _re
+    f = Path(src_path)
+    s = f.read_text(encoding="utf-8", errors="replace")
+    kind = "pr-record" if "/git/pr-" in str(f) or "/git/issue-" in str(f) else (
+        "commit" if "/git/commit-" in str(f) else
+        "chat-session" if "/chats/" in str(f) else "default")
+    tier = {"pr-record": 30, "commit": 30, "chat-session": 45, "default": 180}[kind]
+    state, detail = _reverify_source(f)
+    if state == "fresh":
+        if dry_run:
+            return "fresh", detail
+        new_review = (TODAY + timedelta(days=tier)).isoformat()
+        if "review_after:" in s:
+            s = _re.sub(r"review_after: \S+", f"review_after: {new_review}", s)
+        else:
+            s = s.replace("sha256:", f"review_after: {new_review}\nsha256:", 1)
+        if "stale_after:" in s:
+            s = _re.sub(r"^stale_after: \S+\n", "", s, count=1, flags=_re.MULTILINE)
+        if "last_verified:" in s:
+            s = _re.sub(r"last_verified: \S+", f"last_verified: {TODAY.isoformat()}", s)
+        else:
+            s = s.replace("review_after:", f"last_verified: {TODAY.isoformat()}\nreview_after:", 1)
+        f.write_text(s, encoding="utf-8")
+        return "refreshed", detail
+    if state == "drifted":
+        if dry_run:
+            return "drifted", detail
+        if "stale_after:" not in s:
+            s = s.replace("sha256:", f"stale_after: {TODAY.isoformat()}\nsha256:", 1)
+            f.write_text(s, encoding="utf-8")
+        return "drifted", detail
+    if state == "gone":
+        if dry_run:
+            return "expired", detail
+        s = _re.sub(r"^status: .*$", "status: expired", s, count=1, flags=_re.MULTILINE)
+        if "stale_after:" not in s:
+            s = s.replace("sha256:", f"stale_after: {TODAY.isoformat()}\nsha256:", 1)
+        f.write_text(s, encoding="utf-8")
+        return "expired", detail
+    return state, detail
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Staleness review: check + re-verify")
@@ -118,6 +197,9 @@ def main():
     parser.add_argument("--verify-all", action="store_true", help="Re-verify all overdue claims")
     parser.add_argument("--auto-reverify", action="store_true",
                         help="Mechanically re-verify claims whose source hasn't drifted (sha256 + quote check, 0 tokens)")
+    parser.add_argument("--verify-sources", action="store_true",
+                        help="Mechanically re-verify every source record (#160): fresh rolls review_after, raw-drifted stamps stale_after, upstream-deleted EXPIRES the record (0 tokens)")
+    parser.add_argument("--dry-run", action="store_true", help="--verify-sources: report outcomes, write nothing")
     parser.add_argument("--verify-locators", action="store_true",
                         help="Re-check every claim's locator against its raw source (#109): rewrite drifted locators, strip the verification stamp + contest claims whose quote vanished (0 tokens)")
     parser.add_argument("--limit", type=int, default=None, help="Limit claims processed (verify-locators)")
@@ -137,6 +219,21 @@ def main():
         print(f"✓ re-verified {target.name}")
         print(f"  last_verified: {TODAY.isoformat()}")
         print(f"  review_after:  {new_review} ({tier}d tier)")
+        return 0
+
+    if args.verify_sources:
+        from pathlib import Path as _P
+        counts = {"refreshed": 0, "fresh": 0, "drifted": 0, "expired": 0, "none": 0}
+        for sp in sorted(layout.sources(CORPUS_ROOT).glob("src-*.md")):
+            if args.project and args.project not in sp.stem:
+                continue
+            outcome, detail = expire_or_reverify_source(sp, dry_run=args.dry_run)
+            counts[outcome] = counts.get(outcome, 0) + 1
+            if outcome in ("drifted", "expired"):
+                print(f"  {outcome.upper()}: {sp.name} — {detail}")
+        print(f"Sources: {counts['refreshed']} refreshed, {counts['fresh']} fresh, "
+              f"{counts['drifted']} drifted, {counts['expired']} expired"
+              + (" [DRY RUN]" if args.dry_run else ""))
         return 0
 
     if args.verify_locators:
