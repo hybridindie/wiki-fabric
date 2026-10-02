@@ -1279,7 +1279,7 @@ def _projects(argv):
         n_raw = len(list(raw.glob("*.md"))) if raw.is_dir() else 0
         n_git = len(list((raw / "git").glob("*.md"))) if (raw / "git").is_dir() else 0
         n_chats = len(list((raw / "chats").glob("*.md"))) if (raw / "chats").is_dir() else 0
-        claims = len(list((croot / "evidence" / "claims").glob(f"claim-{slug}-*.md")))
+        claims = len(list(layout.claims(croot).glob(f"{layout.PREFIXES['claim']}{slug}-*.md")))
         last = ""
         mark = raw / "git" / ".last-capture"
         window = ""

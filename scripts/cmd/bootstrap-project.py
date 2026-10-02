@@ -791,8 +791,7 @@ def _print_dry_run(args, project_root_str, project_name, project_slug, domains, 
     """--dry-run: the plan, nothing written (issue #166)."""
     project_root = Path(project_root_str).resolve()
     fabric_root = find_fabric_root()
-    corpus = fabric_root / "corpus" if (fabric_root / "corpus").exists() else fabric_root
-    namespace_dir = corpus / "projects" / project_slug
+    namespace_dir = layout.projects(fabric_root)
     print("[DRY RUN] Bootstrap plan — nothing executed, nothing written\n")
     print(f"Project:   {project_name} ({project_slug})")
     print(f"Root:      {project_root}" + (" (git init)" if args.init_git and not (project_root / ".git").exists() else ""))
@@ -811,15 +810,16 @@ def _print_dry_run(args, project_root_str, project_name, project_slug, domains, 
         if args.graph_dir:
             routes.append(f"graph_dir={args.graph_dir}")
         print(f"Routing:   {', '.join(routes)}")
+    namespace_dir = namespace_dir / project_slug
     print("\nWould create:")
     print(f"  {project_root}/.wiki-overlay.md          (overlay: namespace/domains/skills/source_repos)")
     if not (project_root / ".env.wiki-fabric").exists():
         print(f"  {project_root}/.env.wiki-fabric          (LLM config)")
     if args.init_git and not (project_root / ".git").exists():
         print(f"  {project_root}/.git                      (git init)")
-    print(f"  {namespace_dir}/experience-events/       (project namespace)")
-    print(f"  {namespace_dir}/decisions/")
-    print(f"  {namespace_dir}/README.md                (namespace readme)")
+    print(f"  {namespace_dir / 'experience-events'}/    (project namespace)")
+    print(f"  {namespace_dir / 'decisions'}/")
+    print(f"  {namespace_dir / 'README.md'}            (namespace readme)")
     print(f"  fabric.yaml                              (repos.{project_slug} entry)")
     print("\nNext after real run:")
     print(f"  wf capture {project_slug}")
