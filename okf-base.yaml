@@ -35,6 +35,16 @@ base:
         # graphify self-graph artifacts (generated, not fabric concepts)
         - "graphify-out/**"
         - "wiki/**"
+        # packaging staging copy (build artifact of scripts/ — wheel prep)
+        - "src/wiki_fabric/_harness/**"
+        # harness-installed agent stores + outputs (skill copies, plugin deps,
+        # generated instruction files — never fabric concepts)
+        - ".opencode/**"
+        - ".claude/**"
+        - "CLAUDE.md"
+        - "PI.md"
+        - ".github/copilot-instructions.md"
+        - "AGENTS.md"
   reserved_files:
     index: index.md
     log: log.md
