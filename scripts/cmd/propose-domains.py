@@ -57,11 +57,30 @@ PROPOSALS_DIR = layout.registry(CORPUS) / "domain-proposals"
 
 
 def build_signal_lookup(config):
-    """Build {signal: domain} from fabric.yaml domain signals."""
+    """Build {signal: domain} — fabric.yaml domain signals are user overrides;
+    the ontology (canonical names + alias spellings + Shared tag set) is the
+    base lexicon fed in beneath them (S4/#159). Was config-only: the lexicon
+    fossilized (web-systems stayed live after the ontology renamed it) while
+    the ontology carried the truth nobody discovered with."""
+    import ontology as _o
     lookup = {}
-    for domain, signals in get_domain_signals(config).items():
-        for signal in signals:
-            lookup[signal.lower().replace("-", "_")] = domain
+    onto = load_ontology()
+    # ontology domain names + alias keys are matchable signals; each resolves
+    # to its canonical domain (unknown spellings map to themselves — they can
+    # still score for a NEW domain proposal even though pages can't bind)
+    for sp in sorted(_o.all_spellings(onto)):
+        canon = _o.canonicalize(sp, onto)
+        c = next(iter(canon)) if canon else sp
+        # both spellings matchable: the underscore form (the matcher's key
+        # convention — same replace as every consumer) and the raw hyphen form
+        lookup[sp.lower().replace("-", "_")] = c
+        lookup[sp.lower()] = c
+    # the shared tag set seeds each tag to... nothing: tags describe domains,
+    # they don't claim one. Tags enter matching as themselves (identity) so
+    # tag-token overlap scores, but domain attribution stays config's call.
+    for signal, signals in get_domain_signals(config).items():
+        for s in signals:
+            lookup[s.lower().replace("-", "_")] = signal
     return lookup
 
 

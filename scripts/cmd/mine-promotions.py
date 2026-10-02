@@ -112,7 +112,9 @@ def cluster_events_semantic(events, min_projects=2, model=None, threshold=0.7):
     valid_clusters = {}
     for idx, cluster_indices in enumerate(clusters):
         events_in_cluster = [valid_events[i] for i in cluster_indices]
-        projects = set(ev.get("project", "") for ev in events_in_cluster)
+        # Independence rule: lineages, not project labels (shared-lineage
+        # events across several projects are ONE evidence unit)
+        projects = {_lineage(ev) for ev in events_in_cluster}
         if len(projects) >= min_projects:
             valid_clusters[f"cluster_{idx}"] = events_in_cluster
     
@@ -152,12 +154,12 @@ def _classify_with_threads(ev_a, ev_b, similarity, threshold):
         return (similarity >= threshold, "text" if similarity >= threshold else "")
 
 
-def cluster_events_keyword(events, min_projects=2, _keyword_threshold=None):
-    """Fallback: keyword-based clustering with semantic expansion and Jaccard similarity."""
-    if _keyword_threshold is None:
-        from fabric_config import get_tuning as _gt
-        _keyword_threshold = _gt(None, "mining", "keyword_threshold", 0.05)
-    domain_synonyms = {
+def _domain_synonyms():
+    """Expansion lexicon, ontology-fed (S6/#159): the Shared tag set is the
+    canonical term list; its terms seed the map and hand-maintained expansions
+    layer on top. An ontology adding a tag extends clustering without a code
+    change; unknown tags expand as themselves (identity — still counted)."""
+    base = {
         "threading": ["concurrency", "parallel", "sync", "async", "mutex", "lock", "race", "deadlock"],
         "batching": ["batch", "composite", "bundle", "group"],
         "caching": ["cache", "memoize", "memo", "buffer"],
@@ -167,6 +169,23 @@ def cluster_events_keyword(events, min_projects=2, _keyword_threshold=None):
         "crash": ["crash", "fail", "error", "exception", "abort"],
         "single-writer": ["single-threaded", "serial", "sequential", "mutex", "lock"],
     }
+    try:
+        import ontology as _o
+        tags = _o.parse((layout.domains(CORPUS_ROOT) / "ontology.md")
+                        .read_text(encoding="utf-8", errors="replace"))["tags"]
+    except (OSError, Exception):
+        return base
+    for tag in sorted(tags):
+        base.setdefault(tag, [tag])
+    return base
+
+
+def cluster_events_keyword(events, min_projects=2, _keyword_threshold=None):
+    """Fallback: keyword-based clustering with semantic expansion and Jaccard similarity."""
+    if _keyword_threshold is None:
+        from fabric_config import get_tuning as _gt
+        _keyword_threshold = _gt(None, "mining", "keyword_threshold", 0.05)
+    domain_synonyms = _domain_synonyms()
 
     # Compute expanded keyword sets for each event (the dead nested
     # expand_keywords() here duplicated this inline loop — #155 audit)
@@ -217,12 +236,29 @@ def cluster_events_keyword(events, min_projects=2, _keyword_threshold=None):
                     print(f"  thread-rescued pair: {ev_i.get('project','?')}+{ev_j.get('project','?')} ({why})")
         
         if len(cluster) >= MIN_PROJECTS:
-            projects = set(event_keywords[idx][0].get("project", "") for idx in cluster)
-            if len(projects) >= MIN_PROJECTS:
+            cluster_evs = [event_keywords[idx][0] for idx in cluster]
+            if independent_projects(cluster_evs) >= MIN_PROJECTS:
                 cluster_key = f"cluster_{hashlib.md5(str(sorted(cluster)).encode()).hexdigest()[:8]}"
-                clusters[cluster_key] = [event_keywords[idx][0] for idx in cluster]
-    
+                clusters[cluster_key] = cluster_evs
+
     return clusters
+
+
+def _lineage(ev):
+    """The event's evidence lineage (## Independence rule): `lineage:` field
+    (log-experience stamps the project by default) else the project. Two
+    events with the same lineage = one evidence unit, however many projects
+    they nominally span — cross-project corroboration needs INDEPENDENT
+    lineages (different capture sources, not the same session/doc replayed)."""
+    return str(ev.get("lineage") or ev.get("project") or "").strip().lower()
+
+
+def independent_projects(cluster_events):
+    """Count DISTINCT LINEAGES in a cluster (not distinct project fields —
+    the naive count over-counted when one lineage logged events onto several
+    projects, e.g. a shared capture mined into two repos). The promotion
+    threshold (MIN_PROJECTS) is about independence, so that's what counts."""
+    return len({_lineage(ev) for ev in cluster_events if _lineage(ev)})
 
 
 def extract_experience_events():
@@ -498,7 +534,7 @@ anti_pattern_ref: "[[anti-pattern-{cluster_key}]]"
 
 ## Candidate
 
-[[pattern-{cluster_key}]] — Pattern extracted from {len(set(ev.get('project', '') for ev in events))} independent projects.
+[[pattern-{cluster_key}]] — Pattern extracted from {independent_projects(events)} independent lineage(s) across {len(set(ev.get('project', '') for ev in events))} project(s).
 
 ## Supporting experiences
 
@@ -799,7 +835,10 @@ def main():
     print(f"Found {len(clusters)} clusters with >= {MIN_PROJECTS} projects")
     
     for cluster_key, events in clusters.items():
-        print(f"\nCluster: {cluster_key} ({len(events)} events, {len(set(ev.get('project', '') for ev in events))} projects)")
+        _lin = len({_lineage(ev) for ev in events})
+        _proj = len(set(ev.get('project', '') for ev in events))
+        _tail = f", {_lin} independent lineage(s)" if _lin != _proj else ""
+        print(f"\nCluster: {cluster_key} ({len(events)} events, {_proj} project(s){_tail})")
         for ev in events:
             print(f"  - {ev.get('project', 'unknown')}: {ev.get('title', 'untitled')[:60]}")
     

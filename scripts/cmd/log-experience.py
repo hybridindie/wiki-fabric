@@ -76,7 +76,7 @@ def _actor():
     return actor(get_config(), "human")
 
 
-def write_event(project, problem, intervention, conditions, outcomes, evidence, tags, receipt=None, session=None):
+def write_event(project, problem, intervention, conditions, outcomes, evidence, tags, receipt=None, session=None, lineage=None):
     ns_dir = PROJECTS_DIR / project / "experience-events"
     ns_dir.mkdir(parents=True, exist_ok=True)
 
@@ -128,7 +128,12 @@ def write_event(project, problem, intervention, conditions, outcomes, evidence, 
     lines.append("confidence: medium")
     if tags:
         lines.append(f"tags: [{tags}]")
-    lines.append(f"lineage: \"{project}\"")
+    # Independence rule (ontology ## Independence rule): the lineage is the
+    # SHARED SOURCE this event came from, not the project — a session replayed
+    # into two projects is ONE evidence unit however many projects it spans.
+    # project alone = the capture-side default; --lineage overrides (mined-from
+    # an upstream doc/PR another project already captured).
+    lines.append(f"lineage: \"{(lineage or "").strip() or project}\"")
     lines.append(f"created: {today}")
     lines.append(f"updated: {today}")
     lines.append("---")
@@ -200,6 +205,7 @@ def main():
     parser.add_argument("--tags", help="Comma-separated tags [optional]")
     parser.add_argument("--receipt", help="Receipt id of the context delivery that informed this work (#87: receipt ↔ outcome linkage)")
     parser.add_argument("--session", help="Source session id this event came from (#103: thread-index join key for mining)")
+    parser.add_argument("--lineage", help="Evidence lineage id (shared source): events from one capture/session share it, so mining counts them as ONE independent unit (ontology ## Independence rule). Default: the project.")
     parser.add_argument("--list", action="store_true", help="List available projects")
     args = parser.parse_args()
 
@@ -263,7 +269,8 @@ def main():
 
     # Write event
     event_path = write_event(project, problem, intervention, conditions, outcomes, [], tags,
-                             receipt=args.receipt, session=args.session)
+                             receipt=args.receipt, session=args.session,
+                             lineage=getattr(args, "lineage", None))
 
     print(f"Logged experience event:")
     print(f"  {event_path.relative_to(VAULT_ROOT)}")
