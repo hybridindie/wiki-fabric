@@ -149,6 +149,8 @@ to the standalone layout in one command.
 
 ## Day-to-day sync
 
+Tool upgrades are per-machine and never touch the corpus — the ritual (uv upgrade → skills → hooks → commit-drift) is documented in [Upgrading wf](./upgrading).
+
 ```bash
 wf sync status        # ahead/behind vs the remote (plus uncommitted changes + conflicts)
 wf sync commit-drift  # stage + commit hook-accumulated drift (plane-classified; never pushes)

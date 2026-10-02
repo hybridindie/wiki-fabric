@@ -88,6 +88,7 @@ export default withMermaid(defineConfig({
         text: 'Reference',
         items: [
           { text: 'Skills (on-demand procedures)', link: '/skills' },
+          { text: 'Upgrading wf', link: '/upgrading' },
           { text: 'CLI & Scripts', link: '/cli' },
           { text: 'Corpus Layout', link: '/corpus-layout' },
           { text: 'Model Policy & Evals', link: '/evals' },

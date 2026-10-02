@@ -86,6 +86,7 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 | `wf status` | Fabric health + inventory counts |
 | `wf doctor [--json]` | Environment diagnosis: endpoint reachability, model resolution (phantom compiler_model), compiler-eval readiness, judgment-tier availability, vault drift, gate — each failure names its fix |
 | `wf vault [PATH]` | Scaffold/audit the Obsidian output vault |
+| `wf update` | Tool upgrade + auxiliary refresh (hooks reinstall from config, entity index, catalog) — packaged mode prints `uv tool upgrade wiki-fabric`; see [Upgrading wf](./upgrading) |
 | `wf bootstrap <project-path>` | Connect a project to the fabric |
 | `wf capture <project-slug> [--repo PATH]` | Capture upstream repo docs → `evidence/raw/` |
 | `wf capture <project-slug> --git <owner/name-or-path>` | Capture PR/issue threads + high-signal commits → `evidence/raw/<slug>/git/` (`--since 6m` window, `--limit 30` BUDGET — the window auto-shrinks to fit an active repo, never truncates; `--until` backfill bound; threads paginate + flag truncation; `--churn`; `--since-state` incremental hooks; knobs: `tuning.git_history` + `repos.<slug>.git_history`) |
@@ -103,7 +104,7 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 | `wf claude legacy` | Pre-harness always-on installer (`always_on.py`; superseded by `wf harness install`) |
 | `wf okf export --out DIR [--scope S]` | Export the fabric as a deterministic portable OKF v0.2 bundle |
 | `wf okf import <bundle> [--scope S]` | Ingest an external OKF bundle as immutable evidence (trust recorded, not inherited) |
-| `wf sync {setup\|init\|status\|push\|pull\|resolve\|commit-drift}` | Share the corpus with a team — `setup` uses the gh CLI to create + publish the corpus repo; `resolve` without `--strategy` runs the interactive resolver (diff + pick ours/theirs/union/skip). Team mode (`sync.mode: team`) opens one PR per push — evidence auto-merges on green CI, atoms wait for human review; `sync push --pr` opts in per-invocation; `commit-drift` stages + commits hook-accumulated drift with a plane-classified summary (never pushes); init/setup scaffold `promotion-queue.md` + `questions/` |
+| `wf sync {setup\|init\|status\|push\|pull\|resolve\|commit-drift}` | Share the corpus with a team — `setup` uses the gh CLI to create + publish the corpus repo; `resolve` without `--strategy` runs the interactive resolver (diff + pick ours/theirs/union/skip). Team mode (`sync.mode: team`) opens one PR per push — evidence auto-merges on green CI, atoms wait for human review; `sync push --pr` opts in per-invocation; `commit-drift` stages + commits hook-accumulated drift with a plane-classified summary (never pushes); init/setup scaffold `promotion-queue.md` + `questions/` | The full upgrade ritual (tool → skills → hooks → corpus verify) lives in [Upgrading wf](./upgrading).
 | `wf skill [--list] [<name>]` | Print the procedure for a workflow (`ingest`, `promote`) — universal across all agent harnesses |
 | `wf harness {install\|status} [--all\|--only k1,k2] [--force]` | Install always-on + skills into detected agent harnesses (11 supported; `wf claude` is the legacy alias) |
 | `wf models ensure [--model ID] [--yes]` | Check `llm.local_model` is cached; offer human-gated download (`--check` exits 0/1 without prompting) |
