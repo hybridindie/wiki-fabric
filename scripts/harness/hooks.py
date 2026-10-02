@@ -31,7 +31,7 @@ for _dir in (_HERE, _HERE.parent / "lib"):
 from pathlib import Path
 
 _HOOK_MARKER = "# wiki-fabric-hook-start"
-HOOK_VERSION = 4  # bump when hook script bodies change; wf hook status reports drift
+HOOK_VERSION = 5  # v5: WF_SLUG canonical fold (#158 S3); bump on any body change so wf update refreshes installs  # bump when hook script bodies change; wf hook status reports drift
 # v4: doubled `done` in _PYTHON_DETECT syntax error (every installed hook died
 # at exec — regression from dabba11/#152); shell blocks now bash -n-gated in tests.
 _HOOK_MARKER_END = "# wiki-fabric-hook-end"
