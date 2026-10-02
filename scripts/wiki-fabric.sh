@@ -936,7 +936,7 @@ cmd_bootstrap() {
 # the documented first step. An installed `wf` parses normally.
 if [[ "${BASH_SOURCE[0]:-}" != "${0:-}" ]]; then
     case "${1:-}" in
-        install|help|update|status|version|vault|bootstrap|capture|ingest|query|context|log|models|sync|hook|claude|harness|review|promote|promote-patterns|export|mine|lint|integrations|okf|doctor|thread|rebuild-index|"") ;;
+        install|help|update|status|version|vault|bootstrap|capture|ingest|query|context|log|models|sync|hook|claude|harness|review|promote|promote-patterns|export|mine|lint|integrations|okf|doctor|thread|rebuild-index|relocate-concepts|"") ;;
         *) set -- install "$@" ;;
     esac
     if [[ $# -eq 0 ]]; then
@@ -1164,6 +1164,11 @@ case "${1:-help}" in
         shift
         fdir=$(find_fabric)
         run_script "${fdir}" "scripts/cmd/harvest-questions.py" "$@"
+        ;;
+    relocate-concepts)
+        shift
+        fdir=$(find_fabric)
+        run_script "${fdir}" "scripts/cmd/relocate-concepts.py" "$@"
         ;;
     promote-questions)
         shift

@@ -200,6 +200,8 @@ def _propose_domains(argv): return _simple_script("scripts/cmd/propose-domains.p
 def _harvest_questions(argv): return _simple_script("scripts/cmd/harvest-questions.py", argv)
 @verb("promote-questions")
 def _promote_questions(argv): return _simple_script("scripts/cmd/promote-questions.py", argv)
+@verb("relocate-concepts")
+def _relocate_concepts(argv): return _simple_script("scripts/cmd/relocate-concepts.py", argv)
 @verb("sync")
 def _sync(argv): return _simple_script("scripts/cmd/sync.py", argv)
 

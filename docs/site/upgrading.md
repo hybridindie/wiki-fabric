@@ -67,8 +67,7 @@ wf gate                   # HITL queues + dark knowledge sources
 ## Schemas + migrations
 
 Schemas move without migration scripts in places (alpha contract). Upgrade
-paths that DID ship a migration tool this cycle: `scripts/cmd
-/relocate-concepts.py` (physical domain homes), `wf repos migrate`
+paths that DID ship a migration tool this cycle: `wf relocate-concepts` (physical domain homes), `wf repos migrate`
 (routing → overlays), and the deterministic `review --verify-sources` run
 (stamps `review_after` on pre-tier source records). After a major upgrade,
 run `wf lint` once: the new gates (VOCABULARY / IDENTITY / LAYOUT-GUARD)

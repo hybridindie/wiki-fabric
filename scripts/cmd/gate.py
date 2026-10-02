@@ -221,9 +221,9 @@ def _emit(sections, actionable, quiet=False):
         if err:
             print(f"  [{section} skipped: {err}]")
     print("\n  Resolve:  wf review --auto-reverify | wf promote --promote <dossier> | "
-          "python3 scripts/cmd/promote-domains.py --apply <dossier> | "
-          "python3 scripts/cmd/promote-questions.py --apply <id> --reject <id> --reason <why> | "
-          "python3 scripts/cmd/promote-patterns.py --apply <id> --reject <id> --reason <why>")
+          "wf promote-domains --apply <dossier> | "
+          "wf promote-questions --apply <id> --reject <id> --reason <why> | "
+          "wf promote-patterns --apply <id> --reject <id> --reason <why>")
 
 
 
@@ -429,7 +429,7 @@ def _write_manifest(manifest_path, sections, actionable):
         lines.append("")
     lines += [
         "To resolve: `wf review --auto-reverify` | `wf promote --promote <dossier>` | "
-        "`python3 scripts/cmd/promote-domains.py --apply <dossier>`",
+        "`wf promote-domains --apply <dossier>` | `wf promote-questions --apply <id>`",
     ]
     manifest_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return manifest_path

@@ -66,7 +66,7 @@ persistent memory layer.
 | Log an experience | `wf log --project <slug> [--lineage <id>]` | 0 | Feeds cross-project mining; multiple events from one shared source share a lineage (they count as ONE independent unit — mining enforces the rule) |
 | Commit hook drift | `wf sync commit-drift [--dry-run \| -m msg]` | **0** | The drift-wave ritual: stages + commits hook-accumulated churn with a plane-classified summary; never pushes |
 | Review source records | `wf review --verify-sources` | **0** | Capture-kind staleness tiers; upstream-drifted → stale_after; upstream-gone → `status: expired` tombstone |
-| Relocate domain-bound concepts | `python3 scripts/cmd/relocate-concepts.py [--dry-run]` | **0** | S1 homes: `domains/<domain>/concepts/` — alias-folded through the ontology |
+| Relocate domain-bound concepts | `wf relocate-concepts [--dry-run]` | **0** | S1 homes: `domains/<domain>/concepts/` — alias-folded through the ontology |
 | Record a deferred obligation | `projects/<slug>/commitments/*.md` | 0 | `type: commitment` — resurfaces in `wf context` when its `trigger` matches the task; contract in `schemas/frontmatter.md` |
 | Health check | `wf lint` | **0** | 0-error gate before commit |
 
