@@ -598,15 +598,105 @@ def _version(argv):
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
-    if not argv or argv[0] in ("help", "--help", "-h"):
+    if not argv or argv[0] in ("--help", "-h"):
         _print_help()
         return 0
+    if argv[0] in ("--version", "-v", "-V"):
+        from . import __version__
+        print(f"wf {__version__} (harness: {harness_root()})")
+        return 0
+    if argv[0] == "help":
+        if len(argv) == 1:
+            _print_help()
+            return 0
+        return _verb_help(argv[1])
     fn = VERBS.get(argv[0])
     if fn is None:
+        suggestion = _nearest_verb(argv[0])
         print(f"✗  Unknown command: {argv[0]}", file=sys.stderr)
+        if suggestion:
+            print(f"Did you mean: wf {suggestion}?", file=sys.stderr)
         print("Run: wf help", file=sys.stderr)
         return 1
     return fn(argv[1:])
+
+
+_SCRIPT_FOR_VERB = {
+    "query": "scripts/cmd/query.py",
+    "thread": "scripts/cmd/thread.py",
+    "ingest": "scripts/cmd/ingest.py",
+    "review": "scripts/cmd/review.py",
+    "freshness": "scripts/cmd/freshness-job.py",
+    "gate": "scripts/cmd/gate.py",
+    "context": "scripts/cmd/context.py",
+    "lint": "scripts/cmd/lint.py",
+    "doctor": "scripts/cmd/doctor.py",
+    "sync": "scripts/cmd/sync.py",
+    "log": "scripts/cmd/log-experience.py",
+    "mine": "scripts/cmd/mine-promotions.py",
+    "export": "scripts/cmd/export-wiki.py",
+    "bootstrap": "scripts/cmd/bootstrap-project.py",
+    "capture": "scripts/cmd/capture.py",
+    "rebuild-index": "scripts/cmd/rebuild-index.py",
+    "utility": "scripts/cmd/utility.py",
+    "publish": "scripts/cmd/publish-wiki.py",
+    "verify-effects": "scripts/cmd/verify-effects.py",
+    "apply-changeset": "scripts/cmd/apply_changeset.py",
+    "configure": "scripts/cmd/configure.py",
+    "repos": "scripts/cmd/repos-migrate.py",
+    "promote": "scripts/cmd/promote.py",
+    "promote-patterns": "scripts/cmd/promote-patterns.py",
+    "promote-domains": "scripts/cmd/promote-domains.py",
+    "promote-questions": "scripts/cmd/promote-questions.py",
+    "harvest-questions": "scripts/cmd/harvest-questions.py",
+    "propose-domains": "scripts/cmd/propose-domains.py",
+    "relocate-concepts": "scripts/cmd/relocate-concepts.py",
+    "models": "scripts/cmd/ensure-local-model.py",
+    "vault": "scripts/cmd/vault-refresh.py",
+    "okf": "scripts/cmd/okf_export.py",
+}
+
+
+def _verb_help(name: str) -> int:
+    """wf help <command> — route to the underlying script's argparse help.
+
+    The dispatch delegates to shipped scripts; each script's parser already
+    declares its flags, so the help surface reads the same tree (issue #163).
+    Known verbs without a script help (dispatch-native) print their docstring
+    or the general help as fallback."""
+    fn = VERBS.get(name)
+    if fn is None:
+        suggestion = _nearest_verb(name)
+        print(f"✗  Unknown command: {name}", file=sys.stderr)
+        if suggestion:
+            print(f"Did you mean: wf {suggestion}?", file=sys.stderr)
+        print("Run: wf help", file=sys.stderr)
+        return 1
+    doc = (fn.__doc__ or "").strip()
+    rel = _SCRIPT_FOR_VERB.get(name)
+    if rel:
+        script = harness_root() / rel
+        if script.exists():
+            r = subprocess.run(
+                [sys.executable, str(script), "--help"],
+                capture_output=True, text=True,
+            )
+            out = r.stdout or ""
+            if r.returncode == 0 and out.strip():
+                print(out, end="" if out.endswith("\n") else "\n")
+                return 0
+    if doc:
+        print(f"wf {name} — {doc}")
+        return 0
+    print(f"wf {name} — no detailed help available; Run: wf help")
+    return 0
+
+
+def _nearest_verb(name: str):
+    """Closest known verb by common-prefix / letter-overlap (typo hint)."""
+    import difflib
+    matches = difflib.get_close_matches(name, sorted(VERBS), n=1, cutoff=0.5)
+    return matches[0] if matches else None
 
 
 def _print_help():
@@ -619,7 +709,9 @@ def _print_help():
     print("")
     print("Commands:")
     for v in sorted(VERBS):
-        print(f"  {v}")
+        doc = (VERBS[v].__doc__ or "").strip().splitlines()
+        line = doc[0] if doc else ""
+        print(f"  {v:22} {line}")
     print("  install [--repo URL] [--dir DIR]   Install fabric from repo URL")
     print("  update                             Pull latest + rebuild entity index")
     print("Run: wf help <command> for usage details.")

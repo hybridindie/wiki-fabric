@@ -33,6 +33,38 @@ class TestVerbs:
     def test_help_zero(self, capsys):
         assert dispatch.main(["help"]) == 0
 
+    def test_version_flag(self, capsys):
+        assert dispatch.main(["--version"]) == 0
+        assert "wf 0." in capsys.readouterr().out
+
+    def test_version_short_flag(self, capsys):
+        assert dispatch.main(["-v"]) == 0
+        assert "wf 0." in capsys.readouterr().out
+
+    def test_help_command_routes_to_script_argparse(self, capsys):
+        rc = dispatch.main(["help", "ingest"])
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "--extract-claims" in out  # the script parser's own flags
+
+    def test_help_unknown_suggests(self, capsys):
+        rc = dispatch.main(["help", "ingets"])
+        assert rc == 1
+        err = capsys.readouterr().err
+        assert "Unknown command" in err
+        assert "Did you mean: wf ingest?" in err
+
+    def test_unknown_verb_suggests(self, capsys):
+        rc = dispatch.main(["ingets"])
+        assert rc == 1
+        assert "Did you mean: wf ingest?" in capsys.readouterr().err
+
+    def test_help_dispatch_native_verb_falls_back(self, capsys):
+        # a verb without a _SCRIPT_FOR_VERB entry: docstring fallback
+        rc = dispatch.main(["help", "status"])
+        assert rc == 0
+        assert "wf status" in capsys.readouterr().out
+
 
 class TestFindFabric:
     def test_env_override(self, tmp_path, monkeypatch):
