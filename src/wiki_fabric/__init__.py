@@ -11,7 +11,7 @@ try:
     from importlib.metadata import version as _version
     __version__ = version("wiki-fabric")
 except Exception:  # dev checkout without install — keep in sync with pyproject
-    __version__ = "0.4.0"
+    __version__ = "0.4.1"
 
 # Packaged-install detection (phase 2): the _harness tree beside this package
 # means wf runs from a uv tool install — update/status key off WF_PACKAGED.
