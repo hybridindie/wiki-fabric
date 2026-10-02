@@ -178,9 +178,9 @@ def _overlay_domains(project):
         candidates = []
         if overlay_path:
             candidates.append(Path(overlay_path))
-        candidates.append(VAULT_ROOT / "projects" / canonical / ".wiki-overlay.md")
+        candidates.append(layout.projects(VAULT_ROOT) / canonical / ".wiki-overlay.md")
     except Exception:
-        candidates = [VAULT_ROOT / "projects" / project / ".wiki-overlay.md"]
+        candidates = [layout.projects(VAULT_ROOT) / project / ".wiki-overlay.md"]
     fm, _ = (None, None)
     for cand in candidates:
         if cand and Path(cand).exists():

@@ -134,17 +134,19 @@ def main():
                               r'\g<1>' + canonical, args.dry_run, "overlay project")
         print(f"  overlay rewritten: {n_ov} lines")
 
-    # 6. fabric.yaml repos KEY (path: value untouched — the real dir is raw-named)
+    # 6. fabric.yaml repos KEY (path: value untouched — the real dir is raw-named).
+    # Whole-file dump through the shared convention (#154): re-dumping full
+    # yaml only for one key was the drift shape the dump test guards.
     if repo_cfg_path.exists() and not args.dry_run:
+        from wf_common import parse_frontmatter as _pf, dump_frontmatter
         import yaml
-        cfg = yaml.safe_load(repo_cfg_path.read_text()) or {}
+        text = repo_cfg_path.read_text()
+        cfg = yaml.safe_load(text) or {}
         repos = cfg.get("repos") or {}
         if raw in repos and canonical not in repos:
             repos[canonical] = repos.pop(raw)
             cfg["repos"] = repos
-            repo_cfg_path.write_text(
-                yaml.safe_dump(cfg, sort_keys=False, default_flow_style=False),
-                encoding="utf-8")
+            repo_cfg_path.write_text(dump_frontmatter(cfg), encoding="utf-8")
             print(f"  fabric.yaml: repos.{raw} -> repos.{canonical}")
         elif raw not in repos:
             print("  fabric.yaml: no raw-form key (already canonical?)")
