@@ -62,6 +62,52 @@ def _gate_pattern_candidates():
     return pending, pending
 
 
+def _gate_contributions(stale_days=30):
+    """Contribution freshness per connected project (team-knowledge loop):
+    a project whose last experience-event/capture is staler than stale_days
+    is a knowledge source going dark — the chat-mining / git-capture channel
+    may be idle on that machine. Deterministic; NOT actionable-by-command
+    (info tier — the fix is a human conversation, not a script)."""
+    import layout as _lay
+    from datetime import timedelta
+    from wf_common import parse_frontmatter as _pf
+    from fabric_config import CORPUS_ROOT
+    projects_dir = _lay.projects(CORPUS_ROOT)
+    if not projects_dir.exists():
+        return [], []
+    cutoff = date.today() - timedelta(days=stale_days)
+    rows = []
+    for ns in sorted(projects_dir.iterdir()):
+        if not ns.is_dir():
+            continue
+        last = None
+        ev_dir = ns / "experience-events"
+        if ev_dir.exists():
+            for ev in ev_dir.glob("ee-*.md"):
+                fm, _ = _pf(ev)
+                stamp = str(fm.get("created") or "")[:10] or (ev.stem[3:13] if len(ev.stem) > 13 else "")
+                if stamp > (last or ""):
+                    last = stamp
+        raw_root = _lay.evidence_raw(CORPUS_ROOT) / ns.name
+        mark = raw_root / "git" / ".last-capture"
+        try:
+            stamp = mark.read_text().strip()[:10]
+            if stamp and stamp > (last or ""):
+                last = stamp
+        except OSError:
+            pass
+        chats = raw_root / "chats"
+        if chats.exists():
+            for cf in chats.glob("*.md"):
+                d = cf.stem[:10]
+                if len(d) == 10 and d[4] == "-" and d > (last or ""):
+                    last = d
+        if last is None or last < cutoff.isoformat():
+            rows.append({"project": ns.name, "last": last or "never",
+                         "stale_days": None if last is None else (date.today() - date.fromisoformat(last)).days})
+    return rows, rows
+
+
 def _gate_questions():
     """#88: harvested open questions awaiting triage (staging proposals +
     canonical open questions). Returns (pending, open_qs)."""
@@ -121,15 +167,24 @@ def gate():
         "domains": _safe(_gate_domains),
         "pattern-candidates": _safe(_gate_pattern_candidates),
         "questions": _safe(_gate_questions),
+        "contributions": _safe(_gate_contributions),
     }
-    actionable = any(p for p, _, _ in sections.values())
+    # contributions are INFO (no command resolves them); they never make the
+    # gate actionable on their own — actionable = every OTHER section pending.
+    actionable = any(p for k, (p, _, _) in sections.items()
+                     if k != "contributions" and p)
     return sections, actionable
 
 def _emit(sections, actionable, quiet=False):
+    contrib, contrib_list, contrib_err = sections.get("contributions", ([], [], None))
     if quiet and not actionable:
+        if contrib_list:
+            _emit_contributions(contrib_list)
         return
     if not actionable:
         print("gate: nothing pending — fabric is current (HITL queues empty)")
+        if contrib_list:
+            _emit_contributions(contrib_list)
         return
 
     print("gate: action needed — the following want a human eye\n")
@@ -160,6 +215,8 @@ def _emit(sections, actionable, quiet=False):
         print(f"  Open questions awaiting triage ({len(qpending)}):")
         for path, fm in qpending[:10]:
             print(f"    ? {path.stem}  ({fm.get('priority')}) {str(fm.get('question', ''))[:60]}")
+    if contrib_list:
+        _emit_contributions(contrib_list)
     for section, (p, _, err) in sections.items():
         if err:
             print(f"  [{section} skipped: {err}]")
@@ -169,6 +226,25 @@ def _emit(sections, actionable, quiet=False):
           "python3 scripts/cmd/promote-patterns.py --apply <id> --reject <id> --reason <why>")
 
 
+
+
+def _emit_contributions(rows):
+    """Team-knowledge loop (info tier): which connected projects have gone
+    dark — no experience-event, chat capture, or git capture within the
+    window. The fix is a conversation with the project's owner, not a
+    command; actionable is deliberately untouched."""
+    stale = [r for r in rows if r.get("stale_days") is not None]
+    silent = [r for r in rows if r.get("stale_days") is None]
+    if stale:
+        print(f"\n  Knowledge sources going dark ({len(stale)} — no contribution in 30d):")
+        for r in stale[:10]:
+            print(f"    ○ {r['project']:24} last: {r['last']} ({r['stale_days']}d ago)")
+        print("    (remedy: wf capture chat <slug> / wf log --project <slug> on the owning "
+              "machine, then wf sync push)")
+    if silent:
+        print(f"\n  Connected projects with no captured history at all ({len(silent)}):")
+        for r in silent[:10]:
+            print(f"    ○ {r['project']:24} no experience-events, chats, or git captures")
 
 
 def _emit_deliveries(deliveries):
@@ -293,6 +369,7 @@ def main():
                            for p, fm in sections["promotions"][1]],
             "domains": [{"id": str(p.stem), "domain": fm.get("domain")}
                         for p, fm in sections["domains"][1]],
+            "contributions": sections["contributions"][1],
             "errors": {k: v[2] for k, v in sections.items() if v[2]},
         }, indent=2))
     else:
@@ -339,6 +416,16 @@ def _write_manifest(manifest_path, sections, actionable):
         lines.append(f"## Domain proposals awaiting approval ({len(dom)})")
         for doss, fm in dom_list[:10]:
             lines.append(f"- {doss.name} ({fm.get('domain')})")
+        lines.append("")
+    contrib, contrib_list, _ = sections.get("contributions", ([], [], None))
+    if contrib_list:
+        lines.append("## Knowledge sources going dark (info — team-knowledge loop)")
+        for r in contrib_list[:10]:
+            if r.get("stale_days") is not None:
+                lines.append(f"- {r['project']}: last contribution {r['last']} "
+                             f"({r['stale_days']}d ago) — chat-mining/capture may be idle")
+            else:
+                lines.append(f"- {r['project']}: no captured history (experience-events/chats/git)")
         lines.append("")
     lines += [
         "To resolve: `wf review --auto-reverify` | `wf promote --promote <dossier>` | "
