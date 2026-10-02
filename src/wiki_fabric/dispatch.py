@@ -18,7 +18,13 @@ from typing import Callable
 
 try:
     import sys as _sys
-    _sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / 'scripts' / 'lib'))
+    # shipped lib scripts: the _harness tree beside THIS module (packaged) or
+    # 3-up (dev checkout). The 3-up-only form broke packaged imports (wheel
+    # smoke: ModuleNotFoundError layout at wf version).
+    _lib = Path(__file__).resolve().parent / "_harness" / "scripts" / "lib"
+    if not _lib.is_dir():
+        _lib = Path(__file__).resolve().parent.parent.parent / 'scripts' / 'lib'
+    _sys.path.insert(0, str(_lib))
 except Exception:
     pass
 

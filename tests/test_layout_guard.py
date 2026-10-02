@@ -76,6 +76,10 @@ def _ast_join_sites(tree):
 def _candidate_files():
     for root in SCAN_ROOTS:
         for f in sorted(root.rglob("*.py")):
+            # the packaging STAGING copy (src/wiki_fabric/_harness) is a build
+            # artifact of scripts/ — never scan it (the real tree is scanned)
+            if "_harness" in f.parts or "site-packages" in f.parts:
+                continue
             rel = f.relative_to(_SCRIPTS.parent).as_posix()
             if rel in ALLOWED:
                 continue
