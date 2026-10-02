@@ -52,7 +52,8 @@ One command, using the **gh CLI** (detected at run time — install gh and
    the corpus a standalone git repo (`<fabric>/corpus/.git`), commits the
    content, and pushes to the remote's `main` — the remote's root becomes
    exactly the corpus content.
-3. Prints the teammate one-liner to send to your team.
+3. Scaffolds the helper surfaces: `AGENTS.md` sync marker, `registry/promotion-queue.md` (the human-maintained promotion checklist), and `questions/`.
+4. Prints the teammate one-liner to send to your team.
 
 If gh isn't available, `setup` prints the manual path (`gh repo create` by
 hand, or `wf sync init <url>` pointing at an existing repo — then push).
@@ -146,10 +147,11 @@ main mirrored onto a remote `corpus` branch — the team's tip under an
 alias) was retired 2026-10-01; `wf sync migrate` moves an existing fabric
 to the standalone layout in one command.
 
-## Day-to-day sync## Day-to-day sync
+## Day-to-day sync
 
 ```bash
 wf sync status        # ahead/behind vs the remote (plus uncommitted changes + conflicts)
+wf sync commit-drift  # stage + commit hook-accumulated drift (plane-classified; never pushes)
 wf sync push -m "ingested upstream docs"   # commit + push (rejected if remote moved — pull first)
 wf sync pull          # fetch + merge; conflicts → review queue
 wf sync resolve <c> --strategy ours|theirs|union   # interactive diff resolver

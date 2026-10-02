@@ -147,7 +147,60 @@ so the two linters agree on what's a concept page.
 Hash drift means the raw file changed since its claims were extracted —
 exactly the signal the fabric is designed to catch. Re-ingest the affected
 sources (`wf ingest --changed <slug>`) to produce a change-set, then review
-and merge.
+and merge. On re-ingest the old revision's claims are **mechanically stamped
+`stale_after` + flip `contested`** (0 tokens, before the new record is
+written); `wf review --auto-reverify` re-grounds the ones whose quote still
+holds in the new revision.
+
+### Claims suddenly `contested` with `stale_after` — why?
+
+That's the sha256-drift trigger doing its job: re-captured source ⇒ old-
+revision evidence expired ⇒ derived claims demoted until re-extraction
+re-grounds them. Recovery: `wf ingest --changed <slug> --extract-claims`,
+then `wf review --auto-reverify`. A claim whose quote genuinely no longer
+exists stays contested for human review.
+
+### `IDENTITY repos.<key>: canonical slug '<slug>' collides ...`
+
+Two config keys fold to the same repo name (an underscore dir name and a
+kebab fabric.yaml key are ONE identity — the seam enforces it). Rename one
+of the config keys.
+
+### `IDENTITY namespace '<raw>' is a non-canonical spelling ...` (warning)
+
+Your overlay's `namespace:` is underscore-form. Lookups fold either way,
+but new projects should use the canonical (kebab) form — rename at
+leisure, or add an ontology alias if the old spelling must stay matchable.
+
+### `VOCABULARY <page>: domain '<x>' resolves to no ontology domain`
+
+The page declares a `domain:` the ontology doesn't know. Fix: approve the
+domain (`promote-domains --apply`), add an alias under the ontology's
+`## Aliases` (if the spelling is a legitimate variant), or drop the field
+(the page stays unbound in `concepts/`).
+
+### `LAYOUT-GUARD <file>:<line>: corpus path re-spelled outside layout.py`
+
+Code (probably a new script or AI edit) joined `CORPUS_ROOT / "evidence"...`
+directly. Compose via `scripts/lib/layout.py` accessors — the guard exists
+because re-spelled paths are how the corpus forked into dual trees. (The
+full AST guard runs in tests; this lint tier catches re-spells at commit
+time.)
+
+### Dual trees for one project (`wiki/projects/foo_mcp/` + `foo-mcp/`)
+
+Legacy symptom of the old raw-spelling bug. The `project_slug` seam + hook
+fold (S3) prevent new forks; regenerate the wiki (`wf export wiki
+--deep-dives`) after confirming the canonical tree — the migration deleted
+the duplicate. Canonical slugs are kebab.
+
+### A source record says `status: expired`
+
+The upstream source vanished (raw file deleted) — detected by `wf review
+--verify-sources`. The record is a provenance tombstone: claims derived
+from it were stale-stamped; nothing re-captures it automatically. If the
+source is genuinely gone, leave the tombstone; if it moved, re-capture
+creates a fresh record.
 
 ## Where to look when something else breaks
 

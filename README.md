@@ -12,10 +12,11 @@
 > **Early alpha — expect breaking changes.** The core loop works end-to-end
 > (capture → ingest → query → promote, verified on real projects), and the tool
 > now packages cleanly (`uv tool install wiki-fabric`, pure-python dispatch,
-> Windows-first-class). But schemas still move without migration scripts,
-> claim-extraction quality varies by model, and the corpus CI/freshness job is
-> still manual. Useful today if you want to shape the direction — not yet
-> load-bearing team infrastructure.
+> Windows-first-class). But schemas still move without migration scripts in
+> places, claim-extraction quality varies by model, and the freshness job runs
+> when orchestrated (scaffold CI or `wf freshness` on a cadence). Useful today
+> if you want to shape the direction — not yet load-bearing team
+> infrastructure.
 
 ## Quick start
 
@@ -70,8 +71,8 @@ Full docs at **[hybridindie.github.io/wiki-fabric](https://hybridindie.github.io
 
 ## Status
 
-- **Works today:** capture → ingest → query → promote loop (claims carry provenance edges from chats/PRs); deterministic context compiler + lineage/provenance lines at task time; persisted context receipts + delivery/outcome linkage; locator re-verification (rewrite/repair/restore/contest); chat-mined gated pattern candidates; harvested open-questions loop; prospective-memory commitments; judgment tier (G4-J + mining refinement + ingest effect verification + opt-in context re-rank); git-hooks automation incl. merge-time capture; team sync with teammate corpus pull + PR mode; Obsidian two-way vault; MCP server; OKF v0.2 export/import; writer/bookkeeper wiki generation + static-site publish + utility write-back.
-- **Next:** judgment-informed context re-rank (opt-in `wf context --judge-borderline`; core stays 0-token), scheduled upstream-freshness CI, embeddings re-ranking (shipped, off by default — value conditions in Integrations), multi-harness skill packs.
+- **Works today:** capture → ingest → query → promote loop (claims carry provenance edges from chats/PRs); **activity-bounded git capture** (window shrinks to fit an active repo's budget — shrink-not-truncate; `--until` backfills; threads paginate with flagged truncation; `tuning.git_history` + per-repo knobs); **budgeted ingest** + the mechanical **sha256-drift ⇒ contested** staleness trigger; **source staleness tiers + `--verify-sources` lifecycle** (upstream-gone ⇒ `expired` tombstone); deterministic context compiler + delivery receipts; locator re-verification; chat-mined gated pattern candidates; **physical domain homes** (`domains/<domain>/{concepts,questions,syntheses}`, ontology alias-mapped); **ontology as living vocabulary** (shared parser, VOCABULARY/IDENTITY lint gates, canonical repo slugs); layout single-truth + guard; **commit-drift ritual** (plane-classified hook-drift commits); promotion-queue + questions scaffolds; contribution-freshness gate signal; judgment tier (refinement + effect verification + opt-in re-rank); team sync (PR mode, corpus pull); hooks incl. merge-time capture; Obsidian bridge; MCP server; OKF v0.2 export/import; wiki generation + publish + utility write-back.
+- **Next:** judgment-informed context re-rank surface polish, embeddings re-ranking (shipped, off by default — value conditions in Integrations), multi-harness skill packs, domain-scope syntheses routing.
 - **Contributing:** see [CONTRIBUTING.md](CONTRIBUTING.md). The fabric self-documents — if something isn't clear, that's a bug in the fabric; issues welcome.
 
 ## License

@@ -133,6 +133,9 @@ integrations:
 #   mining: {min_projects: 2, keyword_threshold: 0.05}
 #   judgment: {mining_threshold: 0.8, near_band: 0.1}
 #   context: {max_items: 20, nav_max_files: 5, excluded_cap: 15}
+#   git_history: {since: 6m, budget: 30}   # activity-bounded capture window
+#                                          # (budget caps items; window shrinks to fit; "all" disables)
+#   ingest: {budget: 0}                    # per-run bulk-extraction cap (--changed/--pending; 0 = uncapped)
 #   synthesize: {min_claims: 2}
 #   export: {topic_min_claims: 6}
 

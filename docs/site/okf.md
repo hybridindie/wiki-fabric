@@ -88,7 +88,8 @@ validator in CI, so a bundle from anyone is checkable without wiki-fabric.
 | `all` (default) | everything the fabric owns |
 | `global` | patterns, anti-patterns, skills, entities, principles |
 | `<project-slug>` | that project's claims, experience events, decisions |
-| `<domain-slug>` | that domain's concepts, questions, syntheses |
+| `<domain-slug>` | that domain's home subtree — bound pages physically live at `domains/<domain>/{concepts,questions,syntheses}` (#159 S1); alias-folded through the ontology |
+| source lifecycle | source records travel with `review_after` (capture-kind tiers) and may be `status: expired` (upstream-gone tombstone — provenance ships, nothing re-captures silently) |
 
 Wikilinks are rewritten to travel inside the bundle (dangling links don't ship).
 Raw captures ride along under `references/` (OKF §6.3: external material

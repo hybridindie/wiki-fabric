@@ -68,7 +68,8 @@ graph TB
 **Design rule:** every script runs standalone, but the `wf` CLI is the only user surface;
 shared logic lives in the `scripts/lib/` modules (`fabric_config`,
 `extract_backends`, `local_llm`, `wf_common`, `eval_core`, `judgment`,
-`embed_index`, `tombstones`) — import, don't copy (anti-loop rule 7
+`embed_index`, `tombstones`, `layout` — corpus-path single truth,
+`ontology` — vocabulary single truth) — import, don't copy (anti-loop rule 7
 in [AGENTS.md](https://github.com/hybridindie/wiki-fabric/blob/main/AGENTS.md)).
 
 ## Core vs. optional

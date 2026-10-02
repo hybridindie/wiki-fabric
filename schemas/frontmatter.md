@@ -39,18 +39,20 @@ Per-type required fields. A page lacking required fields fails `scripts/cmd/lint
 | `captured` | date |
 | `summary` | `[[link]]` to the `source-summary` |
 | `review_after` | `YYYY-MM-DD` — capture-kind staleness tier, stamped at ingest (pr/commit 30d, chats 45d, docs 180d; #160 S1) |
+| `status: pending \| ingested \| expired` | `ingested` once a summary exists; `expired` when the upstream source vanished (`review --verify-sources`; tombstone with provenance — #160 S2) |
 
 Capture-specific source kinds:
 - **`pr-record`** (capture-git, github route): adds `source_repo` (`owner/name`), `pr` (number), `pr_state`, `merged_at` (date, when merged), quoted `title`. Graph nodes for threads (#102).
 - **`commit`** (capture-git, local route): metadata only — the commit sha-truncated stem + date + message body; no extra fields beyond `source_path`/`sha256`.
 - **`chat-session`** (capture-chat): adds `session` (id), `harness` (source harness), `session_started`, `files_touched`, `related_sessions`. The mutable thread layer under `evidence/raw/<slug>/chats/`.
 
+
 ## `source-summary`
 
 | Field | Notes |
 |---|---|
 | `source` | `[[link]]` to the source record |
-| `status: pending \| ingested \| expired` | `ingested` once a summary exists; `expired` when the upstream source vanished (raw deleted; provenance preserved — tombstone semantics, #160 S2) |
+| `status: pending \| ingested` | `ingested` once claims exist |
 | `title` | faithful, no inference |
 
 ## `claim`

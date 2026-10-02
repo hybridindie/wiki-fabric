@@ -17,7 +17,12 @@ persistent memory layer.
    `source` + `locator` + `quote`. No evidence, no citation by a concept or
    pattern.
 2. **Never re-ingest an unchanged source.** Check sha256 first
-   (`wf ingest --changed <slug>` only ingests drift).
+   (`wf ingest --changed <slug>` only ingests drift). When drift DOES land:
+   old-revision claims are mechanically contested+stale-stamped at ingest,
+   source records carry capture-kind `review_after` tiers (pr/commit 30d,
+   chats 45d, docs 180d), and `wf review --verify-sources` expires records
+   whose upstream vanished (`status: expired` — tombstone, never re-captured
+   silently).
 3. **Lint 0 errors before every commit.** `wf lint` (full profile) and
    `wf lint --okf` (OKF §11 floor) must both pass.
 4. **Extraction is spending; retrieval is free.** Deterministic walkers
@@ -58,7 +63,10 @@ persistent memory layer.
 | Route extraction/synthesis | `repos.<slug>.extract` / `.synthesize` / `.dossier` | — | Per-repo, per-stage: `"cloud"` (default) or `"local"` (on-device — MLX on Apple Silicon, GGUF elsewhere; model = `llm.local_model`) — privacy + quality tiering |
 | Ensure local model | `wf models ensure [--yes]` | 0 | Check `llm.local_model` is cached; offer human-gated download (`--check` for scripts) |
 | Import external bundle | `wf okf import <bundle>` | 0 or 1/doc | Trust recorded, not inherited |
-| Log an experience | `wf log --project <slug>` | 0 | Feeds cross-project mining |
+| Log an experience | `wf log --project <slug> [--lineage <id>]` | 0 | Feeds cross-project mining; multiple events from one shared source share a lineage (they count as ONE independent unit — mining enforces the rule) |
+| Commit hook drift | `wf sync commit-drift [--dry-run \| -m msg]` | **0** | The drift-wave ritual: stages + commits hook-accumulated churn with a plane-classified summary; never pushes |
+| Review source records | `wf review --verify-sources` | **0** | Capture-kind staleness tiers; upstream-drifted → stale_after; upstream-gone → `status: expired` tombstone |
+| Relocate domain-bound concepts | `python3 scripts/cmd/relocate-concepts.py [--dry-run]` | **0** | S1 homes: `domains/<domain>/concepts/` — alias-folded through the ontology |
 | Record a deferred obligation | `projects/<slug>/commitments/*.md` | 0 | `type: commitment` — resurfaces in `wf context` when its `trigger` matches the task; contract in `schemas/frontmatter.md` |
 | Health check | `wf lint` | **0** | 0-error gate before commit |
 
@@ -90,9 +98,12 @@ persistent memory layer.
    mining run on `llm.compiler_model`. Model swaps require a recorded
    compiler eval (G4). `promote`/`mine` refuse without it.
 7. **Import shared modules, don't re-implement** — `fabric_config.py`
-   (config/routing/actors), `extract_backends.py` (claim extraction),
-   `wf_common.py` (frontmatter/norm/slugify), `eval_core.py` (scoring
-   primitives), `local_llm.py` (on-device generation). A local copy of one of
+   (config/routing/actors/canonical repo keys), `extract_backends.py` (claim
+   extraction), `wf_common.py` (frontmatter/norm/slugify/`project_slug` — the
+   canonical underscore→kebab fold), `eval_core.py` (scoring primitives),
+   `local_llm.py` (on-device generation), `layout.py` (corpus-path single
+   truth — `SEGMENTS`/accessors, guards re-spells), `ontology.py` (vocabulary
+   single truth — domains/aliases/tag-set, alias-fold). A local copy of one of
    these helpers is a bug waiting to drift; lint/tests guard the import shape.
 
 ## Where Things Live

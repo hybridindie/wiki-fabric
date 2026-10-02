@@ -49,7 +49,7 @@ Near-miss pairs are refined by the judgment tier when enabled — the report
 names each judged verdict with its probability, and tombstoned/rejected
 clusters are suppressed (named in the report; see tombstones in
 `patterns/_rejected/` for the rejection reasons).
-Independence rule: two events sharing one lineage count as ONE evidence —
+Independence rule: two events sharing one lineage count as ONE evidence — mining counts DISTINCT lineages (`lineage:` frontmatter); log shared-source events with `wf log --lineage <shared-id>`
 a cluster needs ≥2 independent projects to be promotion-eligible.
 
 ### 2. Generate Dossiers
@@ -66,7 +66,7 @@ review. When graphify is inactive, dossiers rest on experience-event outcomes
 alone.
 
 ### 3. Update Promotion Queue
-Append the candidate to `registry/promotion-queue.md` (pattern, maturity, evidence lineage, dossier link).
+Append the candidate to `registry/promotion-queue.md` (pattern, maturity, evidence lineage, dossier link) — scaffolded by `sync setup/init` when absent (human-maintained; never script-overwritten).
 
 ### 4. Human Review (mandatory, no auto-promotion)
 Present each dossier with the 7-point checklist:
@@ -91,7 +91,8 @@ wf lint
 This writes `patterns/pattern-<slug>.md` (or `anti-patterns/`, `skills/`) with
 `status: recommended`, updates `registry/catalog.json` (regenerated),
 `registry/promotion-queue.md`, then one commit:
-`git add -A && git commit -m "promote <pattern-id> (maturity N)"`.
+`wf sync commit-drift -m "promote <pattern-id> (maturity N)"` (plane-classified;
+fallback: bare `git add -A && git commit`).
 
 **Protected slow-lane content**: if the cluster's new pattern content differs
 from an existing pattern's protected `applicability`/`counterexamples`, the

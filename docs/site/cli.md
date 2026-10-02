@@ -88,12 +88,12 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 | `wf vault [PATH]` | Scaffold/audit the Obsidian output vault |
 | `wf bootstrap <project-path>` | Connect a project to the fabric |
 | `wf capture <project-slug> [--repo PATH]` | Capture upstream repo docs → `evidence/raw/` |
-| `wf capture <project-slug> --git <owner/name-or-path>` | Capture PR/issue threads + high-signal commits → `evidence/raw/<slug>/git/` (add `--since 6m`, `--limit 30`, `--churn`, `--since-state` for incremental hook runs) |
+| `wf capture <project-slug> --git <owner/name-or-path>` | Capture PR/issue threads + high-signal commits → `evidence/raw/<slug>/git/` (`--since 6m` window, `--limit 30` BUDGET — the window auto-shrinks to fit an active repo, never truncates; `--until` backfill bound; threads paginate + flag truncation; `--churn`; `--since-state` incremental hooks; knobs: `tuning.git_history` + `repos.<slug>.git_history`) |
 | `wf capture chat <project-slug>` | Capture agent chat sessions → `evidence/raw/<slug>/chats/` (harnesses: claude, opencode, codex, gemini — auto-detects; `--since 90d`, `--min-turns`, `--harness <name>`) |
 | `wf context --task "<task>" [--project <slug>] [--paths P] [--write-receipt] [--format json] [--judge-borderline]` | Compile the task-scoped context manifest (0 tokens; `--write-receipt` persists a delivery receipt). `--judge-borderline`: opt-in judged re-rank of borderline beyond-`--max` candidates (needs `integrations.judgment`; per-item receipt record) |
 | `wf ingest <source> [--extract-claims]` | Ingest a source (LLM claim extraction; claims carry provenance edges from chat/PR captures) |
-| `wf ingest --changed <slug>` | Ingest only NEW/CHANGED raw files for a project (sha256 anti-loop) |
-| `wf ingest --pending <slug>` | Claim-extract recorded-but-unextracted sources (anti-loop safe) |
+| `wf ingest --changed <slug> [--budget N]` | Ingest only NEW/CHANGED raw files for a project (sha256 anti-loop; `--budget`/`tuning.ingest.budget` caps the run — re-run continues). Drift before ingest: old-revision claims mechanically flip contested+stale_after (0 tokens) |
+| `wf ingest --pending <slug> [--budget N]` | Claim-extract recorded-but-unextracted sources (anti-loop safe; budgeted like --changed) |
 | `wf ingest --reclaim <slug>` | Recover zero-claim ingested sources → back to pending (silent-orphan recovery, #93) |
 | `wf query "<question>" [--no-rerank]` | Ask the fabric a question (lexical + graph expansion; lineage-shaped queries gain an evidence-graph provenance section; graphify symbol discovery when enabled; optional System One fusion rerank — a local decision model reorders the top candidates, latency-budgeted, silent fall-back to lexical order) |
 | `wf freshness [--dry-run] [projects...]` | Scheduled upstream-freshness cycle (0 tokens): capture-git `--since-state` + mechanical auto-reverify per connected repo; scheduled on the corpus CI by `sync setup/init` (opt-in var `WIKI_FABRIC_FRESHNESS=1`); drift flags land in `wf gate` |
@@ -103,15 +103,16 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 | `wf claude legacy` | Pre-harness always-on installer (`always_on.py`; superseded by `wf harness install`) |
 | `wf okf export --out DIR [--scope S]` | Export the fabric as a deterministic portable OKF v0.2 bundle |
 | `wf okf import <bundle> [--scope S]` | Ingest an external OKF bundle as immutable evidence (trust recorded, not inherited) |
-| `wf sync {setup\|init\|status\|push\|pull\|resolve}` | Share the corpus with a team — `setup` uses the gh CLI to create + publish the corpus repo; `resolve` without `--strategy` runs the interactive resolver (diff + pick ours/theirs/union/skip). Team mode (`sync.mode: team`) opens one PR per push — evidence auto-merges on green CI, atoms wait for human review; `sync push --pr` opts in per-invocation |
+| `wf sync {setup\|init\|status\|push\|pull\|resolve\|commit-drift}` | Share the corpus with a team — `setup` uses the gh CLI to create + publish the corpus repo; `resolve` without `--strategy` runs the interactive resolver (diff + pick ours/theirs/union/skip). Team mode (`sync.mode: team`) opens one PR per push — evidence auto-merges on green CI, atoms wait for human review; `sync push --pr` opts in per-invocation; `commit-drift` stages + commits hook-accumulated drift with a plane-classified summary (never pushes); init/setup scaffold `promotion-queue.md` + `questions/` |
 | `wf skill [--list] [<name>]` | Print the procedure for a workflow (`ingest`, `promote`) — universal across all agent harnesses |
 | `wf harness {install\|status} [--all\|--only k1,k2] [--force]` | Install always-on + skills into detected agent harnesses (11 supported; `wf claude` is the legacy alias) |
 | `wf models ensure [--model ID] [--yes]` | Check `llm.local_model` is cached; offer human-gated download (`--check` exits 0/1 without prompting) |
 | `wf review --check [--project <slug>]` | Staleness report: current, due for review, overdue, stale |
 | `wf review --verify <claim-id>` | Re-verify a claim (stamps last_verified, rolls review_after forward by tier) |
 | `wf review --auto-reverify` | Mechanically re-verify all overdue claims (sha256 + quote check, 0 tokens) |
+| `wf review --verify-sources [--dry-run]` | Mechanically drive the SOURCE lifecycle (#160): sha256 recompute per record — fresh rolls `review_after` (capture-kind tier: pr/commit 30d, chats 45d, docs 180d), upstream-drifted stamps `stale_after`, upstream-DELETED expires the record (`status: expired` — provenance tombstone, excluded from context) (0 tokens) |
 | `wf review --verify-locators` | Re-check every claim's locator against its raw source: rewrite drifted locators, repair backtick-elision quotes, restore wrongly-contested claims, strip stamps + contest vanished quotes (0 tokens, #109) |
-| `wf gate [--quiet\|--json\|--write-manifest\|--deliveries]` | Aggregate every pending human decision (overdue/stale claims, promotion dossiers, domain proposals, pattern candidates, open questions) into one report. Exit 1 when anything is actionable. `--write-manifest` persists `registry/pending-gate.md`; `--deliveries` surfaces recent context receipts (was the manifest right?) |
+| `wf gate [--quiet\|--json\|--write-manifest\|--deliveries]` | Aggregate every pending human decision (overdue/stale claims, promotion dossiers, domain proposals, pattern candidates, open questions, + knowledge sources going dark — projects with no contribution in 30d, info tier) into one report. Exit 1 when anything is actionable. `--write-manifest` persists `registry/pending-gate.md`; `--deliveries` surfaces recent context receipts (was the manifest right?) |
 | `wf promote-domains {list\|--apply <dossier>}` | Human-gated merge of an approved domain proposal into `domains/ontology.md` |
 | `wf propose-domains [--dry-run]` | Propose new domains from corpus clusters (0 tokens; staged for human review) |
 | `wf harvest-questions [--project <slug>] [--dry-run]` | Harvest concept open-questions → staged question pages (priority from claim confidence, 0 tokens) |
@@ -178,6 +179,7 @@ Scripts live in four subdirectories of `scripts/` — `cmd/` (entrypoints), `eva
 | `promote-domains.py` | Human-gated merge of a proposed domain into the ontology | 0 |
 | `gate.py` | Aggregate pending HITL decisions + notify adapters (`wf gate`) | +`--write-manifest`/notify |
 | `rebuild-index.py` | Rebuild `registry/catalog.json` from files (`wf rebuild-index`) | 0 |
+| `relocate-concepts.py` | Domain-bound concepts → `domains/<domain>/concepts/` (S1 migration; deterministic, idempotent) | 0 |
 | `build-entity-index.py` | AST entity index from source repos | 0 |
 | `bootstrap-project.py` | Connect a new project to the fabric (`wf bootstrap`) | 0 |
 | `ensure-local-model.py` | Check/download `llm.local_model` (`wf models ensure`) | 0 |
@@ -209,10 +211,12 @@ Scripts live in four subdirectories of `scripts/` — `cmd/` (entrypoints), `eva
 
 | Module | Purpose |
 |--------|---------|
-| `fabric_config.py` | fabric.yaml loading, stage routing, actor conventions, local model |
+| `fabric_config.py` | fabric.yaml loading, stage routing, actor conventions, local model, canonical repo keys (#158) |
+| `layout.py` | Corpus layout single truth: `SEGMENTS` + accessors + the claim-prefix join contract; `seg()` raises on undeclared names (re-spelling is the drift class) |
+| `ontology.py` | Ontology vocabulary single truth: `## Domains`/`## Aliases`/`## Shared tag set` → `canonicalize()` (alias-fold; unknown binds nothing), `all_spellings()` |
 | `extract_backends.py` | Claim-extraction layer: prompt building, 4 LLM backends, JSON repair |
 | `local_llm.py` | On-device generation (GGUF/MLX), serialized model cache |
-| `wf_common.py` | Shared helpers: `parse_frontmatter`, `norm`, `slugify`, hashing |
+| `wf_common.py` | Shared helpers: `parse_frontmatter`, `norm`, `slugify`, `project_slug` (THE canonical underscore→kebab fold), hashing |
 | `eval_core.py` | Eval scoring primitives: `concept_match`, `jaccard`, `fuzzy_coverage` |
 | `judgment.py` | Judgment tier backends (Jev cloud / Laya-MLX / upstream laya / generic), typed questions, graceful degradation |
 | `embed_index.py` | Hash-gated offline embedding index (`registry/embed-index.json`) + query-side embedding |

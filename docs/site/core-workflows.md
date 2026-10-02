@@ -37,6 +37,10 @@ wf ingest --extract-claims --dry-run evidence/raw/foo.md
 
 # Use a different model
 WIKI_LLM_MODEL="llama3.1:70b" wf ingest evidence/raw/foo.md --extract-claims
+
+# Bulk modes with a budget (extraction mirror of the capture window):
+# a big capture wave can't detonate N extractions in one run
+wf ingest --changed my-project --budget 25   # re-run continues; anti-loop safe
 ```
 
 **LLM configuration:** any OpenAI-compatible endpoint works — full provider
@@ -52,7 +56,7 @@ tier is enabled, run the independent second opinion:
 ```bash
 wf verify-effects evidence/claims/claim-my-project-*.md
 # claim-...: 12 pair(s) judged → contradicts: claim-...-007 (conf=0.35)
-# writes <claim>.effects.json beside each claim
+# verdicts → registry/effects/<claim>.effects.json (machine artifacts never sit beside pages)
 ```
 
 Reconcile: where the judged verdict agrees with your draft, keep it; where it
@@ -78,8 +82,11 @@ flowchart LR
 
 ```bash
 # GitHub: PR threads + issue reports (via gh CLI)
-wf capture my-project --git owner/repo
-wf capture my-project --git owner/repo --since 1y --limit 100
+wf capture my-project --git owner/repo                      # window: 6m, budget 30
+wf capture my-project --git owner/repo --since 1y --limit 50  # budget 50: the WINDOW shrinks to fit
+
+# Backfill slice (exclusive upper bound — don't re-ingest newer history)
+wf capture my-project --git owner/repo --since 2025-06-01 --until 2026-01-01
 
 # Local repo: high-signal commits only + churn ranking
 wf capture my-project --git /path/to/repo --churn
@@ -88,12 +95,27 @@ wf capture my-project --git /path/to/repo --churn
 wf capture my-project --git owner/repo --dry-run
 ```
 
+**The activity-bounded window** (default 6m, budget 30): on an extremely active
+repo, a fixed window silently truncates — the newest-30 list collapses six
+months of PRs into two weeks. Instead, the window itself shrinks: capture picks
+the largest window (6m → 3m → 1m → 2w → 1w → 3d → 1d) whose item count fits
+the budget, deterministically, 0 tokens. The chosen window is recorded in
+`.last-capture` (`window=<date>`) and reused by hook runs. Per-repo overrides:
+
+```yaml
+tuning:
+  git_history: { since: 6m, budget: 30 }   # global defaults
+repos:
+  big-repo:
+    git_history: { budget: 50 }            # per-repo override; "all" disables
+```
+
 **Why this is helpful — and why it's filtered:**
 
 | Signal | What it gives the fabric | Cost control |
 |---|---|---|
-| PR bodies + review threads | The *why* behind changes — problem, debate, tradeoffs rejected and chosen. This is pre-written `experience-event` material (structured records of problem → what we tried → what happened — see §3 below), written by people who were there | 1 LLM call per PR, so `--limit` and `--since` bound the blast radius |
-| Issues | Structured `observed_problem` reports, often with repro steps and environment details | Filtered by date window; closed/stale issues usually aren't worth extracting |
+| PR bodies + review threads | The *why* behind changes — problem, debate, tradeoffs rejected and chosen. This is pre-written `experience-event` material (structured records of problem → what we tried → what happened — see §3 below), written by people who were there | The activity-bounded window + budget bound the blast radius (1 LLM call per source at ingest is budgeted separately — `--budget` / `tuning.ingest.budget`) |
+| Issues | Structured `observed_problem` reports, often with repro steps and environment details | Filtered by the window on `updatedAt` — an old issue with fresh comments re-captures (it's live activity); closed/stale issues usually aren't worth extracting |
 | Revert commits | Failed interventions — the seeds of anti-patterns. A revert says "we tried this and it was wrong", which docs never record | Deterministic prefix filter, 0 tokens |
 | Conventional commits (`fix:`, `feat:`, `perf:`) | Hotspot trail: which subsystems keep breaking | `chore:`/`style:`/`test:`/`ci:` skipped — most commits are noise |
 | `--churn` ranking | Tells you *where* to spend ingest budget: high-churn files are where the knowledge is | Pure git analysis, 0 tokens, 0 LLM calls |
@@ -418,7 +440,8 @@ WIKI_SKIP_HOOK=1 git commit ...     # skip once, per command
 ```
 
 Enhancements over the graphify design, adapted to a *content* pipeline:
-- **Drift-gated ingest**: capture exits 2 only when sha256 drift exists, so unchanged docs cost zero LLM calls.
+- **Drift-gated ingest**: capture exits 2 only when sha256 drift exists, so unchanged docs cost zero LLM calls. When drift DOES exist and re-ingest runs: old-revision claims are mechanically stamped `stale_after` + flip `contested` (0 tokens) until the new revision is re-extracted and re-verified — the staleness trigger is now part of the loop, not a lint report that arrives later.
+- **Source staleness tiers**: every source record carries `review_after` derived from its capture kind (pr/commit 30d, chats 45d, docs 180d); `wf review --verify-sources` rolls, stamps, or expires (`status: expired` when the upstream vanished — tombstone with provenance).
 - **Self-skip**: commits touching only fabric-owned paths (`evidence/`, `registry/`, …) never re-trigger — no capture/ingest loop.
 - **CWD-independent**: the hook passes `--project-root`; ingest writes are anchored to the fabric root, so running from inside the project repo can't scatter `evidence/` into the wrong repo.
 - **Chainable**: the block is appended inside a subshell — `exit 0` inside it never kills the rest of an existing hook (keep other hooks' first lines non-`exec`).

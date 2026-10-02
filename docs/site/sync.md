@@ -49,9 +49,19 @@ fabric/vault root if it lacks one (a fresh fabric needs the marker to sync).
 
 ```bash
 wf sync status        # ahead/behind + uncommitted corpus changes + conflicts
+wf sync commit-drift  # stage + commit hook-accumulated drift (plane-classified; never pushes)
 wf sync push -m "ingested upstream docs"   # commit + push corpus changes
 wf sync pull          # fetch + merge; conflicts → review queue
 ```
+
+**The drift-wave ritual:** hooks capture and ingest between human commits —
+a day's work leaves dozens of modified corpus files. `wf sync commit-drift`
+stages everything and commits with a **plane-classified summary** (atom/
+evidence/registry counts, worst-plane tag in the message: `drift
+[knowledge-update]: 2 atom(s), 24 evidence(s), …`). Idempotent (clean tree →
+exit 0), dry-run-able, and **never pushes** — `push` stays the explicit
+publish step. `sync setup/init` also scaffold `registry/promotion-queue.md`
+and `questions/`.
 
 **Branches, in one line:** there aren't any — the corpus is a **standalone
 repo** (`<fabric>/corpus/`, cloned or init'd in place); the remote's root IS

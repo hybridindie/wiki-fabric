@@ -19,7 +19,7 @@ The system is deliberately split into three locations, each with one job:
 | Location | What lives there | How it updates |
 |----------|-----------------|----------------|
 | **The harness** — this repo's clone | code: scripts, schemas, skills | `wf update` (git pull of the public repo) |
-| **The fabric** — `~/.local/share/wiki-fabric/` | your content: `evidence/`, `projects/`, `patterns/`, plus `fabric.yaml` | you (and hooks) write; `wf sync` shares |
+| **The fabric** — `~/.local/share/wiki-fabric/` | your content: `evidence/`, `projects/`, `patterns/`, `domains/` (the vocabulary + physical domain homes — `domains/<d>/{concepts,questions,syntheses}`), plus `fabric.yaml` | you (and hooks) write; `wf sync` shares |
 | **Your code repos** | the projects being documented: source code + a tiny `.wiki-overlay.md` | normal development; the overlay versions with the code |
 
 The harness never holds your knowledge. Your projects never hold the fabric.

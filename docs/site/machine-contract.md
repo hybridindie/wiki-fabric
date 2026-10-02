@@ -22,8 +22,11 @@ The lint report codes are stable: `FRONTMATTER`, `BROKEN-LINK`, `SCOPE`,
 `REVIEW-AFTER`, `CLAIM`, `CONCEPT`, `PATTERN`, `COMMITMENT`, `DUP-ID`, `SOURCE`,
 `SOURCE-DRIFT`, `SOURCE-EMPTY`, `SYNC-CONFLICT`, `ORPHAN`, `LLM-CONFIG`, `GENERATED`,
 `STALE-AFTER`, `TRUST-TIER`, `IGNORE-CONFIG`, `VERIFIED`, `TYPE`, `PROPOSED-TYPE`,
-`RECEIPT`, `QUESTION`, `SLOW-REGION`, plus the OKF-floor
-`OKF-*` codes (`--okf` mode). The rest are structural — `FRONTMATTER`
+`RECEIPT`, `QUESTION`, `SLOW-REGION`, plus `LAYOUT-GUARD` (corpus path
+re-spelled outside `scripts/lib/layout.py`), `VOCABULARY` (a `domain:`
+declaration resolving to no ontology domain — the alias map is the binding),
+`IDENTITY` (canonical repo-slug collisions error; non-canonical namespace
+spellings advise), plus the OKF-floor `OKF-*` codes (`--okf` mode). The rest are structural — `FRONTMATTER`
 (malformed metadata), `BROKEN-LINK`, `DUP-ID`, `SOURCE` — and each message
 names the offending page and field. `registry/catalog.json` carries every
 cataloged page with its `id`, `type`, `scope`, `status`, `maturity`,
@@ -37,13 +40,34 @@ cataloged page with its `id`, `type`, `scope`, `status`, `maturity`,
 | `SCOPE` | frontmatter `scope:` must match the path-implied scope (`global/` `domains/` `projects/`) — precedence comes from scope, so scope lies are errors |
 | `REVIEW-AFTER` | pages with a past `review_after` date are flagged stale (warning; message shows days overdue) — staleness is detected, not forgotten |
 | `SYNC-CONFLICT` | unresolved team-sync conflicts block commit/push |
-| `SOURCE-DRIFT` | a captured source's sha256 changed without re-ingest |
+| `SOURCE-DRIFT` | a captured source's sha256 changed without re-ingest (ingest's drift trigger already stamped the old-revision claims contested+stale_after before this reports) |
+| source lifecycle | `review --verify-sources`: fresh ⇒ roll `review_after` (capture-kind tier: pr/commit 30d, chats 45d, docs 180d), drifted ⇒ `stale_after`, upstream-gone ⇒ `status: expired` tombstone (provenance kept, context-excluded; #160) |
+| canonical slugs | repo identity = `wf_common.project_slug` fold (`comfyui_mcp` ≡ `comfyui-mcp`); `IDENTITY` lint; hooks fold `WF_SLUG` |
 
 ---
 
 ## The registry
 
 The machine surfaces — each machine-written, human-readable:
+
+### `registry/effects/` — judged-effect verdicts
+
+`wf verify-effects` writes `<claim-stem>.effects.json` here (machine
+artifacts never sit beside pages — the layout contract). Audit trail of the
+independent second-opinion verdicts.
+
+### `registry/promotion-queue.md` — the human-maintained promotion checklist
+
+Scaffolded by `sync setup/init` (idempotent; never overwritten by scripts).
+Pattern candidates in flight; dossiers link to it. `wf sync commit-drift`
+carries it across machines when you update it by hand.
+
+### `questions/` — promoted open questions
+
+`promote-questions --apply` writes here — domain-bound questions under
+`domains/<domain>/questions/` (inherited from the source concept's
+binding). Harvest → promote lifecycle in #88; the plane is seeded by
+`sync setup/init`.
 
 ### `registry/wiki-graph.json` — the wiki's edges (not its prose)
 
@@ -238,8 +262,11 @@ fact* that a given task received the required knowledge.
 ### Tunable thresholds (`tuning:`)
 
 Behavioral constants (mining `min_projects`, cluster thresholds, judgment
-`mining_threshold`/`near_band`, context caps, concept-density gate) read
-from a `tuning:` section in fabric.yaml, falling back to shipped defaults.
+`mining_threshold`/`near_band`, **capture**: `git_history {since, budget}`
+(the activity-bounded window), `ingest.budget` (bulk-extraction cap),
+context caps, concept-density gate) read from a `tuning:` section in
+fabric.yaml, falling back to shipped defaults. Per-repo: `repos.<slug>
+.git_history` (window/budget override; `"all"` disables).
 Defaults reproduce shipped behavior exactly (no-op test guarded). Two are
 **calibration-sensitive**: `judgment.mining_threshold` (0.8, calibrated on
 Laya — see issue #39) and `judgment.near_band` — their provenance travels

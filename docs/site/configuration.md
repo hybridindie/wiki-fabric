@@ -123,7 +123,10 @@ domains:
 | `repos.<slug>.<stage>` | ingest, synthesize, mine-promotions routing |
 | `ignore.patterns` / `.globs` / `.regexes` | capture, context, lint, rebuild-index, okf export |
 | `integrations.*` | graphify bridge, skills |
-| `domains.*` | classification, context scoping, propose-domains |
+| `domains.*` | classification, context scoping, propose-domains (the ontology is the vocabulary; config signals are overrides) |
+| `tuning.git_history` | capture-git window/budget (`since`, `budget:int\|"all"`) |
+| `repos.<slug>.git_history` | per-repo window/budget override |
+| `tuning.ingest.budget` | ingest --changed/--pending budget (0 = uncapped) |
 
 ## LLM providers (any OpenAI-compatible endpoint)
 
@@ -251,9 +254,14 @@ routing:
 ```
 
 The fabric **discovers** these automatically: it scans its sibling directories
-for `.wiki-overlay.md` files (respects `namespace:` for the slug), so a
-bootstrap'd project appears in `wf status` with no fabric.yaml edit. Explicit
-`repos:` entries merge **over** the overlay — explicit keys win:
+for `.wiki-overlay.md` files (respects `namespace:` for the slug, folded to
+its **canonical form** — `comfyui_mcp` and `comfyui-mcp` are one identity:
+lookups, hooks, and `wf status` address either spelling; lint's `IDENTITY`
+gate errors on canonical collisions and warns on non-canonical namespaces),
+so a bootstrap'd project appears in `wf status` with no fabric.yaml edit.
+Explicit `repos:` entries merge **over** the overlay — explicit keys win
+(matched by canonical fold: a kebab key configures an underscore-named
+project):
 
 ```yaml
 repos:
@@ -390,19 +398,35 @@ human review. See [Judgment — the decision-model tier](./integrations/judgment
 
 ## Domains
 
-Domain taxonomy drives classification and context scoping. Start with the
-defaults. `wf propose-domains` discovers new domains from
-evidence signals and writes them as **pending-review proposal dossiers**
+Domain taxonomy drives classification and context scoping. The **ontology**
+(`domains/ontology.md`) is the vocabulary single-truth — canonical domain
+names (`## Domains`), alternate spellings (`## Aliases`: `` `godot-systems` -> `godot` `` —
+pages carry the spelling their synthesis wrote, the alias folds them without
+re-tagging), and the shared tag lexicon (`## Shared tag set`, the mining
+expansion vocabulary). Every consumer reads it through the shared parser
+(`scripts/lib/ontology.py`): context's domain tier binds `domain:` frontmatter
+through the alias map, synthesize/log-experience/mine-promotions/hubs bind
+from it, and **lint's `VOCABULARY` gate** warns when a page's `domain:`
+resolves to no ontology domain. Domain-bound pages live in physical homes
+(`domains/<domain>/{concepts,questions,syntheses}` — `relocate-concepts.py`
+migrates legacy flat pages).
+
+`wf propose-domains` discovers new domains from evidence signals (ontology
+names fold into the signal lexicon; config signals below are overrides) and
+writes them as **pending-review proposal dossiers**
 (`registry/domain-proposals/`); merge an approved one into the ontology with
-`wf promote-domains --apply <dossier>`. `wf gate` surfaces
+`wf promote-domains --apply <dossier>` (aliases: a dossier may carry
+`aliases:` to record alternate spellings). `wf gate` surfaces
 pending proposals at session start:
 
 ```yaml
 domains:
   agent-systems:
     signals: [agent, mcp, fastmcp, opencode, claude]
-  web-systems:
+  web-ui:
     signals: [fastapi, flask, react, nextjs, supabase, postgresql]
+  # web-systems (legacy spelling): alias-mapped to web-ui in the ontology —
+  # config keeps working while the vocabulary canon moves
 ```
 ## Security & privacy
 
