@@ -48,6 +48,35 @@ def match_globs(repo_path, globs):
     return sorted(set(matched))  # deduplicate
 
 
+def _connected_project_slugs():
+    """Connected projects for the unknown-slug error surface (fabric.yaml
+    repos keys canonical + discovered sibling overlays)."""
+    slugs: list[str] = []
+    try:
+        from fabric_config import get_all_repo_names
+        slugs = sorted(get_all_repo_names(get_config() or {}))
+    except Exception:
+        pass
+    if not slugs:
+        for d in sorted(PROJECTS_DIR.glob("*/.wiki-overlay.md")):
+            slugs.append(d.parent.name)
+    return slugs
+
+
+def _exit_unknown_project(project_slug):
+    """Exit 3 = unknown project slug (distinct from exit 2 = drift captured
+    so hook/CI consumers keep their meaning table, issue #167)."""
+    import difflib
+    slugs = _connected_project_slugs()
+    print("  Connected projects:", file=sys.stderr)
+    close = difflib.get_close_matches(project_slug, slugs, n=1, cutoff=0.6)
+    for s in slugs:
+        marker = "  (closest match)" if close and s == close[0] else ""
+        print(f"    - {s}{marker}", file=sys.stderr)
+    if not slugs:
+        print("    (none discovered — check fabric.yaml repos: / sibling overlays)", file=sys.stderr)
+
+
 def capture_project(project_slug, repo_filter=None, dry_run=False):
     """Capture knowledge-bearing files from source repos."""
     # Read .wiki-overlay.md from the PROJECT ROOT (not the fabric namespace)
@@ -105,7 +134,8 @@ def capture_project(project_slug, repo_filter=None, dry_run=False):
     if not overlay_path:
         print(f"Error: no .wiki-overlay.md found for project '{project_slug}'", file=sys.stderr)
         print(f"  Searched: {project_paths}", file=sys.stderr)
-        sys.exit(1)
+        _exit_unknown_project(project_slug)
+        sys.exit(3)
 
     fm, _ = parse_frontmatter(overlay_path)
     source_repos = fm.get("source_repos", [])
@@ -235,7 +265,8 @@ def main():
         overlay = root / ".wiki-overlay.md"
         if not overlay.exists():
             print(f"Error: no .wiki-overlay.md in {root}", file=sys.stderr)
-            sys.exit(1)
+            _exit_unknown_project(args.project)
+            sys.exit(3)
         fm, _ = parse_frontmatter(overlay)
         source_repos = fm.get("source_repos", [])
         if not source_repos:

@@ -88,7 +88,7 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 | `wf vault [PATH]` | Scaffold/audit the Obsidian output vault |
 | `wf update` | Tool upgrade + auxiliary refresh (hooks reinstall from config, entity index, catalog) — packaged mode prints `uv tool upgrade wiki-fabric`; see [Upgrading wf](./upgrading) |
 | `wf bootstrap <project-path>` | Connect a project to the fabric |
-| `wf capture <project-slug> [--repo PATH]` | Capture upstream repo docs → `evidence/raw/` |
+| `wf capture <project-slug> [--repo PATH]` | Capture upstream repo docs → `evidence/raw/`. Exit codes: 0 nothing new, 2 drift captured, 3 unknown project slug (with the connected-project list — hooks/CI can detect a typo) |
 | `wf capture <project-slug> --git <owner/name-or-path>` | Capture PR/issue threads + high-signal commits → `evidence/raw/<slug>/git/` (`--since 6m` window, `--limit 30` BUDGET — the window auto-shrinks to fit an active repo, never truncates; `--until` backfill bound; threads paginate + flag truncation; `--churn`; `--since-state` incremental hooks; knobs: `tuning.git_history` + `repos.<slug>.git_history`) |
 | `wf capture chat <project-slug>` | Capture agent chat sessions → `evidence/raw/<slug>/chats/` (harnesses: claude, opencode, codex, gemini — auto-detects; `--since 90d`, `--min-turns`, `--harness <name>`) |
 | `wf context --task "<task>" [--project <slug>] [--paths P] [--write-receipt] [--format json] [--judge-borderline]` | Compile the task-scoped context manifest (0 tokens; `--write-receipt` persists a delivery receipt). `--judge-borderline`: opt-in judged re-rank of borderline beyond-`--max` candidates (needs `integrations.judgment`; per-item receipt record) |

@@ -66,6 +66,45 @@ class TestVerbs:
         assert "wf status" in capsys.readouterr().out
 
 
+class TestCaptureUnknownSlugExit:
+    """#167 — wf capture <wrong-slug> must exit nonzero (3: unknown slug,
+    distinct from 2 = drift captured) so hooks/CI can detect a typo."""
+
+    def run_capture(self, monkeypatch, tmp_path, slug):
+        import importlib
+        import fabric_config
+        importlib.reload(fabric_config)  # re-resolve FABRIC_ROOT/VAULT_ROOT from env
+        import capture as _cap
+        importlib.reload(_cap)
+        monkeypatch.chdir(tmp_path)
+        import io, contextlib
+        buf, err = io.StringIO(), io.StringIO()
+        rc = None
+        try:
+            with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
+                _cap.capture_project(slug)
+        except SystemExit as e:
+            rc = e.code
+        return rc, err.getvalue()
+
+    def test_unknown_slug_exits_3(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("WIKI_FABRIC_DIR", str(tmp_path))
+        rc, err = self.run_capture(monkeypatch, tmp_path, "no-such-project-xyz")
+        assert rc == 3
+        assert "Connected projects:" in err
+
+    def test_unknown_slug_lists_closest(self, tmp_path, monkeypatch):
+        projects = tmp_path / "corpus" / "projects"
+        projects.mkdir(parents=True)
+        (projects / "my-real-project").mkdir()
+        (projects / "my-real-project" / ".wiki-overlay.md").write_text(
+            "---\ntype: registry\nproject: my-real-project\nnamespace: my-real-project\n---\n")
+        monkeypatch.setenv("WIKI_FABRIC_DIR", str(tmp_path))
+        rc, err = self.run_capture(monkeypatch, tmp_path, "my-real-projekt")
+        assert rc == 3
+        assert "- my-real-project  (closest match)" in err
+
+
 class TestFindFabric:
     def test_env_override(self, tmp_path, monkeypatch):
         # the env must carry a fabric marker (fabric.yaml/corpus/evidence/projects):
