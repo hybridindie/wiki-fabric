@@ -307,7 +307,50 @@ def select_context(pages, task, paths, project, today, max_items=20):
     # Order: priority tier → path hit → staleness (fresh first) → stem
     scored.sort(key=lambda s: (tier_order.get(s["priority"], 9), not s["path_hit"], -s["stale"], s["pg"]["stem"]))
 
-    for s in scored[:max_items]:
+    # Precedence-preserving cap (#159 S1): the plain scored[:max_items] cut let
+    # a large P1 claim flood hide the domain tier entirely (P2 is the OVERRIDE
+    # tier — precedence language says it outranks global policies; a cap that
+    # never shows it is a lie under crowd). Reserve: P1 keeps its headroom but
+    # P2/P3 get guaranteed slots when they scored (floor(tier share), min 2 for
+    # P2 when P1 would take everything).
+    def _tier_cut():
+        by_tier = {}
+        for s in scored:
+            by_tier.setdefault(s["priority"], []).append(s)
+        p2, p3 = by_tier.get("P2-domain") or [], by_tier.get("P3-global") or []
+        p1 = by_tier.get("P1-project") or []
+        # no conflict → old behavior byte-identical
+        if not p2 and not p3:
+            return scored[:max_items]
+        # absent tiers release their reservation to the present ones; the
+        # fills below also top up from lower tiers when an upper tier has
+        # fewer members than its share
+        reserve2 = max(2, max_items // 5) if p2 else 0
+        reserve3 = max(1, max_items // 10) if p3 else 0
+        p2_share = min(len(p2), reserve2)
+        p3_share = min(len(p3), reserve3)
+        p1_share = min(len(p1), max_items - p2_share - p3_share)
+        # top-up pass: unused reservations flow down (P1 flood) / up (P2/P3)
+        used = p1_share + p2_share + p3_share
+        spare = max_items - used
+        if spare > 0:
+            rest1 = p1[p1_share:p1_share + spare]; p1_share += len(rest1)
+            spare -= len(rest1)
+            if spare > 0:
+                rest2 = p2[p2_share:p2_share + spare]; p2_share += len(rest2)
+                spare -= len(rest2)
+            if spare > 0:
+                rest3 = p3[p3_share:p3_share + spare]; p3_share += len(rest3)
+        out = p1[:p1_share] + p2[:p2_share] + p3[:p3_share]
+        demoted = [s for s in scored if s not in out]
+        out.sort(key=lambda s: (tier_order.get(s["priority"], 9), not s["path_hit"],
+                                -s["stale"], s["pg"]["stem"]))
+        for s in demoted:
+            excluded.append({"stem": s["pg"]["stem"], "path": s["pg"]["posix"],
+                             "reason": f"beyond --max {max_items} (tier-shared cut)"})
+        return out
+
+    for s in _tier_cut():
         pg = s["pg"]
         item = {
             "id": str(pg["fm"].get("id") or pg["stem"]),

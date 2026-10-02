@@ -95,13 +95,17 @@ def harvest_concept(concept_path, dry_run=False):
             continue
         PROPOSALS_DIR.mkdir(parents=True, exist_ok=True)
         rel_target = PROPOSALS_DIR / f"{qid}.md"
+        # S1/#159: the proposal inherits the SOURCE concept's domain binding —
+        # promote-questions routes it to domains/<d>/questions/ on apply.
+        concept_raw = str(fm.get("domain") or "").strip("[]") if fm.get("domain") else ""
+        domain_line = f"domain: [{concept_raw}]\n" if concept_raw else ""
         rel_target.write_text(f"""---
 type: question
 id: {qid}
 title: {yaml_scalar(q[:140])}
 question: {yaml_scalar(q)}
 priority: {priority}
-rationale: "Open question raised by concept [[{stem}]] — what is unknown or unverified about it"
+{domain_line}rationale: "Open question raised by concept [[{stem}]] — what is unknown or unverified about it"
 related:
   - "[[{stem}]]"
 {actor_block()}status: proposed

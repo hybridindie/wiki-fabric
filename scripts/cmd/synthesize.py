@@ -246,11 +246,15 @@ def write_concept_page(concept_slug, cluster, synthesis, domain=None):
     claim_links = "\n".join(f'  - "[[{c["stem"]}]]"' for c in cluster)
 
     domains = _detect_domains(cluster, _ontology_for_vocab())
-    # concept pages stay flat in concepts/ (the domains/<d>/concepts home is a
-    # doc contract no writer implements yet — layout keeps one truth per dir);
-    # the domain BINDING travels in frontmatter.
+    # Physical home (S1/#159, Scope→home contract): a domain-bound concept
+    # lives in domains/<canonical-domain>/concepts/; unbound concepts stay in
+    # the flat concepts/ dir (the lint vocabulary gate flags their domain as
+    # unbound — relocation happens via the same migration as the corpus bulk).
     primary_domain = domains[0] if domains else None
-    concepts_dir = layout.concepts(VAULT_ROOT)
+    if primary_domain:
+        concepts_dir = layout.domain_home(VAULT_ROOT, primary_domain, "domain_concepts_home")
+    else:
+        concepts_dir = layout.concepts(VAULT_ROOT)
     concepts_dir.mkdir(parents=True, exist_ok=True)
     concept_path = concepts_dir / f"concept-{concept_slug}.md"
 

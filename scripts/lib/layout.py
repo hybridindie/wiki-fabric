@@ -45,6 +45,14 @@ SEGMENTS = {
     "concepts": ("concepts",),
     "domains": ("domains",),
     "projects": ("projects",),
+    # Domain homes (S1/#159 — the Scope→home contract made physical):
+    # domains/<domain>/{concepts,questions,syntheses} — pages LIVE under their
+    # domain (frontmatter `domain:` is the binding; the alias map resolves it).
+    # Second-level dir is the domain name; accessors take it. The `domain_homes`
+    # trio is declared as SUFFIX segments (appended to domains/<name>).
+    "domain_concepts_home": ("concepts",),
+    "domain_questions_home": ("questions",),
+    "domain_syntheses_home": ("syntheses",),
     "registry": ("registry",),
     "registry_effects": ("registry", "effects"),
     "registry_receipts": ("registry", "receipts"),
@@ -115,6 +123,16 @@ def anti_patterns(root=None):     return make(root, "anti_patterns")
 def skills(root=None):            return make(root, "skills")
 def concepts(root=None):          return make(root, "concepts")
 def domains(root=None):           return make(root, "domains")
+def domain_home(root, domain, kind):
+    """domains/<domain>/<kind>/ — the physical home trio (kind: concepts |
+    questions | syntheses; domain may carry underscores → canonical kebab is
+    the caller's call via wf_common.project_slug/ontology canonicalize)."""
+    if kind not in ("domain_concepts_home", "domain_questions_home",
+                    "domain_syntheses_home"):
+        raise KeyError(
+            f"layout.domain_home: kind {kind!r} is not a declared domain home "
+            f"— add it to SEGMENTS ('domain_<name>_home'), never re-spell")
+    return domains(root) / domain / seg(kind)
 def projects(root=None):          return make(root, "projects")
 def registry(root=None):          return make(root, "registry")
 def effects(root=None):           return make(root, "registry_effects")

@@ -23,7 +23,7 @@ can have different trust rules. The ones you'll touch daily are `claim`,
 | `source` | `evidence/sources/` | Immutable bibliographic record + sha256 |
 | `source-summary` | `evidence/source-summaries/` | Faithful summary with locators, no inference |
 | `claim` | `evidence/claims/` | Atomic assertion with `source_refs` (locator + quote) + `code_symbols` + `graph_edges` |
-| `concept` | `concepts/` or `domains/<d>/concepts/` | Stable explanation built ONLY from linked claims |
+| `concept` | `concepts/` (unbound) or `domains/<domain>/concepts/` (bound; canonical via the ontology alias map) | Stable explanation built ONLY from linked claims |
 | `experience-event` | `projects/<p>/experience-events/` | Structured observation: problem → intervention → outcome |
 | `pattern` | `patterns/` | Reusable context→problem→forces→solution (maturity 0–3) |
 | `anti-pattern` | `anti-patterns/` | Repeated failure mode; detect and warn |

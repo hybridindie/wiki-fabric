@@ -35,7 +35,10 @@ legacy alias for the same value).
 | `patterns/` + `patterns/_inbox/` + `patterns/_rejected/` | canonical patterns; staged candidates; rejection tombstones | mine-chats --propose (staging), promote-patterns --apply, promote | mining suppression, context, gate |
 | `anti-patterns/` | canonical anti-patterns (type: anti-pattern) | promote-patterns --apply | promote.py, lint, retrieval |
 | `skills/` | durable procedures promoted as fabric skills | promotion pipeline | context |
-| `concepts/` | synthesized concepts built from claims | synthesize | export, harvest-questions, retrieval |
+| `concepts/` | unbound concepts (declares no ontology domain) | synthesize | export, harvest-questions, retrieval |
+| `domains/<name>/concepts/` | domain-bound concepts (S1 homes) | synthesize, relocate-concepts | export, harvest-questions, retrieval |
+| `domains/<name>/questions/` | domain-bound promoted questions (S1 homes) | promote-questions | query gaps, gate |
+| `domains/<name>/syntheses/` | reserved (S1 trio; query --save routes here when domain-bound) | query --save (reserved) | humans |
 | `domains/ontology.md` | domain vocabulary (human-gated merges) | promote-domains | domain detection, lint scope |
 | `projects/<slug>/` | namespace pages: README, `decisions/`, `experience-events/ee-*.md`, `commitments/`, `receipts/` | bootstrap-project, log-experience, wf context | mine-promotions, context precedence, lint SCOPE |
 | `registry/catalog.json` | page index (derived) | rebuild-index | query, context, dispatch status |
@@ -95,6 +98,9 @@ claim↔source join depends on `claim-` + the raw rel path, so raw paths under
 
 ## History
 
+- 2026-10-01 (S1/#159): physical domain homes — `domains/<domain>/{concepts,questions,syntheses}`;
+  binding is frontmatter `domain:` (canonicalized through the ontology alias map);
+  relocation via `scripts/cmd/relocate-concepts.py` (deterministic, idempotent).
 - 2026-10-01: layout.py introduced (Tier-2 single truth); anti-pattern
   apply-path bug fixed (candidates were unconditionally dropped into
   patterns/); promote-queue update made fail-soft; effects verdicts moved to

@@ -59,7 +59,24 @@ def apply_question(p, dry_run=False):
         print(f"Not a question page: {p}")
         return False
     qid = fm.get("id") or p.stem
-    dest = QUESTIONS_DIR / f"{qid}.md"
+    # S1/#159 trio: domain-bound questions live under domains/<d>/questions/
+    # (canonical via the shared parser); unbound go flat. Same contract the
+    # concept relocation follows.
+    import ontology as _o
+    dest_dir = QUESTIONS_DIR
+    try:
+        onto = _o.parse((layout.domains(CORPUS_ROOT) / "ontology.md")
+                        .read_text(encoding="utf-8", errors="replace")
+                        if (layout.domains(CORPUS_ROOT) / "ontology.md").exists() else "")
+        raw = fm.get("domain") or []
+        if isinstance(raw, str):
+            raw = [x.strip() for x in raw.strip("[]").split(",")]
+        canon = sorted(_o.canonicalize([str(d).strip() for d in raw if str(d).strip()], onto))
+        if canon:
+            dest_dir = layout.domain_home(CORPUS_ROOT, canon[0], "domain_questions_home")
+    except (OSError, KeyError):
+        pass  # vocabulary-less corpus: flat (the lint gate explains)
+    dest = dest_dir / f"{qid}.md"
     if dry_run:
         print(f"[dry-run] would move {p.name} -> {dest}")
         return True
