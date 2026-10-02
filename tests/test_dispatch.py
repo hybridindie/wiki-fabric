@@ -105,6 +105,43 @@ class TestCaptureUnknownSlugExit:
         assert "- my-real-project  (closest match)" in err
 
 
+class TestCompletions:
+    """#162 — wf completions {bash|zsh|fish} generated from the VERBS registry."""
+
+    def test_all_shells(self, capsys):
+        for shell in ("bash", "zsh", "fish"):
+            assert dispatch.main(["completions", shell]) == 0
+            out = capsys.readouterr().out
+            assert "ingest" in out and "rebuild-index" in out  # verbs enumerated
+
+    def test_bash_script_parses(self):
+        import subprocess
+        script = dispatch._completion_scripts("bash")
+        r = subprocess.run(["bash", "-n"], input=script, capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+
+    def test_bash_completes_verbs_and_subcommands(self):
+        import subprocess
+        script = dispatch._completion_scripts("bash")
+        harness = f'''
+source /dev/stdin <<'EOS'
+{script}
+EOS
+COMP_WORDS=(wf mine prom); COMP_CWORD=2; _wf_completions; echo "SUB:${{COMPREPLY[*]}}"
+COMP_WORDS=(wf ingest --); COMP_CWORD=2; _wf_completions; echo "FLAGS:${{COMPREPLY[*]}}"
+COMP_WORDS=(wf revie ""); COMP_CWORD=1; _wf_completions; echo "VERB:${{COMPREPLY[*]:0:1}}"
+'''
+        r = subprocess.run(["bash", "-c", harness], capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+        assert "SUB:promotions" in r.stdout
+        assert "FLAGS:--changed" in r.stdout and "--extract-claims" in r.stdout
+        assert "VERB:review" in r.stdout
+
+    def test_requires_shell_arg(self, capsys):
+        assert dispatch.main(["completions"]) == 1
+        assert "Usage: wf completions" in capsys.readouterr().err
+
+
 class TestFindFabric:
     def test_env_override(self, tmp_path, monkeypatch):
         # the env must carry a fabric marker (fabric.yaml/corpus/evidence/projects):

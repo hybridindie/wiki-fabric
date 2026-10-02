@@ -867,6 +867,30 @@ EOF
 # yaml) and audited a DIFFERENT tree than the packaged `wf status` on the
 # same machine; it now delegates and keeps only the bash-specific CLI-sync
 # line (installed ~/.local/bin/wf vs this harness script).
+# Run a python-dispatch verb directly (dev-tree or packaged), passing argv
+# through. Used where the bash shim delegates an entire verb family to the
+# python dispatch (completions #162).
+_run_dispatch_raw() {
+    local verb="$1"; shift
+    local fabric_dir harness_dir
+    fabric_dir="$(find_fabric 2>/dev/null || true)"
+    harness_dir="$(find_harness 2>/dev/null || echo "${fabric_dir:-$PWD}")"
+    WF_BASH_HARNESS_DIR="${harness_dir}" \
+        run_python "${fabric_dir}" -c '
+import os, sys
+from pathlib import Path
+h = Path(os.environ["WF_BASH_HARNESS_DIR"])
+if (h / "src" / "wiki_fabric" / "dispatch.py").exists():
+    sys.path.insert(0, str(h / "src"))
+try:
+    from wiki_fabric.dispatch import main
+except ModuleNotFoundError as e:
+    print(f"wiki_fabric not importable ({e}) — run: wf update", file=sys.stderr)
+    raise SystemExit(1)
+sys.exit(main(sys.argv[1:]))
+' "$verb" "$@"
+}
+
 cmd_status() {
     local fabric_dir=""
     fabric_dir="$(find_fabric 2>/dev/null || true)"
@@ -1159,6 +1183,55 @@ case "${1:-help}" in
         shift
         fdir=$(find_fabric)
         run_script "${fdir}" "scripts/cmd/propose-domains.py" "$@"
+        ;;
+    freshness)
+        # one implementation: the freshness-job (capture-git --since-state +
+        # mechanical re-verify; #170 — shim parity, the verb existed only in
+        # the python dispatch)
+        fdir=$(find_fabric)
+        run_script "${fdir}" "scripts/cmd/freshness-job.py" "$@"
+        ;;
+    eval)
+        shift
+        fdir=$(find_fabric)
+        sub="${1:-behavior}"
+        shift 2>/dev/null || true
+        case "${sub}" in
+            behavior) run_script "${fdir}" "scripts/eval/eval-behavior.py" "$@" ;;
+            stability) run_script "${fdir}" "scripts/eval/eval-stability.py" "$@" ;;
+            golden) run_script "${fdir}" "scripts/eval/eval.py" "$@" ;;
+            real) run_script "${fdir}" "scripts/eval/eval-real-repo.py" "$@" ;;
+            pr) run_script "${fdir}" "scripts/eval/eval-pr-replay.py" "$@" ;;
+            *)
+                err "Usage: ${SCRIPT_NAME} eval {behavior|stability|golden|real|pr}"
+                exit 1
+                ;;
+        esac
+        ;;
+    graphify)
+        shift
+        fdir=$(find_fabric)
+        sub="${1:-status}"
+        shift 2>/dev/null || true
+        case "${sub}" in
+            all|import|enrich|diff|status)
+                run_script "${fdir}" "scripts/harness/graphify-bridge.py" "--${sub}" "$@"
+                ;;
+            *)
+                err "Usage: ${SCRIPT_NAME} graphify {all|import|enrich|diff|status}"
+                exit 1
+                ;;
+        esac
+        ;;
+    promote)
+        shift
+        fdir=$(find_fabric)
+        [[ "${1:-}" == "promote" ]] && shift
+        run_script "${fdir}" "scripts/cmd/promote.py" "$@"
+        ;;
+    completions)
+        # one implementation: the python dispatch generates from VERBS (#162)
+        _run_dispatch_raw completions "${@:2}"
         ;;
     harvest-questions)
         shift
