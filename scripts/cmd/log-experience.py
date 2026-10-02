@@ -208,6 +208,7 @@ def main():
     parser.add_argument("--session", help="Source session id this event came from (#103: thread-index join key for mining)")
     parser.add_argument("--lineage", help="Evidence lineage id (shared source): events from one capture/session share it, so mining counts them as ONE independent unit (ontology ## Independence rule). Default: the project.")
     parser.add_argument("--list", action="store_true", help="List available projects")
+    parser.add_argument("--dry-run", action="store_true", help="Show the event that would be written, write nothing (issue #166)")
     args = parser.parse_args()
 
     # List projects
@@ -269,6 +270,19 @@ def main():
     tags = getattr(locals().get('tags_arg', None), 'strip', lambda: '')() if 'tags_arg' in locals() else (args.tags or "")
 
     # Write event
+    if getattr(args, "dry_run", False):
+        slug = make_slug(problem, project)
+        print("[DRY RUN] Would log experience event — nothing written (issue #166)")
+        print(f"  Path:     {PROJECTS_DIR / project / 'experience-events' / f'ee-{slug}.md'}")
+        print(f"  Project:  {project}")
+        print(f"  Problem:  {problem[:120]}")
+        if intervention:
+            print(f"  Intervention: {intervention[:120]}")
+        if args.receipt:
+            print(f"  Receipt:  {args.receipt}")
+        if tags:
+            print(f"  Tags:     {tags}")
+        return 0
     event_path = write_event(project, problem, intervention, conditions, outcomes, [], tags,
                              receipt=args.receipt, session=args.session,
                              lineage=getattr(args, "lineage", None))

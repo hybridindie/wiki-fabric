@@ -189,6 +189,101 @@ class TestJsonSurfaces:
         assert payload["overdue"] == []
 
 
+class TestDryRuns:
+    """#166 — bootstrap + log-experience --dry-run (the worst-offender writing
+    verbs): plan printed, nothing written."""
+
+    def test_bootstrap_dry_run_writes_nothing(self, tmp_path):
+        import subprocess
+        proj = tmp_path / "proj"
+        r = subprocess.run(
+            [sys.executable, str(_ROOT / "scripts/cmd/bootstrap-project.py"), str(proj),
+             "--name", "Dry", "--slug", "dry-proj", "--non-interactive", "--dry-run"],
+            capture_output=True, text=True,
+            env={"WIKI_FABRIC_DIR": str(tmp_path / "fabric"), "PATH": "/usr/bin:/bin",
+                 "PYTHONPATH": str(_ROOT / "scripts/lib"), "HOME": str(tmp_path)})
+        assert r.returncode == 0, r.stderr
+        assert "[DRY RUN]" in r.stdout
+        assert "fabric.yaml" in r.stdout  # the plan names the writes
+        assert not proj.exists()  # nothing written
+        assert not (tmp_path / "fabric" / "corpus" / "projects" / "dry-proj").exists()
+
+    def test_log_experience_dry_run_writes_nothing(self, tmp_path, monkeypatch):
+        import subprocess, importlib
+        import fabric_config
+        corpus = tmp_path / "corpus"
+        (corpus / "projects" / "p1").mkdir(parents=True)
+        (tmp_path / "fabric.yaml").write_text("repos: {}\n")
+        monkeypatch.setenv("WIKI_FABRIC_DIR", str(tmp_path))
+        importlib.reload(fabric_config)
+        r = subprocess.run(
+            [sys.executable, str(_ROOT / "scripts/cmd/log-experience.py"),
+             "--project", "p1", "--problem", "dry-run probe", "--dry-run"],
+            capture_output=True, text=True,
+            env={"WIKI_FABRIC_DIR": str(tmp_path), "PATH": "/usr/bin:/bin",
+                 "PYTHONPATH": str(_ROOT / "scripts/lib"), "HOME": str(tmp_path)})
+        assert r.returncode == 0, r.stderr
+        assert "[DRY RUN]" in r.stdout
+        events = list((corpus / "projects" / "p1" / "experience-events").glob("*.md"))
+        assert events == []  # nothing written
+
+
+class TestProjectsVerb:
+    """#169 — wf projects: the connected-repo inventory as a verb."""
+
+    def test_projects_registered(self):
+        assert "projects" in dispatch.VERBS
+
+    def test_projects_requires_fabric(self, tmp_path, monkeypatch):
+        import io, contextlib
+        monkeypatch.setenv("WIKI_FABRIC_DIR", str(tmp_path / "nope"))
+        buf, err = io.StringIO(), io.StringIO()
+        rc = None
+        try:
+            with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
+                rc = dispatch.main(["projects"])
+        except SystemExit as e:
+            rc = e.code
+        assert rc == 1  # no fabric → loud
+
+    def test_projects_json_shape(self, tmp_path, monkeypatch):
+        import io, contextlib, json, importlib
+        fabric = tmp_path
+        corpus = fabric / "corpus"
+        corpus.mkdir()
+        (corpus / "evidence").mkdir()  # content marker (nested-corpus layout)
+        (fabric / "fabric.yaml").write_text("repos:\n  my-proj:\n    path: ../my-proj\n    owner: t\n")
+        monkeypatch.setenv("WIKI_FABRIC_DIR", str(fabric))
+        import fabric_config
+        importlib.reload(fabric_config)  # FABRIC_ROOT frozen at import — re-resolve
+        buf, err = io.StringIO(), io.StringIO()
+        rc = None
+        try:
+            with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
+                rc = dispatch.main(["projects", "--json"])
+        except SystemExit as e:
+            rc = e.code
+        assert rc == 0
+        payload = json.loads(buf.getvalue())
+        assert payload["projects"][0]["slug"] == "my-proj"
+        assert payload["projects"][0]["owner"] == "t"
+        assert payload["projects"][0]["captures"]["claims"] == 0
+
+
+class TestVerbDocstrings:
+    """#168 — every verb carries a one-line docstring (the introspected help
+    surface; `wf help` prints them)."""
+
+    def test_all_verbs_have_docstrings(self):
+        empty = [v for v in dispatch.VERBS if not (dispatch.VERBS[v].__doc__ or "").strip()]
+        assert empty == [], f"verbs without one-liners: {empty}"
+
+    def test_help_prints_one_liners(self, capsys):
+        assert dispatch.main(["help"]) == 0
+        out = capsys.readouterr().out
+        assert "query" in out and "Ask the fabric" in out
+
+
 def _last_json(text):
     """Extract the last complete JSON object printed on mixed stdout (the
     outermost payload — inner nested objects also start with '{')."""

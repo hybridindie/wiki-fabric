@@ -1237,6 +1237,10 @@ case "${1:-help}" in
         # one implementation: the python dispatch generates from VERBS (#162)
         _run_dispatch_raw completions "${@:2}"
         ;;
+    projects)
+        # one implementation: the python dispatch (inventory + provenance, #169)
+        _run_dispatch_raw projects "${@:2}"
+        ;;
     harvest-questions)
         shift
         fdir=$(find_fabric)

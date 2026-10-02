@@ -787,9 +787,52 @@ Ongoing:
 """)
 
 
+def _print_dry_run(args, project_root_str, project_name, project_slug, domains, skills, owner):
+    """--dry-run: the plan, nothing written (issue #166)."""
+    project_root = Path(project_root_str).resolve()
+    fabric_root = find_fabric_root()
+    corpus = fabric_root / "corpus" if (fabric_root / "corpus").exists() else fabric_root
+    namespace_dir = corpus / "projects" / project_slug
+    print("[DRY RUN] Bootstrap plan — nothing executed, nothing written\n")
+    print(f"Project:   {project_name} ({project_slug})")
+    print(f"Root:      {project_root}" + (" (git init)" if args.init_git and not (project_root / ".git").exists() else ""))
+    print(f"Owner:     {owner}")
+    print(f"Domains:   {', '.join(domains) or '(none)'}")
+    print(f"Skills:    {', '.join(skills) or '(none)'}")
+    print(f"Hook:      {'skipped (--no-hook)' if args.no_hook else 'git post-commit auto-capture' + (' + claim extraction' if args.hook_extract_claims else '')}")
+    if args.extract or args.synthesize or args.dossier or args.graph_dir:
+        routes = []
+        if args.extract:
+            routes.append(f"extract={args.extract}")
+        if args.synthesize:
+            routes.append(f"synthesize={args.synthesize}")
+        if args.dossier:
+            routes.append(f"dossier={args.dossier}")
+        if args.graph_dir:
+            routes.append(f"graph_dir={args.graph_dir}")
+        print(f"Routing:   {', '.join(routes)}")
+    print("\nWould create:")
+    print(f"  {project_root}/.wiki-overlay.md          (overlay: namespace/domains/skills/source_repos)")
+    if not (project_root / ".env.wiki-fabric").exists():
+        print(f"  {project_root}/.env.wiki-fabric          (LLM config)")
+    if args.init_git and not (project_root / ".git").exists():
+        print(f"  {project_root}/.git                      (git init)")
+    print(f"  {namespace_dir}/experience-events/       (project namespace)")
+    print(f"  {namespace_dir}/decisions/")
+    print(f"  {namespace_dir}/README.md                (namespace readme)")
+    print(f"  fabric.yaml                              (repos.{project_slug} entry)")
+    print("\nNext after real run:")
+    print(f"  wf capture {project_slug}")
+    print(f"  wf ingest --changed {project_slug} --extract-claims")
+    print(f"  wf query \"...\"")
+
+
 def _execute_bootstrap(args, project_root_str, project_name, project_slug, domains, skills, owner, everything_flagged):
     """Bootstrap, phase-by-phase (#155 audit: was one 393-line function).
     Phase functions live above; this is the orchestrator + state threading."""
+    if getattr(args, "dry_run", False):
+        _print_dry_run(args, project_root_str, project_name, project_slug, domains, skills, owner)
+        return
     args._project_root_str = project_root_str
     _bootstrap_git_init(args)
     project_root = args._project_root
@@ -829,6 +872,7 @@ def main():
     parser.add_argument("--no-hook", action="store_true", help="Skip the git post-commit hook (default: installed, capture-only)")
     parser.add_argument("--hook-extract-claims", action="store_true", help="Hook also runs LLM claim extraction on drift")
     parser.add_argument("--non-interactive", action="store_true", help="Skip prompts, use defaults")
+    parser.add_argument("--dry-run", action="store_true", help="Print the plan (phases + files that would be created), write nothing")
     args = parser.parse_args()
     config = get_config()
 

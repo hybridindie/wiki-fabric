@@ -150,15 +150,25 @@ def _simple_script(rel: str, argv: list[str], timeout: int = 600) -> int:
 
 # content verbs (argv passthrough)
 @verb("query")
-def _query(argv): return _simple_script("scripts/cmd/query.py", argv)
+def _query(argv):
+    """Ask the fabric an evidence-backed question (lexical + graph expansion; 0 tokens)."""
+    return _simple_script("scripts/cmd/query.py", argv)
 @verb("thread")
-def _thread(argv): return _simple_script("scripts/cmd/thread.py", argv)
+def _thread(argv):
+    """Show an evidence thread (chat/PR provenance neighborhood)."""
+    return _simple_script("scripts/cmd/thread.py", argv)
 @verb("ingest")
-def _ingest(argv): return _simple_script("scripts/cmd/ingest.py", argv)
+def _ingest(argv):
+    """Ingest a raw source: record + summary + claims (--changed/--pending/--reclaim for bulk)."""
+    return _simple_script("scripts/cmd/ingest.py", argv)
 @verb("review")
-def _review(argv): return _simple_script("scripts/cmd/review.py", argv)
+def _review(argv):
+    """Staleness review: --check report, --verify, --verify-sources lifecycle, --json."""
+    return _simple_script("scripts/cmd/review.py", argv)
 @verb("freshness")
-def _freshness(argv): return _simple_script("scripts/cmd/freshness-job.py", argv)
+def _freshness(argv):
+    """Scheduled upstream-freshness cycle (capture-git + mechanical re-verify; 0 tokens)."""
+    return _simple_script("scripts/cmd/freshness-job.py", argv)
 @verb("eval")
 def _eval(argv):
     """Golden-corpus/behavior/stability/real-repo/PR-replay evaluations.
@@ -189,25 +199,42 @@ def _graphify(argv):
         raise SystemExit("wf graphify {all|import|enrich|diff|status}")
     return _run_script(fdir, script, f"--{sub}", *argv[1:])
 @verb("gate")
-def _gate(argv): return _simple_script("scripts/cmd/gate.py", argv)
+def _gate(argv):
+    """Aggregate pending human decisions: stale claims, dossiers, proposals (--deliveries: receipts)."""
+    return _simple_script("scripts/cmd/gate.py", argv)
 @verb("promote-domains")
-def _promote_domains(argv): return _simple_script("scripts/cmd/promote-domains.py", argv)
+def _promote_domains(argv):
+    """Merge an approved domain proposal into the ontology (--apply <dossier>)."""
+    return _simple_script("scripts/cmd/promote-domains.py", argv)
 @verb("promote-patterns")
-def _promote_patterns(argv): return _simple_script("scripts/cmd/promote-patterns.py", argv)
+def _promote_patterns(argv):
+    """Apply/reject chat-mined pattern candidates (--list|--apply|--reject)."""
+    return _simple_script("scripts/cmd/promote-patterns.py", argv)
 @verb("propose-domains")
-def _propose_domains(argv): return _simple_script("scripts/cmd/propose-domains.py", argv)
+def _propose_domains(argv):
+    """Propose new ontology domains from corpus clusters (0 tokens)."""
+    return _simple_script("scripts/cmd/propose-domains.py", argv)
 @verb("harvest-questions")
-def _harvest_questions(argv): return _simple_script("scripts/cmd/harvest-questions.py", argv)
+def _harvest_questions(argv):
+    """Harvest concept open-questions → staged pages (0 tokens)."""
+    return _simple_script("scripts/cmd/harvest-questions.py", argv)
 @verb("promote-questions")
-def _promote_questions(argv): return _simple_script("scripts/cmd/promote-questions.py", argv)
+def _promote_questions(argv):
+    """Apply/reject harvested open-questions (--list|--open|--apply|--reject)."""
+    return _simple_script("scripts/cmd/promote-questions.py", argv)
 @verb("relocate-concepts")
-def _relocate_concepts(argv): return _simple_script("scripts/cmd/relocate-concepts.py", argv)
+def _relocate_concepts(argv):
+    """Relocate domain-bound concepts to domains/<domain>/concepts/ (--dry-run first)."""
+    return _simple_script("scripts/cmd/relocate-concepts.py", argv)
 @verb("sync")
-def _sync(argv): return _simple_script("scripts/cmd/sync.py", argv)
+def _sync(argv):
+    """Team corpus: setup|init|migrate|status|push|pull|resolve|commit-drift."""
+    return _simple_script("scripts/cmd/sync.py", argv)
 
 
 @verb("context")
 def _context(argv):
+    """Compile the task-scoped context manifest (0 tokens; --write-receipt persists it)."""
     fdir = find_fabric()
     if not argv or argv[0] in ("-h", "--help"):
         print('Usage: wf context --task "<task>" [--paths <code/path>] '
@@ -218,6 +245,7 @@ def _context(argv):
 
 @verb("lint")
 def _lint(argv):
+    """Deterministic corpus linter (0-error gate; --okf = OKF §11 floor)."""
     fdir = find_fabric()
     if "--okf" in argv:
         return _run_script(fdir, "scripts/cmd/lint.py", *argv)
@@ -229,51 +257,61 @@ def _lint(argv):
 
 @verb("doctor")
 def _doctor(argv):
+    """Environment diagnosis — each failure names its fix."""
     return _run_script(find_fabric(), "scripts/cmd/doctor.py", *argv)
 
 
 @verb("rebuild-index")
 def _rebuild_index(argv):
+    """Rebuild the entity index from code symbols (AST; 0 tokens)."""
     return _run_script(find_fabric(), "scripts/cmd/rebuild-index.py", *argv)
 
 
 @verb("configure")
 def _configure(argv):
+    """Interactive fabric.yaml walkthrough (full config surface)."""
     return _run_script(find_fabric(), "scripts/cmd/configure.py", *argv)
 
 
 @verb("apply-changeset")
 def _apply_changeset(argv):
+    """Apply a reviewed change-set (staged edits → canonical pages)."""
     return _run_script(find_fabric(), "scripts/cmd/apply_changeset.py", *argv)
 
 
 @verb("utility")
 def _utility(argv):
+    """Receipt↔outcome join → usage counts on pattern pages (0 tokens)."""
     return _run_script(find_fabric(), "scripts/cmd/utility.py", *argv)
 
 
 @verb("publish")
 def _publish(argv):
+    """Publish the generated wiki to the vault output (publish-wiki)."""
     return _run_script(find_fabric(), "scripts/cmd/publish-wiki.py", *argv)
 
 
 @verb("verify-effects")
 def _verify_effects(argv):
+    """Verify a claim's predicted effects mechanically (0 tokens)."""
     return _run_script(find_fabric(), "scripts/cmd/verify-effects.py", *argv)
 
 
 @verb("wiki-generate")
 def _wiki_generate(argv):
+    """Generate the wiki tree (mechanical|llm|hybrid modes)."""
     return _run_script(find_fabric(), "scripts/cmd/wiki_generate.py", *argv)
 
 
 @verb("log")
 def _log(argv):
+    """Log an experience event (feeds promotion mining; --receipt links the delivery)."""
     return _run_script(find_fabric(), "scripts/cmd/log-experience.py", *argv)
 
 
 @verb("capture")
 def _capture(argv):
+    """Copy upstream knowledge files → evidence/raw/ (docs, --git threads, chat)."""
     if argv and argv[0] == "chat":
         rest = argv[1:]
         if not rest:
@@ -298,6 +336,7 @@ def _capture(argv):
 
 @verb("export")
 def _export(argv):
+    """Generate the human-layer wiki (wf export wiki [--push])."""
     if argv and argv[0] == "wiki":
         return _run_script(find_fabric(), "scripts/cmd/export-wiki.py", *argv[1:])
     print("Usage: wf export wiki [--push] [--project <slug>] [--dry-run]", file=sys.stderr)
@@ -306,29 +345,34 @@ def _export(argv):
 
 @verb("hook")
 def _hook(argv):
+    """Git post-commit auto-capture hooks (install|uninstall|status|reinstall)."""
     sub = argv[0] if argv else "status"
     return _run_script(find_fabric(), "scripts/harness/hooks.py", sub, *argv[1:])
 
 
 @verb("claude")
 def _claude(argv):
+    """Harness assets install/status (legacy alias of wf harness)."""
     sub = argv[0] if argv else "install"
     return _run_script(find_fabric(), "scripts/harness/harnesses.py", sub, *argv[1:])
 
 
 @verb("harness")
 def _harness_verb(argv):
+    """Install always-on + procedures into detected agent harnesses (--all|--only ...)."""
     sub = argv[0] if argv else "status"
     return _run_script(find_fabric(), "scripts/harness/harnesses.py", sub, *argv[1:])
 
 
 @verb("skill")
 def _skill(argv):
+    """Print the procedure for a workflow (ingest, promote, refresh; --list)."""
     return _run_script(find_fabric(), "scripts/harness/skill.py", *argv)
 
 
 @verb("okf")
 def _okf(argv):
+    """Export/import a portable OKF v0.2 bundle (trust recorded, never inherited)."""
     sub = argv[0] if argv else "export"
     script = {"export": "scripts/cmd/okf_export.py", "import": "scripts/cmd/okf_import.py"}.get(sub)
     if script is None:
@@ -339,6 +383,7 @@ def _okf(argv):
 
 @verb("promote")
 def _promote(argv):
+    """Apply a human-approved promotion dossier (--promote <id>)."""
     if argv and argv[0] == "promote":
         argv = argv[1:]
     return _run_script(find_fabric(), "scripts/cmd/promote.py", *argv)
@@ -346,6 +391,7 @@ def _promote(argv):
 
 @verb("mine")
 def _mine(argv):
+    """Distill chats | cluster events → promotion dossiers (deterministic clustering)."""
     if argv and argv[0] == "chats":
         return _run_script(find_fabric(), "scripts/cmd/mine-chats.py", *argv[1:])
     if argv and argv[0] == "promotions":
@@ -356,6 +402,7 @@ def _mine(argv):
 
 @verb("models")
 def _models(argv):
+    """Ensure the local routing model is downloaded (wf models ensure [--yes])."""
     if argv and argv[0] == "ensure":
         return _run_script(find_fabric(), "scripts/cmd/ensure-local-model.py", *argv[1:])
     print("Usage: wf models ensure [--yes]", file=sys.stderr)
@@ -364,6 +411,7 @@ def _models(argv):
 
 @verb("repos")
 def _repos(argv):
+    """Repo config migration (wf repos migrate — canonical-key forms)."""
     if argv and argv[0] == "migrate":
         return _run_script(find_fabric(), "scripts/cmd/repos-migrate.py", *argv[1:])
     print("Usage: wf repos migrate [options]", file=sys.stderr)
@@ -395,6 +443,7 @@ def _vault_dir(fabric_dir: Path) -> Path:
 
 @verb("status")
 def _status(argv):
+    """Fabric health + inventory (--json for agents/hooks)."""
     fdir = _require_fabric()
     want_json = "--json" in argv
     if want_json:
@@ -677,6 +726,7 @@ def _integrations(argv):
 
 @verb("version")
 def _version(argv):
+    """Print the wf version + harness root."""
     from . import __version__
     print(f"wf {__version__} (harness: {harness_root()})")
     state = "package" if os.environ.get("WF_PACKAGED") == "1" else "dev mode"
@@ -819,6 +869,7 @@ _COMPLETION_SUBCOMMANDS = {
     "graphify": ["all", "import", "enrich", "diff", "status"],
     "models": ["ensure"],
     "repos": ["migrate"],
+    "projects": ["--json"],
     "skill": ["--list", "ingest", "promote", "refresh"],
     "log": [],
 }
@@ -828,6 +879,7 @@ _COMPLETION_FLAG_HINTS = {
     "capture": ["--repo", "--git", "--since", "--limit", "--dry-run", "--quiet", "--help"],
     "review": ["--check", "--project", "--verify", "--verify-all", "--auto-reverify", "--verify-sources", "--dry-run", "--help"],
     "status": ["--json", "--help"],
+    "projects": ["--json"],
     "freshness": ["--dry-run", "--help"],
     "gate": ["--deliveries", "--json", "--help"],
     "context": ["--task", "--paths", "--project", "--write-receipt", "--format", "--max", "--judge-borderline", "--help"],
@@ -1018,6 +1070,7 @@ def _install_print_next(install_dir):
 
 @verb("update")
 def _update(argv):
+    """Pull harness latest + rebuild auxiliary indexes."""
     # packaged mode: the tool is uv-owned
     if os.environ.get("WF_PACKAGED") == "1":
         print("")
@@ -1047,6 +1100,7 @@ def _update(argv):
 
 @verb("bootstrap")
 def _bootstrap(argv):
+    """Connect a project: overlay + namespace + hooks (+ walkthrough)."""
     if not argv:
         print("Usage: wf bootstrap <project-path>", file=sys.stderr)
         return 1
@@ -1056,6 +1110,7 @@ def _bootstrap(argv):
 
 @verb("vault")
 def _vault(argv):
+    """Scaffold/audit the Obsidian output vault (explicit PATH or --check)."""
     # ported cmd_vault: explicit path wins; else let vault-refresh resolve
     if argv and not argv[0].startswith("-"):
         vault_path = argv[0]
@@ -1155,6 +1210,7 @@ _wf() {
         graphify) _values "subcommand" all import enrich diff status ;;
         models) _values "subcommand" ensure ;;
         repos) _values "subcommand" migrate ;;
+        projects) _values "flag" --json ;;
     esac
 }
 _wf "$@"
@@ -1181,6 +1237,7 @@ complete -c wf -n "__fish_seen_subcommand_from ingest" -l "extract-claims"
 complete -c wf -n "__fish_seen_subcommand_from review" -l "check" -d "Full staleness report"
 complete -c wf -n "__fish_seen_subcommand_from review" -l "verify-sources"
 complete -c wf -n "__fish_seen_subcommand_from review" -l "dry-run"
+complete -c wf -n "__fish_seen_subcommand_from projects" -l "json" -d "Machine-readable project inventory"
 complete -c wf -n "__fish_seen_subcommand_from status" -l "json" -d "Machine-readable status"
 '''
 
@@ -1195,4 +1252,71 @@ def _completions(argv):
         print("  fish: wf completions fish > ~/.config/fish/completions/wf.fish", file=sys.stderr)
         return 1
     print(_completion_scripts(argv[0]), end="")
+    return 0
+
+
+@verb("projects")
+def _projects(argv):
+    """Connected repos: slug, path, owner, capture provenance (#169)."""
+    import json as _json
+    fdir = _require_fabric()
+    as_json = argv and argv[0] == "--json"
+    try:
+        sys.path.insert(0, str(harness_root() / "scripts" / "lib"))
+        import fabric_config as fc
+        from wf_common import project_slug as _psl
+        import layout
+        config = fc.get_config()
+    except Exception as e:
+        print(f"✗  config unavailable: {e}", file=sys.stderr)
+        return 1
+    croot = corpus_root(fdir)
+    rows = []
+    for repo in fc.get_all_repo_names(config):
+        cfg = fc.get_repo_config(config, repo) or {}
+        slug = _psl(repo)
+        raw = layout.evidence_raw(croot) / slug
+        n_raw = len(list(raw.glob("*.md"))) if raw.is_dir() else 0
+        n_git = len(list((raw / "git").glob("*.md"))) if (raw / "git").is_dir() else 0
+        n_chats = len(list((raw / "chats").glob("*.md"))) if (raw / "chats").is_dir() else 0
+        claims = len(list((croot / "evidence" / "claims").glob(f"claim-{slug}-*.md")))
+        last = ""
+        mark = raw / "git" / ".last-capture"
+        window = ""
+        if mark.exists():
+            parts = mark.read_text().strip().split()
+            last = parts[0] if parts else ""
+            for tok in parts[1:]:
+                if tok.startswith("window="):
+                    window = tok[len("window="):]
+        row = {
+            "slug": slug,
+            "path": cfg.get("path") or "",
+            "owner": cfg.get("owner") or "",
+            "extract_route": (cfg.get("routing") or {}).get("extract") or cfg.get("extract") or "default",
+            "captures": {"raw": n_raw, "git": n_git, "chats": n_chats, "claims": claims,
+                         "last_git_capture": last or None, "window_since": window or None},
+            "source": "explicit+discovered" if (repo in fc.get_discovered_repos(config)
+                                                and cfg.get("path")) else (
+                "discovered-overlay" if repo in fc.get_discovered_repos(config) else "fabric.yaml"),
+        }
+        rows.append(row)
+    if as_json:
+        print(_json.dumps({"projects": rows}, indent=2))
+        return 0
+    if not rows:
+        print("No connected projects. Bootstrap one: wf bootstrap <project-path>")
+        return 0
+    print("")
+    print("Connected projects:")
+    print("")
+    for r in rows:
+        caps = r["captures"]
+        last = caps["last_git_capture"] or "never"
+        win = f", window since {caps['window_since']}" if caps["window_since"] else ""
+        print(f"  {r['slug']}")
+        print(f"    path:    {r['path'] or '(not configured)'}  owner: {r['owner'] or '(none)'}")
+        print(f"    route:   {r['extract_route']}")
+        print(f"    captures: raw {caps['raw']}, git {caps['git']}, chats {caps['chats']}, "
+              f"claims {caps['claims']} (last git capture: {last}{win})")
     return 0
