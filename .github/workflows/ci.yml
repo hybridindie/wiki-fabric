@@ -48,7 +48,12 @@ jobs:
 
       - name: OKF v0.2 conformance (floor gate)
         if: matrix.python-version == '3.12'
-        run: uv run wf lint --okf
+        run: |
+          # seed like the lint step (step envs don't share SEED; on a bare
+          # runner CORPUS_ROOT resolves to site-packages/../vault — nonexistent)
+          SEED=$(mktemp -d /tmp/wf-okf-seed.XXXXXX)
+          uv run wf install --dir "$SEED" >/dev/null
+          WIKI_FABRIC_DIR="$SEED" uv run wf lint --okf "$SEED/corpus"
 
       - name: OKF cross-check (okflint, external validator)
         if: matrix.python-version == '3.12'
