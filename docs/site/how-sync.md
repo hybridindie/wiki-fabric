@@ -134,7 +134,8 @@ freshness cycle closes that hole:
 
 - **`wf freshness [--dry-run] [projects...]`** (0 tokens): per connected
   project — `capture-git --since-state` (new upstream PRs/issues →
-  evidence/raw/, sha256-gated) then `review --auto-reverify` (mechanical
+  evidence/raw/, sha256-gated) then `review --auto-reverify` + the newest-wins
+  contradiction sweep (#175 — mechanical
   quote+hash re-verification). Exit 1 = drift captured; the human gate
   (`wf gate`) lists anything that needs a decision.
 - **Scheduled on the corpus CI**: `wf sync init`/`sync setup` scaffold

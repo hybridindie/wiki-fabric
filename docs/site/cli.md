@@ -173,6 +173,9 @@ without reading how consumers parse, test_shim_parity-style, first):
 | `wf capture --git` (capture-git) | 0 | nothing new |
 | | 2 | drift captured |
 | | 3 | unknown project slug (+ connected list) |
+| `wf capture issues` | 0 | nothing new |
+| | 2 | drift captured |
+| | 3 | unknown project slug (+ connected list) |
 | `wf freshness` | 0 | clean (no drift) |
 | | 1 | drift found + recorded (gate-worthy) |
 | | 2 | hard failure (no fabric, unknown slug) |
@@ -180,6 +183,8 @@ without reading how consumers parse, test_shim_parity-style, first):
 | | 1 | actionable items want a human |
 | `wf models ensure --check` | 0/1 | model cached / needs download (script-friendly, no prompt) |
 | `wf review --verify-sources` | 0 | source lifecycle driven (refresh/stamp/expire counts reported) |
+| `wf review --contradiction-sweep` | 0 | no demotion |
+| | 1 | a demotion landed (gate-worthy) |
 agent writes prose, the MCP tool validates citations and reconciles claim
 deltas deterministically (the bookkeeper makes no model calls). Claude Code: `claude mcp add wf-mcp wf-mcp`; Claude Desktop/Cursor: stdio-server config pointing at `wf-mcp`.
 

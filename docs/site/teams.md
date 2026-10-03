@@ -188,6 +188,10 @@ setup`/`init` — never hand-made): on every push,
 - **Chat mining** (`mining.yml`, opt-in: repo variable
   `WIKI_FABRIC_MINING=1`) — weekly chat-to-candidate distillation
   (heuristic, 0 tokens; staged candidates wait for the human gate)
+- **Gate digest** (`gate-digest.yml`, opt-in: repo variable
+  `WIKI_FABRIC_GATE_NOTIFY=1`) — daily decision push through the notify
+  adapters (webhook when configured; the manifest always the record) —
+  a bell, never a decision
 
 Both sides of the system are self-governing: the harness repo proves its
 *code* on every PR; the corpus repo proves its *knowledge* on every push.
