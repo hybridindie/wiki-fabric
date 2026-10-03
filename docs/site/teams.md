@@ -185,6 +185,9 @@ setup`/`init` — never hand-made): on every push,
   can't silently enter the shared truth
 - **Upstream freshness** (`freshness.yml`, opt-in: repo variable
   `WIKI_FABRIC_FRESHNESS=1`) — daily capture-git + mechanical re-verify
+- **Chat mining** (`mining.yml`, opt-in: repo variable
+  `WIKI_FABRIC_MINING=1`) — weekly chat-to-candidate distillation
+  (heuristic, 0 tokens; staged candidates wait for the human gate)
 
 Both sides of the system are self-governing: the harness repo proves its
 *code* on every PR; the corpus repo proves its *knowledge* on every push.

@@ -144,3 +144,23 @@ freshness cycle closes that hole:
 - **Evidence-plane only**: the cycle never rewrites claims — stale/contested
   states are the representation; re-extraction stays opt-in per repo
   routing tier.
+
+## The scheduled chat-mining cycle
+
+The twin hole on the intake side: chats flow in (capture hooks, `capture
+chat`), but distillation to candidates waited for someone to remember `wf
+mine chats <slug> --propose` — the promotion inbox starved on exactly the
+input the system captures hardest. The mining cadence closes it:
+
+- **`wf mine chats <slug> [--propose]`** heuristic mode (0 tokens): distill
+  each session's durable takeaways + stage pattern/anti-pattern candidates —
+  with the judged near-miss refinement (#173/G-J-gated) merging paraphrase
+  takeaways into existing candidates.
+- **Scheduled on the corpus CI**: `sync init`/`setup` scaffold
+  `.github/workflows/mining.yml` (weekly, Monday, opt-in per repo variable
+  `WIKI_FABRIC_MINING=1`). Heuristic ONLY — CI stays LLM-free; `--llm`
+  distillation stays interactive. The run commits staged candidates as
+  inbox drift (the same plane-classified ritual as freshness).
+- **Nothing auto-promotes**: candidates land un-applied in
+  `patterns/_inbox/` (the human gate); `wf gate`/`promote-patterns --list`
+  surface them after `sync pull`.

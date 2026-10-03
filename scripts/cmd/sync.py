@@ -252,6 +252,26 @@ def scaffold_freshness_workflow():
     return True
 
 
+def scaffold_mining_workflow():
+    """Write the scheduled chat-mining workflow (#172) into
+    <corpus>/.github/workflows/ when absent — weekly distillation of
+    chat transcripts into gated candidates (patterns/_inbox/), heuristic
+    mode (0 tokens — CI stays LLM-free). Opt-in per repo variable
+    WIKI_FABRIC_MINING=1. Independent of the freshness cycle (different
+    planes); nothing auto-promotes — candidates wait for the human gate."""
+    harness = Path(__file__).resolve().parent.parent.parent
+    template = harness / "system" / "corpus" / "mining-workflow.yml"
+    wf_dir = VAULT_ROOT / ".github" / "workflows"
+    wf_dir.mkdir(parents=True, exist_ok=True)
+    target = wf_dir / "mining.yml"
+    if target.exists() or not template.exists():
+        return False
+    shutil.copy(template, target)
+    print("Scaffolded CI workflow: .github/workflows/mining.yml "
+          "(weekly chat-mining cadence; enable: repo var WIKI_FABRIC_MINING=1)")
+    return True
+
+
 def cmd_migrate(remote_url=None):
     """Legacy A-layout → standalone corpus repo (2026-10-01 model):
     the fabric's outer git tracked corpus/*; the standalone corpus/ gets its
@@ -313,6 +333,7 @@ def cmd_init(remote_url):
     validate_fabric()
     scaffold_ci_workflow()
     scaffold_freshness_workflow()
+    scaffold_mining_workflow()
     scaffold_promotion_queue()
     layout.questions(VAULT_ROOT).mkdir(parents=True, exist_ok=True)  # #160 S4 plane scaffold
 
@@ -355,6 +376,7 @@ def cmd_setup(name=None, private=True, yes=False):
     validate_fabric()
     scaffold_ci_workflow()
     scaffold_freshness_workflow()
+    scaffold_mining_workflow()
     scaffold_promotion_queue()
     layout.questions(VAULT_ROOT).mkdir(parents=True, exist_ok=True)  # #160 S4 plane scaffold
 

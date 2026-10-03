@@ -1,0 +1,76 @@
+name: Chat mining cadence
+
+# Scheduled chat-mining cycle (#173/#172): chat transcripts accumulate in
+# evidence/raw/<repo>/chats/ (capture hooks + capture chat), but distillation
+# waited for someone to run `wf mine chats <slug> --propose`. This job runs
+# that distillation on a cadence so the promotion inbox keeps flowing from
+# what the system captures hardest.
+#
+# Heuristic mode ONLY (0 tokens — CI stays LLM-free; --llm distillation stays
+# an interactive, human-present choice). Staged candidates land un-applied in
+# patterns/_inbox/ (the existing human gate) and commit as inbox drift.
+# NOTHING auto-promotes: the tiers propose, the human decides.
+#
+# Opt-in: set repo var WIKI_FABRIC_MINING=1. Independent of freshness (the
+# two cycles own different planes: upstream evidence vs inbox candidates).
+
+'on':
+  schedule:
+    - cron: '23 6 * * 1'   # weekly, Monday early-morning off-peak
+  workflow_dispatch:
+
+concurrency:
+  group: chat-mining
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  mine:
+    name: Distill chats into staged candidates
+    runs-on: ubuntu-latest
+    if: ${{ vars.WIKI_FABRIC_MINING == '1' }}
+    steps:
+      - name: Checkout corpus (this repo)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 5
+
+      - name: Checkout harness (the tooling)
+        uses: actions/checkout@v4
+        with:
+          repository: hybridindie/wiki-fabric
+          ref: main
+          path: harness
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Mine chats per connected repo (heuristic, 0 tokens)
+        run: |
+          cd harness
+          uv venv
+          uv pip install pyyaml openai anthropic
+          export WIKI_FABRIC_DIR="$(pwd)/"
+          SLUGS=$(python3 -c 'import sys; sys.path.insert(0, "scripts/lib"); import fabric_config as fc; print(" ".join(fc.get_all_repo_names(fc.get_config())))')
+          for SLUG in $SLUGS; do
+            echo "=== $SLUG ==="
+            uv run wf mine chats "$SLUG" --propose || echo "mine failed for $SLUG (non-fatal)"
+          done
+
+      - name: Commit staged candidates
+        run: |
+          git config user.name "wiki-fabric mining"
+          git config user.email "mining@wiki-fabric.local"
+          git add evidence/insights/ patterns/_inbox/ registry/ || true
+          if git diff --cached --quiet; then
+            echo "no new candidates this cycle"
+          else
+            git commit -m "chat mining: staged candidates (heuristic, gated — human review via promote-patterns)"
+            git push origin main || echo "push rejected (remote ahead) — the next cycle merges first"
+          fi
+
+      - name: Candidates are live (need a human)
+        run: |
+          echo "::notice::Chat-mined candidates staged in patterns/_inbox/. Review: wf promote-patterns --list (after wf sync pull). Gate: wf gate."
