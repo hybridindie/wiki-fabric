@@ -506,6 +506,8 @@ def _dossier_thread_citations(events):
             continue
         if node.get("kind") == "pr-record":
             lines.append(f"- PR #{node.get('pr')} [{node.get('pr_state', '')}] — `{node.get('file', '')}`")
+        elif node.get("kind") == "issue-record":
+            lines.append(f"- Issue #{node.get('issue')} [{node.get('issue_state', '')}] — `{node.get('file', '')}`")
         else:
             nf = len(node.get("files_touched") or [])
             lines.append(f"- session `{sid}` ({node.get('harness', '?')}, {node.get('project', '?')}) "

@@ -27,6 +27,7 @@ legacy alias for the same value).
 | `evidence/raw/<slug>/git/issue-N.md` | issues (same shape as pr-record minus merge fields) | capture-git | ingest --changed, threads index |
 | `evidence/raw/<slug>/git/commit-<sha>.md` | `kind: commit` source (local route: sha + date + message body, metadata only) | capture-git | ingest --changed |
 | `evidence/raw/<slug>/chats/session-*.md` | `kind: chat-session` source (`session`, `harness`, `session_started`, `files_touched`, `related_sessions`) | capture-chat | ingest --changed, threads index, mine chats |
+| `evidence/raw/<slug>/issues/issue-N.md` | `kind: issue-record` source (tracker capture, #176 — `issue`, `issue_state`, `closed_at`; the rationale channel) | capture issues | ingest --changed, threads index, query lineage |
 | `evidence/raw/<scope>-okf/` | imported OKF bundles | okf import | ingest `--pending <scope>-okf` |
 | `evidence/sources/src-*.md` | source records (sha256, resource locator) | ingest, okf import | review, propose-domains, lint, threads |
 | `evidence/source-summaries/sum-*.md` | faithful summaries with locators | ingest | retrieval, lint SOURCE-EMPTY |

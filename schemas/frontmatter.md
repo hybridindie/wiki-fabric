@@ -45,6 +45,7 @@ Capture-specific source kinds:
 - **`pr-record`** (capture-git, github route): adds `source_repo` (`owner/name`), `pr` (number), `pr_state`, `merged_at` (date, when merged), quoted `title`. Graph nodes for threads (#102).
 - **`commit`** (capture-git, local route): metadata only — the commit sha-truncated stem + date + message body; no extra fields beyond `source_path`/`sha256`.
 - **`chat-session`** (capture-chat): adds `session` (id), `harness` (source harness), `session_started`, `files_touched`, `related_sessions`. The mutable thread layer under `evidence/raw/<slug>/chats/`.
+- **`issue-record`** (capture issues, #176 — tracker route): adds `source_repo` (`owner/name`), `issue` (number), `issue_state`, `closed_at` (when closed), quoted `title`. Thread graph nodes; the tracker's rationale channel (`evidence/raw/<slug>/issues/`).
 
 
 ## `source-summary`

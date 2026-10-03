@@ -207,7 +207,7 @@ def build_thread_index():
         for p in sorted(raw.rglob("*.md")):
             fm, _ = parse_frontmatter(p)
             kind = fm.get("kind")
-            if kind not in ("chat-session", "pr-record"):
+            if kind not in ("chat-session", "pr-record", "issue-record"):
                 continue
             node = {
                 "file": p.relative_to(VAULT_ROOT).as_posix(),
@@ -220,6 +220,12 @@ def build_thread_index():
                 node["pr"] = fm.get("pr")
                 node["pr_state"] = fm.get("pr_state", "")
                 node["source_repo"] = fm.get("source_repo", "")
+            if kind == "issue-record":
+                node["issue"] = fm.get("issue")
+                node["issue_state"] = fm.get("issue_state", "")
+                node["source_repo"] = fm.get("source_repo", "")
+                if fm.get("closed_at"):
+                    node["closed_at"] = str(fm["closed_at"])[:10]
             files = fm.get("files_touched") or []
             if isinstance(files, list):
                 node["files_touched"] = [str(f).strip('"') for f in files][:20]

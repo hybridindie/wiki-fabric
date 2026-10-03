@@ -140,6 +140,7 @@ def provenance_relations(source_slug, source_path):
 SOURCE_REVIEW_TIERS = {
     "pr-record": 30,       # merged_at + discussion churn — decays fast
     "commit": 30,          # same decay family as PR records
+    "issue-record": 30,    # #176: tracker issues — same decay family (threads churn)
     "chat-session": 45,
     "default": 180,        # docs/immutable captures: slow tier
 }
@@ -153,7 +154,9 @@ def source_kind(source_path):
     if "/git/commit-" in p:
         return "commit"
     if "/git/issue-" in p:
-        return "pr-record"  # issue records share the PR decay family
+        return "pr-record"  # legacy git-issue records share the PR decay family
+    if "/issues/" in p:
+        return "issue-record"  # #176: tracker captures
     if "/chats/" in p:
         return "chat-session"
     return "default"

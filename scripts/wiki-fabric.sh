@@ -1051,6 +1051,13 @@ case "${1:-help}" in
             run_script "${fdir}" "scripts/cmd/capture-chat.py" "$@"
             exit 0
         fi
+        if [[ "${1:-}" == "issues" ]]; then
+            shift
+            fdir=$(find_fabric)
+            [[ -z "${1:-}" ]] && { err "Usage: wf capture issues <project-slug> --repo owner/name [--since 6m] [--since-state] [--dry-run]"; exit 1; }
+            run_script "${fdir}" "scripts/cmd/capture-issues.py" "$@"
+            exit 0
+        fi
         if [[ -z "${1:-}" ]]; then
             err "Usage: wf capture <project-slug> [--repo <path>] [--git <owner/name|path>] [--since 6m] [--limit 30]"
             exit 1

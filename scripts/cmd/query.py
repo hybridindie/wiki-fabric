@@ -581,6 +581,8 @@ def generate_answer(query, scored, pages, query_type, symbol_hits=None, thread_h
             kind = node.get("kind", "?")
             if kind == "pr-record":
                 label = f"PR #{node.get('pr')} [{node.get('pr_state', '')}]"
+            elif kind == "issue-record":
+                label = f"Issue #{node.get('issue')} [{node.get('issue_state', '')}]"
             else:
                 label = f"session {node.get('session', '?')[:24]} ({node.get('harness', '?')})"
             lines.append(f"- {claim_pg['fm'].get('statement', '')[:80]}")
