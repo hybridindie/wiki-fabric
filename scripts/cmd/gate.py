@@ -160,6 +160,28 @@ def _safe(fn):
         return [], [], f"{fn.__name__}: {e}"
 
 
+def _age_days_impl(fm, today):
+    raw = str(fm.get("created") or "").strip()
+    try:
+        created = date.fromisoformat(raw[:10])
+    except Exception:
+        return None
+    return (today - created).days
+
+
+def _escalated(fm, threshold=None):
+    """True when a pending artifact has waited past the escalation threshold
+    (#174: the human queue can't rot invisibly — info → actionable on age).
+    Threshold: tuning.escalation.days (default 7d)."""
+    age = _age_days_impl(fm, date.today())
+    if age is None:
+        return False
+    if threshold is None:
+        from fabric_config import get_tuning
+        threshold = int(get_tuning(None, "escalation", "days", 7))
+    return age >= threshold
+
+
 def gate():
     sections = {
         "review": _safe(_gate_review),
@@ -197,9 +219,12 @@ def _emit(sections, actionable, quiet=False):
             print(f"    ⚠ {days:3d}d  {name}")
     prom, prom_list, prom_err = sections["promotions"]
     if prom:
-        print(f"  Pending pattern promotions ({len(prom)}):")
+        n_esc = sum(1 for _, fm in prom_list if _escalated(fm))
+        print(f"  Pending pattern promotions ({len(prom)})"
+              + (f" — {n_esc} ESCALATED (waiting > threshold)" if n_esc else "") + ":")
         for path, fm in prom_list[:10]:
-            print(f"    ◆ {path.stem}  ({fm.get('status')})")
+            esc = "  ⏰ ESCALATED" if _escalated(fm) else ""
+            print(f"    ◆ {path.stem}  ({fm.get('status')}){esc}")
     dom, dom_list, dom_err = sections["domains"]
     if dom:
         print(f"  Pending domain proposals ({len(dom)}):")
@@ -207,9 +232,12 @@ def _emit(sections, actionable, quiet=False):
             print(f"    ▸ {path.name}  ({fm.get('domain')})")
     pcand, pclist, pc_err = sections["pattern-candidates"]
     if pcand:
-        print(f"  Chat-mined pattern candidates ({len(pcand)}):")
+        n_esc = sum(1 for _, fm in pclist if _escalated(fm))
+        print(f"  Chat-mined pattern candidates ({len(pcand)})"
+              + (f" — {n_esc} ESCALATED (waiting > threshold)" if n_esc else "") + ":")
         for path, fm in pclist[:10]:
-            print(f"    ◆ {path.stem}  ({fm.get('origin', 'chat-mined')})")
+            esc = "  ⏰ ESCALATED" if _escalated(fm) else ""
+            print(f"    ◆ {path.stem}  ({fm.get('origin', 'chat-mined')}){esc}")
     qpending, qopen, q_err = sections["questions"]
     if qpending:
         print(f"  Open questions awaiting triage ({len(qpending)}):")
@@ -362,13 +390,26 @@ def main():
             _notify(manifest_path, sections)
 
     if args.json:
+        def _aged(entries):
+            out = []
+            for p, fm in entries:
+                age = _age_days_impl(fm, date.today())
+                out.append({"id": str(p.stem),
+                            "age_days": age,
+                            "escalated": _escalated(fm)})
+            return out
         print(json.dumps({
             "actionable": actionable,
             "review": sections["review"][0],
-            "promotions": [{"id": str(p.stem), "status": fm.get("status")}
+            "promotions": [{**{"id": str(p.stem), "status": fm.get("status")},
+                             "age_days": _age_days_impl(fm, date.today()),
+                             "escalated": _escalated(fm)}
                            for p, fm in sections["promotions"][1]],
             "domains": [{"id": str(p.stem), "domain": fm.get("domain")}
                         for p, fm in sections["domains"][1]],
+            "pattern-candidates": _aged(sections["pattern-candidates"][1]),
+            "escalation_threshold_days": int(
+                __import__("fabric_config").get_tuning(None, "escalation", "days", 7)),
             "contributions": sections["contributions"][1],
             "errors": {k: v[2] for k, v in sections.items() if v[2]},
         }, indent=2))
@@ -407,15 +448,33 @@ def _write_manifest(manifest_path, sections, actionable):
         lines.append("")
     prom, prom_list, _ = sections["promotions"]
     if prom:
-        lines.append(f"## Promotion dossiers awaiting review ({len(prom)})")
+        n_esc = sum(1 for _, fm in prom_list if _escalated(fm))
+        lines.append(f"## Promotion dossiers awaiting review ({len(prom)})"
+                     + (f" — {n_esc} ESCALATED (waiting > escalation threshold)" if n_esc else ""))
         for doss, fm in prom_list[:10]:
-            lines.append(f"- {doss.stem} ({fm.get('status')})")
+            age = _age_days_impl(fm, date.today())
+            esc = " ESCALATED" if _escalated(fm) else ""
+            lines.append(f"- {doss.stem} ({fm.get('status')}{esc}"
+                         + (f", waiting {age}d" if age is not None else "") + ")")
         lines.append("")
     dom, dom_list, _ = sections["domains"]
     if dom:
         lines.append(f"## Domain proposals awaiting approval ({len(dom)})")
         for doss, fm in dom_list[:10]:
             lines.append(f"- {doss.name} ({fm.get('domain')})")
+        lines.append("")
+    pcand, pclist, _ = sections.get("pattern-candidates", ([], [], None))
+    if pcand:
+        # was manifest-missing entirely (candidates visible only in prose) —
+        # #174: the persisted record must show the inbox too, aged + escalated
+        n_esc = sum(1 for _, fm in pclist if _escalated(fm))
+        lines.append(f"## Chat-mined pattern candidates (patterns/_inbox/) ({len(pcand)})"
+                     + (f" — {n_esc} ESCALATED (waiting > escalation threshold)" if n_esc else ""))
+        for p, fm in pclist[:10]:
+            age = _age_days_impl(fm, date.today())
+            esc = " ESCALATED" if _escalated(fm) else ""
+            lines.append(f"- {p.stem} (candidate{esc}"
+                         + (f", waiting {age}d" if age is not None else "") + ")")
         lines.append("")
     contrib, contrib_list, _ = sections.get("contributions", ([], [], None))
     if contrib_list:

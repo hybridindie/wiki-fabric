@@ -1,0 +1,69 @@
+name: Gate digest
+
+# Daily decision digest (#174): a dormant machine's pending human decisions
+# shouldn't wait for the next agent session. This job runs the gate and, when
+# actionable, pushes the summary through the notify adapters (webhook when
+# configured — Slack/Discord custom endpoints; the manifest is always the
+# record). Deterministic, 0 tokens; notification failure never fails the
+# step. NOTHING auto-promotes — a push is a bell, not a decision.
+#
+# Opt-in: set repo var WIKI_FABRIC_GATE_NOTIFY=1. Works standalone; pairs
+# with freshness/mining cycles (different planes, same scaffold family).
+
+'on':
+  schedule:
+    - cron: '31 6 * * *'   # daily, off-peak (after freshness, before work hours)
+  workflow_dispatch:
+
+concurrency:
+  group: gate-digest
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  digest:
+    name: Gate digest (decisions need a human)
+    runs-on: ubuntu-latest
+    if: ${{ vars.WIKI_FABRIC_GATE_NOTIFY == '1' }}
+    steps:
+      - name: Checkout corpus (this repo)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 5
+
+      - name: Checkout harness (the tooling)
+        uses: actions/checkout@v4
+        with:
+          repository: hybridindie/wiki-fabric
+          ref: main
+          path: harness
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Run the gate + persist the manifest
+        run: |
+          cd harness
+          uv venv
+          uv pip install pyyaml openai anthropic
+          export WIKI_FABRIC_DIR="$(pwd)/"
+          uv run wf gate --quiet --write-manifest --json || GATE_RC=$?
+          echo "GATE_RC=${GATE_RC:-0}" >> "$GITHUB_ENV"
+
+      - name: Fire the notify adapters on actionable
+        if: env.GATE_RC == '1'
+        run: |
+          cd harness
+          export WIKI_FABRIC_DIR="$(pwd)/"
+          # _notify is fire-and-forget: one call, the adapters (webhook
+          # url_env WF_GATE_WEBHOOK_URL) carry selection facts only — the
+          # manifest — never hidden reasoning (#67 contract)
+          echo 'import sys; from pathlib import Path; sys.path.insert(0, "scripts/cmd"); sys.path.insert(0, "scripts/lib"); import gate; mp = Path("registry/pending-gate.md"); sections, actionable = gate.gate(); gate._notify(mp if mp.exists() else None, sections)' > /tmp/gate-notify.py
+          uv run python3 /tmp/gate-notify.py
+
+      - name: Notice
+        if: env.GATE_RC == '1'
+        run: |
+          echo "::notice::Pending human decisions — review: registry/pending-gate.md (wf gate locally after sync pull)"

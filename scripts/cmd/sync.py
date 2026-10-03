@@ -183,9 +183,27 @@ def validate_fabric():
               "(or wf sync migrate for a legacy layout)", file=sys.stderr)
         sys.exit(1)
 
-
 # === Commands ===
 
+
+def scaffold_gate_digest_workflow():
+    """Write the daily gate-digest workflow (#174) into
+    <corpus>/.github/workflows/ when absent — runs the gate on a cadence
+    and pushes the summary through the notify adapters (webhook when
+    configured; the manifest is always the record). Opt-in: repo var
+    WIKI_FABRIC_GATE_NOTIFY=1. Deterministic, 0 tokens; nothing
+    auto-promotes — a push is a bell, not a decision."""
+    harness = Path(__file__).resolve().parent.parent.parent
+    template = harness / "system" / "corpus" / "gate-digest-workflow.yml"
+    wf_dir = VAULT_ROOT / ".github" / "workflows"
+    wf_dir.mkdir(parents=True, exist_ok=True)
+    target = wf_dir / "gate-digest.yml"
+    if target.exists() or not template.exists():
+        return False
+    shutil.copy(template, target)
+    print("Scaffolded CI workflow: .github/workflows/gate-digest.yml "
+          "(daily decision digest; enable: repo var WIKI_FABRIC_GATE_NOTIFY=1)")
+    return True
 
 
 def scaffold_promotion_queue():
@@ -334,6 +352,7 @@ def cmd_init(remote_url):
     scaffold_ci_workflow()
     scaffold_freshness_workflow()
     scaffold_mining_workflow()
+    scaffold_gate_digest_workflow()
     scaffold_promotion_queue()
     layout.questions(VAULT_ROOT).mkdir(parents=True, exist_ok=True)  # #160 S4 plane scaffold
 
@@ -377,6 +396,7 @@ def cmd_setup(name=None, private=True, yes=False):
     scaffold_ci_workflow()
     scaffold_freshness_workflow()
     scaffold_mining_workflow()
+    scaffold_gate_digest_workflow()
     scaffold_promotion_queue()
     layout.questions(VAULT_ROOT).mkdir(parents=True, exist_ok=True)  # #160 S4 plane scaffold
 
