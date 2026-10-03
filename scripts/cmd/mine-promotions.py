@@ -325,11 +325,18 @@ def cluster_events_judged(events, min_projects=2, threshold=None):
     pairs merge into one cluster. Judgment records probabilities; the
     deterministic keyword result is the fallback when the tier is disabled.
     threshold=None => judgment.MINING_THRESHOLD_DEFAULT (0.8, live-calibrated)."""
-    from judgment import same_recurrence, judgment_route, JudgmentUnavailable
+    from judgment import (same_recurrence, judgment_route, judgment_eval_recorded,
+                          JudgmentUnavailable)
     try:
         route = judgment_route()
     except JudgmentUnavailable as e:
         print(f"Judgment tier unavailable, keeping keyword clusters: {e}")
+        return cluster_events_keyword(events, min_projects)
+    ok, why = judgment_eval_recorded()
+    if not ok:
+        # G-J: an uncalibrated judge may not propose cluster merges — the
+        # deterministic keyword result stands (never a silent downgrade)
+        print(f"Judgment gate (G-J) not satisfied — keyword clusters stand: {why}")
         return cluster_events_keyword(events, min_projects)
 
     base = cluster_events_keyword(events, min_projects)
@@ -409,8 +416,13 @@ def _split_incoherent_clusters(base, _text, threshold, route):
     """Demote members judged DIFFERENT from their cluster's representative.
     Singletons left behind are simply unassigned (available for later merges
     but not part of any dossier). A mid-run tier degradation keeps the
-    keyword clusters intact (returns them un-split rather than crashing)."""
-    from judgment import same_recurrence, JudgmentUnavailable
+    keyword clusters intact (returns them un-split rather than crashing).
+    G-J: an uncalibrated judge may not propose splits — returns base as-is."""
+    from judgment import same_recurrence, judgment_eval_recorded, JudgmentUnavailable
+    ok, why = judgment_eval_recorded()
+    if not ok:
+        print(f"Judgment gate (G-J) not satisfied — incoherence sweep skipped: {why}")
+        return base
     for ck in list(base.keys()):
         evs = base[ck]
         if len(evs) <= 1:
@@ -833,7 +845,7 @@ def main():
             use_judged = False
     if use_judged:
         # Cloud-route pre-flight: a missing key shouldn't be discovered mid-run
-        from judgment import judgment_route, cloud_key_ready
+        from judgment import judgment_route, judgment_eval_recorded, cloud_key_ready
         try:
             if judgment_route() == "cloud" and not cloud_key_ready():
                 print("Judgment tier: cloud route has no key (TYPESAFE_API_KEY env, or "
@@ -842,6 +854,16 @@ def main():
                 use_judged = False
         except Exception:
             pass  # route check itself unavailable → try judged path, its own guards handle it
+        # G-J pre-flight: the CURRENT judge needs a PASS calibration receipt —
+        # same rule family as the compiler's G4 (a swap is a judgment change)
+        try:
+            ok, why = judgment_eval_recorded()
+        except Exception as e:
+            ok, why = False, f"gate check failed: {e}"
+        if not ok:
+            print(f"Judgment gate (G-J): {why}")
+            print("  → keyword clusters will stand. Override (logged): WIKI_JUDGE_GATE=0")
+            use_judged = False
     if use_judged:
         print("Judgment tier: active — near-miss pairs will be refined by the decision model")
         clusters = cluster_events_judged(events, MIN_PROJECTS)

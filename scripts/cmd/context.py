@@ -503,8 +503,9 @@ def select_context(pages, task, paths, project, today, max_items=20):
         swapped = 0
         if scored and borderline and args_judge_borderline:
             try:
-                from judgment import noul, is_judgment_active
-                if is_judgment_active():
+                from judgment import noul, is_judgment_active, judgment_eval_recorded
+                if is_judgment_active() and judgment_eval_recorded()[0]:
+                    # G-J: only a calibrated judge touches the manifest boundary
                     promoted_ids = []
                     for i in borderline:
                         s = scored[i]

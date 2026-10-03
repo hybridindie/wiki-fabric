@@ -55,6 +55,32 @@ model. Model swaps are compiler changes; compiler changes require
 re-evaluation. That's the G4 lesson enforced as a hard gate instead of a docs
 sentence.
 
+## The judgment gate (G-J): only a calibrated judge proposes
+
+The same lesson applies to the judgment tier — and it matters more, because a
+judge that cannot separate truth from noise doesn't just degrade quality, it
+silently reshapes proposals (cluster merges, effect verdicts, borderline
+promotions). So:
+
+- `scripts/eval/eval-judgment.py --record` calibrates the CURRENT judge
+  against separation + mining-spread fixtures (positives ≥ 0.7 / negatives
+  ≤ 0.4 / spread ≥ 0.3; paraphrase pairs ≥ 0.9 / unrelated ≤ 0.7 — the 0.8
+  mining threshold must sit strictly between). Declared as
+  `global/computations/ac-judgment-eval.md`; attested by
+  `references/attesters/check-judgment-eval.py`.
+- Every judgment call site (mine-promotions clustering + incoherence sweep,
+  verify-effects, context borderline re-rank) checks the gate FIRST: no PASS
+  receipt for the current judge identity (`judge_kind`, model id) → the
+  deterministic keyword/lexical result stands, loudly. A judge swap is a
+  judgment change — recalibrate before the tier proposes again.
+- The off switch is explicit and logged: `WIKI_JUDGE_GATE=0` skips the check
+  (returns "G-J gate SKIPPED") — overrides are visible in output, never
+  silent.
+
+Judgment still never writes content; the G-J gate adds the missing half: it
+can't even *propose* until its calibration is on record (`wf eval behavior
+--judge` is the CI probe; the calibration eval is the model-identity gate).
+
 ## Attested computations: proving the verdict
 
 Deterministic fabric operations can be declared as **attested computations**

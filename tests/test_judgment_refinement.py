@@ -32,7 +32,12 @@ mine = _load("mine_promotions", REPO / "scripts" / "cmd" / "mine-promotions.py")
 @contextlib.contextmanager
 def judged(prob=0.9, unavailable=False, capture=None, answers=None):
     """Mock the judgment tier at its module — both callers import from the
-    same module object, so module-level patches reach them."""
+    same module object, so module-level patches reach them. Also satisfies
+    the G-J gate (a PASS calibration receipt) — these tests exercise the
+    judged BEHAVIOR, not the calibration lifecycle (test_judgment_gate.py
+    owns the gate's own cases)."""
+    def _gate_ok(*a, **k):
+        return True, "test receipt"
     if unavailable:
         with mock.patch.object(judgment, "judgment_route",
                                side_effect=judgment.JudgmentUnavailable("disabled")):
@@ -42,10 +47,12 @@ def judged(prob=0.9, unavailable=False, capture=None, answers=None):
             def fake_noul(q, s, false_desc=None, true_desc=None, repo=None):
                 return answers.pop(0) if answers else prob
             with mock.patch.object(judgment, "judgment_route", return_value="cloud"), \
+                 mock.patch.object(judgment, "judgment_eval_recorded", _gate_ok), \
                  mock.patch.object(judgment, "noul", side_effect=fake_noul):
                 yield
         else:
             with mock.patch.object(judgment, "judgment_route", return_value="cloud"), \
+                 mock.patch.object(judgment, "judgment_eval_recorded", _gate_ok), \
                  mock.patch.object(judgment, "noul", return_value=prob):
                 yield
 
@@ -263,6 +270,8 @@ class TestJudgmentAutoWiring:
         # patch the tier-selection source: main imports judgment.is_judgment_active
         import judgment as J
         monkeypatch.setattr(J, "is_judgment_active", lambda *a, **k: active)
+        monkeypatch.setattr(J, "judgment_eval_recorded",
+                            lambda *a, **k: (True, "test receipt"))  # G-J satisfied
         import sys as _sys
         for _m in list(_sys.modules):
             if _m.endswith("judgment") and _m != "judgment":

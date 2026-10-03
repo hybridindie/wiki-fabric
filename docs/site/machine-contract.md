@@ -28,7 +28,9 @@ harness hook body v6, at test time by the full AST guard),
 `VOCABULARY` (a `domain:`
 declaration resolving to no ontology domain — the alias map is the binding),
 `IDENTITY` (canonical repo-slug collisions error; non-canonical namespace
-spellings advise), plus the OKF-floor `OKF-*` codes (`--okf` mode). The rest are structural — `FRONTMATTER`
+spellings advise), **`JUDGMENT-GATE`** (a judged surface refused: no PASS
+`judgment-eval` receipt for the current judge identity — G-J, the compiler
+G4 gate's analog; the deterministic fallback stands loudly), plus the OKF-floor `OKF-*` codes (`--okf` mode). The rest are structural — `FRONTMATTER`
 (malformed metadata), `BROKEN-LINK`, `DUP-ID`, `SOURCE` — and each message
 names the offending page and field. `registry/catalog.json` carries every
 cataloged page with its `id`, `type`, `scope`, `status`, `maturity`,
@@ -272,7 +274,11 @@ fabric.yaml, falling back to shipped defaults. Per-repo: `repos.<slug>
 Defaults reproduce shipped behavior exactly (no-op test guarded). Two are
 **calibration-sensitive**: `judgment.mining_threshold` (0.8, calibrated on
 Laya — see issue #39) and `judgment.near_band` — their provenance travels
-in the issue history; changing them is a policy change, not a tweak.
+in the issue history; changing them is a policy change, not a tweak. As of
+G-J, the threshold's validity is EVAL-OWNED: the mining-spread fixtures must
+still separate around it (`ac-judgment-eval`), and `tuning.judgment.*`
+overrides apply only with a re-calibration on record — the eval, not the
+preference, owns the number's truth.
 
 ## Keeping the catalog out of context (bloat guardrails)
 

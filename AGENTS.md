@@ -98,7 +98,14 @@ persistent memory layer.
 6. **Compiler model policy** — claim extraction, synthesis, and promotion
    mining run on `llm.compiler_model`. Model swaps require a recorded
    compiler eval (G4). `promote`/`mine` refuse without it.
-7. **Import shared modules, don't re-implement** — `fabric_config.py`
+7. **Judgment gate (G-J) — only a calibrated judge proposes.** Every judged
+   surface (mine merges/splits, verify-effects, context borderline) checks
+   `judgment_eval_recorded()` first: no PASS `judgment-eval` receipt for the
+   current judge identity → deterministic fallback stands, loudly. A judge
+   swap = re-run `scripts/eval/eval-judgment.py --record`. Explicit logged
+   override: `WIKI_JUDGE_GATE=0`. Judgment still never writes content — this
+   gate stops an uncalibrated judge from even *proposing*.
+8. **Import shared modules, don't re-implement** — `fabric_config.py`
    (config/routing/actors/canonical repo keys), `extract_backends.py` (claim
    extraction), `wf_common.py` (frontmatter/norm/slugify/`project_slug` — the
    canonical underscore→kebab fold), `eval_core.py` (scoring primitives),

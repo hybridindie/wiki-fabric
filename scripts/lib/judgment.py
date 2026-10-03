@@ -23,6 +23,12 @@ Hard contract (AGENTS.md / machine-contract.md):
   - The emulator NEVER auto-serves judgment: laya's keyword-heuristic
     fallback has no discriminative power (returns fixed probabilities),
     so it is explicitly rejected here.
+  - G-J gate (the compiler's G4 analog): a judge swap is a judgment
+    change — the current judge (route + model identity) must have a
+    PASS calibration receipt (scripts/eval/eval-judgment.py --record)
+    in registry/log.md before any call site accepts it. Untested judge
+    = no proposals. Override with WIKI_JUDGE_GATE=0 (explicit env opt-out,
+    logged when used) — the OFF switch is loud, never silent.
 
 Integration shape (fabric.yaml):
     integrations:
@@ -95,6 +101,78 @@ def judgment_route(config=None, repo=None):
         which = f" (repos.{repo})" if repo else ""
         raise JudgmentUnavailable(f"integrations.judgment.enabled is false{which}")
     return cfg.get("route", "cloud")
+
+
+def judge_identity(config=None, repo=None):
+    """(judge, model) — the CURRENT judge's identity tuple, the thing a swap
+    changes. route=cloud → cloud_model; local → backend + resolved tag."""
+    cfg = judgment_config(config, repo)
+    route = cfg.get("route", "cloud")
+    if route == "cloud":
+        m = cfg.get("cloud_model") or CLOUD_MODEL_DEFAULT
+        return ("cloud", m)
+    backend = cfg.get("local_backend") or "laya"
+    if backend == "ollama" or cfg.get("local_model"):
+        try:
+            from systemone import judge_tag
+            return ("systemone", judge_tag())
+        except Exception:
+            return ("systemone", cfg.get("local_model") or "unresolved")
+    return (backend, cfg.get("local_model") or backend)
+
+
+def judgment_eval_recorded(config=None, repo=None, log_path=None):
+    """G-J gate: True when registry/log.md holds a PASS judgment-eval receipt
+    for the CURRENT judge identity (judge_kind + model). The compiler's G4
+    analog (fabric_config.compiler_eval_recorded): a judge swap is a judgment
+    change; an uncalibrated judge may not propose. Returns (ok, detail).
+    WIKI_JUDGE_GATE=0 (explicit, logged at use) skips — the off switch is
+    loud."""
+    identity = judge_identity(config, repo)
+    if os.environ.get("WIKI_JUDGE_GATE", "") == "0":
+        return True, "G-J gate SKIPPED (WIKI_JUDGE_GATE=0)"
+    import re
+    import layout
+    log_path = Path(log_path or (layout.registry() / "log.md"))
+    if not log_path.exists():
+        return False, ("no registry/log.md — run: "
+                       "python3 scripts/eval/eval-judgment.py --record")
+    text = log_path.read_text(errors="replace")
+    # receipt blocks: '## YYYY-MM-DD' + '* **judgment-eval | PASS**' body
+    block_re = re.compile(
+        r"## \d{4}-\d{2}-\d{2}[^\n]*\n\* \*\*judgment-eval \| (\w+)\*\*(.*?)(?=\n## |\Z)",
+        re.DOTALL)
+    for m in block_re.finditer(text):
+        verdict, body = m.group(1), m.group(2)
+        line_m = re.search(r"judge: (.*)", body)
+        line = (line_m.group(1).strip() if line_m else "")
+        kind = line.split()[0] if line.split() else ""
+        if verdict != "PASS" or kind != identity[0]:
+            continue
+        # parse the receipt line: 'judge: <kind> [<model>] route: <route>'
+        tokens = line.split()
+        after_kind = tokens[1:] if len(tokens) > 1 else []
+        route_idx = after_kind.index("route:") if "route:" in after_kind else len(after_kind)
+        model_tokens = after_kind[:route_idx] if "route:" in after_kind else []
+        receipt_model = model_tokens[0] if model_tokens else ""
+        if receipt_model:
+            # a model-pinned receipt matches ONLY its own model (a swap must
+            # re-calibrate — the core case this gate exists for)
+            if receipt_model == identity[1]:
+                return True, f"judgment-eval PASS recorded for {kind}:{identity[1]}"
+            continue
+        # unpinned receipt (route-only): matches the KIND — legacy receipt
+        if "route" in line and kind == identity[0]:
+            return True, (f"judgment-eval PASS recorded for {kind} "
+                          f"(receipt predates model pinning)")
+    return False, (f"no judgment-eval PASS receipt for judge {identity[0]}:{identity[1]} — "
+                   f"a judge swap is a judgment change; run: "
+                   f"python3 scripts/eval/eval-judgment.py --record")
+
+
+def CORPUS_LOG():
+    import layout
+    return layout.registry()
 
 
 def _typesafe_endpoint():

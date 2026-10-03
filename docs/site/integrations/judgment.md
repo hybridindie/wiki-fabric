@@ -16,6 +16,14 @@ probabilities — against assembled state. No prose generation, ever.
 > decide. A low-confidence verdict escalates (`NEAR-THRESHOLD`), it doesn't
 > auto-approve. And the 0-token core (`wf context`, `wf query`, `wf lint`)
 > never calls it — a test enforces that gate.
+>
+> **G-J: only a calibrated judge proposes.** The current judge (route +
+> model identity — a swap of either is a judgment change) needs a PASS
+> `judgment-eval` receipt (`scripts/eval/eval-judgment.py --record`;
+> declared `global/computations/ac-judgment-eval.md`, attested by
+> `references/attesters/check-judgment-eval.py`). Without it every judged
+> surface loudly falls back to the deterministic result. Explicit override:
+> `WIKI_JUDGE_GATE=0` (logged when used).
 
 LangChain's benchmark of Jev as a judge found **100% binary accuracy vs a
 human oracle, 92–913× lower variance than GPT-5.6/Claude LLM-judges, at

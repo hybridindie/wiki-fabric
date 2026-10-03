@@ -59,10 +59,17 @@ def claim_repo(claim_path):
 
 def verify_claim(claim_path, max_pairs=12, min_confidence=0.6):
     """Judge one new claim against its related pool (per-repo judgment routing:
-    the claim's repo decides enable/route; None → global). Returns a report dict."""
-    from judgment import (effect_verdict, related_claim_pool,
-                          judgment_route, JudgmentUnavailable)
+    the claim's repo decides enable/route; None → global). G-J gate on the
+    judge's scope (repo when the claim names one, else global): an
+    uncalibrated judge may not propose effects — returns a refused report.
+    Returns a report dict."""
+    from judgment import (effect_verdict, related_claim_pool, judgment_route,
+                          judgment_eval_recorded, JudgmentUnavailable)
     _repo = claim_repo(claim_path)
+    ok, why = judgment_eval_recorded()
+    if not ok:
+        return {"claim": claim_path, "refused": "G-J", "detail": why,
+                "pairs": [], "verdict": None}
     route = judgment_route(repo=_repo)
     statement, _ = _statement(claim_path)
     pool = related_claim_pool(claim_path, max_n=max_pairs)
