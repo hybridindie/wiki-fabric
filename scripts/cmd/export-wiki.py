@@ -104,15 +104,17 @@ def _concepts_exist():
         (layout.concepts(CORPUS_ROOT)).glob("concept-*.md"))
 
 
-def _synthesize_concepts(config, dry_run=False):
+def _synthesize_concepts(config, dry_run=False, project=None):
     """Restore the concept layer (which topics are built from) before selecting
     topics — but ONLY when concepts are missing/stale, so routine exports are
-    cheap. Gated on the compiler eval; returns count of concepts synthesized."""
+    cheap. Gated on the compiler eval; returns count of concepts synthesized.
+    `project` scopes the clustering to that project's claims (#171 — corpus-wide
+    O(n²) clustering paid for even when --project filtered the output)."""
     if _concepts_exist():
         return 0
     try:
         import synthesize as _syn
-        written = _syn.synthesize_uncovered(cfg=config, dry_run=dry_run)
+        written = _syn.synthesize_uncovered(cfg=config, dry_run=dry_run, project=project)
         return len(written)
     except Exception as e:
         print(f"  SKIP concept synthesis (unavailable): {e}", file=sys.stderr)
@@ -181,7 +183,7 @@ def main():
 
     # (A) Restore the concept layer (topics are built FROM concepts).
     #     Gated on the compiler eval; 0-token clustering, LLM synthesis.
-    n_concepts = _synthesize_concepts(config, dry_run=args.dry_run)
+    n_concepts = _synthesize_concepts(config, dry_run=args.dry_run, project=args.project)
     if n_remove_t or n_remove_p:
         print(f"  reconciled: removed {n_remove_t} stale topic(s), {n_remove_p} stale project(s)")
 

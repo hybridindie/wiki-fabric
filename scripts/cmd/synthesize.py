@@ -58,10 +58,14 @@ CONCEPTS_BASE = VAULT_ROOT
 MIN_CLAIMS = get_tuning(None, 'synthesize', 'min_claims', 2)
 
 
-def load_claims():
-    """Load all claims with their frontmatter and body."""
+def load_claims(project=None):
+    """Load claims with their frontmatter and body. `project` scopes to that
+    project's claim files (#171: --project restricted the synthesis output,
+    not the clustering input — the O(n²) ran over the whole corpus either way)."""
+    from wf_common import claim_prefix_for_project
+    pattern = (claim_prefix_for_project(project) + "-*.md") if project else "claim-*.md"
     claims = []
-    for f in sorted(CLAIMS_DIR.glob("claim-*.md")):
+    for f in sorted(CLAIMS_DIR.glob(pattern)):
         fm, body = parse_frontmatter(f)
         claims.append({
             "file": f,
@@ -320,7 +324,7 @@ def _concept_title_scalar(synthesis, concept_slug):
     from wf_common import yaml_scalar
     return yaml_scalar(_concept_title(synthesis, concept_slug))
 
-def synthesize_uncovered(cfg=None, threshold=0.4, min_claims=2, dry_run=False):
+def synthesize_uncovered(cfg=None, threshold=0.4, min_claims=2, dry_run=False, project=None):
     """Synthesize concept pages for claims not yet covered by any concept.
 
     Reusable entrypoint (used by `wf export wiki` to restore the human layer from
@@ -328,6 +332,11 @@ def synthesize_uncovered(cfg=None, threshold=0.4, min_claims=2, dry_run=False):
     `concept-*.md` page via the compiler model, and return the written paths.
     Deterministic clustering; synthesis is LLM (compiler). Honors the compiler
     eval gate: refuse to synthesize when the compiler model has no recorded eval.
+
+    `project` scopes clustering+synthesis to that project's claims (#171):
+    a project-scoped export must not pay — or LLM-spend — for corpus-wide
+    clusters it won't write. Clusters spanning OTHER projects (mixtures) are
+    excluded by the same scoping, matching the page filter.
 
     Synthesis runs on the cloud compiler model (concept synthesis benefits from
     the strongest available model). Returns list of written concept paths (empty
@@ -348,7 +357,7 @@ def synthesize_uncovered(cfg=None, threshold=0.4, min_claims=2, dry_run=False):
     os.environ["WIKI_LLM_BACKEND"] = ""
     os.environ.pop("WIKI_MLX_MODEL", None)
 
-    claims = load_claims()
+    claims = load_claims(project=project)
     existing = load_existing_concepts()
     covered_stems = set()
     for ec in existing:
@@ -402,7 +411,7 @@ def main():
     global MIN_CLAIMS
     MIN_CLAIMS = args.min_claims
 
-    claims = load_claims()
+    claims = load_claims(project=args.project)
     existing = load_existing_concepts()
 
     print(f"Loaded {len(claims)} claims, {len(existing)} existing concepts")
@@ -454,7 +463,13 @@ def main():
 
 
 def cluster_by_concept(claims, threshold):
-    """Cluster claims by concept-overlap (extracted for testability)."""
+    """Cluster claims by concept-overlap (extracted for testability).
+
+    #171: the O(n²) loop re-ran norm() (a regex sub) on BOTH statements per
+    pair — 39M regex calls at 6k claims, minutes inside `export`. Stems are
+    computed once per claim; an inverted index proposes only pairs SHARING a
+    content token (identical semantics: zero-token-overlap pairs can never
+    reach the threshold, so skipping them changes no cluster membership)."""
     n = len(claims)
     parent = list(range(n))
 
@@ -471,11 +486,31 @@ def cluster_by_concept(claims, threshold):
 
     stopwords = CONCEPT_NAME_FILTER
 
+    stems = []
+    inverted = defaultdict(list)  # token -> claim indices carrying it
+    for i, c in enumerate(claims):
+        toks = set(norm(c["statement"]).split()) - stopwords
+        if not toks:
+            stems.append(frozenset())
+            continue
+        stems.append(toks)
+        for t in toks:
+            inverted[t].append(i)
+
     for i in range(n):
-        for j in range(i + 1, n):
-            si = set(norm(claims[i]["statement"]).split()) - stopwords
-            sj = set(norm(claims[j]["statement"]).split()) - stopwords
-            if not si or not sj:
+        si = stems[i]
+        if not si:
+            continue
+        # candidate pool: claims sharing at least one token with i (deduped,
+        # j > i only — the union-find loop is order-irrelevant)
+        seen = set()
+        for t in si:
+            for j in inverted[t]:
+                if j > i and j not in seen:
+                    seen.add(j)
+        for j in seen:
+            sj = stems[j]
+            if not sj:
                 continue
             overlap = len(si & sj) / max(len(si), len(sj))
             if overlap >= threshold:
