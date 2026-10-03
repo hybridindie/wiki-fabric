@@ -498,18 +498,21 @@ def _status(argv):
         for repo in list(fc.get_all_repo_names(fc.get_config())):
             raw = layout.evidence_raw(croot) / _psl(repo)
             mark = raw / "git" / ".last-capture"
-            last = window = ""
+            last = window = truncated = ""
             if mark.exists():
                 parts = mark.read_text().strip().split()
                 last = parts[0] if parts else ""
                 for tok in parts[1:]:
                     if tok.startswith("window="):
                         window = tok[len("window="):]
+                    elif tok.startswith("truncated="):
+                        truncated = tok[len("truncated="):]
             chats = raw / "chats"
             n_chats = len(list(chats.glob("*.md"))) if chats.is_dir() else 0
             n_git = len(list((raw / "git").glob("*.md"))) if (raw / "git").is_dir() else 0
             if last or n_chats or n_git:
                 provenance[repo] = {"last_capture": last or None, "window_since": window or None,
+                                    "threads_truncated": int(truncated) if truncated else 0,
                                     "git_files": n_git, "chat_files": n_chats}
     except Exception:
         pass
@@ -629,20 +632,24 @@ def _status_prose(fdir):
         for repo in list(fc.get_all_repo_names(fc.get_config())):
             raw = layout.evidence_raw(croot) / _psl(repo)
             mark = raw / "git" / ".last-capture"
-            window = last = ""
+            window = last = truncated = ""
             if mark.exists():
                 parts = mark.read_text().strip().split()
                 last = parts[0] if parts else ""
                 for tok in parts[1:]:
                     if tok.startswith("window="):
                         window = tok[len("window="):]
+                    elif tok.startswith("truncated="):
+                        truncated = tok[len("truncated="):]
             chats = raw / "chats"
             n_chats = len(list(chats.glob("*.md"))) if chats.is_dir() else 0
             n_git = len(list((raw / "git").glob("*.md"))) if (raw / "git").is_dir() else 0
             if last or n_chats or n_git:
                 win = f", window since {window}" if window else ""
-                print(f"    Capture:            {repo} — last {last or 'never'}{win} "
-                      f"(git: {n_git}, chats: {n_chats})")
+                trunc = (f", {truncated} thread(s) truncated at the pagination cap"
+                         if truncated and truncated != "0" else "")
+                print(f"    Capture:            {repo} — last {last or 'never'}{win}"
+                      f"{trunc} (git: {n_git}, chats: {n_chats})")
     except Exception:
         pass  # provenance is cosmetic — status must not break on it
 

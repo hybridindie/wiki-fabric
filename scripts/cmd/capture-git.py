@@ -488,7 +488,8 @@ def read_since_state(project, fallback="6m"):
     """Last capture timestamp (YYYY-MM-DD) or the fallback window. A state
     file written by an activity-bounded run carries a 'window=' stamp; the
     recorded window (not today's default) is the incremental base, so a
-    quiet stretch never silently re-expands coverage."""
+    quiet stretch never silently re-expands coverage. Unknown tokens
+    (truncated=N, #156 S1) are ignored here — status reads them."""
     try:
         text = state_path(project).read_text(encoding="utf-8").strip()
         for token in text.split():
@@ -500,16 +501,20 @@ def read_since_state(project, fallback="6m"):
         return fallback
 
 
-def write_since_state(project, window=None):
+def write_since_state(project, window=None, truncated=0):
     """Record this capture run — the next --since-state run looks back to here.
     The chosen window travels along (window=<iso>) so window provenance and
-    the incremental base share one file."""
+    the incremental base share one file. `truncated` carries the thread-
+    truncation count (#156 S1: the summary's known-incompleteness gets state
+    provenance too — status reads it; the read-side ignores unknown tokens)."""
     try:
         sp = state_path(project)
         sp.parent.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now().strftime("%Y-%m-%d")
         if window:
             stamp += f" window={since_date(window)}"
+        if truncated:
+            stamp += f" truncated={int(truncated)}"
         sp.write_text(stamp, encoding="utf-8")
     except OSError:
         pass  # state file unwritable → the next run re-captures (fresh, not stale)
@@ -557,6 +562,25 @@ def main():
     parser.add_argument("--churn", action="store_true", help="Also print a file-churn ranking (local repos)")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be captured")
     args = parser.parse_args()
+
+    # Unknown-slug guard (#167 contract at the git channel): an unconnected
+    # project must fail loudly (exit 3, the same meaning table as capture.py)
+    # — freshness/hook/CI runs shell this per repo, and a misspelled slug
+    # used to be indistinguishable from a clean capture.
+    connected = set()
+    try:
+        import fabric_config as _fc
+        connected = set(_fc.get_all_repo_names(_fc.get_config()))
+    except Exception:
+        connected = set()
+    if connected and args.project not in connected:
+        similar = [s for s in connected
+                   if s.replace("-", "_") == args.project.replace("-", "_")]
+        print(f"Error: '{args.project}' is not a connected project", file=sys.stderr)
+        print(f"  connected: {', '.join(sorted(connected))}", file=sys.stderr)
+        if similar:
+            print(f"  (did you mean: {similar[0]}?)", file=sys.stderr)
+        sys.exit(3)
 
     include_comments = not args.no_comments
     state_base = None
@@ -623,7 +647,8 @@ def main():
 
     total = stats["new"] + stats["changed"]
     if not args.dry_run:
-        write_since_state(args.project, window=args.since)
+        write_since_state(args.project, window=args.since,
+                          truncated=stats.get("threads_truncated", 0))
     print()
     print(f"Capture summary: {stats['new']} new, {stats['changed']} changed, {stats['unchanged']} unchanged"
           + (f", {stats['threads_truncated']} thread(s) truncated at the comment-page cap" if stats.get("threads_truncated") else ""))
