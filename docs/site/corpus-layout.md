@@ -23,6 +23,10 @@ legacy alias for the same value).
 | Path | Artifact | Producer(s) | Consumers |
 |---|---|---|---|
 | `evidence/raw/<slug>/` | immutable captures (docs + `git/` PRs/issues/commits + `chats/` sessions + `obsidian/` harvests) | capture, capture-git, capture-chat, hooks | ingest (`--changed`), threads index, lint SOURCE-DRIFT, review --verify-locators |
+| `evidence/raw/<slug>/git/pr-N.md` | `kind: pr-record` source (github route: `source_repo`, `pr`, `pr_state`, `merged_at`; thread graph node) | capture-git | ingest --changed, threads index |
+| `evidence/raw/<slug>/git/issue-N.md` | issues (same shape as pr-record minus merge fields) | capture-git | ingest --changed, threads index |
+| `evidence/raw/<slug>/git/commit-<sha>.md` | `kind: commit` source (local route: sha + date + message body, metadata only) | capture-git | ingest --changed |
+| `evidence/raw/<slug>/chats/session-*.md` | `kind: chat-session` source (`session`, `harness`, `session_started`, `files_touched`, `related_sessions`) | capture-chat | ingest --changed, threads index, mine chats |
 | `evidence/raw/<scope>-okf/` | imported OKF bundles | okf import | ingest `--pending <scope>-okf` |
 | `evidence/sources/src-*.md` | source records (sha256, resource locator) | ingest, okf import | review, propose-domains, lint, threads |
 | `evidence/source-summaries/sum-*.md` | faithful summaries with locators | ingest | retrieval, lint SOURCE-EMPTY |
@@ -98,6 +102,14 @@ claim↔source join depends on `claim-` + the raw rel path, so raw paths under
 
 ## History
 
+- 2026-10-02 (#157 S3 decision): `evidence/` plane naming — **the name stays; the plane separation stays in policy.** Claims (canonical atoms) live under "evidence" but classify to the atom-plane (
+  `sync_lib/policy.py`), and every consumer derives paths through `layout`
+  — the directory name is physical, not semantic, and never user-facing.
+  Tier-3 re-layout (claims → `claims/` at the corpus root) remains a
+  one-constant change + the coordination checklist, parked until a real
+  driver appears: the move churns 6284 catalog paths, 16 seam refs, and
+  every existing OKF bundle/clone for zero retrieval benefit (path-scope
+  is never shown to users; classification already disambiguates the planes).
 - 2026-10-01 (S1/#159): physical domain homes — `domains/<domain>/{concepts,questions,syntheses}`;
   binding is frontmatter `domain:` (canonicalized through the ontology alias map);
   relocation via `scripts/cmd/relocate-concepts.py` (deterministic, idempotent).

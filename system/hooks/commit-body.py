@@ -7,6 +7,30 @@ from wf_common import project_slug as _psl  # canonical fold (#158 S3)
 slug = _psl(os.environ['WF_SLUG'])  # underscore repo dirs fold; capture/ingest resolve canonically
 py = sys.executable
 
+# 0. Commit-time layout guard (#157 S2: corpus-path re-spells fail HERE, at
+#    commit, not at the next full-suite run). Only on the harness repo —
+#    the scripts tree (layout.py's authority set) lives there; project repos
+#    have no scripts/ to guard. Fast regex tier of lint's LAYOUT-GUARD.
+_scripts = fabric / 'scripts'
+if _scripts.is_dir() and Path.cwd() == fabric.resolve():
+    try:
+        sys.path.insert(0, str(fabric / 'scripts' / 'cmd'))
+        import importlib.util as _ilu
+        _spec = _ilu.spec_from_file_location('wf_lint', str(fabric / 'scripts/cmd/lint.py'))
+        _lint = _ilu.module_from_spec(_spec)
+        _spec.loader.exec_module(_lint)
+        _probs = _lint.check_layout_respells(fabric)
+        if _probs:
+            print('[wf hook] LAYOUT-GUARD: corpus-path re-spells in committed code:', flush=True)
+            for _p in _probs[:10]:
+                print('  ' + _p, flush=True)
+            print('  compose via scripts/lib/layout.py accessors — fix before committing', flush=True)
+            sys.exit(1)
+    except SystemExit:
+        raise
+    except Exception:
+        pass  # guard unavailable → the pytest guard remains the authority
+
 # 1. Capture (sha256 drift vs recorded sources; exit 2 == drift)
 r = subprocess.run([py, str(fabric / 'scripts/cmd/capture.py'), slug,
                     '--project-root', os.getcwd(), '--quiet'],
