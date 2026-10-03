@@ -93,7 +93,21 @@ pass "all $(ls "${FABRIC}"/scripts/*.sh | wc -l | tr -d ' ') shell scripts parse
 "${PY}" "${FABRIC}/scripts/cmd/lint.py" "${CORPUS}" 2>&1 | head -5 || fail "lint (expected 0 errors)"
 pass "lint clean"
 
-# 5. Capture fixture source (dry run reports, no writes)
+# 5. Capture fixture source (dry run reports, no writes).
+# The smoke fabric copies the repo's fabric.yaml (connected repos) — the
+# fixture registers ITSELF as a connected project (capture-git's unknown-slug
+# guard, #167/#156, correctly refuses unconnected slugs now).
+if [[ -f fabric.yaml ]]; then
+    python3 - <<'PYEOF'
+import yaml
+cfg = yaml.safe_load(open("fabric.yaml")) or {}
+repos = cfg.get("repos") or {}
+if "smoke-project" not in repos:
+    repos["smoke-project"] = {"path": "corpus/evidence/raw/smoke-project"}
+    cfg["repos"] = repos
+    yaml.dump(cfg, open("fabric.yaml", "w"), sort_keys=False, allow_unicode=True)
+PYEOF
+fi
 mkdir -p "${CORPUS}/evidence/raw/smoke-project"
 cat > "${CORPUS}/evidence/raw/smoke-project/sample.md" <<'MD'
 # Sample fixture
