@@ -81,6 +81,28 @@ Judgment still never writes content; the G-J gate adds the missing half: it
 can't even *propose* until its calibration is on record (`wf eval behavior
 --judge` is the CI probe; the calibration eval is the model-identity gate).
 
+## Newest-wins: contradiction-based staleness (#175)
+
+Time-staleness is the ladder (`review_after` per capture kind). The OTHER
+staleness axis is contradiction: a claim a newer supported claim refutes
+shouldn't keep riding as `supported`. The sweep mechanizes it — Graphiti's
+newest-wins invariant, git-native:
+
+```bash
+wf review --contradiction-sweep          # demote/restore; exit 1 when a demotion lands
+wf review --demoted                      # the demoted set
+wf review --restore-demoted <claim-id>   # hand-restore (the stamp clears)
+```
+
+Carriers are proposals only — a hand-declared `contradicts` relation, or
+`registry/effects/` verdicts from `verify-effects` (G-J-gated upstream).
+The DECISION is deterministic: the pair's OLDER member loses to the newer
+one; equal clocks skip (same-batch reads stay human-owned); the
+contradictor must still be `supported` — when IT loses support, the demoted
+claim restores automatically on the next sweep. The stamp
+(`contradicted-by:` + `status: contested` + `stale_after`) is provenance,
+not deletion — the demoted claim keeps its quote and locator.
+
 ## Attested computations: proving the verdict
 
 Deterministic fabric operations can be declared as **attested computations**

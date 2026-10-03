@@ -204,6 +204,12 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="--verify-sources: report outcomes, write nothing")
     parser.add_argument("--verify-locators", action="store_true",
                         help="Re-check every claim's locator against its raw source (#109): rewrite drifted locators, strip the verification stamp + contest claims whose quote vanished (0 tokens)")
+    parser.add_argument("--contradiction-sweep", action="store_true",
+                        help="Newest-wins demotion (#175): same-source contradicts relations where the contradictor is strictly newer + supported mechanically demote the older claim (contested + stale_after); a contradictor no longer supported restores the demoted claim. Sources: hand-written relations blocks + registry/effects verdicts (0 tokens)")
+    parser.add_argument("--demoted", action="store_true",
+                        help="List claims demoted by the contradiction sweep (repairable via --restore-demoted + claim id)")
+    parser.add_argument("--restore-demoted", metavar="CLAIM",
+                        help="Re-ground a contradiction-demoted claim: clears the contradiction stamp (the contradicts-relation note stays in the body; re-run the sweep to re-demote if the contradictor still holds)")
     parser.add_argument("--limit", type=int, default=None, help="Limit claims processed (verify-locators)")
     args = parser.parse_args()
 
@@ -257,6 +263,50 @@ def main():
                 print(f"    ✓ {name}")
         for name in r["contested_files"][:10]:
             print(f"    ⚠ {name}")
+        return 0
+
+    if getattr(args, "contradiction_sweep", False):
+        import json as _json
+        demoted, restored, detail = contradiction_sweep(dry_run=args.dry_run,
+                                                        project=args.project)
+        skipped = sum(1 for d in detail if d.startswith("skip "))
+        print(f"Contradiction sweep (newest-wins, #175): {demoted} demoted, "
+              f"{restored} restored, {skipped} skipped"
+              + (" [DRY RUN]" if args.dry_run else ""))
+        for line in detail[:40]:
+            print(f"  {line}")
+        if args.json:
+            print(_json.dumps({"mode": "contradiction-sweep", "demoted": demoted,
+                               "restored": restored, "skipped": skipped,
+                               "detail": detail}, indent=2))
+        return 1 if demoted and not args.dry_run else 0
+
+    if getattr(args, "restore_demoted", None):
+        claims_dir = layout.claims(CORPUS_ROOT)
+        target = Path(args.restore_demoted)
+        if not target.exists():
+            cands = list(claims_dir.glob(f"*{args.restore_demoted}*"))
+            target = cands[0] if cands else None
+        if not target or not target.exists():
+            print(f"Claim not found: {args.restore_demoted}", file=sys.stderr)
+            return 1
+        if not _contested_by_stamp(target.read_text(encoding="utf-8", errors="replace")):
+            print(f"{target.name}: no contradiction stamp — nothing to restore")
+            return 0
+        if not args.dry_run:
+            _restore(target)
+        print(f"restored {target.name} (re-run --contradiction-sweep to re-demote "
+              f"if the contradictor still holds)")
+        return 0
+
+    if getattr(args, "demoted", False):
+        n = 0
+        for p in sorted(layout.claims(CORPUS_ROOT).glob("claim-*.md")):
+            s = p.read_text(encoding="utf-8", errors="replace")
+            if _contested_by_stamp(s):
+                n += 1 if print(f"  {p.name}") else 1
+        print(f"{n} contradiction-demoted claim(s)" if n else
+              "none demoted (sweep clean)")
         return 0
 
     if args.auto_reverify:
@@ -576,6 +626,164 @@ def auto_reverify(dry_run=False, project=None, _collect=False):
             verify_claim(f)
         verified += 1
     return (verified, skipped, skipped_files) if _collect else (verified, skipped, failed)
+
+
+# === Newest-wins contradiction sweep (#114 spike → #175) ====================
+
+_DEMOTE_MARK = "contradicted-by"
+
+
+def _contradiction_pairs(project=None):
+    """Collect (demotee, contradictor, origin) pairs from the two carriers:
+    hand-written relations blocks (type: contradicts in a claim frontmatter)
+    and registry/effects/*.effects.json judged verdicts. Deterministic, 0
+    tokens. Unknown-target pairs skip (relation to a deleted claim is an
+    ORPHAN lint concern, not sweep input)."""
+    from wf_common import parse_frontmatter
+    import json as _json
+    fx_dir = layout.registry(CORPUS_ROOT) / "effects"
+    pairs = []
+    claims_dir = layout.claims(CORPUS_ROOT)
+    for f in sorted(claims_dir.glob("claim-*.md")):
+        if project and project not in f.stem:
+            continue
+        fm, _ = parse_frontmatter(f)
+        src_stem = f.stem
+        for rel in (fm.get("relations") or []):
+            if not isinstance(rel, dict) or str(rel.get("type", "")).lower() != "contradicts":
+                continue
+            target = str(rel.get("target", "")).strip('"[]')
+            if target.startswith("[[") and target.endswith("]]"):
+                target = target[2:-2]
+            if not target:
+                continue
+            pairs.append((src_stem, target, "relation"))
+    if fx_dir.is_dir():
+        for ef in sorted(fx_dir.glob("*.effects.json")):
+            try:
+                d = _json.loads(ef.read_text())
+            except Exception:
+                continue  # torn write → not sweep input this cycle
+            src_stem = str(d.get("claim") or "")
+            if project and project not in src_stem:
+                continue
+            for against, effect in (d.get("judged_effects") or {}).items():
+                if str(effect).lower() == "contradicts":
+                    pairs.append((src_stem, str(against), "effects-verdict"))
+    return pairs
+
+
+def _claim_capture_date(stem):
+    """The claim's ingestion-time clock for the newest-wins compare:
+    captured || generated.at (the hierarchy ingest stamps). Date or None
+    (unknown = never newest-wins — unknown clocks don't demote)."""
+    from wf_common import parse_frontmatter
+    f = layout.claims(CORPUS_ROOT) / f"{stem}.md"
+    if not f.exists():
+        return None
+    fm, _ = parse_frontmatter(f)
+    raw = str(fm.get("captured") or "").strip()[:10]
+    try:
+        return date.fromisoformat(raw)
+    except Exception:
+        pass
+    gen = fm.get("generated") or {}
+    if isinstance(gen, dict):
+        raw = str(gen.get("at") or "").strip()[:10]
+        try:
+            return date.fromisoformat(raw)
+        except Exception:
+            pass
+    return None
+
+
+def _contested_by_stamp(s):
+    return (_DEMOTE_MARK + ":") in s
+
+
+def _set_contested(path, reason_line):
+    s = path.read_text(encoding="utf-8", errors="replace")
+    s = re.sub(r"^status: (?:supported|proposed)$",
+               f"status: contested\n{_DEMOTE_MARK}: \"{reason_line}\"",
+               s, count=1, flags=re.MULTILINE)
+    if "stale_after:" not in s:
+        s = s.replace("last_verified:", f"stale_after: {TODAY.isoformat()}\nlast_verified:", 1)
+    path.write_text(s, encoding="utf-8")
+
+
+def _restore(path):
+    """Clear the contradiction stamp + flip back (the verify_claim stamp-
+    clearing mechanism, #109-adjacent)."""
+    s = path.read_text(encoding="utf-8", errors="replace")
+    s = re.sub(rf'^{_DEMOTE_MARK}: ?"?[^"\n]*"?\n', "", s, count=1, flags=re.MULTILINE)
+    s = re.sub(r"^status: contested$", "status: supported", s, count=1, flags=re.MULTILINE)
+    s = re.sub(r"^stale_after: \S+\n", "", s, count=1, flags=re.MULTILINE)
+    path.write_text(s, encoding="utf-8")
+
+
+def contradiction_sweep(dry_run=False, project=None):
+    """#175: mechanically demote claims a NEWER still-supported same-corpus
+    claim contradicts; restore demoted claims whose contradictor lost
+    support. Graphiti's newest-wins invariant in git-native form (the #114
+    spike's one adoptable gap). The carriers are proposals (relations
+    blocks + judged effects verdicts, G-J-gated upstream); the DECISION is
+    deterministic date logic — same proposal/validation split as the
+    compiler/judgment gates. Returns (demoted, restored, detail lines)."""
+    demoted = restored = skipped = 0
+    detail = []
+    claims_dir = layout.claims(CORPUS_ROOT)
+    from wf_common import parse_frontmatter
+    for a, b, origin in _contradiction_pairs(project):
+        if a == b:
+            continue
+        fa, fb = claims_dir / f"{a}.md", claims_dir / f"{b}.md"
+        if not fa.exists() or not fb.exists():
+            skipped += 1
+            detail.append(f"skip {a} <- {b}: claim file missing")
+            continue
+        # Direction-free newest-wins: the pair contradicts; whichever side is
+        # chronologically OLDER loses to the newer one (verify-effects writes
+        # effects from the new claim's perspective; hand relations are
+        # outward — normalizing both by DATE avoids two convention bugs).
+        ta, tb = _claim_capture_date(a), _claim_capture_date(b)
+        if ta is None or tb is None or ta == tb:
+            skipped += 1
+            detail.append(f"skip {a} <- {b}: clocks unknown or equal")
+            continue
+        demotee, t_dem, contradictor, t_con = (a, ta, b, tb) if ta < tb else (b, tb, a, ta)
+        d_dem = claims_dir / f"{demotee}.md"
+        dem_s = d_dem.read_text(encoding="utf-8", errors="replace")
+        # the contradictor must still be supported — an unworthy judge demotes
+        # nothing; demoted claims whose contradictor lost support RESTORE
+        con_fm, _ = parse_frontmatter(claims_dir / f"{contradictor}.md")
+        if str(con_fm.get("status") or "").lower() != "supported":
+            if _contested_by_stamp(dem_s):
+                if dry_run:
+                    restored += 1
+                    detail.append(f"[dry] RESTORE {demotee} (contradictor {contradictor} no longer supported)")
+                else:
+                    _restore(d_dem)
+                    restored += 1
+                    detail.append(f"RESTORE {demotee} (contradictor {contradictor} no longer supported)")
+            continue
+        if str(con_fm.get("status") or "").lower() == "supported" and not _contested_by_stamp(dem_s):
+            # also restore when the demotee's stamp is absent but... no: only
+            # demote when the DEMOTEE is currently supported/proposed
+            pass
+        if _contested_by_stamp(dem_s):
+            continue  # already demoted — idempotent re-run
+        dem_st = str((parse_frontmatter(d_dem)[0] or {}).get("status") or "").lower()
+        if dem_st not in ("supported", "proposed", ""):
+            continue  # only a live claim can be demoted (already contested for
+            # another reason keeps ITS reason; superseded/expired untouched)
+        if dry_run:
+            demoted += 1
+            detail.append(f"[dry] DEMOTE {demotee} (contradicted by newer {contradictor}, {origin})")
+            continue
+        _set_contested(d_dem, f"{contradictor} ({origin}, strictly newer {t_con})")
+        demoted += 1
+        detail.append(f"DEMOTE {demotee} (contradicted by newer {contradictor}, {origin})")
+    return demoted, restored, detail
 
 
 if __name__ == "__main__":

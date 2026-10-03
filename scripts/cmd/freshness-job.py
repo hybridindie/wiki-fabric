@@ -89,14 +89,25 @@ def refresh_git_history(slug, repo_cfg, dry_run=False):
 
 
 def reverify_claims(slug, dry_run=False):
-    """Step 3 per project: mechanical re-verification. Returns (outcome, count)."""
+    """Step 3 per project: mechanical re-verification. Returns (outcome, count).
+    Includes the newest-wins contradiction sweep (#175) — the other
+    staleness axis (a claim contradicted by a newer supported claim) rides
+    the same mechanical cycle; its demotion is gate-worthy drift."""
     try:
-        from review import scan  # same-dir; single staleness truth (#155 audit)
+        from review import scan, contradiction_sweep  # same-dir; single staleness truth
         report = scan()
     except Exception as e:
         return f"error:{e}", 0
     stale = report.get("overdue", []) + report.get("stale", [])
     if dry_run or not stale:
+        # even a clean staleness ladder can carry contradictions: the sweep
+        # rides regardless (0 tokens; a demotion surfaces via gate)
+        if not dry_run:
+            d, _r, detail = contradiction_sweep(project=slug)
+            if detail:
+                print("\n".join(detail))
+            if d:
+                return "contradiction-demotion", d
         return "clean", len(report.get("overdue", []))
     r = subprocess.run(
         [sys.executable, str(_HERE / "review.py"), "--auto-reverify",
@@ -105,6 +116,11 @@ def reverify_claims(slug, dry_run=False):
     if r.returncode != 0:
         return f"error:auto-reverify rc={r.returncode}", len(stale)
     print(r.stdout.strip())
+    d, rst, detail = contradiction_sweep(project=slug)
+    if detail:
+        print("\n".join(detail))
+    if d:
+        return "reverified+contradiction-demotion", len(stale)
     return "reverified", len(stale)
 
 
