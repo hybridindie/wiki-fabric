@@ -624,6 +624,46 @@ def check_repo_identity(config):
     return probs
 
 
+def check_overlay_tracked(config):
+    """H4/#180: every connected project's .wiki-overlay.md must be TRACKED in
+    its repo — an untracked overlay is silent config loss on the second
+    machine's clone (the documented 'versioned with the project repo'
+    contract). Deterministic git ls-files probe per repos entry. Only runs
+    where a repo path + git repo exist (discovered-only repos without a
+    fabric.yaml path skip)."""
+    probs = []
+    try:
+        import subprocess
+        import fabric_config as fc
+        cfg = config if config is not None else fc.get_config()
+        for slug in fc.get_all_repo_names(cfg):
+            rcfg = fc.get_repo_config(cfg, slug) or {}
+            rp = rcfg.get("path")
+            if not rp:
+                continue
+            try:
+                repo = (fc.FABRIC_ROOT / rp).resolve() if not Path(rp).is_absolute() else Path(rp).resolve()
+            except Exception:
+                continue
+            overlay = repo / ".wiki-overlay.md"
+            if not overlay.exists():
+                continue  # absent overlay is a different surface (doctor's report)
+            try:
+                probe = subprocess.run(
+                    ["git", "-C", str(repo), "ls-files", "--", ".wiki-overlay.md"],
+                    capture_output=True, text=True, timeout=10)
+                if not probe.stdout.strip():
+                    probs.append(
+                        f"OVERLAY-UNTRACKED {slug}: .wiki-overlay.md is not in git "
+                        f"(a second machine's clone carries no config — H4) — "
+                        f"fix: git add .wiki-overlay.md && git commit")
+            except (OSError, subprocess.TimeoutExpired):
+                pass  # not a git repo / git unavailable → skip quietly
+    except Exception:
+        pass  # config half-wired → the sweep/doctor still cover it
+    return probs
+
+
 def check_ignore_config(config):
     """Deterministic ignore.* checks. Invalid regex patterns are skipped
     silently by get_ignores (so capture/lint can't crash) — but they should be
@@ -1061,6 +1101,10 @@ def main():
         errors.extend(check_llm_config(get_config()))
     except Exception:
         pass  # pre-wired config missing → config checks skip, structural lint still runs
+    try:
+        errors.extend(check_overlay_tracked(get_config()))
+    except Exception:
+        pass  # overlay sweep/doctor cover what lint can't reach
     try:
         errors.extend(check_ignore_config(get_config()))
     except Exception:

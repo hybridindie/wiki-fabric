@@ -581,6 +581,36 @@ def _bootstrap_gitignore_and_commit(args):
         print("Initialized git repository with initial commit")
 
 
+def _stage_overlay_git(args, repo_root=None):
+    """H4 (#180): the overlay ALWAYS reaches the project repo — 'versioned
+    with the project repo' (configuration.md) was false for every bootstrap
+    on a pre-existing repo: git add ran only under --init-git. The second
+    machine's project clone then carries NO overlay (silent config loss).
+    Stages + commits when the repo exists (best-effort, idempotent).
+    repo_root: explicit target (tests; None = cwd, bootstrap's convention)."""
+    _root = Path(repo_root) if repo_root else Path.cwd()
+    overlay = _root / ".wiki-overlay.md"
+    if not overlay.exists():
+        return
+    probe = subprocess.run(["git", "-C", str(_root), "rev-parse", "--is-inside-work-tree"],
+                           capture_output=True, text=True)
+    if probe.returncode != 0 or probe.stdout.strip() != "true":
+        return  # not a git repo (--init-git's own add covers new repos)
+    tracked = subprocess.run(["git", "-C", str(_root), "ls-files", "--", ".wiki-overlay.md"],
+                             capture_output=True, text=True)
+    if tracked.stdout.strip():
+        return  # already tracked — nothing to do
+    subprocess.run(["git", "-C", str(_root), "add", "--", ".wiki-overlay.md"], check=False)
+    commit = subprocess.run(
+        ["git", "-C", str(_root), "commit", "-m",
+         "chore: track .wiki-overlay.md (the fabric config travels with the repo — H4)"],
+        capture_output=True, text=True)
+    if commit.returncode == 0:
+        print("Overlay committed (travels with the repo — H4)")
+    else:
+        print("Overlay STAGED (commit it with your next task commit — H4)")
+
+
 def _bootstrap_fabric_side(fabric_root, harness_root, project_root, project_slug, project_name, owner, args, domains):
     """Phases 5-5b + 6: namespace, cold-start vocabulary, vault refresh,
     namespace README, fabric.yaml registration."""
@@ -843,6 +873,9 @@ def _execute_bootstrap(args, project_root_str, project_name, project_slug, domai
     _bootstrap_overlay(args, project_name, project_slug, domains, skills, owner)
     _bootstrap_agent_configs(harness_root, fabric_root)
     _bootstrap_gitignore_and_commit(args)
+    _stage_overlay_git(args)  # H4: the overlay ALWAYS reaches the repo (the
+    # second-machine path depends on it — git add alone (no commit; the
+    # human's next commit carries it) when the repo predates bootstrap)
     namespace_dir = _bootstrap_fabric_side(fabric_root, harness_root, project_root, project_slug,
                                            project_name, owner, args, domains)
     _bootstrap_project_env(project_root, project_slug, args)

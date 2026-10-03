@@ -175,6 +175,35 @@ def main():
     except Exception as e:
         results.append(check_result("gate", True, f"(gate check skipped: {e})"))
 
+    # ---- 8. connected projects' overlays tracked (H4/#180: the second-
+    # machine clone must carry the overlay — an untracked overlay is silent
+    # config loss on the documented next-machine path)
+    try:
+        import fabric_config as _fc
+        untracked = []
+        for slug in sorted(_fc.get_all_repo_names(_fc.get_config())):
+            rcfg = _fc.get_repo_config(_fc.get_config(), slug) or {}
+            rp = rcfg.get("path")
+            if not rp:
+                continue
+            repo = (_fc.FABRIC_ROOT / rp).resolve() if not Path(rp).is_absolute() else Path(rp)
+            overlay = repo / ".wiki-overlay.md"
+            if not overlay.exists():
+                continue
+            probe = subprocess.run(
+                ["git", "-C", str(repo), "ls-files", "--", ".wiki-overlay.md"],
+                capture_output=True, text=True, timeout=10)
+            if not probe.stdout.strip():
+                untracked.append(str(repo.name))
+        results.append(check_result(
+            "project_overlays", not untracked,
+            ("all connected" if not untracked
+             else f"UNTRACKED in: {', '.join(untracked)} (a second machine's "
+             "clone carries no config)"),
+            fix="git add .wiki-overlay.md && git commit -m 'chore: track the fabric overlay' (per repo)"))
+    except Exception as e:
+        results.append(check_result("project_overlays", True, f"(check skipped: {e})"))
+
     # ---- report
     failures = [r for r in results if not r["passed"]]
     if args.json:

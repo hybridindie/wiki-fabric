@@ -1151,6 +1151,11 @@ case "${1:-help}" in
         fdir=$(find_fabric)
         run_script "${fdir}" "scripts/cmd/wiki-viz.py" "$@"
         ;;
+    overlay-track)
+        shift
+        fdir=$(find_fabric)
+        run_script "${fdir}" "scripts/cmd/overlay-track.py" "$@"
+        ;;
     remember)
         shift
         fdir=$(find_fabric)

@@ -127,6 +127,17 @@ You installed with `--extract-claims`; each drift commit runs an LLM call.
 Re-install without the flag for capture-only (0 tokens), ingest manually with
 `wf ingest --changed <slug> --extract-claims` when you want extraction.
 
+## Second machine has no project config after cloning
+
+The project's `.wiki-overlay.md` was never committed (bootstraps older than
+H4/#180 didn't track it). `wf doctor` names the repos; the fix:
+
+```bash
+wf overlay-track        # stages + commits every connected project's overlay
+```
+
+After the commit, push from each repo; clones carry the config from then on.
+
 ## Exit codes / project addressing
 
 ### `wf capture <slug>` (or `capture-git`, or `freshness`) exits 3 mentioning a connected list

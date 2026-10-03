@@ -308,6 +308,11 @@ def _wiki_generate(argv):
     return _run_script(find_fabric(), "scripts/cmd/wiki_generate.py", *argv)
 
 
+@verb("overlay-track")
+def _overlay_track(argv):
+    """Track connected projects' overlays in their repos (H4 sweep; dry-run first)."""
+    return _simple_script("scripts/cmd/overlay-track.py", argv)
+
 @verb("remember")
 def _remember(argv):
     """Friction-free memory note (S6): one line, 0 tokens; mining reads standing notes."""
@@ -899,6 +904,7 @@ _COMPLETION_SUBCOMMANDS = {
     "log": [],
     "export-viz": ["--out", "--dry-run"],
     "remember": ["--list", "--expire", "--kind", "--dry-run"],
+    "overlay-track": ["--dry-run"],
 }
 
 _COMPLETION_FLAG_HINTS = {

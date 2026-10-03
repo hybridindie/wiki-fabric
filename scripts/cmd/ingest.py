@@ -370,24 +370,57 @@ def reclaim_orphans(project_slug, dry_run=False):
 
 
 def find_changed_sources(project_slug):
-    """Return raw files that are NEW or CHANGED vs. their source records.
+    """Return raw files that are NEW or CHANGED vs. their OWN source record.
 
-    Compares each file under evidence/raw/<slug>/ against every sha256 recorded
-    in evidence/sources/. A file with no matching hash is new or changed.
-    """
+    The comparison is PER-RECORD (path-scoped), not a global hash pool: the
+    #180 audit surfaced the bug — harness install copies the SAME CLAUDE.md/
+    AGENTS.md into several repos (identical bytes = one shared sha256), so a
+    project's genuinely-drifted file looked 'unchanged' because ANOTHER
+    project's record carried the same hash. A raw file's record is
+    'src-<slug-of-its-relpath>.md' (the ingest naming contract) — compare
+    against THAT record's hash; a record-less file is NEW; a missing record
+    hash = changed. Falls back to the global pool ONLY when the per-record
+    lookup can't resolve (legacy records with drifted slugs)."""
     raw_dir = evidence_raw(root=VAULT_ROOT) / project_slug
     if not raw_dir.exists():
         return []
     known_hashes = set()
+    record_hash_by_path = {}
     sources_dir = sources(VAULT_ROOT)
     if sources_dir.exists():
         for rec in sources_dir.glob("src-*.md"):
-            m = re.search(r"sha256:\s*([a-f0-9]{64})", rec.read_text(encoding="utf-8", errors="replace"))
-            if m:
-                known_hashes.add(m.group(1))
+            text = rec.read_text(encoding="utf-8", errors="replace")
+            m = re.search(r"sha256:\s*([a-f0-9]{64})", text)
+            if not m:
+                continue
+            known_hashes.add(m.group(1))
+            sp = re.search(r"source_path:\s*(\S+)", text)
+            if sp:
+                record_hash_by_path[sp.group(1).strip()] = m.group(1)
     changed = []
     for f in sorted(raw_dir.rglob("*.md")):
-        if sha256(f) not in known_hashes:
+        rel = f.relative_to(VAULT_ROOT).as_posix()
+        rec_hash = record_hash_by_path.get(rel)
+        current = sha256(f)
+        if rec_hash is None:
+            # no record carries this path → legacy/global-pool fallback
+            # (raw files predating the path-stamped records; new files also
+            # land here — a raw file with NO record is new by definition, but
+            # the global pool catches same-content capture elsewhere)
+            if current not in known_hashes:
+                changed.append(f)
+            # else: some other project's record carries identical CONTENT
+            # while this path has no record of its own — treat as UNCHANGED
+            # (idempotence: content already ingested once) — the per-path
+            # record arrives on this project's next single-source ingest.
+            # Exception: an identical-content capture at a NEW path should be
+            # INGESTED (its slug differs) — only skip when a record for this
+            # project's prefix already claimed the content.
+            if current in known_hashes and not any(
+                    p.startswith(f"evidence/raw/{project_slug}/") for p in
+                    [k for k, h in record_hash_by_path.items() if h == current]):
+                changed.append(f)
+        elif rec_hash != current:
             changed.append(f)
     return changed
 
@@ -426,6 +459,27 @@ def ingest_source(source_path, extract_claims=False, model=None, dry_run=False, 
             print("  (anti-loop: unchanged sources are never re-ingested. If claims are "
                   "missing, run: wf ingest --pending <project> --extract-claims)")
             _record_json("skipped", source_path, reason="already-ingested", record=existing.name)
+            # H4-adjacent anti-loop refinement (#180 audit): when the SKIP
+            # matched a DIFFERENT project's record (identical harness-installed
+            # content across repos = one shared hash), the OWN record for THIS
+            # path still carries a stale hash → lint SOURCE-DRIFT fires
+            # forever. Same content, same locator semantics → refresh the own
+            # record's hash (a mechanical ledger update, not a re-ingest: the
+            # drift stamp (stale_mark_derived_claims, above) already ran
+            # against THIS path's drift).
+            try:
+                rel = source_path.relative_to(evidence_raw(VAULT_ROOT))
+                own_name = f"src-{slugify(rel.as_posix())}.md"
+                own = sources(VAULT_ROOT) / own_name
+                if own.exists() and own.resolve() != existing.resolve():
+                    own_text = own.read_text(encoding="utf-8", errors="replace")
+                    old_m = re.search(r"sha256:\s*([a-f0-9]{64})", own_text)
+                    if old_m and old_m.group(1) != file_hash:
+                        own_text = own_text.replace(old_m.group(1), file_hash, 1)
+                        own.write_text(own_text, encoding="utf-8")
+                        print(f"  (record hash refreshed: {own_name} {old_m.group(1)[:8]} -> {file_hash[:8]})")
+            except Exception:
+                pass  # best-effort ledger hygiene; the skip stands either way
             return False
 
     namespace = namespace or find_project_namespace(Path.cwd())
