@@ -3,7 +3,7 @@ type: index
 title: "Troubleshooting"
 description: "Common failure modes and fixes — backends, downloads, providers, hooks"
 created: 2026-09-19
-updated: 2026-09-27
+updated: 2026-10-03
 ---
 
 # Troubleshooting
@@ -126,6 +126,30 @@ wf hook status    # per-repo hook state
 You installed with `--extract-claims`; each drift commit runs an LLM call.
 Re-install without the flag for capture-only (0 tokens), ingest manually with
 `wf ingest --changed <slug> --extract-claims` when you want extraction.
+
+## Exit codes / project addressing
+
+### `wf capture <slug>` (or `capture-git`, or `freshness`) exits 3 mentioning a connected list
+
+The slug isn't a connected project — the old behavior (exit 0, clean-looking)
+was the bug (#167). The error prints the connected-project inventory and a
+closest-match hint:
+
+```bash
+wf projects        # the connected inventory (slug/path/route/captures)
+wf capture <the-exact-slug-from-the-list>
+```
+
+Underscore↔kebab differences still collide correctly (`comfyui_mcp` and
+`comfyui-mcp` address one identity through the canonical seam). If both
+spellings REALLY appear separately, you're mid-fork — `wf lint`'s IDENTITY
+gate names the collision.
+
+### freshness/hook "drift indistinguishable from success"
+
+Not anymore: capture-family exit 2 = drift, 3 = unknown slug; freshness
+0/1/2; gate 1 = actionable. The table lives in cli.md ("Exit-code
+contracts"); scripts (hooks, corpus CI) parse off it.
 
 ## Config & lint
 

@@ -90,6 +90,7 @@ export default withMermaid(defineConfig({
           { text: 'Skills (on-demand procedures)', link: '/skills' },
           { text: 'Upgrading wf', link: '/upgrading' },
           { text: 'CLI & Scripts', link: '/cli' },
+          { text: 'CI (what the pipelines prove)', link: '/ci' },
           { text: 'Corpus Layout', link: '/corpus-layout' },
           { text: 'Model Policy & Evals', link: '/evals' },
           { text: 'OKF v0.2 Conformance', link: '/okf' },

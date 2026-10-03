@@ -23,7 +23,9 @@ The lint report codes are stable: `FRONTMATTER`, `BROKEN-LINK`, `SCOPE`,
 `SOURCE-DRIFT`, `SOURCE-EMPTY`, `SYNC-CONFLICT`, `ORPHAN`, `LLM-CONFIG`, `GENERATED`,
 `STALE-AFTER`, `TRUST-TIER`, `IGNORE-CONFIG`, `VERIFIED`, `TYPE`, `PROPOSED-TYPE`,
 `RECEIPT`, `QUESTION`, `SLOW-REGION`, plus `LAYOUT-GUARD` (corpus path
-re-spelled outside `scripts/lib/layout.py`), `VOCABULARY` (a `domain:`
+re-spelled outside `scripts/lib/layout.py` — enforced at COMMIT time in the
+harness hook body v6, at test time by the full AST guard),
+`VOCABULARY` (a `domain:`
 declaration resolving to no ontology domain — the alias map is the binding),
 `IDENTITY` (canonical repo-slug collisions error; non-canonical namespace
 spellings advise), plus the OKF-floor `OKF-*` codes (`--okf` mode). The rest are structural — `FRONTMATTER`

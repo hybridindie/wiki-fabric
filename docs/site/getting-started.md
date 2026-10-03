@@ -80,6 +80,21 @@ All `wf` commands also work without any install — the scripts in `scripts/`
 run with plain `python3` from a clone (dev mode: a clone holding a
 `fabric.yaml` doubles as its own fabric).
 
+### Shell completions
+
+`wf <TAB>` completes 45 verbs, their subcommands (`wf mine chats|promotions`,
+`wf eval behavior|stability|…`, `wf sync resolve|commit-drift`, …) and common
+flags per verb:
+
+```bash
+eval "$(wf completions bash)"                               # bash: .bashrc
+wf completions zsh > "${fpath[1]}/_wf" && compinit          # zsh
+wf completions fish > ~/.config/fish/completions/wf.fish    # fish
+```
+
+Static generation — works offline, degrades to verb-only completion if
+something's missing. See [CLI & Scripts](./cli).
+
 ### Manual installs
 
 **Packaged (same as the recommended path — pick your extras):**

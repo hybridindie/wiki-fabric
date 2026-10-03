@@ -86,7 +86,7 @@ a claim about the system, each one verified:
 
 | Gate | What it proves |
 |------|----------------|
-| **Unit tests** (220+) | script logic: parsing, routing, discovery, merge |
+| **Unit tests** (860+) | script logic: parsing, routing, discovery, merge — plus the mechanical guards (layout single-truth, shim↔dispatch verb parity, exit contracts, statement-dump convention) |
 | **Smoke test** | the CLI works end-to-end in a throwaway fabric |
 | **Behavior eval** | the context manifest actually delivers the right knowledge (banned approaches named, correct alternatives present) — the P4 proof, zero-LLM |
 | **Stability eval** | deterministic operations are byte-deterministic (20 context runs identical; catalog identical across rebuilds) |

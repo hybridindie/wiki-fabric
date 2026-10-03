@@ -54,6 +54,7 @@ persistent memory layer.
 |------|---------|----------|-------|
 | Compile task context | `wf context --task "<task>"` | **0** | Deterministic manifest: claims, patterns, decisions, skills. Add `--write-receipt` to persist an auditable delivery record (receipt-v1) |
 | Answer a question | `wf query "<question>"` | **0** | Evidence-backed answer with locators |
+| Connected-repo inventory | `wf projects [--json]` | **0** | Slug/path/owner/route + capture counts + last-git-capture per repo |
 | Capture upstream docs | `wf capture <slug>` | 0 | Copies from source repos → `evidence/raw/` |
 | Ingest a source | `wf ingest <path> [--extract-claims]` | 1 call | Source record + summary + claims |
 | Detect drift | `graphify-bridge.py --diff` | 0 | Only when graphify integration is enabled |
@@ -146,6 +147,13 @@ content; fresh clones carry `.gitkeep`ed skeletons of the content dirs).
 - Tests marked `live` run real on-device models (GGUF/MLX); skip on slow
   machines with `pytest -m "not live"`. They self-skip when the model isn't
   cached or the platform lacks the backend.
+- Mechanical guards keep the surface honest (all deterministic, in the suite):
+  layout single-truth (corpus-path re-spells), shim↔dispatch verb parity,
+  exit-code contracts, statement-dump convention, user-hint drift. CI = same
+  gates: see `docs/site/ci.md`.
+- Shell completions live with the dispatch: `wf completions {bash|zsh|fish}`
+  generates from `VERBS` — verb/subcommand/flag surface additions must keep
+  both surfaces green (the parity test enforces it).
 
 See `README.md` for the full architecture, OKF conformance details, and
 the promotion pipeline narrative.

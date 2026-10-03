@@ -104,7 +104,7 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 | `wf freshness [--dry-run] [projects...]` | Scheduled upstream-freshness cycle (0 tokens): capture-git `--since-state` + mechanical auto-reverify per connected repo; scheduled on the corpus CI by `sync setup/init` (opt-in var `WIKI_FABRIC_FRESHNESS=1`); drift flags land in `wf gate`. Exit: 0 clean, 1 drift recorded, 2 hard failure (no fabric / unknown slug — the connected list names the fix) |
 | `wf thread <session-or-claim-id> [--stats] [--json]` | Evidence-graph thread lookup: claims citing the session/PR, files touched, continuation edges |
 | `wf log --project <slug> ...` | Log an experience event |
-| `wf hook {install\|uninstall\|status}` | Git post-commit auto-capture+ingest (`--extract-claims` for LLM on drift) |
+| `wf hook {install\|uninstall\|status\|reinstall}` | Git post-commit auto-capture+ingest (`--extract-claims` for LLM on drift). The commit body (v6) also runs the commit-time LAYOUT-GUARD on the harness repo's own scripts — a corpus-path re-spell fails the commit with the fix pointer, not at the next test run |
 | `wf claude legacy` | Pre-harness always-on installer (`always_on.py`; superseded by `wf harness install`) |
 | `wf okf export --out DIR [--scope S]` | Export the fabric as a deterministic portable OKF v0.2 bundle |
 | `wf okf import <bundle> [--scope S]` | Ingest an external OKF bundle as immutable evidence (trust recorded, not inherited) |
@@ -133,6 +133,8 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 | `wf mine promotions [--judge] [--min-projects N]` | Cluster experience events → promotion dossiers (deterministic, 0 tokens; `--judge` for the near-miss judgment tier) |
 | `wf promote-patterns {--list\|--apply <id>\|--reject <id> --reason}` | Human-gated apply/reject of chat-mined pattern candidates |
 | `wf version` | Show wf version + CLI sync state (installed `~/.local/bin/wf` vs harness script) |
+| `wf --version` / `wf -v` | Same version one-liner as a flag (packaged mode: version + harness root) |
+| `wf help <command>` | Per-verb help — routes to the underlying script's argparse (`wf help ingest` = `wf ingest --help`); unknown names get nearest-verb suggestions |
 | `wf repos migrate [--dry-run\|--apply\|--prune]` | Move per-repo routing from fabric.yaml into project overlays |
 | `wf lint [--okf] [--format json]` | Deterministic linter (full profile; `--okf` = OKF conformance floor; JSON for CI) |
 
@@ -154,6 +156,28 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 
 Mutations beyond `log` used to stay CLI-gated; the wiki-generation tools are
 the one deliberate extension — the writer/bookkeeper split (`#144`): the host
+
+## Exit-code contracts
+
+Hook/CI shell-outs key off these — the table is the contract (don't renumber
+without reading how consumers parse, test_shim_parity-style, first):
+
+| Verb / script | Code | Meaning |
+|---|---|---|
+| `wf capture` | 0 | nothing new |
+| | 2 | drift captured (hooks may trigger ingest) |
+| | 3 | unknown project slug (+ connected list, closest-match hint) |
+| | (1) | other errors (repo path missing) |
+| `wf capture --git` (capture-git) | 0 | nothing new |
+| | 2 | drift captured |
+| | 3 | unknown project slug (+ connected list) |
+| `wf freshness` | 0 | clean (no drift) |
+| | 1 | drift found + recorded (gate-worthy) |
+| | 2 | hard failure (no fabric, unknown slug) |
+| `wf gate` | 0 | nothing pending |
+| | 1 | actionable items want a human |
+| `wf models ensure --check` | 0/1 | model cached / needs download (script-friendly, no prompt) |
+| `wf review --verify-sources` | 0 | source lifecycle driven (refresh/stamp/expire counts reported) |
 agent writes prose, the MCP tool validates citations and reconciles claim
 deltas deterministically (the bookkeeper makes no model calls). Claude Code: `claude mcp add wf-mcp wf-mcp`; Claude Desktop/Cursor: stdio-server config pointing at `wf-mcp`.
 

@@ -56,9 +56,17 @@ wf gate                   # HITL queues + dark knowledge sources
 **Version-gating rules** (maintained by the harness):
 - `HOOK_VERSION` (scripts/harness/hooks.py) — **must bump on any hook-body
   change**; installed hooks compare the version line and skip matching
-  versions. v5 = canonical `WF_SLUG` fold.
+  versions. v5 = canonical `WF_SLUG` fold; v6 = commit-time LAYOUT-GUARD in
+  the commit body (harness-repo commits fail on corpus-path re-spells).
 - `wf status` reports `CLI: STALE` when the installed `wf` differs from the
   harness clone — dev-mode reminder that `wf update` is due.
+- Shim↔dispatch parity is mechanically locked (`tests/test_shim_parity.py`):
+  every verb the python dispatch registers must be dispatchable through the
+  bash shim (`scripts/wiki-fabric.sh`) — the class where `freshness` existed
+  only in one surface can't come back.
+- Exit-code contracts are pinned by tests + doc table (cli.md "Exit-code
+  contracts"): capture/capture-git `2 = drift, 3 = unknown slug`; freshness
+  `0/1/2`; gate `1 = actionable`. Consumers (hooks, corpus CI) parse these.
 - Package smoke (`scripts/pkg/wheel-smoke.sh`) runs before each release:
   packaged imports (the `_harness` lib tree), fabric-content leakage, and the
   shared-lib import shape. It caught the `0.4.0` packaged-layout
@@ -68,7 +76,10 @@ wf gate                   # HITL queues + dark knowledge sources
 
 Schemas move without migration scripts in places (alpha contract). Upgrade
 paths that DID ship a migration tool this cycle: `wf relocate-concepts` (physical domain homes), `wf repos migrate`
-(routing → overlays), and the deterministic `review --verify-sources` run
+(routing → overlays), `migrate-project-tree.py` (#158 S4 — canonicalize a
+raw-slug project tree: `projects/<raw>/`, `evidence/raw/<raw>/`,
+source-record paths, ee- frontmatter; deterministic, idempotent, dry-run
+first), and the deterministic `review --verify-sources` run
 (stamps `review_after` on pre-tier source records). After a major upgrade,
 run `wf lint` once: the new gates (VOCABULARY / IDENTITY / LAYOUT-GUARD)
 tell you exactly which legacy pages/configs need a decision — warnings
