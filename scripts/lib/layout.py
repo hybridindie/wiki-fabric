@@ -32,6 +32,7 @@ SEGMENTS = {
     "evidence_source_summaries": ("evidence", "source-summaries"),
     "evidence_claims": ("evidence", "claims"),
     "evidence_insights": ("evidence", "insights"),
+    "evidence_memory": ("evidence", "memory"),
     "evidence_traces": ("evidence", "traces"),
     "evidence_traces_change_sets": ("evidence", "traces", "change-sets"),
     "evidence_traces_wiki_runs": ("evidence", "traces", "wiki-runs"),
@@ -112,6 +113,7 @@ def sources(root=None):           return make(root, "evidence_sources")
 def source_summaries(root=None):  return make(root, "evidence_source_summaries")
 def claims(root=None):            return make(root, "evidence_claims")
 def insights(root=None):          return make(root, "evidence_insights")
+def memory(root=None):            return make(root, "evidence_memory")
 def change_sets(root=None):       return make(root, "evidence_traces_change_sets")
 def wiki_runs(root=None):         return make(root, "evidence_traces_wiki_runs")
 def evidence_inbox(root=None):    return make(root, "evidence_inbox")

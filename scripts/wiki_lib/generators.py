@@ -655,6 +655,26 @@ def _generate_project_article(project, config, dry_run=False, mode=None):
         lines += ["", "## Archived (stale)", ""]
         for cp, st in stale[:10]:
             lines.append(f"- {st[:120]}")
+    rows = _project_steering_outputs(project, rc, config)
+    lines += ["", "## Produces", "", "| Output | Kind | Source |", "|---|---|---|"] \
+        if rows["outputs"] else []
+    KIND_LABEL = {"pypi": "package", "npm": "package", "cli": "CLI", "service": "container service",
+                  "image": "container image", "docs": "generated docs", "mcp": "MCP server",
+                  "wiki": "wiki", "declared": "declared"}
+    for o in rows["outputs"][:14]:
+        lines.append(f"| {o['name']} | {KIND_LABEL.get(o.get('kind', ''), o.get('kind', ''))} | {o.get('source', '')} |")
+    if rows["decisions"]:
+        lines += ["", "## Binding decisions", ""]
+        for d in rows["decisions"][:10]:
+            lines.append(f"- {d}")
+    if rows["patterns"]:
+        lines += ["", "## Patterns (maturity ladder)", ""]
+        for st, label in rows["patterns"][:10]:
+            lines.append(f"- ({st}) {label}")
+    if rows["questions"]:
+        lines += ["", "## Open questions (molding targets)", ""]
+        for qid, q in rows["questions"][:8]:
+            lines.append(f"- {q} — review via `wf promote-questions --apply {qid}`")
     if footnotes:
         lines.append("")
         lines.append("---")
@@ -669,6 +689,147 @@ def _generate_project_article(project, config, dry_run=False, mode=None):
     if not dry_run:
         out_path.write_text(article, encoding="utf-8")
     return out_path, len(current)
+
+
+
+
+def _project_steering_outputs(project, rc, config):
+    """#177 S1+S2: the steering rows for one project page — outputs,
+    patterns, open questions, decisions; 0-token reads over the corpus +
+    the repo tree. Returns dict of render rows."""
+    rows = {"outputs": [], "patterns": [], "questions": [], "decisions": []}
+    repo_path = rc.get("path") or ""
+    repo = (fabric_config.FABRIC_ROOT / repo_path).resolve() if repo_path else None
+    try:
+        import outputs as _outputs
+        if repo and repo.is_dir():
+            fm, _ = __import__("wf_common").parse_frontmatter(repo / ".wiki-overlay.md") if (repo / ".wiki-overlay.md").exists() else ({}, "")
+            rows["outputs"] = _outputs.effective_outputs(repo, fm)
+    except Exception:
+        pass  # scanner unavailable → outputs section omitted (never load-bearing)
+    # patterns: candidates + recommended whose provenance/project touches repo
+    patterns = []
+    inbox = _layout.patterns(_corpus())
+    if inbox.is_dir():
+        for pf in sorted(inbox.glob("pattern-*.md")):
+            t = pf.read_text(encoding="utf-8", errors="replace")
+            m = re.search(r"^status: (\S+)$", t, re.M)
+            st = m.group(1) if m else "candidate"
+            if project in t or st in ("recommended", "standard"):
+                pt = re.search(r"^title: (.+)$", t, re.MULTILINE)
+                patterns.append((st, pt.group(1)[:90] if pt else pf.stem))
+    rows["patterns"] = patterns
+    # open questions (global + domain) — dashed module, importlib form
+    try:
+        import importlib as _ilu2
+        _pq = _ilu2.import_module("promote-questions")
+        qs = _pq.list_open_questions()
+        rows["questions"] = [(p.stem, str(fm.get("question") or fm.get("title") or "")[:90])
+                             for p, fm in qs if project in str(fm.get("project") or "") or project in p.stem]
+    except Exception:
+        pass
+    # decisions binding this project
+    ddir = _layout.projects(_corpus()) / project / "decisions"
+    if ddir.is_dir():
+        for d in sorted(ddir.glob("*.md")):
+            dm = re.search(r"^title: (.+)$", d.read_text(), re.MULTILINE)
+            rows["decisions"].append(dm.group(1)[:100] if dm else d.stem)
+    return rows
+
+
+def _render_outputs_section(rows):
+    """The Produces block (#177 S1): declared + observed in one table."""
+    if not rows["outputs"]:
+        return []
+    KIND_LABEL = {"pypi": "package", "npm": "package", "cli": "CLI", "service": "container service",
+                  "image": "container image", "docs": "generated docs", "mcp": "MCP server",
+                  "wiki": "wiki", "declared": "declared"}
+    lines = ["", "## Produces", "", "| Output | Kind | Source |", "|---|---|---|"]
+    for o in rows["outputs"][:14]:
+        lines.append(f"| {o['name']} | {KIND_LABEL.get(o.get('kind', ''), o.get('kind', ''))} | {o.get('source', '')} |")
+    return lines
+
+
+
+
+def _steering_rows():
+    """#177 S2 dashboard rows: decisions, patterns ladder, open questions,
+    commitments, pending promotions (escalated first), going-dark repos,
+    negative knowledge. 0-token corpus reads; absent planes render no row."""
+    import importlib as _ilu2
+    corpus = _corpus()
+    rows = []
+    # decisions
+    n_dec = 0
+    latest_dec = None
+    for ddir in sorted((_layout.projects(corpus)).glob("*/decisions")):
+        for d in sorted(ddir.glob("*.md")):
+            n_dec += 1
+            latest_dec = d
+    if n_dec:
+        t = re.search(r"^title: (.+)$", latest_dec.read_text(), re.MULTILINE) if latest_dec else None
+        rows.append(("📜", "Binding decisions", f"{n_dec} (latest: {t.group(1)[:70] if t else latest_dec.stem})"))
+    # patterns by maturity
+    promoted = recommended = candidates = 0
+    pdir = _layout.patterns(corpus)
+    if pdir.is_dir():
+        for pf in pdir.glob("pattern-*.md"):
+            if "_inbox" in pf.parts:
+                continue
+            st = re.search(r"^status: (\S+)$", pf.read_text(), re.M)
+            st = (st.group(1) if st else "candidate")
+            if st in ("standard",): promoted += 1
+            elif st in ("recommended",): recommended += 1
+            else: candidates += 1
+        if promoted or recommended or candidates:
+            rows.append(("📐", "Patterns", f"{promoted} standard, {recommended} recommended, {candidates} candidate"))
+    # open questions
+    try:
+        pq = _ilu2.import_module("promote-questions")
+        qs = pq.list_open_questions()
+        if qs:
+            rows.append(("❓", "Open questions", f"{len(qs)} awaiting answers — the molding targets"))
+    except Exception:
+        pass
+    # due commitments
+    n_commit = 0
+    for cdir in (_layout.projects(corpus)).glob("*/commitments"):
+        n_commit += len(list(cdir.glob("*.md"))) if cdir.is_dir() else 0
+    if n_commit:
+        rows.append(("⏳", "Commitments", f"{n_commit} deferred obligation(s) (context surfaces them by trigger)"))
+    # pending promotions (escalated first)
+    try:
+        prom = _ilu2.import_module("promote")
+        dossiers = prom.list_pending_promotions()
+        if dossiers:
+            rows.append(("◆", "Pending promotions", f"{len(dossiers)} dossier(s) — review: wf promote --list"))
+    except Exception:
+        pass
+    # knowledge sources going dark (info tier)
+    try:
+        gate_mod = _ilu2.import_module("gate")
+        rows_dark = gate_mod._gate_contributions()
+        dark = [r for r in (rows_dark[1] or []) if r.get("stale_days") is not None]
+        if dark:
+            names = ", ".join(r["project"] for r in dark[:3])
+            rows.append(("🌑", "Knowledge sources going dark", f"{len(dark)} project(s) — {names}"))
+    except Exception:
+        pass
+    return rows
+
+
+def _research_pages():
+    """#177 S3: the research plane's pages — syntheses (spike notes) +
+    non-project claims' sources. Ordered by date, newest first. Returns
+    [{slug, title}]."""
+    corpus = _corpus()
+    syn = _layout.syntheses(corpus)
+    out = []
+    if syn.is_dir():
+        for p in sorted(syn.glob("*.md"), reverse=True):
+            t = re.search(r"^title: (.+)$", p.read_text(encoding="utf-8", errors="replace"), re.MULTILINE)
+            out.append({"slug": p.stem, "title": (t.group(1) if t else p.stem)[:90]})
+    return out
 
 
 def _generate_index(topics, projects, dry_run=False):
@@ -697,6 +858,26 @@ def _generate_index(topics, projects, dry_run=False):
     lines += ["", "## Projects", ""]
     for p in projects:
         lines.append(f"- [[{p[0]}]] — {p[0]} ({p[1]} claims)")
+
+    # === Steering dashboard (#177 S2): where the project stands + where a
+    # human is asked to mold it. Every row derives from a corpus plane; the
+    # section is ABSENT when the plane is empty (never decorative). ===
+    steering = _steering_rows()
+    if steering:
+        lines.append("")
+        lines.append("## Where the project stands")
+        lines.append("")
+        for icon, label, detail in steering:
+            lines.append(f"- {icon} {label}: {detail}")
+
+    # === Research index (#177 S3): the non-project-anchored plane ===
+    research = _research_pages()
+    if research:
+        lines.append("")
+        lines.append("## Research")
+        lines.append("")
+        for r in research:
+            lines.append(f"- [[{r['slug']}]] — {r['title']}")
     lines += ["", f"_Generated by `wf export wiki` on {TODAY.isoformat()}._"]
     out = _wiki_root() / "index.md"
     out.parent.mkdir(parents=True, exist_ok=True)

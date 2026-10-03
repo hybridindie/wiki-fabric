@@ -11,7 +11,7 @@ Per-type required fields. A page lacking required fields fails `scripts/cmd/lint
 
 | Field | Type | Notes |
 |---|---|---|
-| `type` | enum | one of: `source`, `source-summary`, `claim`, `concept`, `question`, `synthesis`, `decision`, `experience-event`, `commitment`, `pattern`, `anti-pattern`, `experiment`, `change-set`, `promotion-dossier`, `ontology`, `registry`, `index`, `log` |
+| `type` | enum | one of: `source`, `source-summary`, `claim`, `concept`, `question`, `synthesis`, `decision`, `experience-event`, `commitment`, `pattern`, `anti-pattern`, `experiment`, `change-set`, `promotion-dossier`, `ontology`, `registry`, `index`, `log`, `memory-note` |
 | `title` | string | human-readable |
 | `description` | string | **OKF-recommended.** One-line summary for index entries, search snippets, previews. Present on ALL types. |
 | `tags` | list[string] | **OKF-recommended.** Cross-cutting categorization, lowercase kebab-case. |
@@ -123,6 +123,23 @@ Capture-specific source kinds:
 | `evidence` | list of `[[src-...]]` |
 | `lineage` | free text describing the source lineage (for the independence rule) |
 | `receipt` | optional `receipt-<id>` — the context delivery receipt that informed this work (#87: receipt ↔ outcome linkage; provenance only) |
+
+## `memory-note` (#177 S6)
+
+The friction-free intake (the auto-memory lesson): one line, 0 tokens, no
+claim-grade ceremony. EPHEMERAL — expires is the lifecycle (deleted past
+expiry by `remember --expire`/the freshness sweep); mining reads standing
+notes as INPUT (a repeated note → promotion candidate). NOT evidence;
+never cited by claims.
+
+| Field | Notes |
+|---|---|
+| `project` | the canonical project slug |
+| `kind` | `feedback` (corrections, 45d) / `project` (mid-flight state, 30d) / `user` (operator preferences, 90d) / `reference` (pointers, 90d) |
+| `note` | the one-line content (title carries `note[:120]`) |
+| `lineage` | the project (default) — mining's independence rule applies unchanged |
+| `expires` | YYYY-MM-DD — the ephemeral contract |
+| status | (none — presence IS standing; expiry deletes) |
 
 ## `commitment`
 

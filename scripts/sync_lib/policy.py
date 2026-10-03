@@ -16,7 +16,7 @@ ATOM_PATHS = _pfx("evidence_claims", "concepts", "patterns", "anti_patterns",
                   "questions")
 EVIDENCE_PATHS = _pfx("evidence_raw", "evidence_sources", "evidence_source_summaries",
                       "evidence_experiments", "evidence_traces", "evidence_inbox",
-                      "evidence_insights")
+                      "evidence_insights", "evidence_memory")
 REGISTRY_PATHS = _pfx("registry")
 
 

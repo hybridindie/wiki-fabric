@@ -267,6 +267,12 @@ wf log --project my-project \
 # List projects + event counts
 wf log --list
 
+# Friction-free memory notes (S6): corrections/preferences mid-session, no ceremony.
+# Mining reads them — a repeated note becomes a promotion candidate.
+wf remember my-project --note "never edit whitelists without reading the guard" --kind feedback
+wf remember --list           # standing notes
+wf remember --expire         # the ephemeral sweep (30-90d by kind)
+
 # Mine for cross-project patterns
 wf mine promotions --dry-run
 wf mine promotions

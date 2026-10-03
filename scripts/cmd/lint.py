@@ -42,7 +42,7 @@ VALID_TYPES = {
      "source", "source-summary", "claim", "concept", "question", "synthesis",
      "decision", "experience-event", "pattern", "anti-pattern", "experiment",
      "change-set", "change-set-diff", "promotion-dossier", "ontology", "registry", "index", "log",
-     "skill", "commitment",
+     "skill", "commitment", "memory-note",
      "attested-computation", "wiki-article", "rejection-tombstone",
      "eval-fixture",
 }

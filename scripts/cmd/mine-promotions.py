@@ -284,6 +284,38 @@ def extract_experience_events():
     return events
 
 
+def extract_memory_notes():
+    """"#177 S6: standing memory notes as mining INPUT (the friction-free
+    intake — a note repeated across projects/sessions becomes a promotion
+    candidate without ever costing ceremony). Notes join the event stream
+    as experience-shaped dicts (observed_problem = the note); expired notes
+    are excluded (remember.py expire owns deletion; reads stay live-only)."""
+    from datetime import date as _date
+    mem = layout.memory(VAULT_ROOT)
+    if not mem.is_dir():
+        return []
+    today = _date.today()
+    events = []
+    for f in sorted(mem.glob("mn-*.md")):
+        fm, _ = parse_frontmatter(f)
+        if fm.get("type") != "memory-note":
+            continue
+        raw = str(fm.get("expires") or "")[:10]
+        try:
+            if _date.fromisoformat(raw) < today:
+                continue  # expired → not mining input
+        except Exception:
+            continue
+        note = str(fm.get("note") or fm.get("title") or "")
+        events.append({**fm,
+                       "observed_problem": note,
+                       "intervention": fm.get("intervention", ""),
+                       "outcomes": fm.get("outcomes", {}),
+                       "_file": f,
+                       "_memory_note": True})
+    return events
+
+
 def parse_frontmatter(path):
     text = path.read_text(encoding="utf-8", errors="replace")
     m = re.match(r"^---\n(.*?)\n---\n(.*)$", text, re.DOTALL)
@@ -829,8 +861,10 @@ def main():
     
     print(f"Mining promotions (min projects: {MIN_PROJECTS}, embeddings: {args.use_embeddings})...")
     
-    events = extract_experience_events()
-    print(f"Found {len(events)} experience events")
+    events = extract_experience_events() + extract_memory_notes()
+    n_notes = len([e for e in events if e.get("_memory_note")])
+    print(f"Found {len(events)} experience events"
+          + (f" (+{n_notes} standing memory notes)" if n_notes else ""))
 
     # Judgment tier selection (#29): automatic when integrations.judgment is
     # enabled in fabric.yaml (the tier is ON → the miner uses it for near-miss

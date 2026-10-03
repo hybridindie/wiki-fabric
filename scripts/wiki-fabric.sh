@@ -964,7 +964,7 @@ cmd_bootstrap() {
 # the documented first step. An installed `wf` parses normally.
 if [[ "${BASH_SOURCE[0]:-}" != "${0:-}" ]]; then
     case "${1:-}" in
-        install|help|update|status|version|vault|bootstrap|capture|ingest|query|context|log|models|sync|hook|claude|harness|review|promote|promote-patterns|export|mine|lint|integrations|okf|doctor|thread|rebuild-index|relocate-concepts|"") ;;
+        install|help|update|status|version|vault|bootstrap|capture|ingest|query|context|log|remember|export-viz|models|sync|hook|claude|harness|review|promote|promote-patterns|export|mine|lint|integrations|okf|doctor|thread|rebuild-index|relocate-concepts|"") ;;
         *) set -- install "$@" ;;
     esac
     if [[ $# -eq 0 ]]; then
@@ -1145,6 +1145,16 @@ case "${1:-help}" in
                 exit 1
                 ;;
         esac
+        ;;
+    export-viz)
+        shift
+        fdir=$(find_fabric)
+        run_script "${fdir}" "scripts/cmd/wiki-viz.py" "$@"
+        ;;
+    remember)
+        shift
+        fdir=$(find_fabric)
+        run_script "${fdir}" "scripts/cmd/remember.py" "$@"
         ;;
     log)
         shift

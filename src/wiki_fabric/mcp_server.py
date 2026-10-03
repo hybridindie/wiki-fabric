@@ -59,6 +59,42 @@ except Exception:
         raise FileNotFoundError(rel)
 
 
+
+
+def _wiki_read(page: str, max_bytes: int = 60_000) -> str:
+    """Read one wiki page (S4): the vault's wiki root via the #152 resolver
+    (the layout-aware default the status/vault verb names). Path-safe: only
+    files under wiki/ resolve."""
+    _lib = _script("scripts/lib").parent  # scripts/lib dir
+    sys.path.insert(0, str(_lib))
+    try:
+        import paths as _paths
+        fabric = (_paths.env_fabric_root() or _paths.walk_for_fabric(Path.cwd())
+                  or _paths.sibling_vault_of(_paths.HARNESS_ROOT
+                                             if hasattr(_paths, "HARNESS_ROOT") else
+                                             Path(__file__).resolve().parent)
+                  or _paths.xdg_fabric_root())
+        if fabric is None:
+            return "wiki_read: no fabric found (set WIKI_FABRIC_DIR)"
+        wiki = Path(fabric) / "corpus" / "wiki"
+        if not wiki.is_dir():
+            wiki = Path(fabric) / "wiki"  # legacy flat layout
+        if not wiki.is_dir():
+            return "wiki_read: no generated wiki (run: wf export wiki)"
+        target = (wiki / page).resolve()
+        if not str(target).startswith(str(wiki.resolve())):
+            return "wiki_read: path escapes the wiki tree (refused)"
+        if not target.exists():
+            # stem-tolerant search: wiki_search results carry stems
+            cands = list(wiki.rglob(f"{page}*.md"))
+            if not cands:
+                return f"wiki_read: no such page: {page}"
+            target = cands[0]
+        return target.read_text(encoding="utf-8", errors="replace")[:max_bytes]
+    except Exception as e:
+        return f"wiki_read failed: {e}"
+
+
 def _run_script(rel: str, *args: str, timeout: int = 120) -> str:
     """Run a shipped script with the current interpreter — what `wf` does."""
     script = _script(rel)
@@ -116,6 +152,27 @@ TOOLS = [
                 "id": {"type": "string", "description": "Session id, PR number, or capture file stem"},
                 "stats": {"type": "boolean", "description": "Index inventory instead of a lookup"},
             },
+        },
+    ),
+    types.Tool(
+        name="wiki_search",
+        description="Search the generated WIKI surface (0 tokens, local): compact ranked results over wiki pages + their claims — use for concrete questions; wiki_read for the sections you select. The human layer, agent-navigable (#177 S4).",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "The question (ranked by the fabric's lexical+graph engine)"},
+                "max": {"type": "integer", "description": "Max results (default 8)"},
+            },
+            "required": ["query"],
+        },
+    ),
+    types.Tool(
+        name="wiki_read",
+        description="Read a wiki page's content (0 tokens, local): the full markdown (wiki_search's results name the pages).",
+        inputSchema={
+            "type": "object",
+            "properties": {"page": {"type": "string", "description": "Wiki page path (from wiki_search results)"}},
+            "required": ["page"],
         },
     ),
     types.Tool(
@@ -223,6 +280,15 @@ def _call_tool(name: str, arguments: dict) -> str:
         if len(argv) % 2 == 0:  # no --project/--problem pair
             return "error: project and problem are required"
         return _run_script(*argv)
+    if name == "wiki_search":
+        q = args["query"]
+        r = _run_script("scripts/cmd/query.py", q, "--no-rerank")
+        return [types.TextContent(type="text", text=str(r))] if r else []
+    if name == "wiki_read":
+        page = str(args["page"])
+        # the wiki root (the harness's vault resolver, #152 single truth)
+        out = _wiki_read(page)
+        return [types.TextContent(type="text", text=out)]
     if name == "wiki_begin":
         argv = ["scripts/cmd/wiki_generate.py", "begin"]
         if args.get("project"):

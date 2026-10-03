@@ -285,6 +285,11 @@ def _utility(argv):
     return _run_script(find_fabric(), "scripts/cmd/utility.py", *argv)
 
 
+@verb("export-viz")
+def _export_viz(argv):
+    """Static wiki-graph viewer export (S5): self-contained, static-host ready."""
+    return _simple_script("scripts/cmd/wiki-viz.py", argv)
+
 @verb("publish")
 def _publish(argv):
     """Publish the generated wiki to the vault output (publish-wiki)."""
@@ -302,6 +307,11 @@ def _wiki_generate(argv):
     """Generate the wiki tree (mechanical|llm|hybrid modes)."""
     return _run_script(find_fabric(), "scripts/cmd/wiki_generate.py", *argv)
 
+
+@verb("remember")
+def _remember(argv):
+    """Friction-free memory note (S6): one line, 0 tokens; mining reads standing notes."""
+    return _simple_script("scripts/cmd/remember.py", argv)
 
 @verb("log")
 def _log(argv):
@@ -887,6 +897,8 @@ _COMPLETION_SUBCOMMANDS = {
     "projects": ["--json"],
     "skill": ["--list", "ingest", "promote", "refresh"],
     "log": [],
+    "export-viz": ["--out", "--dry-run"],
+    "remember": ["--list", "--expire", "--kind", "--dry-run"],
 }
 
 _COMPLETION_FLAG_HINTS = {
