@@ -170,11 +170,132 @@ def write_insight_page(transcript_path, takeaways, dry_run=False, project=None):
     return out, len(durable), len(maybe), len(transient)
 
 
+_KW_RE = re.compile(r"\b[a-z]{3,}\b")
+# the near-miss band mirrors mine-promotions' philosophy: EXACT-dup (== id)
+# handled by hash; zero-overlap pairs can't be the same take — only pairs in
+# 0 < sim < NEAR_MISS_MAX do the judgment make sense for (similarity near 1.0
+# is already near-identical text; leave to the human).
+NEAR_MISS_MIN = 0.15
+NEAR_MISS_MAX = 0.75
+
+
+def _kw_set(text):
+    return set(_KW_RE.findall(text.lower()))
+
+
+def _jaccard(a, b):
+    i, u = len(a & b), len(a | b)
+    return (i / u) if u else 0.0
+
+
+def _refine_near_miss(statement, kind, out_dir, dry_run=False, project=None, transcript_stem=None):
+    """Judge a new takeaway against the EXISTING same-kind inbox candidates
+    whose keyword Jaccard lands in the near-miss band (#173).
+
+    Judged-SAME → merge into the existing candidate: provenance gains this
+    transcript's source line, the body keeps the original statement (the
+    candidate is the unit of review) and the merged takeaways note records
+    the second phrasing. Returns the merged dest path.
+    Judged-DIFFERENT → None (caller stages separately — normal flow).
+    Tier unavailable / G-J refused → None + a loud print (keyword behavior
+    byte-identical to the pre-#173 flow).
+
+    Routing: the pair's repo (project) threads the per-repo judgment seam;
+    the G-J gate is checked for that repo's judge identity."""
+    try:
+        from judgment import (same_recurrence, judgment_eval_recorded,
+                              JudgmentUnavailable)
+    except ImportError:
+        return None
+    from wf_common import norm as _norm
+    new_kw = _kw_set(_norm(statement))
+    try:
+        existing = sorted(out_dir.glob(f"{kind}-chat-*.md"))
+    except OSError:
+        return None
+    for ex in existing:
+        ex_text = ex.read_text(encoding="utf-8", errors="replace")
+        # the comparison surface is the CANDIDATE STATEMENT (title + body head
+        # before the mined-from boilerplate) — comparing against the whole
+        # file diluted the keyword set with template prose and pushed real
+        # paraphrases under the band (found in test, #173)
+        body = ex_text.split("---", 2)[-1]
+        cand_stmt = body.split("**Mined from:**")[0].strip()
+        cand_stmt = re.sub(r"^#\s+\S+.*$", "", cand_stmt, flags=re.M).strip()
+        sim = _jaccard(new_kw, _kw_set(_norm(cand_stmt)))
+        if not (NEAR_MISS_MIN <= sim <= NEAR_MISS_MAX):
+            continue
+        try:
+            ok, why = judgment_eval_recorded()
+        except Exception as e:
+            ok, why = False, f"gate check failed: {e}"
+        if not ok:
+            print(f"  judgment gate (G-J) not satisfied — near-miss merge skipped: {why}")
+            return None
+        try:
+            same, p = same_recurrence(statement, cand_stmt,
+                                      repo=project, context="both are chat-mined takeaways from sessions in the same project")
+        except JudgmentUnavailable as e:
+            print(f"  judgment tier unavailable — near-miss merge skipped: {str(e)[:80]}")
+            return None
+        if not same:
+            print(f"  judged near-miss p={p:.2f} -> keep separate ({ex.stem})")
+            continue
+        if dry_run:
+            print(f"  [DRY] judged near-miss p={p:.2f} -> merge into {ex.stem}")
+            return ex
+        _merge_into(ex, statement, source_stem_for(project, transcript_stem), p)
+        print(f"  judged near-miss p={p:.2f} -> MERGED into {ex.stem} (provenance +1)")
+        return ex
+    return None
+
+
+def source_stem_for(project, transcript_stem):
+    from wf_common import slugify as _slugify
+    return _slugify(f"{project}/chats/{transcript_stem or 'session'}")
+
+
+def _merge_into(dest, statement, source_stem, prob):
+    """Merge a judged-same paraphrase into an existing candidate: provenance
+    gains the new source line + judgment record; the body notes the second
+    phrasing (deterministic frontmatter edit, 0 tokens)."""
+    text = dest.read_text(encoding="utf-8", errors="replace")
+    fm_end = text.index("\n---", 4)
+    fm = text[4:fm_end]
+    lines = fm.splitlines()
+    # the provenance block: 'provenance:' through the last 2-space-indented
+    # entry (or blank); insert the new source BEFORE the next top-level key
+    pstart = next((i for i, l in enumerate(lines) if l.startswith("provenance:")), None)
+    prov_line = (f'  - source: "[[{source_stem}]]"\n'
+                 f'    locator: "session transcript"\n'
+                 f'    quote: {yaml_scalar(statement[:120])}\n'
+                 f'    judged: "near-miss merged p={prob:.2f}"')
+    if pstart is None:
+        lines += ["provenance:", prov_line]
+    else:
+        pend = pstart + 1
+        while pend < len(lines) and (lines[pend].startswith("  ") or not lines[pend].strip()):
+            pend += 1
+        lines = lines[:pend] + [prov_line] + lines[pend:]
+    new_fm = "\n".join(lines)
+    text = f"---{new_fm}---\n" + text[fm_end + 4:]
+    # body note
+    text = text.rstrip() + (f"\n\n**Merged (judged) phrasing** (p={prob:.2f}, "
+                            f"[[{source_stem}]]): {statement}\n")
+    dest.write_text(text, encoding="utf-8")
+
+
 def propose_candidates(transcript_path, takeaways, dry_run=False, project=None):
     """#89: durable pattern/anti-pattern takeaways → staged candidates in
     patterns/_inbox/ with provenance (source chat, session) in frontmatter.
     NOTHING is auto-promoted: candidates wait for the human gate (surfaced
-    by wf gate via promote-patterns.list_pending)."""
+    by wf gate via promote-patterns.list_pending).
+    Judgement refines BEFORE staging (#173): near-miss takeaways (this
+    transcript vs PRIOR staged candidates) get a same_recurrence verdict —
+    judged-same merges into the existing candidate (provenance gains the
+    second source), judged-different stages separately. The G-J gate
+    (judgment_eval_recorded) routes the seam per project; an uncalibrated
+    judge = keyword behavior unchanged (loud)."""
     import hashlib
     from datetime import date
     out_dir = layout.patterns_inbox(CORPUS_ROOT)
@@ -192,6 +313,17 @@ def propose_candidates(transcript_path, takeaways, dry_run=False, project=None):
         dest = out_dir / f"{cid}.md"
         if dest.exists():
             continue  # idempotent: same statement never duplicated
+
+        # --- judged near-miss refinement (#173) -------------------------
+        # keyword near-miss vs the EXISTING inbox (same kind): an exact-hash
+        # match never reaches here, but paraphrases did — those are the class
+        # the judgment tier exists to merge. G-J gated; per-repo seam.
+        merged = _refine_near_miss(statement, kind, out_dir, dry_run=dry_run,
+                                   project=project, transcript_stem=transcript_path.stem)
+        if merged is not None:
+            proposed += 1
+            continue
+
         if dry_run:
             print(f"  [DRY] would propose {cid}")
             proposed += 1
