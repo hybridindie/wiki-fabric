@@ -37,7 +37,8 @@ def _git_repo(tmp_path, name, with_overlay=True, commit_overlay=False):
                         "user.name=t", "commit", "-qm", "seed"], check=True)
     elif not commit_overlay:
         subprocess.run(["git", "-C", str(repo), "add", ".gitignore"], check=True)
-        subprocess.run(["git", "-C", str(repo), "commit", "-qm", "seed"], check=True)
+        subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@t", "-c",
+                        "user.name=t", "commit", "-qm", "seed"], check=True)
     return repo
 
 
