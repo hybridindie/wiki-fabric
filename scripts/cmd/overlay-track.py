@@ -30,7 +30,8 @@ def stage_overlay(repo: Path, dry_run: bool):
     subprocess.run(["git", "-C", str(repo), "add", "--", ".wiki-overlay.md"],
                    check=False, timeout=15)
     commit = subprocess.run(
-        ["git", "-C", str(repo), "commit", "-m",
+        ["git", "-C", str(repo), "-c", "user.name=wiki-fabric", "-c", "user.email=wf@corpus.local",
+         "commit", "-m",
          "chore: track .wiki-overlay.md (the fabric config travels with the repo — H4/#180)"],
         capture_output=True, text=True, timeout=30)
     return "committed" if commit.returncode == 0 else "staged"

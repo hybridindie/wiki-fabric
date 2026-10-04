@@ -112,7 +112,12 @@ def subprocess_git_add_commit(repo, target, canonical_name):
     import subprocess
     subprocess.run(["git", "-C", str(repo), "add", "--", str(target.relative_to(repo))],
                    capture_output=True)
-    subprocess.run(["git", "-C", str(repo), "commit", "-m",
+    # runner-safe identity: CI runners carry no global git user (the seed-
+    # test class); the -c flags ride without breaking user-local config
+    # (git prefers the -c values when the environment has none)
+    subprocess.run(["git", "-C", str(repo),
+                    "-c", "user.name=wiki-fabric", "-c", "user.email=wf@corpus.local",
+                    "commit", "-m",
                     f"chore: rule promoted to wiki-fabric corpus ({canonical_name}) — this file is a pointer now"],
                    capture_output=True)
 

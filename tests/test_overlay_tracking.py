@@ -31,8 +31,10 @@ def _git_repo(tmp_path, name, with_overlay=True, commit_overlay=False):
             f"---\nproject: {name}\nnamespace: {name}\n---\n\n# {name}\n")
     (repo / ".gitignore").write_text("secrets.env\n")
     if with_overlay and commit_overlay:
-        subprocess.run(["git", "-C", str(repo), "add", ".wiki-overlay.md"], check=True)
-        subprocess.run(["git", "-C", str(repo), "commit", "-qm", "seed"], check=True)
+        (repo / ".gitignore").write_text("secrets.env\n")
+        subprocess.run(["git", "-C", str(repo), "add", ".gitignore", ".wiki-overlay.md"], check=True)
+        subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@t", "-c",
+                        "user.name=t", "commit", "-qm", "seed"], check=True)
     elif not commit_overlay:
         subprocess.run(["git", "-C", str(repo), "add", ".gitignore"], check=True)
         subprocess.run(["git", "-C", str(repo), "commit", "-qm", "seed"], check=True)

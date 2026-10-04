@@ -602,7 +602,9 @@ def _stage_overlay_git(args, repo_root=None):
         return  # already tracked — nothing to do
     subprocess.run(["git", "-C", str(_root), "add", "--", ".wiki-overlay.md"], check=False)
     commit = subprocess.run(
-        ["git", "-C", str(_root), "commit", "-m",
+        ["git", "-C", str(_root),
+         "-c", "user.name=wiki-fabric", "-c", "user.email=wf@corpus.local",
+         "commit", "-m",
          "chore: track .wiki-overlay.md (the fabric config travels with the repo — H4)"],
         capture_output=True, text=True)
     if commit.returncode == 0:
