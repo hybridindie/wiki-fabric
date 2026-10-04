@@ -50,8 +50,25 @@ def _target(path_arg: str | None, user: bool) -> Path:
     return Path("AGENTS.md")
 
 
-def _block_text() -> str:
-    return f"{MARKER_START}\n{_BLOCK_TEMPLATE.strip()}\n{MARKER_END}"
+def _cwd_project_slug():
+    try:
+        from wf_common import parse_frontmatter as _pf
+        from pathlib import Path as _P
+        for name in (".wiki-overlay.md",):
+            p = _P.cwd() / name
+            if p.exists():
+                fm, _ = _pf(p)
+                return str(fm.get("namespace") or fm.get("project") or "") or None
+    except Exception:
+        pass
+    return None
+
+
+def _block_text(project=None) -> str:
+    base = f"{MARKER_START}\n{_BLOCK_TEMPLATE.strip()}\n{MARKER_END}"
+    proj = project or (_cwd_project_slug() if "standing_rules_block" in globals() else None)
+    rules = standing_rules_block(proj) if "standing_rules_block" in globals() else ""
+    return base + ("\n\n" + rules if rules else "")
 
 
 def _has_marker(content: str) -> bool:
@@ -134,3 +151,68 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# === Standing rules (#178-A): the corpus's promoted rules rendered in the
+# managed block — the multi-project parity layer (rendered, source-linked,
+# regenerated on every install/update; ABSENT when nothing qualifies) =======
+
+RULES_MARKER_START = "<!-- wiki-fabric-rules-start -->"
+RULES_MARKER_END = "<!-- wiki-fabric-rules-end -->"
+
+
+def standing_rules_block(project=None, corpus_root=None):
+    """The corpus's PROMOTED patterns (maturity >= recommended) + due
+    commitments, rendered into a managed marker block. Deterministic (render
+    joins, 0 tokens); the corpus is the single truth; absent when nothing
+    qualifies. Every rule carries its source page (agents cite provenance)."""
+    import re as _re
+    try:
+        from wf_common import parse_frontmatter as _pf
+        import layout as _lay
+        from fabric_config import CORPUS_ROOT as _c, get_repo_config as _rconf
+        corpus = corpus_root or _c
+        patterns_dir = _lay.patterns(corpus)
+        rules = []
+        if patterns_dir.is_dir():
+            for pf in sorted(patterns_dir.glob("pattern-*.md")):
+                text = pf.read_text(encoding="utf-8", errors="replace")
+                st_m = _re.search(r"^status: (\S+)$", text, _re.M)
+                st = (st_m.group(1) if st_m else "candidate")
+                if st not in ("recommended", "standard"):
+                    continue  # promoted set only (candidates stay pull-only)
+                t_m = _re.search(r"^title: (.+)$", text, _re.M)
+                title = (t_m.group(1).strip() if t_m else pf.stem)
+                scope_m = _re.search(r"^project: (\S+)$", text, _re.M)
+                if scope_m and project and scope_m.group(1) != project:
+                    continue  # project-scoped elsewhere
+                rules.append((pf.stem, title, st))
+        lines = []
+        if rules:
+            lines += ["", "## Standing rules (wiki-fabric corpus)", ""]
+            for stem, title, st in rules[:10]:
+                lines.append(f"- **{title}** `[{st}]` — source: `{stem}` "
+                             "(the pattern page is the truth; this file regenerates)")
+        # due commitments (prospective memory, compact)
+        try:
+            shown = 0
+            total = 0
+            for cdir in sorted((_lay.projects(corpus)).glob("*/commitments")):
+                if not cdir.is_dir():
+                    continue
+                for cm in sorted(cdir.glob("*.md")):
+                    cfm, _ = _pf(cm)
+                    if str(cfm.get("status") or "open").lower() not in ("open", "", "none"):
+                        continue
+                    total += 1
+                    if shown < 3:
+                        lines.append(f"- ⏳ commitment: {str(cfm.get('title') or cm.stem)[:80]} — [[{cm.stem}]]")
+                        shown += 1
+            if total > shown:
+                lines.append(f"- ⏳ +{total - shown} more open commitments — surfaces in `wf context` by trigger")
+        except Exception:
+            pass
+        if not lines:
+            return ""
+        return f"{RULES_MARKER_START}\n" + "\n".join(lines) + f"\n{RULES_MARKER_END}"
+    except Exception:
+        return ""  # the corpus's absence never breaks the install flow

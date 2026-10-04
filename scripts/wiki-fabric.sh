@@ -1156,6 +1156,16 @@ case "${1:-help}" in
         fdir=$(find_fabric)
         run_script "${fdir}" "scripts/cmd/overlay-track.py" "$@"
         ;;
+    rules)
+        shift
+        fdir=$(find_fabric)
+        _sub="${1:-}"; shift 2>/dev/null || true
+        case "${_sub}" in
+            harvest) run_script "${fdir}" "scripts/cmd/rules.py" harvest "$@" ;;
+            export) run_script "${fdir}" "scripts/cmd/rules.py" export "$@" ;;
+            *) err "Usage: ${SCRIPT_NAME} rules {harvest <project> [--dry-run] | export --for <project>}"; exit 1 ;;
+        esac
+        ;;
     remember)
         shift
         fdir=$(find_fabric)

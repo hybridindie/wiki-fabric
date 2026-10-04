@@ -273,7 +273,11 @@ def _config_fingerprint():
     env_sig = "|".join(f"{k}={os.environ.get(k, '')}" for k in (
         "WIKI_FABRIC_DIR", "WIKI_LLM_BASE_URL", "WIKI_LLM_API_KEY",
         "WIKI_LLM_MODEL", "WIKI_LLM_COMPILER_MODEL", "WIKI_LLM_LOCAL_MODEL"))
-    return hashlib.sha1(f"{file_sig}|{env_sig}".encode()).hexdigest()
+    # the fabric's own path in the signature: coarse-mtime filesystems make
+    # same-second same-size fabric.yaml fixtures collide on the cache (the
+    # fingerprint class: two DIFFERENT fabrics read as one config)
+    path_sig = str(config_file.resolve()) if config_file else "none"
+    return hashlib.sha1(f"{file_sig}|{env_sig}|{path_sig}".encode()).hexdigest()
 
 
 def _merge_user_config(base, user_config):

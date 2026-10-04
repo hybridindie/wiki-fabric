@@ -313,6 +313,11 @@ def _overlay_track(argv):
     """Track connected projects' overlays in their repos (H4 sweep; dry-run first)."""
     return _simple_script("scripts/cmd/overlay-track.py", argv)
 
+@verb("rules")
+def _rules(argv):
+    """Harvest project rule files into the corpus (A0) / render promoted rules back (B)."""
+    return _simple_script("scripts/cmd/rules.py", argv)
+
 @verb("remember")
 def _remember(argv):
     """Friction-free memory note (S6): one line, 0 tokens; mining reads standing notes."""
@@ -905,6 +910,7 @@ _COMPLETION_SUBCOMMANDS = {
     "export-viz": ["--out", "--dry-run"],
     "remember": ["--list", "--expire", "--kind", "--dry-run"],
     "overlay-track": ["--dry-run"],
+    "rules": ["harvest", "export", "--for", "--dry-run", "--no-judge"],
 }
 
 _COMPLETION_FLAG_HINTS = {

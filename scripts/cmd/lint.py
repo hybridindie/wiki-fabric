@@ -664,6 +664,100 @@ def check_overlay_tracked(config):
     return probs
 
 
+def _declared_stems(patterns_dir, slug):
+    """Promoted, scope-valid pattern stems for a project (the render set's
+    single truth — exported + guarded from the same query)."""
+    from wf_common import parse_frontmatter as _pf
+    stems = set()
+    if patterns_dir.is_dir():
+        for pf in sorted(patterns_dir.glob("pattern-*.md")):
+            _fm, _ = _pf(pf)
+            if _declines_or_foreign(_fm, slug):
+                continue
+            stems.add(pf.stem)
+    return stems
+
+
+def _declines_or_foreign(fm, slug):
+    st = str(fm.get("status") or "").lower()
+    if st not in ("recommended", "standard"):
+        return True
+    decl = str(fm.get("project") or "").strip()
+    if decl and decl != slug:
+        return True
+    return False
+
+
+def check_rules_parity(config):
+    """#178-C: a project's MANAGED rendered-rules files (.claude/rules/wiki-fabric/*) must match the corpus's current render — a hand-edit drifts the parity contract (edit the pattern; the file regenerates). Deterministic: re-render each project's expected files (the same join rules.py's export uses) + hash-compare."""
+    probs = []
+    try:
+        import re as _re
+        import fabric_config as fc
+        from wf_common import parse_frontmatter as _pf
+        import layout as _lay
+        sys_path = str(fc.FABRIC_ROOT / "scripts" / "cmd")
+        if sys_path not in sys.path:
+            sys.path.insert(0, sys_path)
+        import rules as _rules_mod
+        from fabric_config import CORPUS_ROOT as _c
+        corpus = _c
+
+
+        patterns_dir = _lay.patterns(corpus)
+        for slug in fc.get_all_repo_names(config if config is not None else fc.get_config()):
+            rcfg = fc.get_repo_config(config if config is not None else fc.get_config(), slug) or {}
+            rp = rcfg.get("path")
+            if not rp:
+                continue
+            try:
+                repo = (fc.FABRIC_ROOT / rp).resolve() if not Path(rp).is_absolute() else Path(rp).resolve()
+            except Exception:
+                continue
+            managed_dir = repo / ".claude" / "rules" / "wiki-fabric"
+            if not managed_dir.is_dir():
+                continue  # not exported yet → nothing to guard
+            # the expected render (status >= recommended, project-scope honored)
+            expected = {}
+            if patterns_dir.is_dir():
+                for pf in sorted(patterns_dir.glob("pattern-*.md")):
+                    fm, body = _pf(pf)
+                    if str(fm.get("status") or "").lower() not in ("recommended", "standard"):
+                        continue
+                    decl = str(fm.get("project") or "").strip()
+                    if decl and decl != slug:
+                        continue
+                    rcfg2 = fc.get_repo_config(config if config is not None else fc.get_config(), slug) or {}
+                    if str(fm.get("id") or "") in set(rcfg2.get("rules") or {}):
+                        continue  # declined
+                    expected[pf.stem + ".md"] = fm.get("id") or pf.stem
+            for f in sorted(managed_dir.glob("*.md")):
+                stem = f.stem
+                pf = patterns_dir / f"{stem}.md"
+                if stem not in _declared_stems(patterns_dir, slug):
+                    probs.append(f"RULES-PARITY {slug}: managed file {f.name} has no promoted pattern "
+                                 f"(hand-made, or the pattern was deprecated — regenerate: wf rules export --for {slug})")
+                    continue
+                # CONTENT compare via the render single-truth: a hand-edit
+                # (adding prose, changing paths) drifts the managed contract
+                fm, body = _pf(pf)
+                try:
+                    expected_content = _rules_mod.rendered_rule_content(pf, fm, body, project=slug)
+                except Exception as e:
+                    probs.append(f"RULES-PARITY {slug}: {f.name} re-render failed ({e})")
+                    continue
+                got = f.read_text(encoding="utf-8", errors="replace")
+                if got.strip() != (expected_content or "").strip():
+                    probs.append(f"RULES-PARITY {slug}: {f.name} was HAND-EDITED "
+                                 f"(the managed file regenerates — edit the pattern instead; "
+                                 f"fix: wf rules export --for {slug}")
+    except Exception as e:
+        # visible skip — the silent-except class bit parity twice during dev
+        import sys as _sys2
+        print(f"(lint: rules-parity check skipped: {e})", file=_sys2.stderr)
+    return probs
+
+
 def check_ignore_config(config):
     """Deterministic ignore.* checks. Invalid regex patterns are skipped
     silently by get_ignores (so capture/lint can't crash) — but they should be
@@ -1101,6 +1195,10 @@ def main():
         errors.extend(check_llm_config(get_config()))
     except Exception:
         pass  # pre-wired config missing → config checks skip, structural lint still runs
+    try:
+        errors.extend(check_rules_parity(get_config()))
+    except Exception:
+        pass  # rules parity: the export owns the truth; sweep covers the rest
     try:
         errors.extend(check_overlay_tracked(get_config()))
     except Exception:

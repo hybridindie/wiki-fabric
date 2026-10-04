@@ -38,23 +38,33 @@ def judged(prob=0.9, unavailable=False, capture=None, answers=None):
     owns the gate's own cases)."""
     def _gate_ok(*a, **k):
         return True, "test receipt"
-    if unavailable:
-        with mock.patch.object(judgment, "judgment_route",
-                               side_effect=judgment.JudgmentUnavailable("disabled")):
-            yield
-    else:
-        if answers is not None:
-            def fake_noul(q, s, false_desc=None, true_desc=None, repo=None):
-                return answers.pop(0) if answers else prob
-            with mock.patch.object(judgment, "judgment_route", return_value="cloud"), \
-                 mock.patch.object(judgment, "judgment_eval_recorded", _gate_ok), \
-                 mock.patch.object(judgment, "noul", side_effect=fake_noul):
-                yield
+    # module pin: other test files re-register sys.modules['judgment'] (the
+    # spec-loader pattern) — stab's call-time `from judgment import` must
+    # resolve THIS file's object for the mocks to bind (the #178-suite find)
+    module_pin = mock.patch.dict(sys.modules, {"judgment": judgment})
+    module_pin.start()
+    try:
+        if unavailable:
+            with mock.patch.object(judgment, "judgment_route",
+                                   side_effect=judgment.JudgmentUnavailable("disabled")), \
+                 mock.patch.object(judgment, "noul",
+                                   side_effect=judgment.JudgmentUnavailable("disabled")):
+                yield  # both heads patched — the tier's unavailability is total
         else:
-            with mock.patch.object(judgment, "judgment_route", return_value="cloud"), \
-                 mock.patch.object(judgment, "judgment_eval_recorded", _gate_ok), \
-                 mock.patch.object(judgment, "noul", return_value=prob):
-                yield
+            if answers is not None:
+                def fake_noul(q, s, false_desc=None, true_desc=None, repo=None):
+                    return answers.pop(0) if answers else prob
+                with mock.patch.object(judgment, "judgment_route", return_value="cloud"), \
+                     mock.patch.object(judgment, "judgment_eval_recorded", _gate_ok), \
+                     mock.patch.object(judgment, "noul", side_effect=fake_noul):
+                    yield
+            else:
+                with mock.patch.object(judgment, "judgment_route", return_value="cloud"), \
+                     mock.patch.object(judgment, "judgment_eval_recorded", _gate_ok), \
+                     mock.patch.object(judgment, "noul", return_value=prob):
+                    yield
+    finally:
+        module_pin.stop()
 
 
 class TestG4Judge:
@@ -94,17 +104,24 @@ class TestG4Judge:
 
         @contextlib.contextmanager
         def capture_judged(prob=0.9, unavailable=False, capture=calls):
-            if unavailable:
-                with mock.patch.object(judgment, "judgment_route",
-                                       side_effect=judgment.JudgmentUnavailable("disabled")):
-                    yield
-            else:
-                def fake_noul(q, s, false_desc=None, true_desc=None, repo=None):
-                    capture.append(q)
-                    return prob
-                with mock.patch.object(judgment, "judgment_route", return_value="cloud"), \
-                     mock.patch.object(judgment, "noul", side_effect=fake_noul):
-                    yield
+            # module pin (the judged() fixture's find: other files re-register
+            # sys.modules['judgment']; call-time imports must see THIS object)
+            pin = mock.patch.dict(sys.modules, {"judgment": judgment})
+            pin.start()
+            try:
+                if unavailable:
+                    with mock.patch.object(judgment, "judgment_route",
+                                           side_effect=judgment.JudgmentUnavailable("disabled")):
+                        yield
+                else:
+                    def fake_noul(q, s, false_desc=None, true_desc=None, repo=None):
+                        capture.append(q)
+                        return prob
+                    with mock.patch.object(judgment, "judgment_route", return_value="cloud"), \
+                         mock.patch.object(judgment, "noul", side_effect=fake_noul):
+                        yield
+            finally:
+                pin.stop()
 
         with capture_judged():
             gates = stab.judge_model_sensitivity(

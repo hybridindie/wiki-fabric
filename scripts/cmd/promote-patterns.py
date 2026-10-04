@@ -59,10 +59,62 @@ def apply_candidate(p, dry_run=False):
     dest.parent.mkdir(parents=True, exist_ok=True)
     text = p.read_text(encoding="utf-8")
     text = text.replace("tags: [chat-mined, inbox]", "tags: [chat-mined]", 1)
+    text = text.replace("tags: [rules-harvest, inbox]", "tags: [rules-harvest]", 1)
     dest.write_text(text, encoding="utf-8")
     p.unlink()
+    # #178-B: a rules-harvested candidate RETIRES its source hand file (a
+    # tombstone pointer replaces it — the corpus is the truth; the managed
+    # export regenerates the rules file; the hand edit source is gone)
+    if fm.get("origin") == "rules-file":
+        _retire_source_rule(fm, dest)
     print(f"applied: {dest} — the pattern maturity gates now govern it (review_after applies)")
     return True
+
+
+def _retire_source_rule(fm, canonical_path):
+    """Replace the harvested rule's SOURCE file with a pointer to the corpus
+    pattern (#178-B): the hand file's project repo + relative path from the
+    provenance entry. Best-effort + loud: repo resolution failures print,
+    never crash."""
+    try:
+        from fabric_config import FABRIC_ROOT, get_repo_config
+        from wf_common import project_slug
+        import re as _re
+        provs = fm.get("provenance") or []
+        if not provs or not isinstance(provs[0], dict):
+            return
+        src = str(provs[0].get("source") or "").strip('"')
+        # the harvest writes 'repo/relative-path' (twin) or the relpath
+        parts = src.split("/", 1)
+        if len(parts) != 2:
+            return  # no repo prefix → the file lives at an unknown root
+        repo_name, rel = parts
+        rcfg = get_repo_config(get_repo_config.__self__ if hasattr(get_repo_config, "__self__") else None, repo_name) \
+            if False else get_repo_config(getattr(__import__("fabric_config"), "get_config")(), project_slug(repo_name))
+        rp = (rcfg or {}).get("path") or ""
+        repo = (FABRIC_ROOT / rp).resolve() if rp else None
+        if not repo or not (repo / ".claude" / "rules").is_dir() and not (repo / rel).exists():
+            return
+        target = repo / rel
+        if target.exists():
+            target.write_text(f"""# RETIRED — promoted to the wiki-fabric corpus
+# This rule file was harvested and promoted; the canonical version lives at
+# `{canonical_path.name}` and the managed render regenerates it under
+# .claude/rules/wiki-fabric/. Edit the PATTERN, not this file.
+# (This pointer replaces the hand file — the corpus is the single truth; #178-B)
+""")
+            subprocess_git_add_commit(repo, target, canonical_path.name)
+    except Exception as e:
+        print(f"  (rule-retirement skipped: {e})", file=__import__("sys").stderr)
+
+
+def subprocess_git_add_commit(repo, target, canonical_name):
+    import subprocess
+    subprocess.run(["git", "-C", str(repo), "add", "--", str(target.relative_to(repo))],
+                   capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-m",
+                    f"chore: rule promoted to wiki-fabric corpus ({canonical_name}) — this file is a pointer now"],
+                   capture_output=True)
 
 
 def reject_candidate(qid, reason, dry_run=False):
