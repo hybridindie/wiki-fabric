@@ -627,13 +627,22 @@ def get_git_history_cfg(config, repo_name=None):
 
 
 def get_domain_signals(config):
-    """Return {domain_name: [signal, ...]} from config."""
+    """Return {domain_name: [signal, ...]}. Merge order (#184-a):
+    ONTOLOGY ## Signals (the team-true synced vocabulary) < fabric.yaml's
+    config domains (the machine-defaults tier — lint advises on these now).
+    The ontology is the single truth the migration targets."""
     result = {}
-    for domain, cfg in config.get("domains", {}).items():
+    try:
+        import ontology as _onto
+        onto = _onto.parse((CORPUS_ROOT / "domains" / "ontology.md").read_text(errors="replace"))
+        result.update(onto.get("signals") or {})
+    except Exception:
+        pass  # ontology unreadable → config tier still applies
+    for domain, cfg in (config or {}).get("domains", {}).items():
         if isinstance(cfg, dict):
-            result[domain] = cfg.get("signals", [])
+            result[domain] = list(result.get(domain) or []) + list(cfg.get("signals", []))
         elif isinstance(cfg, list):
-            result[domain] = cfg
+            result[domain] = list(result.get(domain) or []) + list(cfg)
     return result
 
 
@@ -1123,9 +1132,27 @@ def _default_vault_root():
 
 
 def get_tuning(config=None, section=None, key=None, default=None):
-    """Read a tuning value from fabric.yaml (merged over shipped defaults).
-    Three-arg access: get_tuning(cfg, "judgment", "near_band", 0.1)."""
-    config = config or get_config()
+    """Read a tuning value (merged over shipped defaults). Merge order:
+    shipped < corpus/tuning.yaml (the TEAM-TRUE synced plane, #184-a —
+    tuning is corpus content, not machine config) < fabric.yaml's tuning
+    (the machine-true override; lint advises when it carries team-tuned
+    keys). Three-arg access: get_tuning(cfg, "judgment", "near_band", 0.1)."""
+    import yaml as _yaml
+    if config is None:
+        try:
+            corpus_tuning_file = CORPUS_ROOT / "tuning.yaml"
+            if corpus_tuning_file.exists():
+                shared = _yaml.safe_load(corpus_tuning_file.read_text()) or {}
+                machine = (config.get("tuning") or {}) if config else {}
+                merged_t = {**shared, **{k: v for k, v in machine.items() if v is not None}}
+                if section is None:
+                    return merged_t
+                sec = merged_t.get(section) or {}
+                return default if not isinstance(sec, dict) else (sec.get(key, default)
+                                                                 if sec.get(key, default) is not None else default)
+        except Exception:
+            pass
+        config = get_config()
     tuning = config.get("tuning") or {}
     if section is None:
         return tuning

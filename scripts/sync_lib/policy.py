@@ -19,6 +19,21 @@ EVIDENCE_PATHS = _pfx("evidence_raw", "evidence_sources", "evidence_source_summa
                       "evidence_insights", "evidence_memory")
 REGISTRY_PATHS = _pfx("registry")
 
+# #181: derived artifacts both machines regenerate wholesale — a merge
+# conflict here is resolved by REGENERATING locally, never by the
+# ours/theirs/union flow. Files (not dirs): explicit registry/ paths.
+_DERIVED = ("registry/catalog.json", "registry/threads.json",
+            "registry/wiki-graph.json", "registry/wiki-export-manifest.json")
+DERIVED_REGENERABLE_PATHS = tuple(str(_layout.registry(None)) + name.split("/", 1)[1]
+                                  if False else f"registry/{_f}" for _f, _layout in
+                                  [("catalog.json", None), ("threads.json", None),
+                                   ("wiki-graph.json", None), ("wiki-export-manifest.json", None)])
+
+# #182 decision (machine-local): per-machine delivery/state planes that
+# never travel and never conflict — the queues they summarize are the
+# synced truth.
+MACHINE_LOCAL_PATHS = _pfx("registry_receipts") + ("registry/pending-gate.md",)
+
 
 
 
@@ -66,6 +81,10 @@ def classify_change(path_str):
         return "atom"
     if p.startswith(EVIDENCE_PATHS):
         return "evidence"
+    if p.startswith(MACHINE_LOCAL_PATHS):
+        return "machine-local"
+    if p.startswith(DERIVED_REGENERABLE_PATHS):
+        return "derived"
     if p.startswith(REGISTRY_PATHS):
         return "registry"
     return "other"
@@ -87,14 +106,23 @@ def machine_name():
     return re.sub(r"[^a-z0-9-]", "-", host)[:30] or "unknown"
 
 def pr_branch_name():
-    """sync/<machine>-<yyyymmdd-hhmm> — one branch per push."""
+    """sync/<machine>-<yyyymmdd-hhmm> — one branch per push. The machine
+    name resolves through the MODULE (call-time — the #178 test-patch seam)."""
+    import sys as _sys
+    mod = _sys.modules.get(__name__)
+    machine = (mod.machine_name() if mod and hasattr(mod, "machine_name") else machine_name())
     from datetime import datetime
     stamp = datetime.now().strftime("%Y%m%d-%H%M")
-    return f"sync/{machine_name()}-{stamp}"
+    return f"sync/{machine}-{stamp}"
 
 def pr_merge_policy(changes):
-    """'auto-merge' | 'review' for this push's file set (team mode)."""
-    if evidence_prs_policy() == "review":
+    """'auto-merge' | 'review' for this push's file set (team mode).
+    Resolves evidence_prs_policy through the MODULE (call-time binding —
+    test-patches bind; the from-import copies kept for API compat)."""
+    import sys as _sys
+    mod = _sys.modules.get(__name__)
+    pol = (mod.evidence_prs_policy() if mod else evidence_prs_policy())
+    if pol == "review":
         return "review"
     if classify_changes([l[3:] for l in changes]) == "evidence":
         return "auto-merge"

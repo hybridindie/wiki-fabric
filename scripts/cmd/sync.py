@@ -20,6 +20,7 @@
 # registry/conflicts/ with both versions preserved. Nothing is silently
 # overwritten. Lint treats unresolved conflicts as errors until reviewed.
 
+import os
 import sys
 import sys as _s, pathlib as _p
 _HERE = _p.Path(__file__).resolve().parent
@@ -36,9 +37,16 @@ from pathlib import Path
 from datetime import date, datetime
 import wf_common
 from wf_common import git_sh as _git_sh, parse_frontmatter, yaml_scalar, TIMEOUT_GIT, TIMEOUT_API
+from sync_lib import policy as _policy_mod
 from sync_lib.policy import (sync_mode, evidence_prs_policy, classify_change,
                              classify_changes, pr_merge_policy, use_pr_mode,
                              machine_name, pr_branch_name)
+
+def evidence_prs_policy_wrapper():
+    """Call-time binding (the #178 flake): the from-import copy pinned at
+    module load; tests patch the POLICY module — the call resolves THROUGH
+    the module (patch-visible), not through the stale copy."""
+    return _policy_mod.evidence_prs_policy()
 from sync_lib.pr import (gh_run, gh_last_error, corpus_github_repo,
                          build_pr_body, push_via_pr,
                          change_set_manifests_for_range)
@@ -72,6 +80,11 @@ CONTENT_PATHS = [
     "global/entities",
     "global/graphs",
     "registry",
+]
+
+MACHINE_LOCAL_SYNC_PATHS = [  # #181/#182 decisions: per-machine state (the queues are the truth)
+    "registry/receipts",
+    "registry/pending-gate.md",
 ]
 
 LOCAL_ONLY_PATHS = [
@@ -147,6 +160,9 @@ def git_status():
 
 def is_content_path(path_str):
     p = path_str.lstrip('"').strip()
+    for cp in MACHINE_LOCAL_SYNC_PATHS:  # per-machine planes never sync (#181/#182)
+        if p == cp or p.startswith(cp + "/") or p.startswith(f'"{cp}/'):
+            return False
     for cp in CONTENT_PATHS:
         if p == cp or p.startswith(cp + "/") or p.startswith(f'"{cp}/'):
             return True
@@ -184,6 +200,101 @@ def validate_fabric():
         sys.exit(1)
 
 # === Commands ===
+
+
+def migrate_team_config(dry_run=False):
+    """#184-a: move team-true blocks OUT of the gitignored fabric.yaml: routing
+    → the overlays (already supported by discovery), tuning → corpus/tuning.yaml,
+    domain signals → the ontology ## Signals. machine fabric.yaml left
+    machine-true (llm/owner/paths/vault). Deterministic; idempotent."""
+    import yaml as _yaml
+    config_file = FABRIC_ROOT / "fabric.yaml"
+    if not config_file.exists():
+        print("no machine fabric.yaml — nothing to migrate")
+        return 0
+    cfg = _yaml.safe_load(config_file.read_text()) or {}
+    moved = []
+    # 1. routing keys → the overlays (same values; overlay already carries them)
+    repos = cfg.get("repos") or {}
+    for slug, rcfg in list(repos.items()):
+        if not isinstance(rcfg, dict):
+            continue
+        if dry_run:
+            if any(k in rcfg for k in ("routing", "extract", "synthesize", "dossier")):
+                moved.append(f"repos.{slug}.routing -> overlay")
+            continue
+        for key in ("routing", "extract", "synthesize", "dossier"):
+            if key in rcfg:
+                rcfg.pop(key, None)
+                moved.append(f"repos.{slug}.{key} -> overlay")
+    # 2. tuning → corpus/tuning.yaml
+    tuning = cfg.get("tuning") or {}
+    tf = _corpus_tuning_file()
+    if tuning:
+        if dry_run:
+            moved.append("tuning -> corpus/tuning.yaml")
+        else:
+            moved.append("tuning -> corpus/tuning.yaml")
+            existing = _yaml.safe_load(tf.read_text()) if tf.exists() else {}
+            merged = {**existing, **tuning}
+            tf.write_text(__import__("wf_common").dump_frontmatter(merged))
+            cfg.pop("tuning")
+    # 3. domain signals → the ontology ## Signals
+    domains = cfg.get("domains") or {}
+    onto = layout.domains(VAULT_ROOT) / "ontology.md"
+    if domains and onto.exists():
+        if dry_run:
+            moved.append("domains.*.signals -> ontology ## Signals")
+        else:
+            moved.append("domains.*.signals -> ontology ## Signals")
+            text = onto.read_text()
+            block = "\n## Signals\n" if "## Signals" not in text else ""
+            lines = [block]
+            for name, d in sorted(domains.items()):
+                sigs = sorted(set((d or {}).get("signals") or []))
+                if sigs:
+                    lines.append(f"- {name}: {', '.join(sigs)}")
+            if len(lines) > 1 or block:
+                text = text.rstrip() + "\n" + "\n".join(lines) + "\n"
+                onto.write_text(text)
+            cfg.pop("domains", None)
+    if dry_run:
+        print("[DRY]" if moved else "[DRY] nothing team-true in the machine config")
+        for mm in moved:
+            print(f"  would move: {mm}")
+        return 0
+    if not moved and not dry_run:
+        print("machine config already machine-true")
+        return 0
+    if not dry_run:
+        config_file.write_text(__import__("wf_common").dump_frontmatter(cfg))
+    for mm in moved:
+        print(f"  migrated: {mm}")
+    print("#184-a: fabric.yaml is machine-true only; the team content travels "
+          "(overlays + corpus/tuning.yaml + the ontology).")
+    return 0
+
+
+def seed_corpus_gitignore():
+    """The machine-local plane contract (#181/#182 decisions, 2026-10-03):
+    receipts + pending-gate = machine-local (the queues are the truth);
+    .last-capture = the sanctioned per-capture-channel state marker; derived
+    artifacts (regenerable, #181) stay tracked but the pull-side regen keeps
+    them converging. Idempotent: existing lines never duplicate."""
+    gi = VAULT_ROOT / ".gitignore"
+    required = ["registry/receipts/", "registry/pending-gate.md",
+                ".last-capture", ".DS_Store", "fabric.yaml", "secrets.env"]
+    try:
+        txt = gi.read_text() if gi.exists() else ""
+        added = [ln for ln in required if ln not in txt.splitlines()]
+        if added:
+            header = "" if txt else ("# Machine-local planes + secrets (#181/#182): "
+                                     "per-machine state never syncs\n")
+            gi.write_text(txt.rstrip("\n") + "\n" + header + "\n".join(added) + "\n")
+            print(f"(gitignore seeded: {len(added)} machine-local line(s))")
+        return True
+    except OSError:
+        return False
 
 
 def scaffold_gate_digest_workflow():
@@ -353,6 +464,7 @@ def cmd_init(remote_url):
     scaffold_freshness_workflow()
     scaffold_mining_workflow()
     scaffold_gate_digest_workflow()
+    seed_corpus_gitignore()
     scaffold_promotion_queue()
     layout.questions(VAULT_ROOT).mkdir(parents=True, exist_ok=True)  # #160 S4 plane scaffold
 
@@ -397,6 +509,7 @@ def cmd_setup(name=None, private=True, yes=False):
     scaffold_freshness_workflow()
     scaffold_mining_workflow()
     scaffold_gate_digest_workflow()
+    seed_corpus_gitignore()
     scaffold_promotion_queue()
     layout.questions(VAULT_ROOT).mkdir(parents=True, exist_ok=True)  # #160 S4 plane scaffold
 
@@ -801,6 +914,25 @@ def cmd_resolve(conflict, strategy, message=None):
     Interactive flow (#14): with no strategy given, show both versions and
     prompt for the choice (requires a TTY)."""
     conflict_file = VAULT_ROOT / conflict
+    if strategy == "derived":
+        # the conflict record's PATH is a derived artifact: regenerate it
+        import re as _re
+        rec_fm, _ = parse_frontmatter(conflict_file)
+        derived_path = str(rec_fm.get("path") or "")
+        if not derived_path:
+            print(f"conflict record carries no path — cannot regen: {conflict}", file=sys.stderr)
+            sys.exit(1)
+        subprocess.run(["git", "checkout", "--theirs", "--", derived_path],
+                       cwd=str(VAULT_ROOT), capture_output=True)
+        subprocess.run(["git", "commit", "--no-edit", "-q"],
+                       cwd=str(VAULT_ROOT), capture_output=True)
+        _regen_derived()
+        subprocess.run(["git", "add", "-A"], cwd=str(VAULT_ROOT), capture_output=True)
+        subprocess.run(["git", "-c", "user.name=wiki-fabric", "-c", "user.email=wf@corpus.local",
+                        "commit", "-q", "-m", f"sync resolve (derived): {derived_path} regenerated"],
+                       cwd=str(VAULT_ROOT), capture_output=True)
+        print(f"Derived artifact resolved by regen: {derived_path} — SYNC-CONFLICT cleared.")
+        return
     if not conflict_file.exists() and conflict.startswith("corpus/"):
         # conflict paths are recorded relative to the VAULT root; VAULT_ROOT
         # is the corpus dir (nested layout) — the join doubles. Resolve
@@ -880,6 +1012,32 @@ def cmd_resolve(conflict, strategy, message=None):
     print(f"Conflict record removed; SYNC-CONFLICT gate cleared for this file.")
     print("Next: wf sync pull — if the same file conflicts again, resolve with")
     print("  'ours' (your resolution already carries the union) — then push.")
+def _corpus_tuning_file():
+    """corpus/tuning.yaml — the team-true tuning plane (#184-a)."""
+    return VAULT_ROOT / "tuning.yaml" if False else __import__("pathlib").Path(VAULT_ROOT) / "tuning.yaml"
+
+
+def _regen_derived():
+    """#181: regenerate the derived plane in place (catalog + threads) —
+    both machines converge before the next push. Best-effort: regen failure
+    is a LINT concern, never a pull failure."""
+    from pathlib import Path as _P
+    import subprocess as _sp
+    ri = _P(__file__).parent / "rebuild-index.py"
+    if ri.exists():
+        try:
+            env = {**os.environ, "WIKI_FABRIC_ROOT": str(VAULT_ROOT),
+                   "WIKI_FABRIC_DIR": str(VAULT_ROOT)}
+            r = _sp.run([sys.executable, str(ri)], cwd=str(VAULT_ROOT),
+                        capture_output=True, text=True, timeout=TIMEOUT_API, env=env)
+            if r.returncode == 0:
+                print("  (derived artifacts regenerated: catalog + threads converged)")
+            else:
+                print(f"  (derived regen skipped: {(r.stderr or '').strip()[-80:]})", file=sys.stderr)
+        except Exception as e:
+            print(f"  (derived regen skipped: {e})", file=sys.stderr)
+
+
 def cmd_pull():
     validate_fabric()
     _legacy_layout_check("pull")
@@ -929,10 +1087,33 @@ def cmd_pull():
                 print("Next: wf status to see inventory, wf query to use them.")
         except Exception as e:
             print(f"  (post-pull namespace report skipped: {e})", file=sys.stderr)
+        # #181: the derived plane regenerates here — both machines' copies
+        # converge before the next push (cosmetic conflicts never queue)
+        _regen_derived()
         return
 
-    # Merge failed: collect conflicts
-    conflicted = [l[3:] for l in git_status() if l.startswith("UU ") or l.startswith("AA ")]
+    # Merge failed: collect conflicts — the DERIVED plane (policy
+    # classification, #181) auto-resolves by theirs+regen (regen is the
+    # truth; human review of catalog.json noise is meaningless) and the
+    # merge can often complete with zero human steps.
+    from sync_lib.policy import classify_change as _cls
+    conflicted_all = [l[3:] for l in git_status() if l.startswith("UU ") or l.startswith("AA ")]
+    derived_conflicted = [p for p in conflicted_all if _cls(p) == "derived"]
+    conflicted = [p for p in conflicted_all if p not in derived_conflicted]
+    if derived_conflicted and not conflicted:
+        for p in derived_conflicted:
+            subprocess.run(["git", "checkout", "--theirs", "--", p],
+                           cwd=str(VAULT_ROOT), capture_output=True)
+        subprocess.run(["git", "commit", "--no-edit", "-q"],
+                       cwd=str(VAULT_ROOT), capture_output=True)
+        _regen_derived()
+        subprocess.run(["git", "add", "-A"], cwd=str(VAULT_ROOT), capture_output=True)
+        subprocess.run(["git", "-c", "user.name=wiki-fabric", "-c", "user.email=wf@corpus.local",
+                        "commit", "-q", "-m", "sync pull: derived artifacts auto-regenerated"],
+                       cwd=str(VAULT_ROOT), capture_output=True)
+        print(f"Pull complete — {len(derived_conflicted)} derived artifact(s) auto-resolved "
+              "by regen (no human step: the regenerated output is the truth).")
+        return
     conflicts_dir = layout.registry(VAULT_ROOT) / "conflicts" / today
     conflicts_dir.mkdir(parents=True, exist_ok=True)
 
@@ -968,12 +1149,12 @@ def cmd_pull():
 
 def main():
     parser = argparse.ArgumentParser(description="Share the corpus via a git remote (source-of-truth sync)")
-    parser.add_argument("command", choices=["setup", "init", "migrate", "status", "push", "pull", "resolve", "commit-drift"], help="Sync operation")
+    parser.add_argument("command", choices=["setup", "init", "migrate", "migrate-team-config", "status", "push", "pull", "resolve", "commit-drift"], help="Sync operation")
     parser.add_argument("remote", nargs="?", help="Git URL for `init`")
     parser.add_argument("name", nargs="?", help="Corpus repo name for `setup` (default: wiki-fabric-corpus)")
     parser.add_argument("-m", "--message", help="Commit message for push")
     parser.add_argument("--public", action="store_true", help="setup: create the corpus repo public (default private)")
-    parser.add_argument("--strategy", choices=["ours", "theirs", "union"], default=None, help="resolve: how to resolve the conflict (omit for the interactive flow, #14)")
+    parser.add_argument("--strategy", choices=["ours", "theirs", "union", "derived"], default=None, help="resolve: how to resolve the conflict (derived = regenerate the artifact locally — the #181 class; omit for the interactive flow, #14)")
     parser.add_argument("conflict_file", nargs="?", help="Conflict file (from registry/conflicts/) for `resolve`")
     parser.add_argument("--yes", "-y", action="store_true", help="setup: skip the creation prompt")
     parser.add_argument("--pr", action="store_true",

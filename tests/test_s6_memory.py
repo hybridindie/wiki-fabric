@@ -171,7 +171,10 @@ class TestLintContract:
         assert layout.memory().name == "memory"
 
     def test_policy_plane(self):
-        sys.path.insert(0, str(_REPO / "scripts" / "sync_lib"))
-        import policy
+        # import through the PACKAGE (sync_lib.policy) — the sync_lib dir
+        # on sys.path registered a SECOND 'policy' module identity (the
+        # #178-suite flake: same code, two module objects, the from-import
+        # bindings then disagree)
+        from sync_lib import policy as policy
         # memory plane is EVIDENCE (auto-mergeable, unlike atoms)
         assert any("evidence/memory" in x for x in policy.EVIDENCE_PATHS)

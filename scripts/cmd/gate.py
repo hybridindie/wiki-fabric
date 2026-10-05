@@ -62,6 +62,51 @@ def _gate_pattern_candidates():
     return pending, pending
 
 
+def _local_sync_staleness():
+    """#183: THIS machine's corpus staleness — the documented habit
+    (end-of-session commit-drift + push; start pull) is unenforced; a
+    machine can hold an unsynced LOCAL backlog for days. Info-tier row
+    (never actionable alone): the committed-backlog age (corpus git log -1)
+    + the uncommitted change count. tuning.sync.staleness_days (default 7)
+    — overdue renders ESCALATED in the manifest/prose (the digest carries
+    it)."""
+    import subprocess
+    import re as _re
+    from fabric_config import get_tuning, CORPUS_ROOT as VAULT_ROOT
+    threshold = int(get_tuning(None, "sync", "staleness_days", 7))
+    # the uncommitted corpus-churn count (the shared porcelain parser)
+    try:
+        from sync_lib import porcelain as _porc
+    except Exception:
+        _porc = None
+    uncommitted = 0
+    r = subprocess.run(["git", "status", "--porcelain", "-unormal"],
+                       cwd=str(VAULT_ROOT), capture_output=True, text=True, timeout=15)
+    if r.returncode == 0:
+        uncommitted = len([l for l in r.stdout.splitlines() if l.strip()])
+    # the last corpus commit's age (the committed backlog's freshness)
+    r2 = subprocess.run(["git", "log", "-1", "--format=%cd", "--date=iso"],
+                        cwd=str(VAULT_ROOT), capture_output=True, text=True, timeout=15)
+    last_date = None
+    days = None
+    if r2.returncode == 0 and r2.stdout.strip():
+        try:
+            last_date = date.fromisoformat(r2.stdout.strip()[:10])
+            days = (date.today() - last_date).days
+        except Exception:
+            pass
+    escalated = (days is not None and days >= threshold)
+    if days is None and not uncommitted:
+        return 0, []  # no git info at all → silent
+    if days is None and uncommitted:
+        return 1, [{"detail": f"uncommitted corpus changes: {uncommitted} (run: wf sync commit-drift)"}]
+    if escalated or uncommitted:
+        esc = " ESCALATED" if escalated else ""
+        return 1, [{"detail": f"local corpus {days}d behind{esc} — "
+                    f"{uncommitted} uncommitted change(s); remedy: wf sync commit-drift && wf sync push"}]
+    return 0, []
+
+
 def _gate_contributions(stale_days=30):
     """Contribution freshness per connected project (team-knowledge loop):
     a project whose last experience-event/capture is staler than stale_days
@@ -185,6 +230,7 @@ def _escalated(fm, threshold=None):
 def gate():
     sections = {
         "review": _safe(_gate_review),
+        "local-sync": _safe(_local_sync_staleness),
         "promotions": _safe(_gate_promotions),
         "domains": _safe(_gate_domains),
         "pattern-candidates": _safe(_gate_pattern_candidates),
@@ -194,7 +240,7 @@ def gate():
     # contributions are INFO (no command resolves them); they never make the
     # gate actionable on their own — actionable = every OTHER section pending.
     actionable = any(p for k, (p, _, _) in sections.items()
-                     if k != "contributions" and p)
+                     if k not in ("contributions", "local-sync") and p)
     return sections, actionable
 
 def _emit(sections, actionable, quiet=False):

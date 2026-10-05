@@ -10,6 +10,16 @@ import fabric_config
 import wf_common
 from wf_common import git_sh as _git_sh, github_repo_from_remote_url
 import sync_lib.policy as policy
+
+
+def _policy_live():
+    """The LIVE policy object (the sys.modules entry — single truth at call
+    time). A bound module attribute dies when another loader re-registers
+    the entry (the #178-suite flake: the patch went to the NEW entry while
+    this module's OLD binding served the call)."""
+    import sys as _sys
+    mod = _sys.modules.get("sync_lib.policy")
+    return mod if mod is not None else policy
 from sync_lib.policy import classify_change, classify_changes
 
 # gh_run error stash (#100: a swallowed pr-create error once printed
@@ -76,18 +86,22 @@ def build_pr_body(changes, base_head):
         "---",
         "type: change-set",
         "sync-pr: true",
-        f"machine: {policy.machine_name()}",
+        f"machine: {_policy_live().machine_name()}",
         f"date: {date.today().isoformat()}",
         "---",
         "",
         "# Corpus sync",
         "",
-        f"Machine: `{policy.machine_name()}` — one PR per `sync push` (#100).",
+        f"Machine: `{_policy_live().machine_name()}` — one PR per `sync push` (#100).",
         "",
         "## Change-set receipts",
         "",
     ]
-    cs = change_set_manifests_for_range(base_head)
+    # call-time module lookup (the #178 seam: test patches bind the live
+    # sys.modules entry, not this module's stale self-binding)
+    import sys as _sys
+    _pr_live = _sys.modules.get(__name__) or sys.modules[__name__]
+    cs = _pr_live.change_set_manifests_for_range(base_head)
     if cs:
         for c in cs[:20]:
             lines.append(f"- `{c}`")
@@ -141,7 +155,7 @@ def push_via_pr(changes, message):
                      (range_files.splitlines() if isinstance(range_files, str) else range_files)
                      if p.strip()]
     body = build_pr_body(range_changes, base_head)
-    title = message or f"sync {policy.machine_name()} {date.today().isoformat()}"
+    title = message or f"sync {_policy_live().machine_name()} {date.today().isoformat()}"
     out = gh_run("pr", "create",
                  "--repo", repo,
                  "--base", "corpus",

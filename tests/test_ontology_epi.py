@@ -39,7 +39,8 @@ class TestOntologyParser:
         assert ontology.all_spellings(o) == {"godot", "godot-systems"}
 
     def test_missing_ontology_empty(self):
-        assert ontology.parse("") == {"domains": set(), "aliases": {}, "tags": set()}
+        assert ontology.parse("") == {"domains": set(), "aliases": {}, "tags": set(),
+                                      "signals": {}}
 
 
 def _load():

@@ -24,6 +24,7 @@ name (godot) through the alias map — pages never need re-tagging when the
 vocabulary renames; the map is the compatibility layer.
 """
 import re
+import re as _re
 
 _BULLET_RE = re.compile(r"-\s+\*\*([a-z0-9][a-z0-9-]*)\*\*")
 _ALIAS_RE = re.compile(r"-\s+`?([a-z0-9][a-z0-9-]*)`?\s*(?:->|←)\s*`?([a-z0-9][a-z0-9-]*)`?")
@@ -32,10 +33,13 @@ _TAG_LINE_RE = re.compile(r"-\s+[A-Za-z-]+:\s*(.+)$")
 
 def parse(text_or_body):
     """Parse ontology text → {'domains': set, 'aliases': {alias: canonical},
-    'tags': set}. Sections are line-scoped (## Domains / ## Aliases / ## Shared
-    tag set); malformed sections parse to what they can — consumers degrade
-    (empty vocabulary binds nothing, the honest gate)."""
-    domains, aliases, tags = set(), {}, set()
+    'tags': set, 'signals': {domain: [tokens]}}. Sections are line-scoped
+    (## Domains / ## Aliases / ## Shared tag set / ## Signals); malformed
+    sections parse to what they can — consumers degrade (empty vocabulary
+    binds nothing, the honest gate). Signals = the domain-DETECTION lexicon
+    (#184-a: the detection vocabulary lives in the SYNCED ontology, not the
+    gitignored machine config — the promote-domains scanner's lexicon)."""
+    domains, aliases, tags, signals = set(), {}, set(), {}
     section = None
     for line in (text_or_body or "").splitlines():
         s = line.strip()
@@ -56,7 +60,13 @@ def parse(text_or_body):
             m = _TAG_LINE_RE.match(s)
             if m:
                 tags.update(t.strip().strip("`") for t in m.group(1).split(",") if t.strip())
-    return {"domains": domains, "aliases": aliases, "tags": tags}
+        elif section == "signals" and s.startswith("- "):
+            dm = _re.match(r"- `?([\w-]+)`?\s*[:\-]\s*(.+)", s)
+            if dm:
+                domain = dm.group(1).strip()
+                toks = [t.strip() for t in dm.group(2).split(",") if t.strip()]
+                signals[domain] = toks
+    return {"domains": domains, "aliases": aliases, "tags": tags, "signals": signals}
 
 
 def canonicalize(declared, onto):

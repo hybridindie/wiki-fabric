@@ -100,7 +100,18 @@ class TestPlaneClassification:
 
     def test_registry_plane(self):
         assert sync.classify_change("registry/log.md") == "registry"
-        assert sync.classify_change("registry/catalog.json") == "registry"
+        assert sync.classify_change("registry/promotions/promo-a.md") == "registry"
+
+    def test_derived_plane(self):
+        """#181: the derived artifacts classify 'derived' (regen-resolve)."""
+        for f in ("registry/catalog.json", "registry/threads.json",
+                  "registry/wiki-graph.json", "registry/wiki-export-manifest.json"):
+            assert sync.classify_change(f) == "derived", f
+
+    def test_machine_local_plane(self):
+        """#182: the machine-local planes classify separately (never sync)."""
+        assert sync.classify_change("registry/receipts/receipt-x.json") == "machine-local"
+        assert sync.classify_change("registry/pending-gate.md") == "machine-local"
 
     def test_unknown_fails_closed(self):
         assert sync.classify_change("random/file.md") == "other"
@@ -153,7 +164,8 @@ class TestPrPolicy:
         import unittest.mock as mock
         import importlib
         policy_mod = importlib.import_module("sync_lib.policy")
-        with mock.patch.object(policy_mod, "evidence_prs_policy", lambda: "review"):
+        with mock.patch.object(policy_mod, "evidence_prs_policy", lambda: "review"), \
+             mock.patch.object(sync, "evidence_prs_policy", lambda: "review"):
             assert sync.pr_merge_policy([" M evidence/raw/x.md"]) == "review"
 
 
@@ -180,6 +192,9 @@ class TestPrBody:
         import importlib
         policy_mod = importlib.import_module("sync_lib.policy")
         monkeypatch.setattr(policy_mod, "machine_name", lambda: "testbox")
+        # from-import bindings (sync.py imported machine_name/pr_branch_name
+        # by value): patch AT SYNC too — the from-import copy is what runs
+        monkeypatch.setattr(sync, "machine_name", lambda: "testbox")
         import re
         assert re.match(r"^sync/testbox-\d{8}-\d{4}$", sync.pr_branch_name())
 

@@ -758,6 +758,58 @@ def check_rules_parity(config):
     return probs
 
 
+def check_team_true_travel(config):
+    """#184-a: team-true keys in the GITIGNORED machine config never travel —
+    after the migration norm (routing→overlay, tuning→corpus/tuning.yaml,
+    domains.signals→ontology), lint ADVISES on any residue (the migration
+    pass: wf sync migrate-team-config). Advisory tier (values still work
+    per-machine)."""
+    probs = []
+    try:
+        cfg = (config if isinstance(config, dict) else (get_config() or {}))
+        repos = cfg.get("repos") or {}
+        for slug, rcfg in repos.items():
+            if not isinstance(rcfg, dict):
+                continue
+            for key in ("routing", "extract", "synthesize", "dossier"):
+                if key in rcfg:
+                    probs.append(f"TEAM-TRUE-UNSYNCED repos.{slug}.{key}: routing lives in the "
+                                 f"project overlay (travels) — migrate: this key never syncs (#184)")
+        if cfg.get("tuning"):
+            probs.append("TEAM-TRUE-UNSYNCED tuning.*: the team-tuned knobs live in "
+                         "corpus/tuning.yaml (the synced plane) — migrate (#184)")
+        if cfg.get("domains"):
+            probs.append("TEAM-TRUE-UNSYNCED domains.*.signals: the detection vocabulary lives in "
+                         "the ontology ## Signals (synced) — migrate (#184)")
+    except Exception:
+        pass
+    return probs
+
+
+def check_machine_local_planes(vault):
+    """#182: receipts/pending-gate are MACHINE-LOCAL (the 2026-10-03
+    decisions) — appearing tracked/staged = sweep-in noise (the pull-side
+    sweep excludes them; an already-tracked copy is the migration residue).
+    Advisory tier: never blocks (the state is deletable, not corrupt)."""
+    probs = []
+    import subprocess
+    try:
+        # the corpus's git repo = the VAULT dir itself (#152 layout)
+        repo = Path(vault)
+        probe = subprocess.run(["git", "-C", str(repo), "ls-files",
+                                "registry/receipts", "registry/pending-gate.md"],
+                               capture_output=True, text=True, timeout=10)
+        for line in (probe.stdout or "").splitlines():
+            if line.strip():
+                probs.append(
+                    f"MACHINE-LOCAL {line.strip()}: the receipts/pending-gate planes are "
+                    f"machine-local (#182/#181 — never sync); untrack: "
+                    f"git rm -r --cached && git commit")
+    except Exception:
+        pass
+    return probs
+
+
 def check_ignore_config(config):
     """Deterministic ignore.* checks. Invalid regex patterns are skipped
     silently by get_ignores (so capture/lint can't crash) — but they should be
@@ -1199,6 +1251,11 @@ def main():
         errors.extend(check_rules_parity(get_config()))
     except Exception:
         pass  # rules parity: the export owns the truth; sweep covers the rest
+    try:
+        for prob in check_team_true_travel(get_config()) + check_machine_local_planes(vault):
+            warnings.append(prob)  # both advisory tiers (travel + deletable state)
+    except Exception:
+        pass
     try:
         errors.extend(check_overlay_tracked(get_config()))
     except Exception:
