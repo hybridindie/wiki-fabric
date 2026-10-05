@@ -1076,7 +1076,13 @@ def cmd_pull():
          "-m", f"sync pull from {CONTENT_REMOTE_NAME} ({today})"],
         cwd=str(VAULT_ROOT), capture_output=True, text=True,
     )
-    if result.returncode == 0:
+    conflicts_seen_post = git_status()
+    merge_conflicts = [l[3:] for l in conflicts_seen_post
+                       if l.startswith(("UU ", "AA ", "DD "))]
+    if result.returncode == 0 or (not merge_conflicts and result.returncode != 0):
+        # clean merge OR a non-zero that left no conflict markers: the
+        # regen path covers both (the returncode alone misled the CI run —
+        # a scaffold/racy git exit with a CLEAN tree is a COMPLETED merge)
         print("Pulled and merged corpus.")
         # Report newly-arrived project namespaces (present remotely, absent locally before the pull)
         try:
