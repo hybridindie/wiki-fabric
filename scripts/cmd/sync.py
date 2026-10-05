@@ -924,7 +924,8 @@ def cmd_resolve(conflict, strategy, message=None):
             sys.exit(1)
         subprocess.run(["git", "checkout", "--theirs", "--", derived_path],
                        cwd=str(VAULT_ROOT), capture_output=True)
-        subprocess.run(["git", "commit", "--no-edit", "-q"],
+        subprocess.run(["git", "-c", "user.name=wiki-fabric", "-c", "user.email=wf@corpus.local",
+                        "commit", "--no-edit", "-q"],
                        cwd=str(VAULT_ROOT), capture_output=True)
         _regen_derived()
         subprocess.run(["git", "add", "-A"], cwd=str(VAULT_ROOT), capture_output=True)
@@ -1072,7 +1073,8 @@ def cmd_pull():
     # share a remote but no common ancestor are still the same corpus)
     today = date.today().isoformat()
     result = subprocess.run(
-        ["git", "merge", f"{CONTENT_REMOTE_NAME}/main", "--no-edit", "--allow-unrelated-histories",
+        ["git", "-c", "user.name=wiki-fabric", "-c", "user.email=wf@corpus.local",
+         "merge", f"{CONTENT_REMOTE_NAME}/main", "--no-edit", "--allow-unrelated-histories",
          "-m", f"sync pull from {CONTENT_REMOTE_NAME} ({today})"],
         cwd=str(VAULT_ROOT), capture_output=True, text=True,
     )
@@ -1116,7 +1118,8 @@ def cmd_pull():
         for p in derived_conflicted:
             subprocess.run(["git", "checkout", "--theirs", "--", p],
                            cwd=str(VAULT_ROOT), capture_output=True)
-        subprocess.run(["git", "commit", "--no-edit", "-q"],
+        subprocess.run(["git", "-c", "user.name=wiki-fabric", "-c", "user.email=wf@corpus.local",
+                        "commit", "--no-edit", "-q"],
                        cwd=str(VAULT_ROOT), capture_output=True)
         _regen_derived()
         subprocess.run(["git", "add", "-A"], cwd=str(VAULT_ROOT), capture_output=True)
