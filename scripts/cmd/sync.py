@@ -1076,6 +1076,8 @@ def cmd_pull():
          "-m", f"sync pull from {CONTENT_REMOTE_NAME} ({today})"],
         cwd=str(VAULT_ROOT), capture_output=True, text=True,
     )
+    print(f"  (merge rc={result.returncode} out={result.stdout.strip()[:120]!r} "
+          f"err={result.stderr.strip()[:160]!r})")  # pull-report diagnosability (#179)
     conflicts_seen_post = git_status()
     merge_conflicts = [l[3:] for l in conflicts_seen_post
                        if l.startswith(("UU ", "AA ", "DD "))]
