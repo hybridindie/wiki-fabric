@@ -1097,9 +1097,13 @@ def cmd_pull():
     # truth; human review of catalog.json noise is meaningless) and the
     # merge can often complete with zero human steps.
     from sync_lib.policy import classify_change as _cls
-    conflicted_all = [l[3:] for l in git_status() if l.startswith("UU ") or l.startswith("AA ")]
+    conflicts_seen = git_status()
+    conflicted_all = [l[3:] for l in conflicts_seen if l.startswith("UU ") or l.startswith("AA ")]
     derived_conflicted = [p for p in conflicted_all if _cls(p) == "derived"]
     conflicted = [p for p in conflicted_all if p not in derived_conflicted]
+    # CI-diagnosability: the pull always reports which branch it took
+    print(f"  (pull conflicts: {conflicts_seen!r:.200} -> derived={derived_conflicted}, "
+          f"content={len(conflicted)})")
     if derived_conflicted and not conflicted:
         for p in derived_conflicted:
             subprocess.run(["git", "checkout", "--theirs", "--", p],
