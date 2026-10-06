@@ -407,8 +407,170 @@ def _llm_project_article(project, claims, topic_links, insight_takeaways, patter
     return resp.choices[0].message.content or ""
 
 
-def _generate_topic_article(topic, mode="mechanical", dry_run=False):
-    """Generate one topic article from a concept + its claims."""
+# --- Delta-mode refresh (#187) ----------------------------------------------
+# The Hindsight lesson: regenerating a long-lived document wholesale guarantees
+# drift ("told to preserve the unchanged parts, it will still drift"). The
+# refresh is therefore signature-gated: an article whose INPUTS are unchanged
+# is left physically untouched (0 tokens, byte-identical); changed inputs get
+# a delta prompt over the previous article, with untouched sections SPLICED
+# from the previous file (mechanical, never re-emitted by the model).
+
+LAST_SIGS = {}  # module-level: {out_path_str: input_sig} read by export-wiki
+
+
+def _file_sha(p):
+    from wf_common import sha256_file
+    try:
+        return sha256_file(Path(p))
+    except OSError:
+        return "missing"
+
+
+def _topic_input_sig(topic, claims):
+    """The deterministic generation-input signature for one topic article:
+    the tier-classified claim file hashes + generation mode. Same inputs ⇒
+    same sig ⇒ the previous article stands untouched."""
+    parts = [f"mode={_current_mode()}", "topic", str(topic.get("domain"))]
+    for cp in claims:
+        parts.append(f"{cp.stem}:{_file_sha(cp)}")
+    from hashlib import sha256
+    return sha256("\n".join(parts).encode()).hexdigest()[:16]
+
+
+_current_mode_holder = ["mechanical"]  # set by export-wiki per run
+
+
+def _current_mode():
+    return _current_mode_holder[0]
+
+
+def _load_input_manifest():
+    """The INPUT sidecar from the wiki-export manifest (additive `inputs`
+    section, wiki-export-manifest-v1): {rel_path: {sig, sha}}. Absent/corrupt
+    → {} (first delta run: everything regenerates once)."""
+    from obsidian_bridge import load_manifest
+    m = load_manifest() or {}
+    return m.get("inputs") or {}
+
+
+def _save_input_manifest(inputs):
+    from obsidian_bridge import load_manifest, write_manifest
+    m = load_manifest() or {}
+    m["inputs"] = inputs
+    write_manifest(m)
+
+
+def _delta_split(prev_text):
+    """Split the previous article into (frontmatter_block, sections) where
+    sections is a list of (heading_line_or_None, [body_lines]) — a None
+    heading means 'preamble' (before the first ##) or 'tail' (after a ---
+    divider): those blocks belong to no named section and ALWAYS pass through
+    verbatim (the model never edits what it cannot name)."""
+    m = re.match(r"^(---\n.*?\n---\n)(.*)$", prev_text, re.DOTALL)
+    if not m:
+        return "", [[None, prev_text.splitlines(keepends=True)]]
+    fm, body = m.group(1), m.group(2)
+    sections, cur_head, cur = [], None, []
+    for line in body.splitlines(keepends=True):
+        hm = re.match(r"^##? ", line)
+        if hm:
+            if cur or cur_head is not None:
+                sections.append((cur_head, cur))
+            cur_head, cur = line, []
+        elif re.match(r"^---\s*$", line) and cur_head is not None:
+            sections.append((cur_head, cur))
+            sections.append((None, [line]))  # the divider (tail starts)
+            cur_head, cur = None, ["__TAIL__"]
+        else:
+            cur.append(line)
+    if cur or cur_head is not None:
+        # strip the __TAIL__ marker: the tail lines speak for themselves
+        if cur and cur[0] == "__TAIL__":
+            cur = cur[1:]
+        sections.append((cur_head, cur))
+    return fm, sections
+
+
+def _llm_topic_delta(topic, prev_text, new_claims, removed_claims, dry_run=False):
+    """Delta prompt over the previous article: ONLY the edits the new
+    knowledge implies. Returns the model's edit list (JSON-ish) or None"""
+    from extract_backends import llm_config, LLM_TEMPERATURE, ARTICLE_MAX_TOKENS
+    import openai, os, json as _json
+    cfg = llm_config(compiler=True)
+    client = openai.OpenAI(base_url=cfg["base_url"], api_key=cfg["api_key"],
+                           timeout=float(os.environ.get("WIKI_LLM_TIMEOUT", "600")))
+    additions = "\n".join(f"- {claim_statement(cp)}" for cp, st in new_claims) or "- (none)"
+    removals = "\n".join(f"- {st[:120]}" for st in removed_claims) or "- (none)"
+    prompt = (
+        "You are updating ONE section of an existing wiki article, incrementally.\n"
+        f'Article topic: "{topic["title"]}".\n\n'
+        f"=== CURRENT ARTICLE ===\n{prev_text}\n=== END CURRENT ARTICLE ===\n\n"
+        f"=== NEW CLAIMS TO INCORPORATE ===\n{additions}\n"
+        f"=== CLAIMS NO LONGER SUPPORTED (remove their content) ===\n{removals}\n\n"
+        "Apply ONLY the changes this delta implies. Do NOT rewrite, reword, "
+        "or reformat anything else — untouched sections stay byte-identical "
+        "(bullets stay bullets, casing stays casing). Output STRICT JSON:\n"
+        '{"sections": [{"heading": "<existing ## heading to update OR a NEW heading>", '
+        '"action": "replace|append|insert", "new_body": ["<line>", ...]}, ...], '
+        '"delete_sections": ["<heading>"]}\n'
+        "Reference an existing heading by its EXACT text. Return ONLY the JSON.")
+    try:
+        resp = client.chat.completions.create(
+            model=cfg["ops_model"] or cfg["model"], temperature=LLM_TEMPERATURE,
+            max_tokens=ARTICLE_MAX_TOKENS,
+            messages=[{"role": "user", "content": prompt}])
+        out = resp.choices[0].message.content or ""
+        m = re.search(r"\{.*\}", out, re.DOTALL)
+        return _json.loads(m.group()) if m else None
+    except Exception as e:
+        print(f"  delta LLM failed: {e} — full regeneration fallback", file=sys.stderr)
+        return None
+
+
+def _apply_delta(prev_text, edits):
+    """MECHANICAL splice (#187): the model names sections + bodies; THIS code
+    decides placement — untouched sections pass through byte-identical from
+    the previous FILE (verbatim strings we read from disk, never model
+    output). The split keeps every newline (keepends), so splicing is pure
+    concatenation — no separators are added that the original lacked.
+    Headings match normalized (stripped); delete_sections removes; unknown
+    headings append at the end."""
+    fm, sections = _delta_split(prev_text)
+    by_head = {h.strip(): i for i, (h, _) in enumerate(sections)
+               if h is not None}
+    deletes = {str(d).strip() for d in (edits.get("delete_sections") or [])}
+    out_sections = [(h, ln) for h, ln in sections
+                    if not (h is not None and h.strip() in deletes)]
+    for edit in (edits.get("sections") or []):
+        if not isinstance(edit, dict) or not edit.get("heading"):
+            continue
+        head = str(edit["heading"]).strip()
+        if not head.startswith("#"):
+            head = f"## {head}"
+        lines = [str(x) if str(x).endswith("\n") else str(x) + "\n"
+                 for x in (edit.get("new_body") or [])]
+        i = by_head.get(head)
+        if i is not None:
+            for idx, (h, _) in enumerate(out_sections):
+                if h is not None and h.strip() == head:
+                    out_sections[idx] = (h, lines)
+                    break
+        else:
+            out_sections.append((head + "\n", lines))
+    out = [fm]
+    for h, ln in out_sections:
+        out.append(h if h is not None else "")
+        out.extend(ln)
+    return "".join(out)
+
+
+def _generate_topic_article(topic, mode="mechanical", dry_run=False,
+                            force_full=False):
+    """Generate one topic article from a concept + its claims. #187: when
+    the article's inputs are unchanged (input-manifest sig match), the
+    previous file stands untouched (0 tokens, byte-identical); changed
+    inputs route an LLM delta over the previous text with a mechanical
+    splice; force_full keeps today's wholesale regeneration."""
     title = topic["title"]
     slug = re.sub(r"[^a-z0-9-]+", "-", title.lower()).strip("-")
     claims = []
@@ -417,7 +579,18 @@ def _generate_topic_article(topic, mode="mechanical", dry_run=False):
         if cp.exists():
             claims.append(cp)
     if not claims:
+        LAST_SIGS[f"topics/{slug}"] = None
         return None, 0
+    sig = _topic_input_sig(topic, claims)
+    LAST_SIGS[f"topics/{slug}"] = sig
+    out_path = _wiki_root() / "topics" / f"{slug}.md"
+    if not force_full and not dry_run:
+        inputs = _load_input_manifest()
+        rel = str(out_path.relative_to(_wiki_root()))
+        prev_meta = inputs.get(rel)
+        if prev_meta and prev_meta.get("sig") == sig and out_path.exists():
+            print(f"  unchanged inputs — untouched: {rel}")
+            return out_path, len(claims)
     # staleness tiers (calendar + evidence-version drift, #143)
     current, flagged, stale = [], [], []
     for cp in claims:
@@ -433,6 +606,33 @@ def _generate_topic_article(topic, mode="mechanical", dry_run=False):
     # LLM mode: generate narrative prose with the compiler model
     if mode in ("llm", "hybrid") and (mode == "llm" or len(current) >= 5):
         try:
+            # #187 delta path: a previous article exists with a DIFFERENT sig
+            # → patch it (the splice keeps untouched sections byte-identical);
+            # no previous file → today's full generation.
+            prev_text = None
+            if not force_full and out_path.exists():
+                inputs = _load_input_manifest()
+                rel = str(out_path.relative_to(_wiki_root()))
+                if inputs.get(rel):
+                    prev_text = out_path.read_text(encoding="utf-8", errors="replace")
+            if prev_text:
+                prev_stems = {m.group(1) for m in re.finditer(
+                    r"\[cps?:(claim-[\w-]+)\]", prev_text)}
+                prev_stems |= {m.group(1) for m in re.finditer(
+                    r"(claim-[\w-]+-\d{3})", prev_text)}
+                claimed_stems = {(cp, st) for cp, st in current + flagged}
+                new_claims = [(cp, st) for cp, st in claimed_stems
+                              if cp.stem not in prev_stems]
+                removed = [st for cp, st in current + flagged
+                           if cp.stem in prev_stems and _file_sha(cp) == "missing"]
+                edits = _llm_topic_delta(topic, prev_text, new_claims, removed,
+                                         dry_run=dry_run)
+                if edits:
+                    article = _apply_delta(prev_text, edits)
+                    if not dry_run:
+                        out_path.write_text(article, encoding="utf-8")
+                    return out_path, len(claims)
+                # delta unavailable → fall through to full regeneration
             body = _llm_topic_article(topic, claims, dry_run=dry_run)
             if body:
                 lines = [
@@ -534,8 +734,10 @@ def _generate_topic_article(topic, mode="mechanical", dry_run=False):
     return out_path, len(claims)
 
 
-def _generate_project_article(project, config, dry_run=False, mode=None):
-    """Generate a project narrative summary from claims + decisions."""
+def _generate_project_article(project, config, dry_run=False, mode=None,
+                              force_full=False):
+    """Generate a project narrative summary from claims + decisions. #187:
+    sig-gated like topics (unchanged inputs → untouched file)."""
     rc = get_repo_config(config, project)
     if not rc:
         return None, 0
@@ -560,6 +762,21 @@ def _generate_project_article(project, config, dry_run=False, mode=None):
     decisions = sorted(decisions_dir.glob("*.md")) if decisions_dir.is_dir() else []
 
     slug = re.sub(r"[^a-z0-9-]+", "-", project).strip("-")
+    # input signature: claim files + decisions + mode (the article's inputs)
+    from hashlib import sha256 as _psig
+    sig_parts = [f"mode={_current_mode()}", "project", project]
+    sig_parts += [f"{cp.stem}:{_file_sha(cp)}" for cp in claims]
+    sig_parts += [f"dec:{d.stem}:{_file_sha(d)}" for d in decisions]
+    sig = _psig("\n".join(sig_parts).encode()).hexdigest()[:16]
+    out_path = _wiki_root() / "projects" / f"{project}.md"
+    LAST_SIGS[f"projects/{project}"] = sig
+    if not force_full and not dry_run:
+        inputs = _load_input_manifest()
+        rel = str(out_path.relative_to(_wiki_root()))
+        prev_meta = inputs.get(rel)
+        if prev_meta and prev_meta.get("sig") == sig and out_path.exists():
+            print(f"  unchanged inputs — untouched: {rel}")
+            return out_path, len(current)
 
     # LLM mode: generate a project retrospective
     mode = mode or config.get("wiki", {}).get("generation", {}).get("default") or "hybrid"

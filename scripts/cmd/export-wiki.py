@@ -77,9 +77,11 @@ def select_topics(min_claims=None):
         t["slug"] = re.sub(r"[^a-z0-9-]+", "-", t["title"].lower()).strip("-")
     return topics
 
-def _reconcile_wiki_dir(subdir, dry_run=False):
+def _reconcile_wiki_dir(subdir, dry_run=False, keep=None):
     """Delete stale generated pages in a wiki subdir so a run always reflects
     current evidence (the vault is the RESULT, never an accumulating mirror).
+    `keep(rel)` exempts pages from deletion (#187: signature-unchanged pages
+    survive reconcile so the delta no-op can keep them byte-identical).
     Returns count of files present (removed in non-dry-run)."""
     d = _wiki_root() / subdir
     if not d.exists():
@@ -87,6 +89,9 @@ def _reconcile_wiki_dir(subdir, dry_run=False):
     removed = 0
     for p in d.glob("*.md"):
         removed += 1
+        rel = str(p.relative_to(_wiki_root()))
+        if keep and keep(rel):
+            continue  # #187: unchanged inputs — the page stands
         if dry_run:
             continue
         try:
@@ -152,6 +157,10 @@ def main():
     parser.add_argument("--mode", default=None, choices=["mechanical", "llm", "hybrid"],
                        help="Override generation mode (default: fabric.yaml wiki.generation)")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--full", action="store_true",
+                        help="#187: force wholesale regeneration (skip the delta path)")
+    parser.add_argument("--check", action="store_true",
+                        help="#187: report which pages are regenerable-stale vs unchanged (0 tokens, writes nothing)")
     parser.add_argument("--push", action="store_true",
                         help="Write generated notes through the Obsidian Local REST API (#112; requires integrations.obsidian)")
     args = parser.parse_args()
@@ -160,6 +169,44 @@ def main():
     mode = args.mode or (config.get("wiki", {}).get("generation", {}).get("default") or "hybrid")
 
     print(f"=== Generating wiki ({mode}) ===")
+    from wiki_lib import generators as _gen
+    _gen._current_mode_holder[0] = mode  # the input signature carries the mode
+
+    # (#187) --check: 0-token staleness report over generation-input sigs.
+    if args.check:
+        topics_c = select_topics()
+        inputs = _gen._load_input_manifest()
+        wiki_root = _wiki_root()
+        stale_pages, unchanged, never = [], [], []
+        for t in topics_c:
+            slug = re.sub(r"[^a-z0-9-]+", "-", t["title"].lower()).strip("-")
+            cp = wiki_root / "topics" / f"{slug}.md"
+            claims = [(_gen, cs) for cs in t["claims"]]
+            from wf_common import sha256_file as _sha
+            parts = [f"mode={mode}", "topic", str(t.get("domain"))]
+            claims_real = []
+            for cs in t["claims"]:
+                cfile = layout.claims(CORPUS_ROOT) / f"{cs}.md"
+                if cfile.exists():
+                    parts.append(f"{cfile.stem}:{_sha(cfile)}")
+                    claims_real.append(cfile)
+            if not claims_real:
+                continue
+            import hashlib as _h
+            sig = _h.sha256("\n".join(parts).encode()).hexdigest()[:16]
+            rel = str(cp.relative_to(wiki_root)) if cp.exists() else None
+            if rel is None:
+                never.append(slug)
+            elif inputs.get(rel, {}).get("sig") == sig:
+                unchanged.append(slug)
+            else:
+                stale_pages.append(slug)
+        print(f"  unchanged (untouched on next export): {len(unchanged)}")
+        print(f"  regenerable-stale (will delta-refresh): {len(stale_pages)}")
+        for s in stale_pages[:15]:
+            print(f"    ~ {s}")
+        print(f"  never-generated (full generation): {len(never)}")
+        return 0
 
     # (H) Harvest-before-export (#112): human edits to wiki notes land as
     # evidence BEFORE regeneration overwrites them. No-op when the obsidian
@@ -176,10 +223,16 @@ def main():
         print(f"  harvest skipped: {e}", file=sys.stderr)
 
     # (B) Reconcile: clear stale generated pages so the output reflects current
-    # evidence, never an accumulating set of orphans.
-    n_remove_t = _reconcile_wiki_dir("topics", dry_run=args.dry_run)
-    n_remove_p = _reconcile_wiki_dir("projects", dry_run=args.dry_run)
-    n_remove_d = _reconcile_wiki_dir("domains", dry_run=args.dry_run)
+    # evidence, never an accumulating set of orphans. #187: pages whose inputs
+    # are UNCHANGED are preserved here (the reconcile reads the input manifest
+    # and skips them) — the 0-token no-op is only honest if the file survives
+    # the reconcile that precedes generation.
+    _inputs_manifest = _gen._load_input_manifest()
+    def _keep(rel):
+        return not args.full and rel in _inputs_manifest
+    n_remove_t = _reconcile_wiki_dir("topics", dry_run=args.dry_run, keep=_keep)
+    n_remove_p = _reconcile_wiki_dir("projects", dry_run=args.dry_run, keep=_keep)
+    n_remove_d = _reconcile_wiki_dir("domains", dry_run=args.dry_run, keep=_keep)
 
     # (A) Restore the concept layer (topics are built FROM concepts).
     #     Gated on the compiler eval; 0-token clustering, LLM synthesis.
@@ -198,21 +251,27 @@ def main():
 
     n_topics = 0
     for t in topics:
-        out, n = _generate_topic_article(t, mode, dry_run=args.dry_run)
+        out, n = _generate_topic_article(t, mode, dry_run=args.dry_run,
+                                         force_full=args.full)
         if out:
             n_topics += 1
-            if not args.dry_run:
+            _keep = str(out.relative_to(_wiki_root())) in _inputs_manifest \
+                and not args.full
+            if not args.dry_run and not _keep:
                 _enrich_page(out, config, mode, related_links=page_edges.get(t["slug"], []))
             print(f"  topic: {out.name} ({n} claims)")
 
     n_projects = 0
     project_counts = []
     for proj in projects:
-        out, n = _generate_project_article(proj, config, dry_run=args.dry_run, mode=mode)
+        out, n = _generate_project_article(proj, config, dry_run=args.dry_run,
+                                           mode=mode, force_full=args.full)
         project_counts.append((proj, n))
         if out:
             n_projects += 1
-            if not args.dry_run:
+            _keep = str(out.relative_to(_wiki_root())) in _inputs_manifest \
+                and not args.full
+            if not args.dry_run and not _keep:
                 _enrich_page(out, config, mode, related_links=page_edges.get(proj, []))
             print(f"  project: {out.name} ({n} current claims)")
 
@@ -257,6 +316,29 @@ def main():
 
     # Machine value of the human wiki: the citation edges, as deterministic JSON.
     graph_path = emit_citation_graph(topics, get_all_repo_names(config), dry_run=args.dry_run)
+
+    # (#187) Record the generation inputs: {rel_path: {sig, sha}} per page —
+    # the NEXT run's delta decision (unchanged sig = untouched file) and the
+    # harvest's content-hash check. Additive `inputs` section of the
+    # wiki-export-manifest-v1 envelope.
+    if not args.dry_run:
+        from wf_common import sha256_file as _sha
+        wiki_root = _wiki_root()
+        inputs = {}
+        for sub in ("topics", "projects", "domains"):
+            d = wiki_root / sub
+            if not d.is_dir():
+                continue
+            for p in sorted(d.rglob("*.md")):
+                rel = str(p.relative_to(wiki_root))
+                slug_key = p.stem
+                entry = dict(_inputs_manifest.get(rel) or {})
+                entry["sha"] = _sha(p)
+                gen_sig = _gen.LAST_SIGS.get(rel)
+                if gen_sig is not None:
+                    entry["sig"] = gen_sig
+                inputs[rel] = entry
+        _gen._save_input_manifest(inputs)
 
     # (C) Reconcile the machine index to disk.
     if _rebuild_catalog(dry_run=args.dry_run):
