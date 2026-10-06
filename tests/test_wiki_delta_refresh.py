@@ -259,3 +259,35 @@ class TestFlagsAndDocs:
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__, "-v"])
+
+class TestInputsSurvival:
+    """Found-in-review: the manifest rewriters must never wipe `inputs`."""
+
+    def test_harvest_rewrite_preserves_inputs(self, tmp_path, monkeypatch):
+        import obsidian_bridge as OB
+        import json as _json
+        mpath = tmp_path / "m.json"
+        mpath.write_text(_json.dumps({
+            "$schema": "wiki-fabric/wiki-export-manifest-v1",
+            "files": {"a": "1"},
+            "inputs": {"topics/t.md": {"sig": "s1", "sha": "x"}}}))
+        monkeypatch.setattr(OB, "MANIFEST_PATH", mpath)
+        OB.write_manifest({"files": {"a": "2"}, "orphans": []})
+        m = _json.loads(mpath.read_text())
+        assert m["inputs"]["topics/t.md"]["sig"] == "s1"
+        assert m["files"]["a"] == "2"
+
+    def test_save_merges_and_keeps_unselected_sigs(self, tmp_path, monkeypatch):
+        # a --project-scoped export regenerates only ITS pages; the other
+        # pages' recorded sigs stay true — clobbering them would force one
+        # pointless full regeneration of every untouched topic
+        import obsidian_bridge as OB
+        import json as _json
+        mpath = tmp_path / "m.json"
+        mpath.write_text(_json.dumps({"files": {}, "inputs": {
+            "topics/t.md": {"sig": "s1", "sha": "x"}}}))
+        monkeypatch.setattr(OB, "MANIFEST_PATH", mpath)
+        G._save_input_manifest({"topics/u.md": {"sig": "s2", "sha": "y"}})
+        inp = _json.loads(mpath.read_text()).get("inputs", {})
+        assert inp["topics/t.md"]["sig"] == "s1"
+        assert inp["topics/u.md"]["sig"] == "s2"

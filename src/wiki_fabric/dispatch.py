@@ -364,10 +364,10 @@ def _capture(argv):
 
 @verb("export")
 def _export(argv):
-    """Generate the human-layer wiki (wf export wiki [--push])."""
+    """Generate the human-layer wiki (wf export wiki [--push] [--full|--check])."""
     if argv and argv[0] == "wiki":
         return _run_script(find_fabric(), "scripts/cmd/export-wiki.py", *argv[1:])
-    print("Usage: wf export wiki [--push] [--project <slug>] [--dry-run]", file=sys.stderr)
+    print("Usage: wf export wiki [--push] [--project <slug>] [--dry-run] [--full] [--check]", file=sys.stderr)
     return 1
 
 
@@ -923,13 +923,15 @@ _COMPLETION_FLAG_HINTS = {
     "gate": ["--deliveries", "--json", "--help"],
     "context": ["--task", "--paths", "--project", "--write-receipt", "--format", "--max", "--judge-borderline", "--help"],
     "lint": ["--okf", "--help"],
-    "query": ["--no-rerank", "--help"],
+    "query": ["--no-rerank", "--type", "--save", "--verbose", "--help"],
     "sync": ["--strategy", "--dry-run", "--help"],
     "mine": ["--llm", "--judge", "--dry-run", "--help"],
-    "export": ["--push", "--project", "--dry-run", "--help"],
+    "export": ["--push", "--project", "--dry-run", "--full", "--check", "--help"],
     "okf": ["--out", "--scope", "--help"],
     "bootstrap": ["--dry-run", "--help"],
     "promote": ["--promote", "--list", "--help"],
+    "promote-patterns": ["--list", "--apply", "--reject", "--reason",
+                         "--auto", "--unapply", "--dry-run", "--help"],
 }
 
 

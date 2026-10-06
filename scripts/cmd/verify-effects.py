@@ -70,6 +70,9 @@ def verify_claim(claim_path, max_pairs=12, min_confidence=0.6):
         return {"claim": claim_path, "refused": "G-J", "detail": why,
                 "pairs": [], "verdict": None}
     route = judgment_route()
+    # provenance: the claim's own project (no longer routes the tier —
+    # judgment is fabric-global — but the effects report names it)
+    _project = claim_repo(claim_path)
     statement, _ = _statement(claim_path)
     pool = related_claim_pool(claim_path, max_n=max_pairs)
     pairs = []
@@ -105,6 +108,7 @@ def verify_claim(claim_path, max_pairs=12, min_confidence=0.6):
         pairs.append(pair)
     report = {
         "claim": claim_path.stem,
+        "project": _project,
         "route": route,
         "pairs": pairs,
         "judged_effects": {

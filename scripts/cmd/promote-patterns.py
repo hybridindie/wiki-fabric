@@ -459,7 +459,7 @@ def main():
                         help="#190: judged auto-apply tier — preconditions + calibrated judgment band per candidate (needs tuning.promotion.auto_apply: true; G-J gated)")
     parser.add_argument("--unapply", metavar="CANONICAL",
                         help="#190: roll an auto-applied candidate back to the inbox (refuses non-auto-applied files)")
-    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--dry-run", action="store_true", help="Show what would happen; write nothing")
     args = parser.parse_args()
 
     if args.list:

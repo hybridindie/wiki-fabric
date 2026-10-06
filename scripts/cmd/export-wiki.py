@@ -174,6 +174,8 @@ def main():
 
     # (#187) --check: 0-token staleness report over generation-input sigs.
     if args.check:
+        # #187: 0-token staleness report — the SAME sig helper the generator
+        # uses (the inline copy here was a drift target; one truth).
         topics_c = select_topics()
         inputs = _gen._load_input_manifest()
         wiki_root = _wiki_root()
@@ -181,19 +183,15 @@ def main():
         for t in topics_c:
             slug = re.sub(r"[^a-z0-9-]+", "-", t["title"].lower()).strip("-")
             cp = wiki_root / "topics" / f"{slug}.md"
-            claims = [(_gen, cs) for cs in t["claims"]]
-            from wf_common import sha256_file as _sha
-            parts = [f"mode={mode}", "topic", str(t.get("domain"))]
             claims_real = []
             for cs in t["claims"]:
                 cfile = layout.claims(CORPUS_ROOT) / f"{cs}.md"
                 if cfile.exists():
-                    parts.append(f"{cfile.stem}:{_sha(cfile)}")
                     claims_real.append(cfile)
             if not claims_real:
                 continue
-            import hashlib as _h
-            sig = _h.sha256("\n".join(parts).encode()).hexdigest()[:16]
+            _gen._current_mode_holder[0] = mode
+            sig = _gen._topic_input_sig(t, claims_real)
             rel = str(cp.relative_to(wiki_root)) if cp.exists() else None
             if rel is None:
                 never.append(slug)
@@ -255,9 +253,9 @@ def main():
                                          force_full=args.full)
         if out:
             n_topics += 1
-            _keep = str(out.relative_to(_wiki_root())) in _inputs_manifest \
-                and not args.full
-            if not args.dry_run and not _keep:
+            page_rel = str(out.relative_to(_wiki_root()))
+            sig_preserved = page_rel in _inputs_manifest and not args.full
+            if not args.dry_run and not sig_preserved:
                 _enrich_page(out, config, mode, related_links=page_edges.get(t["slug"], []))
             print(f"  topic: {out.name} ({n} claims)")
 
@@ -269,9 +267,9 @@ def main():
         project_counts.append((proj, n))
         if out:
             n_projects += 1
-            _keep = str(out.relative_to(_wiki_root())) in _inputs_manifest \
-                and not args.full
-            if not args.dry_run and not _keep:
+            page_rel = str(out.relative_to(_wiki_root()))
+            sig_preserved = page_rel in _inputs_manifest and not args.full
+            if not args.dry_run and not sig_preserved:
                 _enrich_page(out, config, mode, related_links=page_edges.get(proj, []))
             print(f"  project: {out.name} ({n} current claims)")
 
@@ -331,12 +329,14 @@ def main():
                 continue
             for p in sorted(d.rglob("*.md")):
                 rel = str(p.relative_to(wiki_root))
-                slug_key = p.stem
+                rel_noext = rel[:-3] if rel.endswith(".md") else rel
                 entry = dict(_inputs_manifest.get(rel) or {})
                 entry["sha"] = _sha(p)
-                gen_sig = _gen.LAST_SIGS.get(rel)
+                gen_sig = _gen.LAST_SIGS.get(rel_noext)
                 if gen_sig is not None:
                     entry["sig"] = gen_sig
+                # else: page not generated this run (index/deep-dive/
+                # preserved) — the previous sig (if any) stays in the entry
                 inputs[rel] = entry
         _gen._save_input_manifest(inputs)
 

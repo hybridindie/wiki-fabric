@@ -110,6 +110,16 @@ def load_manifest():
 
 def write_manifest(manifest):
     MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
+    # #187: `inputs` (the generation-input signatures) is carried by THIS
+    # same envelope but is owned by the export's delta path — a wholesale
+    # rewrite (harvest baseline/re-record) must not wipe it.
+    if "inputs" not in manifest:
+        try:
+            prev = load_manifest()
+            if prev and prev.get("inputs"):
+                manifest["inputs"] = prev["inputs"]
+        except Exception:
+            pass  # torn prior manifest → inputs regenerate on the next export
     manifest["$schema"] = MANIFEST_SCHEMA
     manifest["generated"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n",

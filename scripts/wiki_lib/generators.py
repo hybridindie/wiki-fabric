@@ -456,7 +456,13 @@ def _load_input_manifest():
 def _save_input_manifest(inputs):
     from obsidian_bridge import load_manifest, write_manifest
     m = load_manifest() or {}
-    m["inputs"] = inputs
+    prev = m.get("inputs") or {}
+    # merge: this run's sigs overwrite their own rel; sigs for pages NOT
+    # selected this run (a --project-scoped export) stay — their recorded
+    # truth is unchanged, and clobbering them would force one full regen
+    merged = dict(prev)
+    merged.update(inputs)
+    m["inputs"] = merged
     write_manifest(m)
 
 
@@ -617,14 +623,15 @@ def _generate_topic_article(topic, mode="mechanical", dry_run=False,
                     prev_text = out_path.read_text(encoding="utf-8", errors="replace")
             if prev_text:
                 prev_stems = {m.group(1) for m in re.finditer(
-                    r"\[cps?:(claim-[\w-]+)\]", prev_text)}
-                prev_stems |= {m.group(1) for m in re.finditer(
                     r"(claim-[\w-]+-\d{3})", prev_text)}
                 claimed_stems = {(cp, st) for cp, st in current + flagged}
-                new_claims = [(cp, st) for cp, st in claimed_stems
+                # the delta prompts NEW claim content; a claim removed from
+                # the SUPPORTED tier is still rendered in its (flagged/stale)
+                # section by the full-regen path, so removals ride the next
+                # full generation rather than a surgical delete (conservative)
+                new_claims = [(cp, st) for cp, st in sorted(claimed_stems)
                               if cp.stem not in prev_stems]
-                removed = [st for cp, st in current + flagged
-                           if cp.stem in prev_stems and _file_sha(cp) == "missing"]
+                removed = []
                 edits = _llm_topic_delta(topic, prev_text, new_claims, removed,
                                          dry_run=dry_run)
                 if edits:

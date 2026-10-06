@@ -1406,7 +1406,7 @@ case "${1:-help}" in
         echo "  hook {install|uninstall|status}   Git post-commit auto-capture+ingest in a project"
         echo "                                    (--extract-claims: LLM runs on drift)"
         echo "  skill [--list] [<name>]           Print the procedure for a workflow (ingest, promote) — universal across agent harnesses"
-        echo "  export wiki [--mode mechanical|llm|hybrid]   Generate the human-layer wiki (topics, projects, staleness)"
+        echo "  export wiki [--mode mechanical|llm|hybrid] [--full|--check]   Generate the human-layer wiki (topics, projects, staleness; --full = wholesale regen, --check = 0-token delta-staleness report)"
         echo "  review --check [--project <slug>] Staleness report: what's due, overdue, stale"
         echo "  review --verify <claim>           Re-verify a claim (rolls review_after forward)"
         echo "  review --auto-reverify            Mechanically re-verify all overdue (sha256-gated, 0 tokens)"
