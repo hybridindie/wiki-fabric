@@ -153,6 +153,24 @@ _LINEAGE_QUERY_WORDS = {"where", "origin", "provenance", "discussed", "session",
                         "thread", "came", "source", "decided", "pr", "conversation"}
 
 
+def _detect_type(query):
+    """Auto-detect the query type from keywords (the #189 'changed' branch
+    included) — the single truth main() uses, extracted for tests."""
+    q = query.lower()
+    if any(w in q for w in ["decide", "decision", "why did we", "chose"]):
+        return "decision"
+    if any(w in q for w in ["what changed", "how did", "evolution", "over time", "used to", "evolve"]):
+        # #189: the temporal axis — earliest→latest, capture-date ranked
+        return "changed"
+    if any(w in q for w in ["verify", "is it true", "does", "check"]):
+        return "verify"
+    if any(w in q for w in ["compare", "versus", " vs ", "difference"]):
+        return "compare"
+    if any(w in q for w in ["investigate", "gap", "what should", "missing", "next"]):
+        return "gap"
+    return "concept"
+
+
 def thread_lineage(query, expanded, query_type, index=None, pages=None):
     """#104b: for lineage-shaped queries (or decision queries), collect the
     thread neighborhood of the top claims — 'where did this come from'.
@@ -279,6 +297,46 @@ def graphify_boost(pg, q_tokens, q_words):
     return RETRIEVAL["graphboost_hit"] * min(hits, RETRIEVAL["graphboost_cap"])
 
 
+def _page_date(fm):
+    """A page's best temporal cut (frontmatter dates only — deterministic):
+    last_verified > updated > generated.at > created. Returns a date or None."""
+    from datetime import datetime as _dt
+    for key in ("last_verified", "updated"):
+        raw = str(fm.get(key) or "").strip()
+        if raw:
+            try:
+                return _dt.strptime(raw[:10], "%Y-%m-%d").date()
+            except ValueError:
+                continue
+    gen = fm.get("generated")
+    if isinstance(gen, dict):
+        raw = str(gen.get("at") or "").strip()
+        if raw:
+            try:
+                return _dt.fromisoformat(raw.replace("Z", "+00:00")).date()
+            except ValueError:
+                pass
+    raw = str(fm.get("created") or "").strip()
+    if raw:
+        try:
+            return _dt.strptime(raw[:10], "%Y-%m-%d").date()
+        except ValueError:
+            return None
+    return None
+
+
+def _age_rank(d, pages):
+    """Normalized recency rank [0..1]: 1 = newest page date in the corpus,
+    0 = oldest, None dates score 0. Deterministic per corpus snapshot."""
+    dates = [v for v in (_page_date(pg["fm"]) for pg in pages) if v is not None]
+    if not dates or d is None:
+        return 0.0
+    lo, hi = min(dates), max(dates)
+    if hi == lo:
+        return 1.0
+    return (d - lo).days / (hi - lo).days
+
+
 def score_pages(pages, query, query_type):
     """Score pages against the query, weighted by query type."""
     q_n = norm(query)
@@ -314,7 +372,15 @@ def score_pages(pages, query, query_type):
 
         # Type-based boosting per retrieval policy
         boost = 1.0
-        if query_type == "decision":
+        if query_type == "changed":
+            # #189 (the Hindsight recall's temporal axis, ported): keyword
+            # match is the candidate FILTER; capture recency is the RANK.
+            # The staleness ladder still applies (contested pages flag in
+            # the answer, never silently dropped). boost carries the sort:
+            # newer-captured candidates outrank older ones at equal overlap.
+            cap = _page_date(pg["fm"]) or _date_floor(pg)
+            boost = 1.0 + (0.5 * _age_rank(cap, pages))
+        elif query_type == "decision":
             if pg["type"] == "decision":
                 boost = 3.0
             elif pg["type"] == "experience-event":
@@ -459,6 +525,65 @@ def hop_gate(args, scored_pages, pages, relations, max_edges=RETRIEVAL["graphboo
 # Answer generation
 # ---------------------------------------------------------------------------
 
+def _evolution_sort(scored):
+    """#189: the changed protocol's payload order — earliest→latest by the
+    page's temporal cut, keyword score as tiebreak. Deterministic (no LLM
+    ordering)."""
+    def key(entry):
+        score, pg = entry
+        d = _page_date(pg["fm"])
+        return (d or date.min, -score)
+    return sorted(scored, key=key)
+
+
+def _changed_answer(query, ordered):
+    """#189: the changed-protocol answer — an ordered EVOLUTION (earliest
+    state → each contradict/supersedes event → current state), each step with
+    its locator. The ORDER is the payload (deterministic sort upstream); when
+    the LLM tier narrates, main() post-processes — this rendering proves the
+    ordering deterministically (the 0-token fall-back shape too)."""
+    claims = []
+    for score, pg in ordered:
+        if pg["type"] != "claim":
+            continue
+        refs = pg["fm"].get("source_refs", [{}])
+        ref = refs[0] if isinstance(refs, list) and refs else {}
+        d = _page_date(pg["fm"])
+        claims.append({
+            "statement": pg["fm"].get("statement", ""),
+            "locator": ref.get("locator", "?"),
+            "quote": ref.get("quote", "")[:70],
+            "status": pg["fm"].get("status", "?"),
+            "date": d.isoformat() if d else "(undated)",
+        })
+        if len(claims) >= 10:
+            break
+    if not claims:
+        return "No claims with dating for this query — nothing to order temporally."
+    lines = []
+    lines.append("## Bottom line")
+    lines.append("")
+    lines.append(f"The record for \"{query.strip()}\" spans {len(claims)} dated claim(s); "
+                 "ordered earliest → latest below.")
+    lines.append("")
+    lines.append("## Evolution (earliest → latest)")
+    lines.append("")
+    for i, c in enumerate(claims):
+        mark = {"contested": "⚠ contested — ", "supported": "", "": ""}.get(
+            str(c["status"]), f"{c['status']} — ")
+        rels = ""
+        if i:
+            lines.append(f"  ⤷ then ({c['date']}):")
+        else:
+            lines.append(f"**{c['date']}** — first recorded state:")
+        lines.append(f"- {mark}{c['statement'][:130]}")
+        lines.append(f"  [{c['locator']}] quote: \"{c['quote']}...\"")
+        lines.append("")
+    lines.append("Ordering is capture-date rank (deterministic); contested entries "
+                 "flag (the staleness ladder applies) — never silently dropped.")
+    return "\n".join(lines)
+
+
 def generate_answer(query, scored, pages, query_type, symbol_hits=None, thread_hits=None):
     """Produce a structured answer per the query protocol.
 
@@ -472,6 +597,9 @@ def generate_answer(query, scored, pages, query_type, symbol_hits=None, thread_h
     symbol_hits = [pg for pg in (symbol_hits or []) if isinstance(pg, dict) and pg.get("fm")]
     if not scored and not symbol_hits and not thread_hits:
         return "No relevant pages found for this query."
+
+    if query_type == "changed":
+        return _changed_answer(query, _evolution_sort(scored))
 
     # Take top results
     top = scored[:10]
@@ -700,7 +828,7 @@ def main():
     parser = argparse.ArgumentParser(description="Query the evidence fabric")
     parser.add_argument("query", help="Question to answer")
     parser.add_argument("--type", default="auto",
-                        choices=["auto", "decision", "verify", "compare", "gap", "concept"],
+                        choices=["auto", "decision", "verify", "compare", "gap", "concept", "changed"],
                         help="Query type (determines retrieval policy)")
     parser.add_argument("--save", action="store_true", help="Save answer as a synthesis page")
     parser.add_argument("--verbose", action="store_true", help="Show scoring detail")
@@ -713,17 +841,7 @@ def main():
     # Auto-detect query type if not specified
     query_type = args.type
     if query_type == "auto":
-        q = args.query.lower()
-        if any(w in q for w in ["decide", "decision", "why did we", "chose"]):
-            query_type = "decision"
-        elif any(w in q for w in ["verify", "is it true", "does", "check"]):
-            query_type = "verify"
-        elif any(w in q for w in ["compare", "versus", " vs ", "difference"]):
-            query_type = "compare"
-        elif any(w in q for w in ["investigate", "gap", "what should", "missing", "next"]):
-            query_type = "gap"
-        else:
-            query_type = "concept"
+        query_type = _detect_type(args.query)
 
     if args.verbose:
         print(f"Query type: {query_type}", file=sys.stderr)
