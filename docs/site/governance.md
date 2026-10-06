@@ -51,6 +51,31 @@ $ wf lint                    # the 0-error gate before any commit
 0 error(s), 6314 warning(s)  # warnings are advisory; errors fail the commit
 ```
 
+### The scoped auto-promote exception (#190)
+
+The human gate is absolute for dossiers, claims, domains, and questions. For
+**inbox pattern candidates** — the trivially-promotable class — a fabric may
+opt into the judged-confident tier:
+
+```yaml
+tuning:
+  promotion:
+    auto_apply: true         # OFF by default — a policy change must be explicit
+    auto_threshold: 0.90     # calibration-sensitive: overrides travel with provenance (G-J)
+```
+
+`wf promote-patterns --auto` then bands each candidate: deterministic
+preconditions first (candidate type, complete provenance, age ≥ 1d, no
+judged-different verdict — one refusal means the human), then ONE calibrated
+judgment call. `p ≥ auto_threshold` applies (the same deterministic move,
+stamped `auto_applied: {judge, prob, at}` and logged — reversible with
+`promote-patterns --unapply`); the near-band below the floor escalates to the
+human gate; further below stays in the inbox with the verdict recorded. The
+gate's `auto-applies` INFO section lists recent applies (never actionable
+alone) — auto-promote downgrades rows, it never silences the gate. The judge
+proposes, never writes: the apply is a file move, the candidate text is
+untouched.
+
 `wf skill ingest` / `wf skill promote` print the full agent-facing
 procedures — so any harness (Claude Code, opencode, Codex) runs the same
 governed loop without the human dictating steps each time.

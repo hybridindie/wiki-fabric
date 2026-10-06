@@ -65,7 +65,10 @@ The machine surfaces — each machine-written, human-readable:
 
 `wf verify-effects` writes `<claim-stem>.effects.json` here (machine
 artifacts never sit beside pages — the layout contract). Audit trail of the
-independent second-opinion verdicts.
+independent second-opinion verdicts — `{claim, project, route, pairs,
+judged_effects}`: the claim's provenance namespace, the route used, the
+per-pair verdicts, and the `contradicts`/`supersedes` map the #186 synthesis
+prompt and the #175 newest-wins sweep both consume.
 
 ### `registry/promotion-queue.md` — the human-maintained promotion checklist
 
@@ -202,7 +205,10 @@ thread signals.
 Written by `wf export wiki` (#112): path → sha256 for every wiki note at
 export time. The next export's harvest step diffs against it — human edits
 land as evidence before regeneration. Orphan files (nothing claims them)
-are tracked.
+are tracked. Additive sections (within-version, compatibility policy):
+`inputs:` (#187) — `{rel_path: {sig, sha}}`, each page's *generation-input*
+signature carried forward by every rewriter; the next export's delta decision
+reads it (sig unchanged ⇒ the file stands byte-identical, 0 tokens).
 
 ### `registry/catalog.json` → `wiki-fabric/registry-v1`
 

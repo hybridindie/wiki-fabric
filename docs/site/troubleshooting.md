@@ -237,6 +237,26 @@ from it were stale-stamped; nothing re-captures it automatically. If the
 source is genuinely gone, leave the tombstone; if it moved, re-capture
 creates a fresh record.
 
+### `SECRETS <page>: ... pattern detected`
+
+The #188 lint rule found a credential-shaped string in a corpus page —
+token prefixes match *standalone text only* (slugs like
+`…risk-monitoring-setup-md` don't trip it), so a match is a real
+key-shaped string in authored content. Recovery: **rotate the credential
+first**, remove/redact the page, re-capture or re-ingest clean. Real keys
+belong in `<fabric>/secrets.env` (gitignored); authored pages reference the
+env-var NAME, never the value. Matches are masked in lint output (the
+report itself gets committed). `evidence/raw/` is exempt — the capture
+plane holds upstream docs verbatim and never lints for content.
+
+### `Auto-promote is OFF (tuning.promotion.auto_apply: false)`
+
+The #190 tier is off until a fabric turns it on explicitly — a policy
+change must be explicit. Add the `tuning.promotion` block
+(`configuration.md`), then re-run `wf promote-patterns --auto`. If you ran
+it from the corpus CI expecting automation: the tier is deliberately a
+HUMAN command; the scheduled mining pipeline stays promotion-free.
+
 ## Where to look when something else breaks
 
 - `wf status` — health, inventory, all three models, lint summary

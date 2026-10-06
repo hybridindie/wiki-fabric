@@ -32,6 +32,21 @@ calibrated judge lets CI gate *judgment*, not just determinism.
 
 ## Where it runs (all live)
 
+| Surface | What the judge does | Gate |
+|---|---|---|
+| `mine-promotions` near-miss refinement | "same recurring problem + intervention?" pairwise verdict (merges/splits keyword clusters) | G-J |
+| `mine-chats` / `rules` twin-merges | judged near-duplicate reconciliation of staged candidates | G-J |
+| `wf verify-effects` | independent second opinion on claim effects (supports/contradicts/supersedes) | G-J |
+| eval gates (`eval-judgment`, `eval-stability`, `eval-behavior --judge`) | typed verdicts on model-sensitivity fixtures | G-J |
+| **`promote-patterns --auto`** (#190) | one `noul` per inbox candidate: confident (≥ `tuning.promotion.auto_threshold`) **auto-applies** (stamped `auto_applied` + logged + reversible via `--unapply`); in-band escalates to the human gate; below stays (verdict recorded) | G-J + `tuning.promotion.auto_apply: true` (OFF by default) |
+| retrieval fusion (`systemone_rank`) | reorders top query candidates (local decision models, ~0.7s batched) | `integrations.judgment.enabled` |
+
+**Judgment is a fabric-global setting.** There is no per-repo override — one
+judge identity per fabric is what makes the G-J calibration gate meaningful
+(a per-repo route pin would multiply identities under one gate and silently
+fork the calibrations; the seam existed and was removed). Route a repo's
+*extraction* instead: `repos.<slug>.extract: local`.
+
 | Surface | What the judge does | Route |
 |---|---|---|
 | `wf mine promotions` | near-miss cluster pairs judged "same pattern?" (merge / keep-split); an incoherence sweep demotes cluster members judged DIFFERENT from their representative (split) — an incoherent cluster can't reach a dossier intact | automatic when enabled |
@@ -166,6 +181,10 @@ See [Notifications](/integrations#the-loudness-contract).
 - **Low-variance judgment, not determinism** — every judgment records
   backend + model + probability in the artifact.
 - **Never authority** — a judge score supports a check; provenance, scope,
-  and human gates decide.
+  and human gates decide. The #190 auto-apply tier is the scoped exception:
+  inbox candidates only, opt-in, recorded, reversible — dossiers, claims,
+  domains, and questions are never auto-promoted.
 - **Degrade everywhere** — server down, route off, timeout ⇒ the caller's
   deterministic behavior stands, byte-identical.
+- **One judge identity per fabric** — the calibration receipt is pinned to
+  the judge (kind + model); a swap re-runs the eval or nothing proposes.

@@ -69,10 +69,13 @@ promotions). So:
   `global/computations/ac-judgment-eval.md`; attested by
   `references/attesters/check-judgment-eval.py`.
 - Every judgment call site (mine-promotions clustering + incoherence sweep,
-  verify-effects, context borderline re-rank) checks the gate FIRST: no PASS
+  verify-effects, context borderline re-rank, the `promote-patterns --auto`
+  banding) checks the gate FIRST: no PASS
   receipt for the current judge identity (`judge_kind`, model id) → the
   deterministic keyword/lexical result stands, loudly. A judge swap is a
-  judgment change — recalibrate before the tier proposes again.
+  judgment change — recalibrate before the tier proposes again. The auto-apply
+  tier adds the policy gate to the same check: no calibration receipt, no
+  threshold, no auto-promotes at any threshold.
 - The off switch is explicit and logged: `WIKI_JUDGE_GATE=0` skips the check
   (returns "G-J gate SKIPPED") — overrides are visible in output, never
   silent.

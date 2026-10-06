@@ -145,8 +145,10 @@ structural:
 And it compounds: the experience event behind that anti-pattern was mined
 from two projects' real failures (that's what "maturity 2" means — a pattern
 isn't *recommended* until it's been observed in ≥2 independent projects, and
-never auto-promoted: a human approves every promotion). One session's lesson
-becomes every future session's starting context.
+promotion is human-gated — with one scoped, opt-in exception: trivially
+promotable inbox candidates may auto-apply under a calibrated judge's
+confidence (#190), stamped and reversible; dossiers never do). One session's
+lesson becomes every future session's starting context.
 
 Run it yourself: `bash scripts/demo.sh --json` for the machine-checkable
 manifest, or continue to [Getting Started](./getting-started).

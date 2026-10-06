@@ -18,8 +18,11 @@ An agent (or you) asks: *"Why does the write path batch?"* Four layers run:
 
 **1. Type detection.** The question is routed by intent — `verify` questions
 boost claims and locators, `decision` questions boost decisions and experience
-events, `gap` questions surface open questions and contradictions. Type is
-auto-detected or forced with `--type`.
+events, `gap` questions surface open questions and contradictions, and
+**`changed` questions (#189) get the temporal axis**: capture-date is the
+*ranking* (keyword match stays the candidate filter) and the answer renders as
+an ordered evolution — earliest state → latest, each step with its locator,
+contested entries flagged. Type is auto-detected or forced with `--type`.
 
 **2. Lexical scoring.** Every page scores by concept overlap — words are
 normalized and stemmed (`rotation` matches `rotating`), so morphological
@@ -94,3 +97,20 @@ content. Prose is read by people; edges are read by machines.
 
 For people, `wf export wiki` enriches every generated page with consistent,
 OpenWiki-style anatomy — a `SUMMARY:` lead, a deterministic `## Key Takeaways` (from the page's own top-tier claims, never hallucinated), a `## Sources` backtrace to the cited claims, a `generated: {by, at}` provenance stamp, and validated/auto-repaired Mermaid diagrams. Explore the resulting `[[wikilinks]]` in Obsidian's native Graph view — it renders the topic↔topic↔project network. No separate HTML viewer is shipped; Obsidian is the human graph surface.
+
+**Delta-mode refresh (#187).** Regeneration is signature-gated: each article's
+*generation inputs* (mode + the tier-classified claim files' hashes + a
+project page's decisions) hash into an input signature, recorded in the
+wiki-export manifest's `inputs:` section. An article whose inputs are
+unchanged is left **byte-identical** — 0 tokens, and it survives the
+reconcile that precedes generation. Changed inputs get a **delta prompt**
+(the previous article + the new/removed claims) whose section edits are
+spliced *mechanically*: the model names headings and bodies; the code decides
+placement, and preamble/tail sections pass through verbatim from disk — the
+model never edits what it cannot name. The Hindsight lesson this encodes:
+told to "preserve the unchanged parts" a generative model will still drift
+(bullets become numbers, casing shifts) — untouched text must come from the
+previous FILE, never from the model's re-emission. `--full` forces wholesale
+regeneration; `--check` (0 tokens) reports unchanged / regenerable-stale /
+never-generated. Human wiki edits keep winning: harvest-before-export runs
+before any of it.

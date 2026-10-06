@@ -34,7 +34,10 @@ durable pattern/anti-pattern takeaways from captured chat sessions as gated cand
 (`patterns/_inbox/`, provenance-cited to the conversation, idempotent hashed ids). They
 surface in `wf gate`; `wf promote-patterns --apply <id> --reject <id> --reason` is the
 human decision. Apply moves them to canonical `patterns/` — the maturity gates govern
-from there. Mining with thread signals (#103) means clusters are informed by graph
+from there. Opt-in (#190): `promote-patterns --auto` bands the inbox through the
+calibrated judge (confident applies, near-band escalates); auto-applies are stamped +
+reversible, and the CI pipeline itself never promotes. Mining with thread signals
+(#103) means clusters are informed by graph
 structure (shared sessions, file overlap, continuations), not just text overlap.
 
 `mine-promotions.py` clusters experience events across projects by concept

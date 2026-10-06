@@ -55,13 +55,15 @@ graph TB
 
     R1 & R2 & R3 -->|capture| RAW
     RAW -->|"ingest.py → extract_backends (LLM)"| CLAIMS
-    CLAIMS -->|"synthesize.py (LLM)"| CONCEPTS
+    CLAIMS -->|"synthesize.py (LLM; contradiction-aware, #186)"| CONCEPTS
     CLAIMS -->|"mine-promotions.py"| PATTERNS
     PATTERNS -->|"promote.py"| SKILLS
+    INBOX["patterns/_inbox/<br/>(gated candidates)"] -->|"promote-patterns (--apply / --auto judged tier, #190)"| PATTERNS
     R1 & R2 & R3 -->|"build-entity-index.py (AST)"| ENTITIES
     R1 -->|"graphify-bridge.py (AST, 0 tokens)"| GRAPHS
     EVENTS -->|"mine-promotions.py"| PATTERNS
     CLAIMS -->|"wiki_generate.py (writer/bookkeeper, 0 tokens)"| WIKI["wiki/<br/>(staged pages → change-set flow)"]
+    CLAIMS -->|"export-wiki.py (signature-gated: delta refresh, #187)"| VAULTW["vault wiki/<br/>(the human layer)"]
     WIKI -->|"publish-wiki.py"| SITE["static site<br/>(Quartz, graph view)"]
 ```
 

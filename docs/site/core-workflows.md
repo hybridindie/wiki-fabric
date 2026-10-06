@@ -192,6 +192,10 @@ wf query "What patterns apply to batch-write systems?" --save   # file as a synt
 
 # Force query type
 wf query "What did we decide about the bridge?" --type decision
+
+# The temporal axis (#189): capture-date ranked, ordered earliest → latest
+# with per-step locators (auto-detected for "what changed / how did" queries)
+wf query "what changed about our retry handling?" --type changed
 ```
 
 **Scenario — mid-session architectural question.** While refactoring, the agent
@@ -281,6 +285,13 @@ wf mine promotions
 wf mine chats <project> --propose
 wf promote-patterns --list    # wf gate surfaces them too
 wf promote-patterns --apply <id>
+
+# The judged auto-apply tier (#190; opt-in — tuning.promotion.auto_apply: true):
+# deterministic preconditions + one calibrated judgment per candidate.
+# Confident (>= auto_threshold) applies — stamped + reversible; near-band
+# escalates to you; below stays (verdict recorded, --list annotates).
+wf promote-patterns --auto          # the whole inbox, banded
+wf promote-patterns --unapply <id>  # roll an auto-apply back
 
 # Review dossier, then promote
 wf promote --list
