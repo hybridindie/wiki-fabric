@@ -33,7 +33,11 @@ spellings advise), **`JUDGMENT-GATE`** (a judged surface refused: no PASS
 G4 gate's analog; the deterministic fallback stands loudly),
 **`CONTRADICTION-STAMP`** (a claim mechanically demoted by the newest-wins
 sweep, #175: `contradicted-by:` frontmatter stamp + `status: contested` —
-restores when the contradictor loses support), plus the OKF-floor `OKF-*` codes (`--okf` mode). The rest are structural — `FRONTMATTER`
+restores when the contradictor loses support),
+**`SECRETS`** (a credential-shaped string in a corpus content page, #188 —
+error tier, blocks the commit gate: rotate, redact, re-ingest; matches are
+masked in output, `evidence/raw/` exempt as the immutable capture plane),
+plus the OKF-floor `OKF-*` codes (`--okf` mode). The rest are structural — `FRONTMATTER`
 (malformed metadata), `BROKEN-LINK`, `DUP-ID`, `SOURCE` — and each message
 names the offending page and field. `registry/catalog.json` carries every
 cataloged page with its `id`, `type`, `scope`, `status`, `maturity`,

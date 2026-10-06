@@ -786,6 +786,74 @@ def check_team_true_travel(config):
     return probs
 
 
+# ---- SECRETS (#188, the Hindsight Memory Defense idea, minus the server) ----
+# Deterministic scan of corpus CONTENT planes for credential-shaped strings.
+# Error tier: blocks the commit gate (rule 8 — "no secrets in content" had no
+# guard). Scope: staged/authored corpus pages only — NOT evidence/raw/ (the
+# capture plane holds upstream docs verbatim, is immutable, and is covered by
+# capture-ignore patterns); the corpus is where secrets get RE-STATED and
+# COMMITTED, so that's the plane this rule guards. Matches are MASKED in lint
+# output (the report itself gets committed). Detect + refuse + instruct —
+# the fabric never rewrites content; the human rotates + redacts.
+
+_SECRET_PATTERNS = [
+    # name, regex, hint for the remediation line
+    ("github_token", r"gh[pousr]_[A-Za-z0-9]{30,}", "GitHub token"),
+    ("github_pat", r"github_pat_[A-Za-z0-9_]{20,}", "GitHub fine-grained PAT"),
+    ("openai", r"sk-(?:proj-)?[A-Za-z0-9_-]{20,}", "OpenAI-style key"),
+    ("anthropic", r"sk-ant-[A-Za-z0-9_-]{20,}", "Anthropic key"),
+    ("aws_access_key", r"AKIA[0-9A-Z]{16}", "AWS access key id"),
+    ("slack", r"xox[baprs]-[A-Za-z0-9-]{10,}", "Slack token"),
+    ("gitlab", r"glpat-[A-Za-z0-9_-]{16,}", "GitLab PAT"),
+    ("private_key", r"-----BEGIN (?:RSA |EC |OPENSSH |PGP |DSA )?PRIVATE KEY( BLOCK)?-----", "private key block"),
+    ("google", r"AIza[0-9A-Za-z_-]{35}", "Google API key"),
+    ("stripe", r"(?:sk|pk)_(?:test|live)_[A-Za-z0-9]{16,}", "Stripe key"),
+    ("npm", r"npm_[A-Za-z0-9]{36}", "npm token"),
+    ("huggingface", r"hf_[A-Za-z0-9]{30,}", "HuggingFace token"),
+]
+# A quoted assignment-shaped line carrying a long high-entropy secret-ish
+# value in an AUTHORED page's frontmatter (generic backstop — narrow to
+# keep the false-positive rate at zero on prose):
+_SECRET_ASSIGN_RE = re.compile(
+    r"^\s*(?:api_key|token|secret|password|api-key)\s*[:=]\s*[\"']?"
+    r"([A-Za-z0-9_\-]{32,})[\"']?\s*$", re.IGNORECASE | re.MULTILINE)
+
+
+def _mask(match_text):
+    """Never print the secret itself (lint output is committed in reports):
+    first 4 chars + masked tail."""
+    s = str(match_text)
+    if len(s) <= 8:
+        return "****"
+    return s[:4] + "…****"
+
+
+def check_secrets(state):
+    """#188: credential-shaped strings in corpus content planes. Returns
+    nothing (writes into state.errors directly) — ERROR tier, blocks the
+    commit gate."""
+    for p, rel in md_files(state.vault):
+        fm, body, _ = parse_frontmatter(p, _cache=state._fm_cache)
+        if not isinstance(fm, dict):
+            fm = {}
+        t = str(fm.get("type") or "")
+        if t in ("rejection-tombstone",):
+            continue  # tombstones quote rejected content by design
+        text = p.read_text(encoding="utf-8", errors="replace")
+        for name, rx, hint in _SECRET_PATTERNS:
+            m = re.search(rx, text)
+            if m:
+                state.errors.append(
+                    f"SECRETS {rel}: {hint} pattern ({name}) detected "
+                    f"[{_mask(m.group(0))}] — rotate the credential, remove/redact "
+                    f"the page, re-capture or re-ingest clean")
+        for m in _SECRET_ASSIGN_RE.finditer(text):
+            state.errors.append(
+                f"SECRETS {rel}: credential-shaped assignment "
+                f"[{_mask(m.group(1))}] — move real keys to <fabric>/secrets.env "
+                f"(gitignored); reference env var NAMES, never values")
+
+
 def check_machine_local_planes(vault):
     """#182: receipts/pending-gate are MACHINE-LOCAL (the 2026-10-03
     decisions) — appearing tracked/staged = sweep-in noise (the pull-side
@@ -916,6 +984,11 @@ def _section_collect(state):
         if t in ("registry", "index"):
             for m in LINK_RE.finditer(strip_code(body)):
                 state.INDEX.add(m.group(1).strip().lower())
+
+
+def _section_secrets(state):
+    """3b. credential-shaped strings in staged content (#188) — ERROR tier."""
+    check_secrets(state)
 
 
 def _section_wikilinks(state):
@@ -1284,6 +1357,7 @@ def main():
     _section_collect(state)
     _section_wikilinks(state)
     _section_invariants(state)
+    _section_secrets(state)
     _section_dup_ids(state)
     _section_sources(state)
     _section_orphans(state)
