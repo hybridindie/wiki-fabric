@@ -10,8 +10,11 @@
 #
 # Output (both modes): a chat-insights page per session under
 #   evidence/insights/ — takeaways classified durable|maybe|transient
-#   with rationale. NOTHING is auto-promoted: patterns/anti-patterns still go
-#   through the normal human-gated pipeline (these proposals are inputs).
+#   with rationale. NOTHING is auto-promoted HERE: patterns/anti-patterns
+#   stay staged proposals; promotion is human-gated (promote-patterns) —
+#   with the #190 scoped exception: the human may run promote-patterns
+#   --auto (judged-confident tier, opt-in, recorded+reversible); the
+#   mining/CI path itself never promotes.
 #
 # Usage:
 #   python3 scripts/cmd/mine-chats.py <project> [--since 90d] [--llm] [--dry-run]

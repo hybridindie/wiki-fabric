@@ -127,6 +127,7 @@ domains:
 | `tuning.git_history` | capture-git window/budget (`since`, `budget:int\|"all"`) |
 | `repos.<slug>.git_history` | per-repo window/budget override |
 | `tuning.ingest.budget` | ingest --changed/--pending budget (0 = uncapped) |
+| `tuning.promotion.auto_apply` / `.auto_threshold` | #190 judged auto-apply tier (inbox candidates): opt-in switch (default off) + confident floor (0.90); near-band escalates |
 
 ## LLM providers (any OpenAI-compatible endpoint)
 

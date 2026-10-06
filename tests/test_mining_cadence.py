@@ -1,6 +1,7 @@
 """#172 — the scheduled chat-mining cadence: scaffold (workflow yml written
 on sync init/setup, opt-in var), template shape (gated, heuristic-only,
-never auto-promotes), and the idempotence contract (never overwrites).
+never auto-promotes — promote-patterns --auto is a HUMAN command surface,
+never a CI verb, #190), and the idempotence contract (never overwrites).
 """
 
 import sys
@@ -85,8 +86,10 @@ class TestTemplateShape:
         d = self._template()
         run = str(d["jobs"]["mine"]["steps"])
         # 'promote' appears only in HUMAN-review notices, never as an
-        # executed verb (the human gate is never automatable)
-        assert "wf promote" not in run.replace("promote-patterns --list", "")
+        # executed verb. #190: the judged auto-apply tier is a HUMAN command
+        # (promote-patterns --auto) — the CI pipeline stays promotion-free.
+        assert "promote-patterns --auto" not in run
+        assert "--unapply" not in run
         assert "run: wf promote" not in run
 
     def test_weekly_cron(self):

@@ -136,7 +136,7 @@ The `wf` command is the single entry point for controlling the fabric. It instal
 | `wf export-viz [--out DIR]` | Export the static wiki-graph viewer (#177 S5): self-contained `index.html` + `graph.json` (the citation graph the export builds) - static-host ready, no live reload |
 | `wf mine chats <project> [--llm] [--propose] [--dry-run]` | Distill captured chat transcripts into durable takeaways (transients filtered); `--propose` stages pattern/anti-pattern candidates in `patterns/_inbox/` (gated, provenance-cited, idempotent) |
 | `wf mine promotions [--judge] [--min-projects N]` | Cluster experience events → promotion dossiers (deterministic, 0 tokens; `--judge` for the near-miss judgment tier) |
-| `wf promote-patterns {--list\|--apply <id>\|--reject <id> --reason}` | Human-gated apply/reject of chat-mined pattern candidates |
+| `wf promote-patterns {--list\|--apply <id>\|--reject <id> --reason\|--auto\|--unapply <id>}` | Human-gated apply/reject of chat-mined pattern candidates; `--auto` is the #190 judged-confident tier (opt-in `tuning.promotion.auto_apply`, G-J gated, band-banded: p ≥ `auto_threshold` applies + stamped + reversible, near-band escalates to the gate, below stays annotated); `--unapply` rolls an auto-apply back |
 | `wf version` | Show wf version + CLI sync state (installed `~/.local/bin/wf` vs harness script) |
 | `wf --version` / `wf -v` | Same version one-liner as a flag (packaged mode: version + harness root) |
 | `wf help <command>` | Per-verb help — routes to the underlying script's argparse (`wf help ingest` = `wf ingest --help`); unknown names get nearest-verb suggestions |

@@ -29,7 +29,12 @@ persistent memory layer.
    (query, context, lint) cost 0 tokens. The LLM is only invoked for
    extraction and synthesis.
 5. **Human gate before canonical writes.** Stage in `evidence/`, present the
-   change-set manifest, ask before merging into canonical pages.
+   change-set manifest, ask before merging into canonical pages. Scoped
+   exception (#190): inbox pattern candidates may auto-promote when the
+   judged-confident tier is ON (`tuning.promotion.auto_apply`) — preconditions
+   + calibrated judgment ≥ auto_threshold, every apply stamped (`auto_applied`)
+   + logged + reversible (`promote-patterns --unapply`); dossiers/claims/
+   domains/questions are never auto-promoted.
 6. **Raw is immutable.** Never edit `evidence/raw/` in place; re-capture.
 7. **Actor convention**: `agent/<owner>/<model>`, `human:<id>`,
    `process:<id>`. Lint rejects malformed actors.

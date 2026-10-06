@@ -1417,7 +1417,7 @@ case "${1:-help}" in
         echo "  verify-effects <claim.md>...      Judged effect verification at ingest (independent second opinion)"
         echo "  wiki-generate {begin|next|submit|finish|status}  Wiki-generation bookkeeper (writer/bookkeeper split)"
         echo "  promote-domains {list|--apply <dossier>} Merge a human-approved domain proposal into the ontology"
-        echo "  promote-patterns {--list|--apply <id>|--reject <id> --reason} Apply/reject chat-mined pattern candidates"
+        echo "  promote-patterns {--list|--apply <id>|--reject <id> --reason|--auto|--unapply <id>} Apply/reject chat-mined pattern candidates (--auto: the judged confident tier, #190 — needs tuning.promotion.auto_apply)"
         echo "  propose-domains [--dry-run]       Propose new domains from corpus clusters (0 tokens)"
         echo "  harvest-questions [--project <slug> [--dry-run]] Harvest concept open-questions → staged pages"
         echo "  promote-questions {--list|--open|--apply <id>|--reject <id>} Human-gated question apply/reject"

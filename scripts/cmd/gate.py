@@ -227,6 +227,20 @@ def _escalated(fm, threshold=None):
     return age >= threshold
 
 
+def _gate_auto_applies():
+    """#190 INFO surface: recent judgment-applied pattern candidates (the
+    confident tier's trail — delivery-vs-outcome review style, #182's
+    discipline). Info-tier: never actionable alone (the decisions are
+    reversible via promote-patterns --unapply); the gate DOWNGRADES rows,
+    never silences them."""
+    import importlib
+    pp = importlib.import_module("promote-patterns")
+    from fabric_config import CORPUS_ROOT as _C, get_CORPUS_ROOT_or_none
+    _C = get_CORPUS_ROOT_or_none() or _C
+    rows = pp.auto_applied_marker(_C)
+    return len(rows), rows
+
+
 def gate():
     sections = {
         "review": _safe(_gate_review),
@@ -234,13 +248,15 @@ def gate():
         "promotions": _safe(_gate_promotions),
         "domains": _safe(_gate_domains),
         "pattern-candidates": _safe(_gate_pattern_candidates),
+        "auto-applies": _safe(_gate_auto_applies),
         "questions": _safe(_gate_questions),
         "contributions": _safe(_gate_contributions),
     }
-    # contributions are INFO (no command resolves them); they never make the
-    # gate actionable on their own — actionable = every OTHER section pending.
+    # contributions + auto-applies are INFO (no command resolves them); they
+    # never make the gate actionable on their own — actionable = every OTHER
+    # section pending.
     actionable = any(p for k, (p, _, _) in sections.items()
-                     if k not in ("contributions", "local-sync") and p)
+                     if k not in ("contributions", "local-sync", "auto-applies") and p)
     return sections, actionable
 
 def _emit(sections, actionable, quiet=False):
@@ -289,6 +305,12 @@ def _emit(sections, actionable, quiet=False):
         print(f"  Open questions awaiting triage ({len(qpending)}):")
         for path, fm in qpending[:10]:
             print(f"    ? {path.stem}  ({fm.get('priority')}) {str(fm.get('question', ''))[:60]}")
+    aa, aa_rows, aa_err = sections.get("auto-applies", (0, [], None))
+    if aa_rows:
+        print(f"  Auto-applied pattern candidates ({len(aa_rows)}) — info: judged-confident, reversible (promote-patterns --unapply <id>):")
+        for r in aa_rows[:10]:
+            p = f" p={r['prob']:.2f}" if isinstance(r.get("prob"), (int, float)) else ""
+            print(f"    ✓ {r['id']}{p}  ({r.get('judge', '')})")
     if contrib_list:
         _emit_contributions(contrib_list)
     for section, (p, _, err) in sections.items():
@@ -454,6 +476,7 @@ def main():
             "domains": [{"id": str(p.stem), "domain": fm.get("domain")}
                         for p, fm in sections["domains"][1]],
             "pattern-candidates": _aged(sections["pattern-candidates"][1]),
+            "auto-applies": sections.get("auto-applies", (0, [], None))[1],
             "escalation_threshold_days": int(
                 __import__("fabric_config").get_tuning(None, "escalation", "days", 7)),
             "contributions": sections["contributions"][1],
@@ -531,6 +554,15 @@ def _write_manifest(manifest_path, sections, actionable):
                              f"({r['stale_days']}d ago) — chat-mining/capture may be idle")
             else:
                 lines.append(f"- {r['project']}: no captured history (experience-events/chats/git)")
+        lines.append("")
+    aa_rows = sections.get("auto-applies", (0, [], None))[1]
+    if aa_rows:
+        lines.append(f"## Auto-applied pattern candidates ({len(aa_rows)}) — info: judged-confident, reversible")
+        for r in aa_rows[:10]:
+            prob = r.get("prob")
+            p = f" p={prob:.2f}" if isinstance(prob, (int, float)) else ""
+            lines.append(f"- {r['id']}{p} ({r.get('judge', '')}, at {r.get('at', '?')}) "
+                         f"— revert: wf promote-patterns --unapply {r['id']}")
         lines.append("")
     lines += [
         "To resolve: `wf review --auto-reverify` | `wf promote --promote <dossier>` | "

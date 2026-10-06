@@ -162,6 +162,10 @@ input the system captures hardest. The mining cadence closes it:
   `WIKI_FABRIC_MINING=1`). Heuristic ONLY — CI stays LLM-free; `--llm`
   distillation stays interactive. The run commits staged candidates as
   inbox drift (the same plane-classified ritual as freshness).
-- **Nothing auto-promotes**: candidates land un-applied in
-  `patterns/_inbox/` (the human gate); `wf gate`/`promote-patterns --list`
-  surface them after `sync pull`.
+- **Auto-promote (scoped, opt-in, #190)**: candidates land un-applied in
+  `patterns/_inbox/`; the mining pipeline itself never promotes. On a
+  fabric that opts in (`tuning.promotion.auto_apply: true`), the human
+  runs `wf promote-patterns --auto` (never the CI): judged-confident
+  candidates (calibrated judge, p ≥ `promotion.auto_threshold`) apply,
+  near-band escalates, everything recorded + reversible. `wf gate`/
+  `promote-patterns --list` surface them after `sync pull`.

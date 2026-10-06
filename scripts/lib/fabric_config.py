@@ -188,6 +188,13 @@ _DEFAULTS = {
         },
         "synthesize": {"min_claims": 2},
         "export": {"topic_min_claims": 6},
+        # #190: the judged auto-apply tier for inbox candidates (OFF until a
+        # fabric turns it on — a policy change, never a default). The
+        # escalation band is DERIVED: [auto_threshold - judgment.near_band,
+        # auto_threshold) escalates to the human gate; >= auto_threshold
+        # auto-applies. Override requires the judge's calibration receipt
+        # (G-J) — an uncalibrated judge proposes at no threshold.
+        "promotion": {"auto_apply": False, "auto_threshold": 0.90},
     },
     "vault": {"path": None},  # Obsidian output dir; None => FABRIC_ROOT.parent/vault
 }
