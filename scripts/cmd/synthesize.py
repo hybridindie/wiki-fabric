@@ -94,6 +94,45 @@ def load_existing_concepts():
             "claims": fm.get("claims", []),
         })
     return concepts
+def _concise_relations(claim):
+    """Non-empty relations in compact form: type:target (deterministic
+    input for the synthesis prompt's contradiction clause)."""
+    rels = (claim["fm"].get("relations") or []) if isinstance(claim["fm"], dict) else []
+    out = []
+    for r in rels:
+        if isinstance(r, dict) and r.get("type"):
+            tgt = str(r.get("target", "")).replace("[[", "").replace("]]", "")
+            out.append(f"{r['type']}:{tgt[:40]}")
+    return ", ".join(out)
+
+
+def _cluster_effects(cluster):
+    """judged effects from registry/effects/<claim-stem>.effects.json —
+    {claim_stem: "contradicts: <target-stem>"}. layout.effects is the single
+    path truth; unreadable/torn files degrade to silence (never fatal)."""
+    out = {}
+    try:
+        eff_dir = layout.effects(VAULT_ROOT)
+    except Exception:
+        return out
+    for c in cluster:
+        f = eff_dir / f"{c['stem']}.effects.json"
+        if not f.exists():
+            continue
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        marks = []
+        for pair in (data.get("pairs") or []):
+            eff = pair.get("effect")
+            if eff in ("contradicts", "supersedes"):
+                marks.append(f"{eff}:{str(pair.get('against', ''))[:40]}")
+        if marks:
+            out[c["stem"]] = "; ".join(marks[:3]) + (f" (+{len(marks)-3})" if len(marks) > 3 else "")
+    return out
+
+
 def generate_concept_slug(cluster, existing_stems):
     """Generate a concept slug from the cluster's common theme."""
     # Extract common words from all statements
@@ -138,12 +177,22 @@ The concept must draw ONLY from these claims - do not add external knowledge.
 Claims:
 {claims_block}
 
+Contradiction handling (#186 — REQUIRED when the claims disagree):
+- If a claim is `status=contested`, or the claims contain contradicts/supersedes
+  markers, do NOT silently pick a winner. Render the EVOLUTION: state the prior
+  belief and the current state together ("previously held X; as of <newer
+  evidence>, Y — the correction matters because ..."), folding the prior state
+  into the definition rather than dropping it. The disputed aspect is recorded,
+  not overwritten.
+- Unresolved disagreement (both claims still supported, no newer tiebreak) is
+  NOT a settled definition: name it in open_questions.
+
 Output format (STRICT):
 {{
   "title": "<Short concept name, 3-6 words>",
   "definition": "<2-3 sentence explanation drawing only from the claims above>",
   "applicability": [<list of conditions where this applies>],
-  "open_questions": [<list of what is unknown or unverified>]
+  "open_questions": [<list of what is unknown, unverified, or DISPUTED (live contradictions)>]
 }}
 
 Return ONLY the JSON object."""
@@ -162,10 +211,21 @@ def synthesize_concept(cluster, concept_slug):
     # omitted count so the concept still links the full cluster downstream.
     CAP = int(os.environ.get("WIKI_SYNTH_MAX_CLAIMS", "60"))
     used = sorted(cluster, key=lambda c: {"high": 0, "medium": 1, "low": 2}.get(c.get("confidence"), 1))[:CAP]
-    claims_text = "\n".join(
-        f"- [{c['stem']}] {c['statement']} (status={c['status']}, conf={c['confidence']})"
-        for c in used
-    )
+    # #186: the claims block carries disagreement explicitly — status +
+    # relations on the claim itself plus any contradicts/supersedes verdicts
+    # recorded in the effects files (the judged second opinion). The prompt
+    # contract renders the evolution instead of a flattened winner.
+    _effects = _cluster_effects(used)
+    def _line(c):
+        bits = f"- [{c['stem']}] {c['statement']} (status={c['status']}, conf={c['confidence']}"
+        rels = _concise_relations(c)
+        if rels:
+            bits += f", relations={rels}"
+        eff = _effects.get(c["stem"])
+        if eff:
+            bits += f"; judged effects: {eff}"
+        return bits + ")"
+    claims_text = "\n".join(_line(c) for c in used)
     if len(cluster) > len(used):
         claims_text += f"\n(_and {len(cluster)-len(used)} more related claims, see concept claims list_)"
     prompt = SYNTH_PROMPT.replace("{claims_block}", claims_text)
