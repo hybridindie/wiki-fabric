@@ -34,7 +34,8 @@ llm:
   # Together, LM Studio, vLLM, llama.cpp server). See provider table above.
   base_url: http://localhost:11434/v1
   api_key: ollama                   # Ollama ignores it; cloud providers need a real key
-  model: qwen2.5-coder:7b           # OPS model — cheap queries, capture, status
+  ops_model: qwen2.5-coder:7b      # OPS model — cheap queries, capture, status
+                                   # (legacy key `model:` still reads — renamed #190-adjacent)
 
   # COMPILER model — claim extraction, synthesis, promotion mining.
   # The most consequential knob: the fabric's canonical evidence is compiled
@@ -116,7 +117,7 @@ domains:
 
 | Key | Read by |
 |-----|---------|
-| `llm.model` | query synthesis, capture, status |
+| `llm.ops_model` | query synthesis, capture, status (legacy key `llm.model` still reads)
 | `llm.compiler_model` | ingest extraction, synthesize, mine-promotions, compiler-eval gate |
 | `llm.local_model` | any `local` route (extract/synthesize/dossier) |
 | `repos.<slug>.path` | capture, entity index, graphify bridge, hooks |
@@ -137,7 +138,7 @@ The fabric talks to **any OpenAI-compatible `/v1` endpoint**. Set it once in `fa
 llm:
   base_url: http://localhost:11434/v1   # any OpenAI-compatible endpoint
   api_key: ollama                        # Ollama ignores this; cloud providers need a real key
-  model: qwen2.5-coder:7b               # ops model (see "Model tiers" below)
+  ops_model: qwen2.5-coder:7b          # ops model (see "Model tiers" below; legacy `model:` reads)
 ```
 
 Tested endpoints:
@@ -166,7 +167,7 @@ llm:
 |----------|---------|---------|
 | `WIKI_LLM_BASE_URL` | `http://localhost:11434/v1` | OpenAI-compatible endpoint |
 | `WIKI_LLM_API_KEY` | `ollama` | API key |
-| `WIKI_LLM_MODEL` | `qwen2.5-coder:7b` | Ops model name |
+| `WIKI_LLM_OPS_MODEL` (legacy `WIKI_LLM_MODEL`) | `qwen2.5-coder:7b` | Ops model name |
 | `WIKI_LLM_COMPILER_MODEL` | `deepseek-v4.1-flash:cloud` | Compiler model name |
 | `WIKI_LLM_LOCAL_MODEL` | platform-split (below) | On-device model id |
 | `WIKI_LLM_TIMEOUT` | `600` | Request timeout (seconds) |
@@ -185,7 +186,7 @@ Three model roles, each independently configurable:
 
 | Setting | Default | Used for |
 |---------|---------|----------|
-| `llm.model` | `qwen2.5-coder:7b` | ops: capture, status, cheap query synthesis |
+| `llm.ops_model` | `qwen2.5-coder:7b` | ops: capture, status, cheap query synthesis (legacy `llm.model` reads) |
 | `llm.compiler_model` | `deepseek-v4.1-flash:cloud` | claim extraction, synthesis, promotion mining (compiler work) |
 | `llm.local_model` | `gemma4:e4b-fixed` (ollama-served, egress-free) — offline/HF alternatives: `mlx-community/gemma-4-e4b-it-4bit` (Apple Silicon) / `unsloth/gemma-4-e4b-it-GGUF` (other) | resolves `repos.<slug>.<stage>: local` routes; ollama tags need `ollama pull <tag>` |
 

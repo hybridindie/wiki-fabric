@@ -9,7 +9,7 @@ fabric.yaml schema:
     llm:
       base_url: http://localhost:11434/v1   # any OpenAI-compatible endpoint
       api_key: ollama                        # or a real key for cloud providers
-      model: qwen2.5-coder:7b
+      ops_model: qwen2.5-coder:7b            # renamed from `model` (back-compat read)
       local_model: gemma4:e4b-fixed   # resolves "local" routes (ollama-served)
     repos:
       my-project:
@@ -133,8 +133,11 @@ _DEFAULTS = {
     "llm": {
         "base_url": "http://localhost:11434/v1",
         "api_key": "ollama",
-        # ops model: cheap queries, capture, status
-        "model": "qwen2.5-coder:7b",
+        # ops model: cheap queries, capture, status. Canonical key is
+        # `ops_model` (the rename was a clarity fix — three sibling keys
+        # ops/_compiler/_local read as one family now); `model` is the
+        # legacy name and still reads (get_config folds it forward).
+        "ops_model": "qwen2.5-coder:7b",
         # compiler model: claim extraction, synthesis, promotion mining.
         # Policy (eval-stability G4): compiler runs need the most capable model —
         # cross-model extraction disagreement is capability-correlated.
@@ -264,7 +267,8 @@ def _config_fingerprint():
     file_sig = f"{stat.st_mtime_ns}:{stat.st_size}" if stat else "none"
     env_sig = "|".join(f"{k}={os.environ.get(k, '')}" for k in (
         "WIKI_FABRIC_DIR", "WIKI_LLM_BASE_URL", "WIKI_LLM_API_KEY",
-        "WIKI_LLM_MODEL", "WIKI_LLM_COMPILER_MODEL", "WIKI_LLM_LOCAL_MODEL"))
+        "WIKI_LLM_MODEL", "WIKI_LLM_OPS_MODEL", "WIKI_LLM_COMPILER_MODEL",
+        "WIKI_LLM_LOCAL_MODEL"))
     # the fabric's own path in the signature: coarse-mtime filesystems make
     # same-second same-size fabric.yaml fixtures collide on the cache (the
     # fingerprint class: two DIFFERENT fabrics read as one config)
@@ -363,12 +367,20 @@ def get_config():
             # a corrupt fabric.yaml must still yield DEFAULTS (never crash import)
             print(f"warning: fabric.yaml unreadable, using defaults ({_e})", file=sys.stderr)
 
-    # Env var overrides for LLM
-    config["llm"]["base_url"] = os.environ.get("WIKI_LLM_BASE_URL", config["llm"]["base_url"])
+    # Env var overrides for LLM. Ops model: WIKI_LLM_OPS_MODEL is canonical;
+    # WIKI_LLM_MODEL is the legacy name (still read — same seam). The dict
+    # carries BOTH keys when a legacy config folded forward: `model` mirrors
+    # `ops_model` so every existing reader (dispatch/doctor/synthesize,
+    # scripts that read cfg["model"] directly) keeps working through the
+    # rename window; get_llm_config/compiler fallbacks read either.
+    _ops = os.environ.get("WIKI_LLM_OPS_MODEL") or os.environ.get("WIKI_LLM_MODEL")
+    config["llm"]["ops_model"] = _ops or config["llm"].get(
+        "ops_model") or config["llm"].get("model") or "qwen2.5-coder:7b"
+    # legacy mirror: writers stop emitting `model`; readers never need to care
+    config["llm"]["model"] = config["llm"]["ops_model"]
     config["llm"]["api_key"] = os.environ.get("WIKI_LLM_API_KEY", config["llm"]["api_key"])
-    config["llm"]["model"] = os.environ.get("WIKI_LLM_MODEL", config["llm"]["model"])
     config["llm"]["compiler_model"] = os.environ.get(
-        "WIKI_LLM_COMPILER_MODEL", config["llm"].get("compiler_model") or config["llm"]["model"])
+        "WIKI_LLM_COMPILER_MODEL", config["llm"].get("compiler_model") or config["llm"]["ops_model"])
     config["llm"]["local_model"] = os.environ.get(
         "WIKI_LLM_LOCAL_MODEL", config["llm"].get("local_model") or None)
 
@@ -409,7 +421,7 @@ llm:
   # local tier (privacy): ollama-served gemma4 e4b; offline alternative:
   # mlx-community/gemma-4-e4b-it-4bit darwin / unsloth/gemma-4-e4b-it-GGUF
   local_model: gemma4:e4b-fixed
-  model: qwen2.5-coder:7b
+  ops_model: qwen2.5-coder:7b
   compiler_model: deepseek-v4.1-flash:cloud
 
 repos: {{}}
@@ -707,6 +719,7 @@ def get_stage_route(config, repo_name=None, stage="extract"):
     fabric.yaml overrides the WIKI_MLX_MODEL env default for mlx routes.
     """
     cloud = (config.get("llm", {}).get("compiler_model")
+             or config.get("llm", {}).get("ops_model")
              or config.get("llm", {}).get("model") or "deepseek-v4.1-flash:cloud")
     if not repo_name:
         return cloud
@@ -922,18 +935,25 @@ def actor(config, kind="agent", model=None):
         return f"process:{model or 'script'}"
     # agent kind: model = llm model in use (ops or compiler)
     m = model or (config.get("llm", {}).get("compiler_model")
+                  or config.get("llm", {}).get("ops_model")
                   or config.get("llm", {}).get("model") or "unknown")
     return f"agent/{owner}/{m}"
 
 def get_llm_config(config, compiler=False):
     """Return LLM configuration dict. compiler=True returns the compiler model
-    (falls back to llm.model when unset) — claim extraction, synthesis, and
-    promotion mining must run on the policy-designated compiler model."""
+    (falls back to the ops model — llm.ops_model, legacy llm.model — when
+    unset) — claim extraction, synthesis, and promotion mining must run on
+    the policy-designated compiler model. The dict carries BOTH `ops_model`
+    (canonical) and its legacy `model` mirror (get_config folds the rename
+    forward), so direct-dict readers work either way."""
     llm = dict(config.get("llm", {}))
+    ops = llm.get("ops_model") or llm.get("model")
+    llm["ops_model"] = ops
+    llm["model"] = ops
     if compiler:
         cm = llm.get("compiler_model")
         if cm and cm.strip():
-            llm["model"] = cm
+            llm["ops_model"] = llm["model"] = cm
     return llm
 
 

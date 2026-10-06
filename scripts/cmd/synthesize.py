@@ -193,7 +193,7 @@ def synthesize_concept(cluster, concept_slug):
         import openai
         base_url = os.environ.get("WIKI_LLM_BASE_URL", cfg["base_url"])
         api_key = os.environ.get("WIKI_LLM_API_KEY", cfg["api_key"])
-        model = os.environ.get("WIKI_LLM_MODEL", cfg["model"])
+        model = os.environ.get("WIKI_LLM_OPS_MODEL") or os.environ.get("WIKI_LLM_MODEL", cfg["ops_model"] or cfg["model"])
 
         client = openai.OpenAI(base_url=base_url, api_key=api_key)
         response = client.chat.completions.create(
@@ -403,7 +403,7 @@ def main():
             ensure_local_model(_model, config=_cfg)  # offer download if missing
         else:
             os.environ["WIKI_LLM_BACKEND"] = ""
-            os.environ["WIKI_LLM_MODEL"] = _model
+            os.environ["WIKI_LLM_OPS_MODEL"] = _model
     else:
         # No --project: cloud compiler path (synthesis is compiler work).
         os.environ["WIKI_LLM_BACKEND"] = ""

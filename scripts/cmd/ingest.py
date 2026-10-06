@@ -6,7 +6,7 @@
 # LLM configuration (env vars):
 #   WIKI_LLM_BASE_URL   — OpenAI-compatible base URL (default: http://localhost:11434/v1 for Ollama)
 #   WIKI_LLM_API_KEY    — API key (default: "ollama"; Ollama ignores it)
-#   WIKI_LLM_MODEL      — model name (default: qwen2.5-coder:7b)
+#   WIKI_LLM_OPS_MODEL  — ops model name (default: qwen2.5-coder:7b)
 
 import sys
 import sys as _s, pathlib as _p
@@ -686,7 +686,7 @@ def main():
     parser.add_argument("--project", help="Project namespace (from .wiki-overlay.md)")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be done without writing")
     parser.add_argument("--extract-claims", action="store_true", help="Extract claims using LLM")
-    parser.add_argument("--model", default=None, help="LLM model (default: $WIKI_LLM_MODEL or qwen2.5-coder:7b)")
+    parser.add_argument("--model", default=None, help="LLM model (default: $WIKI_LLM_OPS_MODEL or qwen2.5-coder:7b)")
     parser.add_argument("--workers", type=int, default=int(os.environ.get("WIKI_INGEST_WORKERS", "1")),
                         help="Concurrent extraction threads (default 1; cloud tiers tolerate 6-12)")
     parser.add_argument("--budget", type=int, default=None,

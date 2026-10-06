@@ -36,7 +36,7 @@ wf ingest evidence/raw/my-project/docs/readme.md --extract-claims
 wf ingest --extract-claims --dry-run evidence/raw/foo.md
 
 # Use a different model
-WIKI_LLM_MODEL="llama3.1:70b" wf ingest evidence/raw/foo.md --extract-claims
+WIKI_LLM_OPS_MODEL="llama3.1:70b" wf ingest evidence/raw/foo.md --extract-claims
 
 # Bulk modes with a budget (extraction mirror of the capture window):
 # a big capture wave can't detonate N extractions in one run
@@ -375,7 +375,7 @@ wf lint
 wf lint --format json
 
 # Run formal evaluation (golden corpus)
-WIKI_LLM_MODEL="qwen3.8:27b-mlx" wf eval golden
+WIKI_LLM_OPS_MODEL="qwen3.8:27b-mlx" wf eval golden
 
 # Discover new domains from evidence
 wf propose-domains

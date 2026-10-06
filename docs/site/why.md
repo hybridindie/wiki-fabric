@@ -176,7 +176,7 @@ In configuration, the split is three knobs plus per-repo routing overrides:
 
 ```yaml
 llm:
-  model: qwen2.5-coder:7b            # ops: query, capture, status
+  ops_model: qwen2.5-coder:7b        # ops: query, capture, status
   compiler_model: glm-5.3-flash:cloud # extraction, synthesis, mining (eval-gated)
   local_model: gemma4:e4b-fixed  # privacy routes (ollama-served; on-device HF ids also work)
 repos:

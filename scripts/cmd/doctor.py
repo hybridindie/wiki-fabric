@@ -71,13 +71,13 @@ def main():
             "endpoint", True, f"{base_url} — {len(models)} models served"))
 
         # ---- 2. ops model resolves
-        ops_model = llm.get("model", "")
+        ops_model = llm.get("ops_model") or llm.get("model", "")
         ops_ok = ops_model in models
         results.append(check_result(
-            "llm.model", ops_ok,
+            "llm.ops_model", ops_ok,
             (f"resolved: {ops_model}" if ops_ok
              else f"phantom: {ops_model!r} not served by the endpoint"),
-            fix=f"set llm.model to a served model, or pull it (e.g. ollama pull {ops_model})"))
+            fix=f"set llm.ops_model to a served model, or pull it (e.g. ollama pull {ops_model})"))
 
         # ---- 3. compiler model resolves (the #43 finding: phantom defaults block gates)
         compiler = get_llm_config(get_config(), compiler=True).get("model", "")

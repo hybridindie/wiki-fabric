@@ -382,10 +382,12 @@ class TestGetConfigMemoization(unittest.TestCase):
     def test_cache_invalidation_on_env_change(self):
         import os
         from fabric_config import get_config
-        base = get_config()["llm"]["model"]
-        with mock.patch.dict(os.environ, {"WIKI_LLM_MODEL": "env-test-model"}):
+        base = get_config()["llm"]["ops_model"]
+        with mock.patch.dict(os.environ, {"WIKI_LLM_OPS_MODEL": "env-test-model"}):
+            assert get_config()["llm"]["ops_model"] == "env-test-model"
+            # the legacy mirror rides along (readers read either key)
             assert get_config()["llm"]["model"] == "env-test-model"
-        assert get_config()["llm"]["model"] == base
+        assert get_config()["llm"]["ops_model"] == base
 
     def test_repeated_calls_return_same_object(self):
         from fabric_config import get_config

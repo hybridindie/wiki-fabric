@@ -21,7 +21,7 @@ llm:
   # api_key: real-key                     # simple path, but preferred: put keys in
                                           # <fabric>/secrets.env (gitignored) as WIKI_LLM_API_KEY=…
                                           # — env/secrets.env win over this literal
-  model: qwen2.5-coder:7b               # ops model: cheap queries, capture, status
+  ops_model: qwen2.5-coder:7b           # ops model: cheap queries, capture, status
 
   # Other tested endpoints:
   #   LM Studio:        http://localhost:1234/v1

@@ -44,3 +44,28 @@ class TestTuning:
     def test_bad_section_returns_default(self):
         cfg = {"tuning": {"judgment": "not-a-dict"}}
         assert fc.get_tuning(cfg, "judgment", "near_band", 0.1) == 0.1
+
+
+class TestOpsModelRename:
+    """llm.model → llm.ops_model (#190-adjacent): the canonical key is
+    ops_model; a legacy `model:` config folds forward — both keys readable,
+    writers emit only ops_model."""
+
+    def test_new_key_canonical(self):
+        cfg = {"llm": {"ops_model": "ops-x:7b"}}
+        assert fc.get_llm_config(cfg)["ops_model"] == "ops-x:7b"
+        assert fc.get_llm_config(cfg)["model"] == "ops-x:7b"  # the mirror
+
+    def test_legacy_key_folds_forward(self):
+        cfg = {"llm": {"model": "legacy:7b"}}
+        assert fc.get_llm_config(cfg)["ops_model"] == "legacy:7b"
+        assert fc.get_llm_config(cfg)["model"] == "legacy:7b"
+
+    def test_compiler_flag_overrides_both(self):
+        cfg = {"llm": {"ops_model": "ops:7b", "compiler_model": "cm:cloud"}}
+        lc = fc.get_llm_config(cfg, compiler=True)
+        assert lc["model"] == "cm:cloud" and lc["ops_model"] == "cm:cloud"
+
+    def test_shipped_default_names_ops_model(self):
+        assert "ops_model" in fc._DEFAULTS["llm"]
+        assert fc._DEFAULTS["llm"]["ops_model"]

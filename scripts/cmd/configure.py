@@ -126,7 +126,8 @@ def run(fabric_root: Path, args):
     if needs_key:
         llm_key = _ask("  API key for this provider", "").strip() or None
     model = _ask("  Ops model (queries/capture; cheap)",
-                 cfg.get("llm", {}).get("model", "qwen2.5-coder:7b"))
+                 (cfg.get("llm", {}).get("ops_model")
+                  or cfg.get("llm", {}).get("model", "qwen2.5-coder:7b")))
     compiler = _ask("  Compiler model (claim extraction, synthesis)",
                     cfg.get("llm", {}).get("compiler_model", "deepseek-v4.1-flash:cloud"))
     from fabric_config import DEFAULT_LOCAL_MODELS
@@ -142,7 +143,7 @@ def run(fabric_root: Path, args):
     else:
         llm_key_ref = _ask("  Env var name holding the key", "WIKI_LLM_API_KEY")
     cfg["llm"] = {"base_url": base_url, "api_key": llm_key_ref or "ollama",
-                  "model": model, "compiler_model": compiler,
+                  "ops_model": model, "compiler_model": compiler,
                   "local_model": local_model}
 
     # 3. Judgment tier

@@ -600,7 +600,7 @@ def _status_prose(fdir):
             import yaml
             cfg = yaml.safe_load(fabric_yaml.read_text()) or {}
             llm = cfg.get("llm") or {}
-            model = llm.get("model") or "not configured"
+            model = llm.get("ops_model") or llm.get("model") or "not configured"
             compiler = llm.get("compiler_model") or model
             print(f"\033[0;32m✓\033[0m  LLM:    {model}")
             print(f"\033[0;32m✓\033[0m  Compiler: {compiler} (claim extraction, synthesis, promotion)")

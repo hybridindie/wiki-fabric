@@ -707,9 +707,8 @@ def _bootstrap_project_env(project_root, project_slug, args):
         llm_env_path.write_text(f"""# Wiki Fabric LLM configuration
 # Source these before running fabric scripts:
 #   set -a; . .env.wiki-fabric; set +a
-WIKI_LLM_BASE_URL={config["llm"]["base_url"]}
-WIKI_LLM_API_KEY={config["llm"]["api_key"]}
-WIKI_LLM_MODEL={config["llm"]["model"]}
+WIKI_LLM_OPS_MODEL={config["llm"]["ops_model"]}
+WIKI_LLM_COMPILER_MODEL={config["llm"].get("compiler_model", "")}
 """)
         print("Created .env.wiki-fabric (LLM configuration)")
 

@@ -494,7 +494,7 @@ def extract_claims(source_text, source_path, model=None):
     """
     from fabric_config import looks_like_local_model
     if not model:
-        model = os.environ.get("WIKI_LLM_MODEL")
+        model = os.environ.get("WIKI_LLM_OPS_MODEL") or os.environ.get("WIKI_LLM_MODEL")
     # record the model that runs extraction — the claim actor trail must name
     # the model that actually did the work (local vs cloud)
     if os.environ.get("WIKI_LLM_BACKEND", "").lower() == "mlx" or looks_like_local_model(model):
