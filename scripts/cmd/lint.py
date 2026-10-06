@@ -800,16 +800,16 @@ _SECRET_PATTERNS = [
     # name, regex, hint for the remediation line
     ("github_token", r"gh[pousr]_[A-Za-z0-9]{30,}", "GitHub token"),
     ("github_pat", r"github_pat_[A-Za-z0-9_]{20,}", "GitHub fine-grained PAT"),
-    ("openai", r"sk-(?:proj-)?[A-Za-z0-9_-]{20,}", "OpenAI-style key"),
-    ("anthropic", r"sk-ant-[A-Za-z0-9_-]{20,}", "Anthropic key"),
+    ("openai", r"(?<![A-Za-z0-9_-])sk-(?:proj-)?[A-Za-z0-9_-]{20,}", "OpenAI-style key"),
+    ("anthropic", r"(?<![A-Za-z0-9_-])sk-ant-[A-Za-z0-9_-]{20,}", "Anthropic key"),
     ("aws_access_key", r"AKIA[0-9A-Z]{16}", "AWS access key id"),
     ("slack", r"xox[baprs]-[A-Za-z0-9-]{10,}", "Slack token"),
-    ("gitlab", r"glpat-[A-Za-z0-9_-]{16,}", "GitLab PAT"),
+    ("gitlab", r"(?<![A-Za-z0-9_-])glpat-[A-Za-z0-9_-]{16,}", "GitLab PAT"),
     ("private_key", r"-----BEGIN (?:RSA |EC |OPENSSH |PGP |DSA )?PRIVATE KEY( BLOCK)?-----", "private key block"),
     ("google", r"AIza[0-9A-Za-z_-]{35}", "Google API key"),
     ("stripe", r"(?:sk|pk)_(?:test|live)_[A-Za-z0-9]{16,}", "Stripe key"),
-    ("npm", r"npm_[A-Za-z0-9]{36}", "npm token"),
-    ("huggingface", r"hf_[A-Za-z0-9]{30,}", "HuggingFace token"),
+    ("npm", r"(?<![A-Za-z0-9_-])npm_[A-Za-z0-9]{36}", "npm token"),
+    ("huggingface", r"(?<![A-Za-z0-9_-])hf_[A-Za-z0-9]{30,}", "HuggingFace token"),
 ]
 # A quoted assignment-shaped line carrying a long high-entropy secret-ish
 # value in an AUTHORED page's frontmatter (generic backstop — narrow to

@@ -134,3 +134,29 @@ class TestWiring:
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__, "-v"])
+
+class TestSlugFalsePositives:
+    """Found-in-release (0.4.5): 'sk-' matched inside 'ri*sk-m*onitoring-setup-md'
+    slugs — the pattern classes need lookbehind guards; a slug like
+    risk-monitoring-setup-md-004 embeds 'sk-monitoring...' textually."""
+
+    def test_slugged_prose_not_flagged(self, tmp_path):
+        st = _State(tmp_path)
+        p = tmp_path / "concepts/concept-alert.md"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(
+            "claims list:\n"
+            "  - \"[[claim-alpaca-agents-alpaca-agents-docs-guides-risk-monitoring-setup-md-004]]\"\n"
+            "  - \"[[claim-alpaca-agents-alpaca-agents-docs-guides-risk-monitoring-setup-md-005]]\"\n")
+        L = _lint_module()
+        L.check_secrets(st)
+        assert st.errors == []
+
+    def test_underscore_slugs_not_flagged(self, tmp_path):
+        st = _State(tmp_path)
+        p = tmp_path / "concepts/concept-b.md"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("risk_msk-ant-analysis-token-research-000 claim ref\n")
+        L = _lint_module()
+        L.check_secrets(st)
+        assert st.errors == []
