@@ -272,8 +272,9 @@ Behavioral constants (mining `min_projects`, cluster thresholds, judgment
 `mining_threshold`/`near_band`, **capture**: `git_history {since, budget}`
 (the activity-bounded window), `ingest.budget` (bulk-extraction cap),
 context caps, concept-density gate) read from a `tuning:` section in
-fabric.yaml, falling back to shipped defaults. Per-repo: `repos.<slug>
-.git_history` (window/budget override; `"all"` disables).
+fabric.yaml, falling back to shipped defaults. Per-repo: `repos.<slug>.git_history`
+(stage routing, graph_dir, git_history are the per-repo keys — never
+integrations blocks: those are fabric-global; `"all"` disables the window).
 Defaults reproduce shipped behavior exactly (no-op test guarded). Two are
 **calibration-sensitive**: `judgment.mining_threshold` (0.8, calibrated on
 Laya — see issue #39) and `judgment.near_band` — their provenance travels

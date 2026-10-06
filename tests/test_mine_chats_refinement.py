@@ -107,8 +107,8 @@ class TestNearMissRefinement:
         assert "judged: \"near-miss merged" in text  # the judgment is RECORDED
         assert "Merged (judged) phrasing" in text
         assert "[[proj-chats-chat-b-md]]" in text  # provenance gained the source
-        # the judged verdict used the per-repo seam
-        assert sr.call_args.kwargs.get("repo") == "proj"
+        # judgment is a fabric-global setting — no per-repo thread
+        assert "repo" not in sr.call_args.kwargs
 
     def test_judged_same_records_probability(self, tmp_path):
         corpus = _mk_fabric(tmp_path)

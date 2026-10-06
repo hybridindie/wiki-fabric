@@ -200,8 +200,9 @@ def _refine_near_miss(statement, kind, out_dir, dry_run=False, project=None, tra
     Tier unavailable / G-J refused → None + a loud print (keyword behavior
     byte-identical to the pre-#173 flow).
 
-    Routing: the pair's repo (project) threads the per-repo judgment seam;
-    the G-J gate is checked for that repo's judge identity."""
+    Routing: the judgment tier is a fabric-global setting (the per-repo
+    override seam is gone); the G-J gate checks the fabric's one judge
+    identity."""
     try:
         from judgment import (same_recurrence, judgment_eval_recorded,
                               JudgmentUnavailable)
@@ -234,7 +235,7 @@ def _refine_near_miss(statement, kind, out_dir, dry_run=False, project=None, tra
             return None
         try:
             same, p = same_recurrence(statement, cand_stmt,
-                                      repo=project, context="both are chat-mined takeaways from sessions in the same project")
+                                      context="both are chat-mined takeaways from sessions in the same project")
         except JudgmentUnavailable as e:
             print(f"  judgment tier unavailable — near-miss merge skipped: {str(e)[:80]}")
             return None
@@ -317,7 +318,7 @@ def propose_candidates(transcript_path, takeaways, dry_run=False, project=None):
         # --- judged near-miss refinement (#173) -------------------------
         # keyword near-miss vs the EXISTING inbox (same kind): an exact-hash
         # match never reaches here, but paraphrases did — those are the class
-        # the judgment tier exists to merge. G-J gated; per-repo seam.
+        # the judgment tier exists to merge. G-J gated.
         merged = _refine_near_miss(statement, kind, out_dir, dry_run=dry_run,
                                    project=project, transcript_stem=transcript_path.stem)
         if merged is not None:

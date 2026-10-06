@@ -192,7 +192,7 @@ def _near_miss_twin(statement, rule_text, inbox, project, judge=True):
         if not judge:
             continue  # no judgment available → stage separately (never silent-merge)
         cand_stmt = re.sub(r"^#\s+.*$", "", body.split("**", 1)[0], flags=re.M).strip()
-        same, prob = same_recurrence(statement, cand_stmt, repo=project,
+        same, prob = same_recurrence(statement, cand_stmt,
                                      context="both are agent-workflow rule files harvested from project repos")
         if same:
             return p, prob

@@ -172,7 +172,7 @@ The routing rules fall out of that table:
 - **Deterministic stages never route**: anything with a byte-stable guarantee
   (context, lint, receipts, staleness) touches no model at all.
 
-In configuration, the split is three knobs plus per-repo overrides:
+In configuration, the split is three knobs plus per-repo routing overrides:
 
 ```yaml
 llm:

@@ -121,9 +121,8 @@ domains:
 | `llm.local_model` | any `local` route (extract/synthesize/dossier) |
 | `repos.<slug>.path` | capture, entity index, graphify bridge, hooks |
 | `repos.<slug>.<stage>` | ingest, synthesize, mine-promotions routing |
-| `repos.<slug>.integrations.<name>` | per-repo integration override (deep-merged over the global block: enabled/route/...); judgment routes per repo (mining pairs, verify-effects) |
 | `ignore.patterns` / `.globs` / `.regexes` | capture, context, lint, rebuild-index, okf export |
-| `integrations.*` | graphify bridge, skills |
+| `integrations.*` | graphify bridge, skills — **fabric-global** (no per-repo override; judgment included) |
 | `domains.*` | classification, context scoping, propose-domains (the ontology is the vocabulary; config signals are overrides) |
 | `tuning.git_history` | capture-git window/budget (`since`, `budget:int\|"all"`) |
 | `repos.<slug>.git_history` | per-repo window/budget override |
@@ -215,25 +214,26 @@ Stages: `extract` (sees raw docs — highest sensitivity), `synthesize`
 (sanitized statements), `dossier` (experience events). Values: `"cloud"`
 (default) · `"local"` (on-device via `llm.local_model`) · any explicit model id.
 
-**Per-repo integrations** (the graphify precedent, generalized): a repo
-block may carry an `integrations:` section — deep-merged over the global
-`integrations:` block (repo wins per key; unset keys inherit). The main
-use case is **judgment**: a privacy-sensitive repo runs its decision-model
-calls local even when the fabric's judgment tier is globally disabled, and
-vice versa:
+**Integrations are fabric-global.** There is deliberately no per-repo
+`integrations:` override (an earlier version deep-merged
+`repos.<slug>.integrations.<name>` over the global block so a privacy-sensitive
+repo could run judgment locally — the seam is gone): the judgment tier's
+G-J calibration gate is keyed to ONE judge identity per fabric, and per-repo
+route pinning would multiply identities and silently fork calibrations. Route
+a specific repo's *extraction* instead — `repos.<slug>.extract: local` keeps
+that repo's raw docs on-device while the judge stays one shared setting:
 
 ```yaml
 repos:
   sensitive-repo:
-    integrations:
-      judgment: {enabled: true, route: local}   # on-device only, this repo
+    extract: local        # raw docs never leave the machine (stage routing)
+integrations:
+  judgment: {enabled: true, route: local}   # one judge, whole fabric
 ```
 
-Routing follows the **claim/event's own repo** (the `project:` field
-stamped onto claims at ingest): mining pairs route per repo; cross-repo
-pairs use the global tier — both projects' evidence is already
-corpus-level. graphify stays repo-scoped via its `graph_dir`; embeddings
-and obsidian are correctly global (one index, one vault).
+graphify stays repo-adjacent only through its per-repo `graph_dir` (a path,
+not an enable/route decision); embeddings and obsidian are correctly global
+(one index, one vault).
 
 **Backends, chosen by model-id shape:**
 
@@ -299,30 +299,12 @@ Stage and value semantics are the same as [On-device routes](#on-device-local-ro
 stages `extract` / `synthesize` / `dossier`; values `"cloud"` (default),
 `"local"`, or an explicit model id.
 
-**Per-repo integrations** (the graphify precedent, generalized): a repo
-block may carry an `integrations:` section — deep-merged over the global
-`integrations:` block (repo wins per key; unset keys inherit). The main
-use case is **judgment**: a privacy-sensitive repo runs its decision-model
-calls local even when the fabric's judgment tier is globally disabled, and
-vice versa (a local-first fabric can enable the cloud judge for one
-low-sensitivity repo):
-
-```yaml
-repos:
-  sensitive-repo:
-    integrations:
-      judgment: {enabled: true, route: local}   # on-device only, this repo
-  public-repo:
-    integrations:
-      judgment: {route: cloud}
-```
-
-Routing follows the **claim/event's own repo** (the `project:` field
-stamped onto claims at ingest): mining pairs in-cluster route per repo;
-cross-repo pairs use the global tier — both projects' evidence is
-already corpus-level. graphify remains the other repo-scoped integration
-(its per-repo `graph_dir`); embeddings and obsidian are correctly global
-(one index, one vault).
+**Integrations are fabric-global** (no per-repo `integrations:` override —
+the judgment seam was removed; see [On-device routes](#on-device-local-routes-privacy-tiering)
+above for the rationale and the stage-routing alternative). A stale
+`repos.<slug>.integrations:` block in an old fabric.yaml is inert.
+graphify remains repo-adjacent via its per-repo `graph_dir`; embeddings
+and obsidian are correctly global (one index, one vault).
 
 Migrating an existing fabric: `wf repos migrate --dry-run` shows which
 per-repo keys would move into overlays; `--apply --prune` writes them **and**

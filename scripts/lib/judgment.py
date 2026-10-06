@@ -37,6 +37,12 @@ Integration shape (fabric.yaml):
         route: local           # "cloud" | "local"
         local_backend: laya    # "laya" (auto: MLX if installed) | "ollama" (tev1/nimble decision models) | "generic"
         cloud_model: jev-latest # cloud route only
+
+Judgment is a FABRIC-GLOBAL setting (no per-repo override — the graphify
+graph_dir seam doesn't apply here): one judge identity per fabric keeps the
+G-J calibration gate meaningful (a judge swap is a judgment change, and the
+calibration receipt names the judge — per-repo route pinning would multiply
+identities and silently fork the calibrations).
 """
 
 import os
@@ -53,7 +59,7 @@ for _dir in (_HERE, _HERE.parent / "lib"):
     if str(_dir) not in sys.path:
         sys.path.insert(0, str(_dir))
 
-from fabric_config import get_config, get_integrations, is_integration_active, get_tuning
+from fabric_config import get_config, get_integration_cfg, get_tuning
 
 
 def fabric_config_get(key, default):
@@ -70,15 +76,14 @@ class JudgmentUnavailable(Exception):
     """Raised when the judgment tier is requested but not configured/reachable."""
 
 
-def judgment_config(config=None, repo=None):
-    """Merged judgment dict — with `repo`, the per-repo override
-    (repos.<slug>.integrations.judgment) merges over the global block
-    (#156-adjacent seam: privacy-tiered repos can run judgment local/keep it
-    off while the fabric runs it globally, and vice versa). Disabled by
-    default."""
+def judgment_config(config=None):
+    """Merged judgment dict — global only, deliberately. Judgment was once
+    per-repo overridable (repos.<slug>.integrations.judgment); that seam is
+    gone: the judge identity is a one-per-fabric calibration contract, and a
+    per-repo route pin would multiply identities under one G-J gate.
+    Disabled by default."""
     config = config or get_config()
-    from fabric_config import get_integration_cfg
-    cfg = get_integration_cfg(config, "judgment", repo)
+    cfg = get_integration_cfg(config, "judgment")
     if not isinstance(cfg, dict):
         cfg = {"enabled": bool(cfg)}
     cfg.setdefault("enabled", False)
@@ -89,24 +94,24 @@ def judgment_config(config=None, repo=None):
 
 
 def is_judgment_active(config=None, repo=None):
-    """True only when explicitly enabled — globally OR for this repo (the
-    per-repo override wins; same rule family as graphify/embeddings)."""
-    from fabric_config import is_integration_active as _act
-    return _act(config or get_config(), "judgment", repo)
+    """True only when explicitly enabled globally. `repo` is accepted (and
+    ignored) — the per-repo judgment override seam was removed; callers thread
+    project context for other reasons and the asker-shape stays stable."""
+    cfg = get_integration_cfg(config or get_config(), "judgment")
+    return bool((cfg or {}).get("enabled", False))
 
 
 def judgment_route(config=None, repo=None):
-    cfg = judgment_config(config, repo)
-    if not is_judgment_active(config, repo):
-        which = f" (repos.{repo})" if repo else ""
-        raise JudgmentUnavailable(f"integrations.judgment.enabled is false{which}")
+    cfg = judgment_config(config)
+    if not is_judgment_active(config):
+        raise JudgmentUnavailable("integrations.judgment.enabled is false")
     return cfg.get("route", "cloud")
 
 
 def judge_identity(config=None, repo=None):
     """(judge, model) — the CURRENT judge's identity tuple, the thing a swap
     changes. route=cloud → cloud_model; local → backend + resolved tag."""
-    cfg = judgment_config(config, repo)
+    cfg = judgment_config(config)
     route = cfg.get("route", "cloud")
     if route == "cloud":
         m = cfg.get("cloud_model") or CLOUD_MODEL_DEFAULT
@@ -121,14 +126,14 @@ def judge_identity(config=None, repo=None):
     return (backend, cfg.get("local_model") or backend)
 
 
-def judgment_eval_recorded(config=None, repo=None, log_path=None):
+def judgment_eval_recorded(config=None, log_path=None):
     """G-J gate: True when registry/log.md holds a PASS judgment-eval receipt
     for the CURRENT judge identity (judge_kind + model). The compiler's G4
     analog (fabric_config.compiler_eval_recorded): a judge swap is a judgment
     change; an uncalibrated judge may not propose. Returns (ok, detail).
     WIKI_JUDGE_GATE=0 (explicit, logged at use) skips — the off switch is
     loud."""
-    identity = judge_identity(config, repo)
+    identity = judge_identity(config)
     if os.environ.get("WIKI_JUDGE_GATE", "") == "0":
         return True, "G-J gate SKIPPED (WIKI_JUDGE_GATE=0)"
     import re
@@ -301,23 +306,23 @@ def _ask_laya(q):
 # ---- question constructors (typed; shared by all routes) ----
 
 def score(question, state, rubric=None, repo=None):
-    """Ordered rubric score with probabilities + confidence. `repo`: per-repo
-    judgment routing (same seam as noul/choice)."""
+    """Ordered rubric score with probabilities + confidence. `repo` accepted
+    and ignored (the per-repo override seam is gone — judgment is global)."""
     return _ask({"kind": "score", "question": question, "state": state,
-                 "rubric": rubric or {}}, repo)
+                 "rubric": rubric or {}})
 
 
 def choice(question, state, options, repo=None):
-    """One of the options with probabilities + confidence. `repo`: per-repo
-    judgment routing (same seam as noul)."""
+    """One of the options with probabilities + confidence. `repo` accepted
+    and ignored (same shape stability as score)."""
     return _ask({"kind": "choice", "question": question, "state": state,
-                 "options": list(options)}, repo)
+                 "options": list(options)})
 
 
 def _ask(q, repo=None):
-    """Route per CALL: the caller's repo thread wins (per-repo integration
-    config, #156-adjacent), else the global judgment route."""
-    route = judgment_route(repo=repo)
+    """Route per CALL: the fabric's global judgment route (one judge identity,
+    one G-J calibration). `repo` accepted and ignored for shape stability."""
+    route = judgment_route()
     if route == "cloud":
         return _ask_cloud(q)
     return _ask_local(q)
@@ -327,10 +332,10 @@ def noul(question, state, false_desc=None, true_desc=None, repo=None):
     """P(yes) for a yes/no judgment (0.0..1.0). Criteria descriptions
     (false_desc/true_desc) dramatically sharpen laya's separation —
     live-calibrated: criteria phrasing separates 0.97 vs 0.19; abstract
-    phrasing only 0.3–0.6 vs 0.19. `repo` threads the per-repo judgment
-    config (route/enable) through the call."""
+    phrasing only 0.3–0.6 vs 0.19. `repo` accepted and ignored — the per-repo
+    judgment override seam was removed (judgment is a fabric-global setting)."""
     out = _ask({"kind": "noul", "question": question, "state": state,
-                "false_desc": false_desc, "true_desc": true_desc}, repo)
+                "false_desc": false_desc, "true_desc": true_desc})
     return float(out.get("value", 0.0))
 
 
@@ -603,8 +608,8 @@ def is_near_threshold(p, threshold):
 
 def same_recurrence(item_a, item_b, threshold=None, config=None, context=None, repo=None):
     """Pairwise 'same recurring pattern?' judgment for cluster refinement.
-    `repo`: per-repo judgment config (route/enable) — mining threads the
-    events' project so a per-repo judgment block routes its own pairs.
+    `repo` accepted and ignored: the per-repo judgment override seam is gone
+    (one judge identity per fabric — mining pairs all route globally).
     Returns (same: bool, probability: float). Threshold defaults to
     MINING_THRESHOLD_DEFAULT (0.8) — live-calibrated on Laya: true paraphrase
     pairs score ~0.93, unrelated pairs ~0.75, so 0.6 would wrongly merge
@@ -618,7 +623,7 @@ def same_recurrence(item_a, item_b, threshold=None, config=None, context=None, r
     if context:
         state = f"{state}\n\n{context}"
     p = noul("Do these two records describe the same recurring problem and intervention?",
-             state, repo=repo)
+             state)
     return (p >= threshold, p)
 
 # ---- Effect verification (ingest, #29 wiring A) ----------------------------
