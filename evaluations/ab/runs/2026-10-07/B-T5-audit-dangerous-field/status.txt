@@ -1,0 +1,2 @@
+ M src/comfyui_mcp/audit.py
+ M src/comfyui_mcp/tools/generation.py

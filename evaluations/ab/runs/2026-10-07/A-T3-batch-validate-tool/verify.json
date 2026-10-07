@@ -1,0 +1,10 @@
+{
+ ".venv/bin/pytest tests/test_tools_batch_validate.py -q": {
+  "rc": 4,
+  "tail": "no tests ran in 0.00s"
+ },
+ ".venv/bin/pytest tests/ -q -m 'not integration'": {
+  "rc": 0,
+  "tail": "668 passed in 24.10s"
+ }
+}

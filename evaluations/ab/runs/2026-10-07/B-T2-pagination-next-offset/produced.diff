@@ -1,0 +1,51 @@
+diff --git a/src/comfyui_mcp/pagination.py b/src/comfyui_mcp/pagination.py
+index f72bfb1..b6af180 100644
+--- a/src/comfyui_mcp/pagination.py
++++ b/src/comfyui_mcp/pagination.py
+@@ -17,6 +17,7 @@ class PaginationEnvelope(TypedDict, Generic[T]):  # noqa: UP046
+     offset: int
+     limit: int
+     has_more: bool
++    next_offset: int | None
+ 
+ 
+ def paginate(  # noqa: UP047
+@@ -36,18 +37,23 @@ def paginate(  # noqa: UP047
+         max_limit: Hard cap on page size.
+ 
+     Returns:
+-        Dict with keys: ``items``, ``total``, ``offset``, ``limit``, ``has_more``.
++        Dict with keys: ``items``, ``total``, ``offset``, ``limit``, ``has_more``,
++        ``next_offset``. When ``has_more`` is true, ``next_offset`` is
++        ``offset + limit`` (the offset to request for the next page); otherwise
++        it is ``None``.
+     """
+     effective_limit = min(limit if limit and limit > 0 else default_limit, max_limit)
+     effective_offset = max(offset, 0)
+     total = len(items)
+     page = items[effective_offset : effective_offset + effective_limit]
++    has_more = (effective_offset + effective_limit) < total
+     return {
+         "items": page,
+         "total": total,
+         "offset": effective_offset,
+         "limit": effective_limit,
+-        "has_more": (effective_offset + effective_limit) < total,
++        "has_more": has_more,
++        "next_offset": effective_offset + effective_limit if has_more else None,
+     }
+ 
+ 
+diff --git a/tests/test_pagination.py b/tests/test_pagination.py
+index 313a146..a65f190 100644
+--- a/tests/test_pagination.py
++++ b/tests/test_pagination.py
+@@ -74,7 +74,7 @@ class TestPaginate:
+ 
+     def test_envelope_keys(self):
+         result = paginate([1, 2, 3])
+-        assert set(result.keys()) == {"items", "total", "offset", "limit", "has_more"}
++        assert set(result.keys()) == {"items", "total", "offset", "limit", "has_more", "next_offset"}
+ 
+ 
+ def test_limit_field_and_offset_field_schema_constraints():

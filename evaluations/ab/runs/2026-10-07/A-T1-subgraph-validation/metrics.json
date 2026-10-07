@@ -1,0 +1,27 @@
+{
+ "arm": "A",
+ "task": "T1-subgraph-validation",
+ "repeat": 0,
+ "model": "glm-5.3-flash:cloud",
+ "gates_pass": false,
+ "gates": {
+  ".venv/bin/pytest tests/test_workflow_validation_subgraph.py -q": {
+   "rc": 4,
+   "tail": "no tests ran in 0.00s"
+  },
+  ".venv/bin/pytest tests/ -q -m 'not integration'": {
+   "rc": 0,
+   "tail": "668 passed in 19.84s"
+  }
+ },
+ "completion_tokens": 7432,
+ "reasoning_tokens": 4626,
+ "output_tokens": 14864,
+ "total_spend": 550861,
+ "prompt_tokens": 1082232,
+ "calls": 60,
+ "tool_calls": 60,
+ "errored_cmds": 23,
+ "steps": 60,
+ "wall_seconds": 94.3
+}

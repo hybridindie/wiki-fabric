@@ -1,0 +1,41 @@
+diff --git a/src/comfyui_mcp/audit.py b/src/comfyui_mcp/audit.py
+index 5a91211..453c062 100644
+--- a/src/comfyui_mcp/audit.py
++++ b/src/comfyui_mcp/audit.py
+@@ -59,6 +59,7 @@ class AuditRecord(BaseModel):
+     prompt_id: str = ""
+     nodes_used: list[str] = []
+     warnings: list[str] = []
++    security_warnings: list[str] = []
+     duration_ms: int = 0
+     status: str = ""
+     extra: dict[str, object] = {}
+@@ -76,6 +77,8 @@ class AuditRecord(BaseModel):
+             data["nodes_used"] = self.nodes_used
+         if self.warnings:
+             data["warnings"] = self.warnings
++        if self.security_warnings:
++            data["security_warnings"] = self.security_warnings
+         if self.duration_ms:
+             data["duration_ms"] = self.duration_ms
+         if self.status:
+diff --git a/src/comfyui_mcp/tools/generation.py b/src/comfyui_mcp/tools/generation.py
+index 081c6f8..632a04e 100644
+--- a/src/comfyui_mcp/tools/generation.py
++++ b/src/comfyui_mcp/tools/generation.py
+@@ -198,6 +198,7 @@ async def _submit_workflow(
+         "action": "inspected",
+         "nodes_used": inspection.nodes_used,
+         "warnings": inspection.warnings,
++        "security_warnings": inspection.warnings,
+     }
+     if inspect_extra:
+         log_kwargs["extra"] = inspect_extra
+@@ -267,6 +268,7 @@ async def _submit_workflow(
+         tool=tool_name,
+         action="submitted",
+         prompt_id=prompt_id,
++        security_warnings=list(inspection.warnings),
+         extra={"success_message": success_message},
+     )
+ 

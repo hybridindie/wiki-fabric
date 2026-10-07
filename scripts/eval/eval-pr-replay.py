@@ -33,6 +33,7 @@ _HERE = _p.Path(__file__).resolve().parent
 for _dir in (_HERE, _HERE.parent / "lib"):
     if str(_dir) not in _s.path:
         _s.path.insert(0, str(_dir))
+import os
 import json
 import shutil
 import tempfile
@@ -76,10 +77,16 @@ def fetch_pr(repo, number):
 
 def seed_fabric(tmp, repo, pr, repo_clone, graphify=False):
     """Fresh harness + docs captured from the repo clone + PR thread as raw."""
+    # the NESTED-CORPUS layout (the resolver's default): config at the root,
+    # content atoms under corpus/ — the flat layout died when the resolver
+    # moved to vault/corpus (the seed wrote tmp/evidence/raw and the walker
+    # read tmp/vault/corpus: selected=0 forever, found in the comfyui replay)
+    _C = tmp / "corpus"
     shutil.copytree(REPO_ROOT / "scripts", tmp / "scripts", dirs_exist_ok=True)
     shutil.copytree(REPO_ROOT / "schemas", tmp / "schemas", dirs_exist_ok=True)
     for d in ("patterns", "anti-patterns", "skills", "concepts"):
-        (tmp / d).mkdir(exist_ok=True)
+        import layout as _lay
+        _lay.make(_C, d).mkdir(parents=True, exist_ok=True)
     if graphify:
         # enable graphify and index the repo's code (AST entity pages)
         (tmp / "fabric.yaml").write_text(
@@ -89,12 +96,17 @@ def seed_fabric(tmp, repo, pr, repo_clone, graphify=False):
         subprocess.run(
             [sys.executable, str(tmp / "scripts" / "cmd/build-entity-index.py")],
             capture_output=True, text=True, cwd=str(tmp), timeout=600,
+            env=_clean_env(tmp),
         )
-    (tmp / "registry").mkdir(exist_ok=True)
-    (tmp / "registry" / "log.md").write_text("# Log\n\nAppend-only timeline.\n")
+    import layout as _lay
+    _lay.registry(_C).mkdir(parents=True, exist_ok=True)
+    (_lay.registry(_C) / "log.md").write_text("# Log\n\nAppend-only timeline.\n")
 
+    if not (tmp / "fabric.yaml").exists():
+        (tmp / "fabric.yaml").write_text(
+            f"owner: replay\nrepos:\n  {repo.split('/')[-1]}:\n    path: {repo_clone}\n")
     # capture scoped docs from the clone (fastapi: docs slice)
-    raw = tmp / "evidence" / "raw" / repo.split("/")[-1]
+    raw = _lay.evidence_raw(_C) / repo.split("/")[-1]
     raw.mkdir(parents=True, exist_ok=True)
     doc_count = 0
     for doc in sorted(repo_clone.rglob("*.md")):
@@ -117,7 +129,56 @@ def seed_fabric(tmp, repo, pr, repo_clone, graphify=False):
         f"## Discussion\n\n{comments_md}\n\n## Files touched\n\n"
         + "\n".join(f"- {f}" for f in pr["files"])
     )
-    return doc_count
+    # corpus claims exist BEFORE the replay measures: a fabric with captured
+    # docs but zero claims delivers an empty manifest (found in the comfyui
+    # replay: selected=0 everywhere). The PR thread must NOT be in this
+    # ingest — the replay's after-ingest tier measures exactly the delta its
+    # claims produce. Alphabetical budget ordering did NOT keep git/ last
+    # (it landed inside the first 25 in one run — the 0-claims class), so the
+    # thread directory is PARKED outside the vault for the corpus ingest and
+    # moved back: its record stays absent until ingest_pr_thread creates it.
+    import subprocess as _sp
+    git_dir = raw / "git"
+    git_parked = tmp / "_pr_thread_parked"
+    if git_dir.exists():
+        shutil.move(str(git_dir), str(git_parked))
+    _sp.run([sys.executable, str(tmp / "scripts" / "cmd/ingest.py"),
+             "--changed", repo.split("/")[-1], "--budget", "100",
+             "--extract-claims"],
+            capture_output=True, text=True, cwd=str(tmp), timeout=1800,
+            env=_clean_env(tmp))
+    if git_parked.exists():
+        shutil.move(str(git_parked), str(git_dir))
+        return doc_count
+
+
+
+def _pr_git_dir(tmp):
+    """The slug dir seed_fabric used for this fabric's raw/git (underscore
+    fold: comfyui_mcp as captured)."""
+    import glob as _g
+    cands = _g.glob(str(tmp / "corpus" / "evidence" / "raw" / "*"))
+    for c in cands:
+        if Path(c).is_dir() and (Path(c) / "git").exists():
+            return Path(c).name
+    return Path(cands[0]).name if cands else "comfyui_mcp"
+
+
+def _clean_env(tmp=None):
+    """Pin the children to THIS replay's fabric. Two failure classes found
+    in the comfyui replay (2026-10-07): (a) a leaked WIKI_FABRIC_DIR from
+    the outer shell pointed every child at the LIVE corpus (the alpaca
+    claims in the manifests were the give-away), (b) the seeded tmp IS a
+    harness tree (scripts/wiki-fabric.sh copied with the seed) so the
+    cwd-walk breaks on it — the resolver's fallback (tmp.parent/'vault')
+    answered instead. Explicit WIKI_FABRIC_DIR is the only honest answer;
+    the corpus lives under tmp/corpus (the nested layout the resolver
+    applies to pinned roots)."""
+    env = dict(os.environ)
+    env.pop("WIKI_FABRIC_DIR", None)
+    if tmp is not None:
+        env["WIKI_FABRIC_DIR"] = str(tmp)
+    return env
 
 
 def compile_manifest(tmp, task, paths):
@@ -125,25 +186,33 @@ def compile_manifest(tmp, task, paths):
            "--task", task, "--format", "json"]
     for pp in paths:
         cmd += ["--paths", pp]
-    out = subprocess.run(cmd, capture_output=True, text=True, cwd=str(tmp))
+    out = subprocess.run(cmd, capture_output=True, text=True, cwd=str(tmp),
+                         env=_clean_env(tmp))
     return json.loads(out.stdout)
 
 
 def ingest_pr_thread(tmp, pr):
-    """--llm tier: LLM-extract claims from the PR thread.
-
-    Returns number of claims extracted. This is the expensive step; it measures
-    whether ingesting the PR's own discussion improves later recall.
-    """
-    src = tmp / "evidence" / "raw" / "fastapi" / "git" / f"pr-{pr['number']}.md"
+    """--llm tier: LLM-extract claims from the PR thread (the replay's delta
+    measurement: the corpus claims exist at seed; the PR thread's claims are
+    the AFTER tier). Count scoped to THIS PR's thread claims."""
+    src = (tmp / "corpus" / "evidence" / "raw" /
+           _pr_git_dir(tmp) / "git") / f"pr-{pr['number']}.md"
     if not src.exists():
+        print(f"  (pr-thread source file MISSING: {src})", file=sys.stderr)
         return 0, False
     out = subprocess.run(
         [sys.executable, str(tmp / "scripts" / "cmd/ingest.py"), str(src), "--extract-claims"],
         capture_output=True, text=True, cwd=str(tmp), timeout=900,
+        env=_clean_env(tmp),
     )
-    claims = list((tmp / "evidence" / "claims").glob("claim-*.md"))
-    return len(claims), out.returncode == 0
+    if out.returncode != 0:
+        print(f"  (pr-thread ingest FAILED: {(out.stderr or '')[-220:]})", file=sys.stderr)
+    claims_dir = tmp / "corpus" / "evidence" / "claims"
+    pr_new = list(claims_dir.glob("claim-*-git-pr-*.md"))
+    all_claims = list(claims_dir.glob("claim-*.md"))
+    print(f"  pr-thread ingest: rc={out.returncode} "
+          f"pr-claims={len(pr_new)} all-claims={len(all_claims)}")
+    return len(pr_new), out.returncode == 0
 
 
 def score_pr(pr, manifest, fabric):
@@ -153,7 +222,11 @@ def score_pr(pr, manifest, fabric):
 
     selected_text = ""
     for s in manifest["selected"]:
-        p = fabric / s["path"]
+        # manifest paths are CORPUS-relative (the layout contract): join the
+        # corpus, not the fabric root (flat tmp join → nothing exists →
+        # term coverage reads 0.0 forever — the silent scorer-killer)
+        _croot = (fabric / "corpus") if (fabric / "corpus").exists() else fabric
+        p = _croot / s["path"]
         if p.exists():
             selected_text += p.read_text().lower()
     sel_toks = tokens(selected_text)

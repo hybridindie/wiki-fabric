@@ -1,0 +1,10 @@
+{
+ ".venv/bin/pytest tests/test_pagination_next_offset.py -q": {
+  "rc": 1,
+  "tail": "11 failed in 0.06s"
+ },
+ ".venv/bin/pytest tests/ -q -m 'not integration'": {
+  "rc": 1,
+  "tail": "12 failed, 667 passed in 19.96s"
+ }
+}

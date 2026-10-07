@@ -1,0 +1,91 @@
+# eval-ab task fixtures: real comfyui-mcp engineering work, each with a
+# machine-verifiable gate (the NEW test must pass + the suite must not
+# regress). Verifier commands run in the sandbox clone with the repo's venv.
+# The `fabric_context_file` names the PINNED context manifest (generated once
+# from the vault corpus, committed as the fixture) — arm B (with-fabric) gets
+# exactly this text; arm A gets none. Same model, same tools, same gates.
+
+base:
+  repo: /Users/johnd/Development/comfyui_mcp
+  pinned_sha: 84fb34a
+  venv_pytest: .venv/bin/pytest
+  suite_cmd: ".venv/bin/pytest tests/ -q -m 'not integration'"
+
+tasks:
+  - id: T1-subgraph-validation
+    prompt: >-
+      In workflow/validation.py, validation walks only the workflow's
+      top-level node map. ComfyUI workflow JSON may now embed subgraph nodes
+      whose internal node maps are nested under the node's "subgraph" key.
+      Extend the validation walk so it descends into nested subgraph node
+      maps: prompts/negatives should be found inside subgraphs, dangerous
+      nodes inside subgraphs must warn, and the output validation should
+      treat a workflow whose ONLY output node lives inside a subgraph the
+      same as a top-level one. Add tests in a new file
+      tests/test_workflow_validation_subgraph.py covering: (a) a subgraph
+      containing a prompt node is found, (b) a dangerous node inside a
+      subgraph produces a warning, (c) an output node inside a subgraph
+      satisfies the output check. Then the FULL suite must pass.
+    verify_new: ".venv/bin/pytest tests/test_workflow_validation_subgraph.py -q"
+    verify_suite: true
+
+  - id: T2-pagination-next-offset
+    prompt: >-
+      The pagination envelope in src/comfyui_mcp/pagination.py carries
+      items/total/offset/limit/has_more. Extend it to also carry
+      "next_offset": when has_more is true, next_offset = offset + limit;
+      otherwise null. Update paginate() and add tests in a new file
+      tests/test_pagination_next_offset.py covering: (a) next_offset present
+      and correct when more items remain, (b) next_offset is None on the
+      last page, (c) next_offset respects the max_limit clamp. Also update
+      the docstring's envelope-key list. Then the FULL suite must pass.
+    verify_new: ".venv/bin/pytest tests/test_pagination_next_offset.py -q"
+    verify_suite: true
+
+  - id: T3-batch-validate-tool
+    prompt: >-
+      Add a new MCP tool `comfyui_batch_validate` to src/comfyui_mcp/tools/workflow.py:
+      it accepts a JSON list of workflow strings and validates each one against the
+      existing validation path, returning a list of {index, ok, errors, warnings}
+      entries (reuse the module's existing validation entry point; do not
+      reimplement). Register it in _TOOL_CATEGORIES in src/comfyui_mcp/server.py
+      under the "workflow" category (a validation call is read-heavy but not
+      billable — follow the file's existing comment style). Add tests in a new
+      file tests/test_tools_batch_validate.py covering: (a) one valid + one
+      invalid workflow returns ok/error per index, (b) an empty list returns an
+      empty result, (c) the tool is registered under the "workflow" category in
+      _TOOL_CATEGORIES. Then the FULL suite must pass.
+    verify_new: ".venv/bin/pytest tests/test_tools_batch_validate.py -q"
+    verify_suite: true
+
+  - id: T4-node-auditor-net-regex
+    prompt: >-
+      src/comfyui_mcp/security/node_auditor.py classifies unknown nodes by
+      name regexes (http/request/download substrings). Newer node families
+      evade it (no such substring). Add a second regex category "net-exec"
+      that flags nodes whose names match exec/eval/interpose/agent/inference
+      service patterns (case-insensitive), with its own reason string, and
+      make sure the auditor's existing verdicts are unchanged for the
+      current test fixtures. Add tests in a new file
+      tests/test_node_auditor_netexec.py covering: (a) a node named e.g.
+      "MyAgentTool" is flagged by the new category, (b) existing fixture
+      classifications are unchanged, (c) the new reason string appears.
+      Then the FULL suite must pass.
+    verify_new: ".venv/bin/pytest tests/test_node_auditor_netexec.py -q"
+    verify_suite: true
+
+  - id: T5-audit-dangerous-field
+    prompt: >-
+      The audit logger (src/comfyui_mcp/audit.py) records tool/action and
+      redacts sensitive keys. When a workflow submission triggers security
+      warnings (inspector warnings), the audit record does not carry them.
+      Extend AuditRecord with an optional "security_warnings" field
+      (list[str], omitted when empty — following the existing omit-empty
+      contract), and have the workflow submission path (find where
+      inspector warnings are collected) pass them into the audit record.
+      Add tests in a new file tests/test_audit_security_warnings.py covering:
+      (a) field present when warnings passed, (b) omitted when empty,
+      (c) serialized record includes the warnings array. Then the FULL suite
+      must pass.
+    verify_new: ".venv/bin/pytest tests/test_audit_security_warnings.py -q"
+    verify_suite: true

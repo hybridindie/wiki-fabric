@@ -195,6 +195,8 @@ def check_receipt(fabric, manifest, rc):
 
 
 def llm_probe(fixture, prompt, model=None):
+    if not (fixture.get("probe") or {}).get("question"):
+        return None  # fixture declares no llm probe (be5/be6: receipt/prospective evals)
     try:
         from fabric_config import get_llm_config, get_config
         import openai
@@ -203,11 +205,18 @@ def llm_probe(fixture, prompt, model=None):
         resp = client.chat.completions.create(
             model=model or cfg["model"],
             messages=[{"role": "user", "content": prompt + f"\n\n# Question\n{fixture['probe']['question']}\n"}],
-            max_tokens=400,
+            max_tokens=int(os.environ.get("WF_EVAL_PROBE_MAX_TOKENS", "1600")),
         )
         answer = resp.choices[0].message.content or ""
+        usage = getattr(resp, "usage", None)
+        _tok = {
+            "prompt_tokens": int(getattr(usage, "prompt_tokens", 0) or 0),
+            "completion_tokens": int(getattr(usage, "completion_tokens", 0) or 0),
+            "reasoning_tokens_est": round(len(str(getattr(
+                resp.choices[0].message, "reasoning", "") or "")) / 4),
+        }
     except Exception as e:
-        return {"answer": "", "ok": False, "failures": [f"llm error: {e}"]}
+        return {"answer": "", "ok": False, "failures": [f"llm error: {e}"], "tokens": {}}
     ok = True
     failures = []
     for term in fixture["probe"].get("must_contain", []):
@@ -218,7 +227,7 @@ def llm_probe(fixture, prompt, model=None):
         if term.lower() in answer.lower():
             ok = False
             failures.append(f"banned: {term}")
-    return {"answer": answer, "ok": ok, "failures": failures}
+    return {"answer": answer, "ok": ok, "failures": failures, "tokens": _tok}
 
 
 def judge_probe(fixture, prompt, manifest, tmp):
@@ -338,11 +347,25 @@ def main():
             if args.llm:
                 prompt = assemble_prompt(tmp, manifest)
                 probe = llm_probe(fixture, prompt, args.model)
+                if probe is None:
+                    probe = {"ok": True, "failures": [], "answer": "",
+                             "skipped": "no probe contract in fixture"}
                 entry["probe_ok"] = probe["ok"]
                 entry["probe_failures"] = probe["failures"]
                 entry["answer_excerpt"] = probe["answer"][:300]
                 entry["ok"] = entry["ok"] and probe["ok"]
                 entry["mode"] = "llm"
+                # the A/B pair (#185-cycle): the SAME probe question asked
+                # BARE (no fabric context) — compliance delta = the fabric's
+                # effect on the decision, measured per fixture. Both arms'
+                # usage captured; the bare arm never gates ok (it's the
+                # baseline, not the claim under test).
+                if (fixture.get("probe") or {}).get("question"):
+                    bare_probe = llm_probe(fixture, "", args.model)
+                    entry["bare_ok"] = bare_probe["ok"]
+                    entry["bare_failures"] = bare_probe["failures"]
+                    entry["tokens_manifest"] = probe.get("tokens", {})
+                    entry["tokens_bare"] = bare_probe.get("tokens", {})
             results.append(entry)
         except Exception as e:
             results.append({"id": fx_path.stem, "ok": False, "checks": [{"kind": "error", "detail": str(e), "passed": False}]})

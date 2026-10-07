@@ -380,10 +380,16 @@ def select_context(pages, task, paths, project, today, max_items=20):
             # Path relevance boosts within-tier ordering
             path_hit = any(pp and pp in pg["posix"] for pp in path_list) if path_list else False
             scored.append({"pg": pg, "reason": reason, "priority": priority,
-                           "stale": overdue, "path_hit": path_hit})
+                           "stale": overdue, "path_hit": path_hit,
+                           "project_affinity": bool(project and (
+                               project.lower() in pg["posix"]))})
 
-    # Order: priority tier → path hit → staleness (fresh first) → stem
-    scored.sort(key=lambda s: (tier_order.get(s["priority"], 9), not s["path_hit"], -s["stale"], s["pg"]["stem"]))
+    # Order: priority tier → path hit → project affinity (a --project pin
+    # lifts THAT project's pages above same-tier neighbors — alphabetical
+    # stem order let an unrelated project flood the P1 slots; found in the
+    # AB-eval fixture build, #185-cycle) → staleness → stem
+    scored.sort(key=lambda s: (tier_order.get(s["priority"], 9), not s["path_hit"],
+                               not s.get("project_affinity"), -s["stale"], s["pg"]["stem"]))
 
     # Precedence-preserving cap (#159 S1): the plain scored[:max_items] cut let
     # a large P1 claim flood hide the domain tier entirely (P2 is the OVERRIDE
@@ -422,7 +428,7 @@ def select_context(pages, task, paths, project, today, max_items=20):
         out = p1[:p1_share] + p2[:p2_share] + p3[:p3_share]
         demoted = [s for s in scored if s not in out]
         out.sort(key=lambda s: (tier_order.get(s["priority"], 9), not s["path_hit"],
-                                -s["stale"], s["pg"]["stem"]))
+                                not s.get("project_affinity"), -s["stale"], s["pg"]["stem"]))
         for s in demoted:
             excluded.append({"stem": s["pg"]["stem"], "path": s["pg"]["posix"],
                              "reason": f"beyond --max {max_items} (tier-shared cut)"})

@@ -1,0 +1,27 @@
+{
+ "arm": "A",
+ "task": "T2-pagination-next-offset",
+ "repeat": 0,
+ "model": "glm-5.3-flash:cloud",
+ "gates_pass": false,
+ "gates": {
+  ".venv/bin/pytest tests/test_pagination_next_offset.py -q": {
+   "rc": 1,
+   "tail": "7 failed in 0.05s"
+  },
+  ".venv/bin/pytest tests/ -q -m 'not integration'": {
+   "rc": 1,
+   "tail": "7 failed, 668 passed in 19.60s"
+  }
+ },
+ "completion_tokens": 32384,
+ "reasoning_tokens": 10462,
+ "output_tokens": 64768,
+ "total_spend": 1088344,
+ "prompt_tokens": 2101458,
+ "calls": 60,
+ "tool_calls": 60,
+ "errored_cmds": 15,
+ "steps": 60,
+ "wall_seconds": 305.0
+}
