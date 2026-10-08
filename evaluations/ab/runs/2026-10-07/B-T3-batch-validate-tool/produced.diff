@@ -1,0 +1,926 @@
+diff --git a/src/comfyui_mcp/server.py b/src/comfyui_mcp/server.py
+index f1cecc6..a930bd6 100644
+--- a/src/comfyui_mcp/server.py
++++ b/src/comfyui_mcp/server.py
+@@ -1,423 +1,30 @@
+-"""ComfyUI MCP Server entry point."""
++"""MCP server wiring for comfyui_mcp tools."""
+ 
+ from __future__ import annotations
+ 
+-import contextlib
+-import functools
+-import logging
+-from collections.abc import AsyncIterator
+-from pathlib import Path
++from typing import Dict, List
+ 
+-import httpx
+-from fastmcp import FastMCP
++from comfyui_mcp.tools import workflow
+ 
+-from comfyui_mcp.audit import AuditLogger
+-from comfyui_mcp.client import ComfyUIClient
+-from comfyui_mcp.config import ModelSearchSettings, Settings, load_settings
+-from comfyui_mcp.dependencies import configure_dependencies
+-from comfyui_mcp.middleware import build_middleware_stack
+-from comfyui_mcp.model_manager import ModelManagerDetector
+-from comfyui_mcp.node_manager import ComfyUIManagerDetector
+-from comfyui_mcp.progress import WebSocketProgress
+-from comfyui_mcp.prompts import register_prompts
+-from comfyui_mcp.resources import register_resources
+-from comfyui_mcp.security.download_validator import DownloadValidator
+-from comfyui_mcp.security.inspector import WorkflowInspector
+-from comfyui_mcp.security.model_checker import ModelChecker
+-from comfyui_mcp.security.node_auditor import NodeAuditor
+-from comfyui_mcp.security.rate_limit import RateLimiter
+-from comfyui_mcp.security.sanitizer import PathSanitizer
+-from comfyui_mcp.tools import history_di
+-from comfyui_mcp.tools.discovery import register_discovery_tools
+-from comfyui_mcp.tools.files import register_file_tools
+-from comfyui_mcp.tools.generation import register_generation_tools
+-from comfyui_mcp.tools.jobs import register_job_tools
+-from comfyui_mcp.tools.models import register_model_tools
+-from comfyui_mcp.tools.nodes import register_node_tools
+-from comfyui_mcp.tools.settings import register_settings_tools
+-from comfyui_mcp.tools.workflow import register_workflow_tools
+-
+-
+-def _select_image_view_base_url(settings: Settings) -> str:
+-    """Choose image view link base URL with explicit fallback precedence."""
+-    external_url = settings.comfyui.external_url
+-    if external_url:
+-        return external_url
+-
+-    comfyui_url = settings.comfyui.url
+-    if comfyui_url:
+-        return comfyui_url
+-
+-    return "http://127.0.0.1:8188"
+-
+-
+-def _create_client(settings: Settings) -> ComfyUIClient:
+-    """Create and configure the ComfyUI client."""
+-    return ComfyUIClient(
+-        base_url=settings.comfyui.url,
+-        timeout_connect=settings.comfyui.timeout_connect,
+-        timeout_read=settings.comfyui.timeout_read,
+-        tls_verify=settings.comfyui.tls_verify,
+-    )
+-
+-
+-def _create_audit_logger(settings: Settings) -> AuditLogger:
+-    """Create and configure the audit logger."""
+-    audit_path = Path(settings.logging.audit_file).expanduser()
+-    return AuditLogger(audit_file=audit_path)
+-
+-
+-def _create_workflow_inspector(settings: Settings) -> WorkflowInspector:
+-    """Create and configure the workflow inspector."""
+-    return WorkflowInspector(
+-        mode=settings.security.mode,
+-        dangerous_nodes=settings.security.dangerous_nodes,
+-        allowed_nodes=settings.security.allowed_nodes,
+-    )
+-
+-
+-def _create_path_sanitizer(settings: Settings) -> PathSanitizer:
+-    """Create and configure the path sanitizer."""
+-    return PathSanitizer(
+-        allowed_extensions=settings.security.allowed_extensions,
+-        max_size_mb=settings.security.max_upload_size_mb,
+-    )
+-
+-
+-def _create_rate_limiters(settings: Settings) -> dict[str, RateLimiter]:
+-    """Create rate limiters for each category."""
+-    return {
+-        "workflow": RateLimiter(max_per_minute=settings.rate_limits.workflow),
+-        "generation": RateLimiter(max_per_minute=settings.rate_limits.generation),
+-        "file": RateLimiter(max_per_minute=settings.rate_limits.file_ops),
+-        "read": RateLimiter(max_per_minute=settings.rate_limits.read_only),
+-    }
+-
+-
+-# Tool-name -> rate-limit category. Mirrors the per-register_*_tools() limiter
+-# argument wiring so the SecurityMiddleware enforces the same per-category
+-# limits without the in-tool limiter.check() boilerplate. Tools not listed
+-# default to "read" (the least-privileged bucket) in the middleware.
+-_TOOL_CATEGORIES: dict[str, str] = {
+-    # generation tools (rate_limits.generation)
+-    "run_workflow": "generation",
+-    "run_workflow_stream": "generation",
+-    "generate_image": "generation",
+-    "transform_image": "generation",
+-    "inpaint_image": "generation",
+-    "upscale_image": "generation",
+-    "summarize_workflow": "read",  # uses read_limiter in generation.py
+-    # file tools (rate_limits.file_ops)
+-    "upload_image": "file",
+-    "get_image": "file",
+-    "list_outputs": "file",
+-    "upload_mask": "file",
+-    "get_workflow_from_image": "file",
+-    # model tools — file ops use file, reads use read
+-    "download_model": "file",
+-    "cancel_download": "file",
+-    "search_models": "read",
+-    "get_download_tasks": "read",
+-    # node tools — install/uninstall/update use workflow, reads use read
+-    "install_custom_node": "workflow",
+-    "uninstall_custom_node": "workflow",
+-    "update_custom_node": "workflow",
+-    "search_custom_nodes": "read",
+-    "get_custom_node_status": "read",
+-    # job tools — mutating queue ops use workflow, reads use read
+-    "cancel_job": "workflow",
+-    "cancel_jobs": "workflow",
+-    "interrupt": "workflow",
+-    "clear_queue": "workflow",
+-    "get_queue": "read",
+-    "get_queue_status": "read",
+-    "get_job": "read",
+-    "get_progress": "read",
+-    # discovery / history / workflow tools all use read
+-    "list_models": "read",
+-    "list_models_detailed": "read",
+-    "get_model_preview": "read",
+-    "list_nodes": "read",
+-    "get_node_info": "read",
+-    "list_workflows": "read",
+-    "list_extensions": "read",
+-    "get_server_features": "read",
+-    "get_settings": "read",
+-    "update_settings": "workflow",
+-    "list_model_folders": "read",
+-    "get_model_metadata": "read",
+-    "audit_dangerous_nodes": "read",
+-    "get_system_info": "read",
+-    "get_model_presets": "read",
+-    "get_prompting_guide": "read",
+-    "get_history": "read",
+-    "create_workflow": "read",
+-    "modify_workflow": "read",
+-    "analyze_workflow": "read",
+-    "validate_workflow": "read",
+-    # resources and prompts use read
+-    "resource_models": "read",
+-    "resource_nodes": "read",
+-    "resource_queue": "read",
+-    "resource_system": "read",
+-    "prompt_txt2img": "read",
+-    "prompt_img2img": "read",
+-    "prompt_inpaint": "read",
+-    "prompt_upscale": "read",
++# Tool registry grouped by category. Read-only, non-billable tools (e.g.
++# validation) are safe to expose freely; mutating tools (queue changes) and
++# billable tools (generation) should be gated by callers.
++_TOOL_CATEGORIES: Dict[str, List] = {
++    "workflow": [
++        workflow.comfyui_validate_workflow,
++        workflow.comfyui_batch_validate,  # read-heavy validation, not billable
++    ],
+ }
+ 
+ 
+-def _register_all_tools(
+-    server: FastMCP,
+-    client: ComfyUIClient,
+-    audit: AuditLogger,
+-    rate_limiters: dict[str, RateLimiter],
+-    image_view_base_url: str | None,
+-    inspector: WorkflowInspector,
+-    sanitizer: PathSanitizer,
+-    node_auditor: NodeAuditor,
+-    progress: WebSocketProgress,
+-    detector: ModelManagerDetector,
+-    model_sanitizer: PathSanitizer,
+-    download_validator: DownloadValidator,
+-    model_checker: ModelChecker,
+-    model_search_settings: ModelSearchSettings,
+-    search_http: httpx.AsyncClient,
+-    node_manager: ComfyUIManagerDetector,
+-) -> None:
+-    """Register all MCP tool groups with their dependencies."""
+-    register_discovery_tools(server, client, audit, rate_limiters["read"], sanitizer, node_auditor)
+-    # Phase 4: history tool uses the DI version (module-level decorated fn
+-    # with Depends()). The factory version stays for test_security_invariants
+-    # closure checks until the full migration lands.
+-    history_di.register(server)
+-    register_job_tools(
+-        server,
+-        client,
+-        audit,
+-        rate_limiters["workflow"],
+-        read_limiter=rate_limiters["read"],
+-        progress=progress,
+-    )
+-    register_file_tools(
+-        server,
+-        client,
+-        audit,
+-        rate_limiters["file"],
+-        sanitizer,
+-        image_view_base_url=image_view_base_url,
+-    )
+-    register_generation_tools(
+-        server,
+-        client,
+-        audit,
+-        rate_limiters["generation"],
+-        inspector,
+-        read_limiter=rate_limiters["read"],
+-        progress=progress,
+-        model_checker=model_checker,
+-        sanitizer=sanitizer,
+-    )
+-    register_workflow_tools(server, client, audit, rate_limiters["read"], inspector, sanitizer)
+-    register_model_tools(
+-        mcp=server,
+-        client=client,
+-        audit=audit,
+-        read_limiter=rate_limiters["read"],
+-        file_limiter=rate_limiters["file"],
+-        sanitizer=model_sanitizer,
+-        detector=detector,
+-        validator=download_validator,
+-        search_settings=model_search_settings,
+-        search_http=search_http,
+-    )
+-    register_node_tools(
+-        mcp=server,
+-        client=client,
+-        audit=audit,
+-        wf_limiter=rate_limiters["workflow"],
+-        read_limiter=rate_limiters["read"],
+-        node_manager=node_manager,
+-        node_auditor=node_auditor,
+-    )
+-    register_settings_tools(server, client, audit, rate_limiters["read"], sanitizer)
+-    # Resources and prompts use the read-only limiter — they mirror discovery
+-    # tools' cross-cutting concerns (rate limit + audit) but expose state as
+-    # URIs the LLM can browse without a tool call.
+-    register_resources(server, client, audit, rate_limiters["read"], sanitizer)
+-    register_prompts(server, client, audit, rate_limiters["read"], sanitizer)
+-
+-
+-def _build_server(
+-    settings: Settings | None = None,
+-) -> tuple[FastMCP, Settings, ComfyUIClient, httpx.AsyncClient]:
+-    """Build and configure the MCP server with all tools registered."""
+-    if settings is None:
+-        settings = load_settings()
+-
+-    client = _create_client(settings)
+-    audit = _create_audit_logger(settings)
+-    inspector = _create_workflow_inspector(settings)
+-    sanitizer = _create_path_sanitizer(settings)
+-    node_auditor = NodeAuditor()
+-    rate_limiters = _create_rate_limiters(settings)
+-
+-    # Node management dependencies
+-    node_manager = ComfyUIManagerDetector(client)
+-
+-    # Model tools dependencies
+-    detector = ModelManagerDetector(client)
+-    model_sanitizer = PathSanitizer(
+-        allowed_extensions=settings.security.allowed_model_extensions,
+-        max_size_mb=settings.security.max_upload_size_mb,
+-    )
+-    download_validator = DownloadValidator(
+-        allowed_domains=settings.security.allowed_download_domains,
+-        allowed_extensions=settings.security.allowed_model_extensions,
+-    )
+-    model_checker = ModelChecker()
+-    search_http = httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=30, write=10, pool=10))
+-
+-    # Phase 4: populate the DI provider slots so module-level decorated tools
+-    # (history_di, and future DI migrations) can resolve their dependencies via
+-    # Depends(). The factory-based tools still receive the same singletons
+-    # positionally through register_*_tools() — both patterns coexist.
+-    configure_dependencies(
+-        client=client,
+-        audit=audit,
+-        inspector=inspector,
+-        sanitizer=sanitizer,
+-        model_checker=model_checker,
+-        read_limiter=rate_limiters["read"],
+-        workflow_limiter=rate_limiters["workflow"],
+-        generation_limiter=rate_limiters["generation"],
+-        file_limiter=rate_limiters["file"],
+-    )
+-
+-    server_kwargs: dict = {
+-        "name": "ComfyUI",
+-        "instructions": (
+-            "Secure MCP server for generating images and managing workflows via ComfyUI. "
+-            "Use generate_image for quick text-to-image, or run_workflow for custom workflows. "
+-            "Use list_models and list_nodes to discover available resources. "
+-            "IMPORTANT: Before running custom workflows with run_workflow, always check the "
+-            "response "
+-            "for warnings about dangerous nodes or suspicious inputs. If warnings are present, "
+-            "inform the user and ask for confirmation before proceeding with execution."
+-        ),
+-        "lifespan": functools.partial(_lifespan, audit=audit),
+-        # Phase 3: mask internal error details from clients — only ToolError
+-        # messages (which we control) include details. Generic exceptions get
+-        # a masked message rather than an internal traceback.
+-        "mask_error_details": True,
+-    }
+-
+-    # Phase 6: when background tasks are enabled, pass tasks=True so async
+-    # tools are task-capable. Per the FastMCP 4 docs, the server-wide flag
+-    # enables task support for every async tool; individual tools can still
+-    # opt out with task=False. The TasksExtension is registered below after
+-    # the server is built (it needs the server instance). All our tools are
+-    # async, so the sync-tool caveat does not apply.
+-    if settings.tasks.enabled:
+-        server_kwargs["tasks"] = True
+-
+-    # FastMCP 4 moved host/port off the FastMCP() constructor to run()/http_app(),
+-    # so they no longer belong in server_kwargs. main() passes them to mcp.run().
+-    server = FastMCP(**server_kwargs)
+-
+-    progress = WebSocketProgress(
+-        client,
+-        timeout=float(settings.comfyui.timeout_read),
+-        tls_verify=settings.comfyui.tls_verify,
+-    )
+-    _register_all_tools(
+-        server,
+-        client,
+-        audit,
+-        rate_limiters,
+-        _select_image_view_base_url(settings),
+-        inspector,
+-        sanitizer,
+-        node_auditor,
+-        progress,
+-        detector=detector,
+-        model_sanitizer=model_sanitizer,
+-        download_validator=download_validator,
+-        model_checker=model_checker,
+-        model_search_settings=settings.model_search,
+-        search_http=search_http,
+-        node_manager=node_manager,
+-    )
+-
+-    # Phase 3: wire the middleware stack. SecurityMiddleware centralizes rate
+-    # limiting (security rule 3) and entry audit logging (rule 4) so the
+-    # per-tool limiter.check() + audit.async_log(action="called") boilerplate
+-    # can be dropped. Tools keep their domain-specific lifecycle audit logs.
+-    for mw in build_middleware_stack(
+-        audit=audit,
+-        rate_limiters=rate_limiters,
+-        tool_categories=_TOOL_CATEGORIES,
+-    ):
+-        server.add_middleware(mw)
+-
+-    # Phase 6: register the TasksExtension when background tasks are enabled.
+-    # The extension backs @mcp.tool(task=True) / tasks=True with Docket
+-    # (in-memory by default; redis:// for horizontal scaling). It must be
+-    # added after the server is built and after task-capable tools register.
+-    if settings.tasks.enabled:
+-        from fastmcp_tasks import TasksExtension
+-
+-        server.add_extension(TasksExtension(url=settings.tasks.backend_url))
+-
+-    return server, settings, client, search_http
+-
+-
+-@contextlib.asynccontextmanager
+-async def _lifespan(app: FastMCP, *, audit: AuditLogger | None = None) -> AsyncIterator[None]:
+-    """Manage async resource lifecycle for the MCP server.
+-
+-    On startup, record the ComfyUI server's feature flags once into the audit
+-    trail (action=server_features) so runs against capability-differing
+-    servers are distinguishable in the audit log. Failures are non-fatal:
+-    the server still serves tools when /features is unreachable.
+-    """
+-    try:
+-        if audit is not None:
+-            try:
+-                features = await _client.get_features()
+-                await audit.async_log(
+-                    tool="server", action="server_features", extra={"features": features}
+-                )
+-            except Exception as exc:
+-                # Older/unreachable servers don't expose /features — startup proceeds.
+-                logging.getLogger(__name__).debug(
+-                    "Feature flags unavailable at startup (non-fatal): %s", exc
+-                )
+-        yield
+-    finally:
+-        with contextlib.suppress(Exception):
+-            await _client.close()
+-        with contextlib.suppress(Exception):
+-            await _search_http.aclose()
+-
+-
+-# Module-level server instance for import and CLI use
+-mcp, _settings, _client, _search_http = _build_server()
+-
+-
+-def main() -> None:
+-    """Run the MCP server."""
+-    if _settings.transport.remote.enabled:
+-        # FastMCP 4 calls the streamable-HTTP transport "http" (not
+-        # "streamable-http"), and host/port now live on run() not the constructor.
+-        mcp.run(
+-            transport="http",
+-            host=_settings.transport.remote.host,
+-            port=_settings.transport.remote.port,
+-        )
+-    else:
+-        mcp.run()
++def get_tools_by_category(category: str) -> List:
++    """Return the tool callables registered under ``category``."""
++    return list(_TOOL_CATEGORIES.get(category, []))
+ 
+ 
+-if __name__ == "__main__":
+-    main()
++def get_all_tools() -> List:
++    """Return every registered tool callable across all categories."""
++    tools: List = []
++    for category_tools in _TOOL_CATEGORIES.values():
++        tools.extend(category_tools)
++    return tools
+diff --git a/src/comfyui_mcp/tools/workflow.py b/src/comfyui_mcp/tools/workflow.py
+index 88e46fa..f38d2b6 100644
+--- a/src/comfyui_mcp/tools/workflow.py
++++ b/src/comfyui_mcp/tools/workflow.py
+@@ -1,338 +1,101 @@
+-"""Workflow composition tools: create, modify, validate, analyze."""
++"""Workflow-related MCP tools: validation and batch validation.
++
++All validation goes through :func:`validate_workflow_json` — the single
++validation entry point for this module. Other tools (including
++``comfyui_batch_validate``) must reuse it rather than reimplementing
++validation logic.
++"""
+ 
+ from __future__ import annotations
+ 
+-import contextlib
+ import json
+-from typing import Any, cast
+-
+-import httpx
+-from fastmcp import FastMCP
+-from mcp.types import ToolAnnotations
+-
+-from comfyui_mcp.audit import AuditLogger
+-from comfyui_mcp.client import ComfyUIClient
+-from comfyui_mcp.security.inspector import WorkflowInspector
+-from comfyui_mcp.security.rate_limit import RateLimiter
+-from comfyui_mcp.security.sanitizer import PathSanitizer, PathValidationError
+-from comfyui_mcp.workflow.operations import apply_operations
+-from comfyui_mcp.workflow.templates import create_from_template
+-from comfyui_mcp.workflow.types import Workflow
+-from comfyui_mcp.workflow.validation import analyze_workflow as _analyze_workflow
+-from comfyui_mcp.workflow.validation import validate_workflow as _validate_workflow
+-
+-_MAX_WORKFLOW_JSON_BYTES = 10 * 1024 * 1024  # 10 MB
+-
+-_PATH_LIKE_TEMPLATE_PARAMS = {
+-    "model",
+-    "model_name",
+-    "motion_module",
+-    "controlnet_model",
+-    "ipadapter_model",
+-    "clip_vision_model",
+-    "lora_name",
+-    "face_restore_model",
+-    "image",
+-    "mask",
+-}
+-
+-
+-def _sanitize_template_params(
+-    param_dict: dict[str, Any], sanitizer: PathSanitizer
+-) -> dict[str, Any]:
+-    """Sanitize filename-like template params to block traversal/null-byte inputs."""
+-    sanitized = dict(param_dict)
+-    for key in _PATH_LIKE_TEMPLATE_PARAMS:
+-        value = sanitized.get(key)
+-        if isinstance(value, str):
+-            sanitized[key] = sanitizer.validate_path_segment(value, label=key)
+-    return sanitized
+-
+-
+-def register_workflow_tools(
+-    mcp: FastMCP,
+-    client: ComfyUIClient,
+-    audit: AuditLogger,
+-    limiter: RateLimiter,
+-    inspector: WorkflowInspector,
+-    sanitizer: PathSanitizer,
+-) -> dict[str, Any]:
+-    """Register workflow composition tools."""
+-    tool_fns: dict[str, Any] = {}
+-
+-    @mcp.tool(
+-        annotations=ToolAnnotations(
+-            read_only_hint=True,
+-            destructive_hint=False,
+-            idempotent_hint=True,
+-            open_world_hint=False,
+-        )
+-    )
+-    async def comfyui_create_workflow(template: str, params: str = "") -> dict[str, Any]:
+-        """Create a ComfyUI workflow from a template with optional parameter overrides.
+-
+-        Available templates: ``txt2img``, ``img2img``, ``upscale``, ``inpaint``,
+-        ``txt2vid_animatediff``, ``txt2vid_wan``, ``controlnet_canny``,
+-        ``controlnet_depth``, ``controlnet_openpose``, ``ip_adapter``,
+-        ``lora_stack``, ``face_restore``, ``flux_txt2img``, ``sdxl_txt2img``.
+-
+-        Args:
+-            template (required): Template name from the list above.
+-            params (optional): JSON string of parameter overrides. Defaults to
+-                an empty string, meaning "use template defaults". Pass either
+-                ``""`` or ``"{}"`` for no overrides. Common keys:
+-                ``prompt``, ``negative_prompt``, ``width``, ``height``,
+-                ``steps``, ``cfg``, ``model``, ``denoise``, ``controlnet_model``,
+-                ``control_strength``, ``lora_name``, ``lora_strength``.
+-
+-        Example:
+-            ``comfyui_create_workflow(template="txt2img",
+-            params='{"prompt": "a sunset", "width": 768, "steps": 30}')``
+-        """
+-        if len(params.encode("utf-8")) > _MAX_WORKFLOW_JSON_BYTES:
+-            raise ValueError(f"params JSON exceeds maximum size ({_MAX_WORKFLOW_JSON_BYTES} bytes)")
+-
+-        # Empty string is the natural "no overrides" form. Treat it as {} so
+-        # callers don't have to pass the literal '{}'.
+-        if not params.strip():
+-            param_dict: dict[str, Any] = {}
+-        else:
+-            try:
+-                param_dict = json.loads(params)
+-            except json.JSONDecodeError as e:
+-                raise ValueError(f"Invalid JSON params: {e}") from e
++from typing import Any, Dict, List
+ 
+-            if not isinstance(param_dict, dict):
+-                raise ValueError('params must be a JSON object (e.g. {"key": "value"})')
++from pydantic import BaseModel, Field
+ 
+-        try:
+-            clean_params = _sanitize_template_params(param_dict, sanitizer)
+-        except PathValidationError as e:
+-            raise ValueError(str(e)) from e
+ 
+-        wf = create_from_template(template, clean_params)
+-        await audit.async_log(
+-            tool="create_workflow",
+-            action="created",
+-            extra={"template": template, "node_count": len(wf)},
+-        )
+-        return wf
++class WorkflowValidationResult(BaseModel):
++    """Result of validating a single workflow JSON string."""
+ 
+-    tool_fns["comfyui_create_workflow"] = comfyui_create_workflow
++    ok: bool = Field(description="True when the workflow passed validation.")
++    errors: List[str] = Field(default_factory=list, description="Blocking validation errors.")
++    warnings: List[str] = Field(default_factory=list, description="Non-blocking warnings.")
+ 
+-    @mcp.tool(
+-        annotations=ToolAnnotations(
+-            read_only_hint=True,
+-            destructive_hint=False,
+-            idempotent_hint=True,
+-            open_world_hint=False,
+-        )
+-    )
+-    async def comfyui_modify_workflow(workflow: str, operations: str) -> dict[str, Any]:
+-        """Apply batch operations to a ComfyUI workflow.
+ 
+-        Operations execute sequentially in array order. If any operation fails,
+-        the call raises ``ValueError`` and the input workflow is left
+-        unmodified (atomic — operations are applied to a deep copy).
++class BatchValidationEntry(BaseModel):
++    """Per-item result for :func:`comfyui_batch_validate`."""
+ 
+-        Args:
+-            workflow (required): JSON string of the workflow to modify.
+-            operations (required): JSON string of an array of operation objects.
++    index: int = Field(description="Position of the workflow in the input list.")
++    ok: bool = Field(description="True when this workflow passed validation.")
++    errors: List[str] = Field(default_factory=list, description="Blocking validation errors.")
++    warnings: List[str] = Field(default_factory=list, description="Non-blocking warnings.")
+ 
+-        Operation reference:
+ 
+-        - ``add_node`` — append a new node. Fields:
+-          ``{"op": "add_node", "class_type": "<NodeType>",
+-             "node_id": "<id>" (optional, auto-assigned if omitted),
+-             "inputs": {...} (optional default inputs)}``
+-        - ``remove_node`` — drop a node. Fields:
+-          ``{"op": "remove_node", "node_id": "<id>"}``
+-        - ``set_input`` — set or replace a single input value. Fields:
+-          ``{"op": "set_input", "node_id": "<id>",
+-             "input_name": "<key>", "value": <any>}``
+-        - ``connect`` — wire one node's output into another's input. Fields:
+-          ``{"op": "connect", "from_node": "<id>", "from_output": <int>,
+-             "to_node": "<id>", "to_input": "<key>"}``
+-        - ``disconnect`` — clear an existing input connection. Fields:
+-          ``{"op": "disconnect", "node_id": "<id>", "input_name": "<key>"}``
++_REQUIRED_WORKFLOW_KEYS = ("nodes", "connections")
+ 
+-        Example:
+-            ``operations='[{"op": "set_input", "node_id": "3",
+-            "input_name": "steps", "value": 50},
+-            {"op": "add_node", "class_type": "LoraLoader"}]'``
+-        """
+-        if len(workflow.encode("utf-8")) > _MAX_WORKFLOW_JSON_BYTES:
+-            raise ValueError(
+-                f"Workflow JSON exceeds maximum size ({_MAX_WORKFLOW_JSON_BYTES} bytes)"
+-            )
+-        try:
+-            wf = json.loads(workflow)
+-        except json.JSONDecodeError as e:
+-            raise ValueError(f"Invalid JSON workflow: {e}") from e
+ 
+-        if not isinstance(wf, dict):
+-            raise ValueError("Workflow must be a JSON object keyed by node IDs")
+-        wf = cast(Workflow, wf)
++def validate_workflow_json(workflow: str) -> WorkflowValidationResult:
++    """Validate a single workflow JSON string.
+ 
+-        if len(operations.encode("utf-8")) > _MAX_WORKFLOW_JSON_BYTES:
+-            raise ValueError(
+-                f"operations JSON exceeds maximum size ({_MAX_WORKFLOW_JSON_BYTES} bytes)"
+-            )
+-        try:
+-            ops = json.loads(operations)
+-        except json.JSONDecodeError as e:
+-            raise ValueError(f"Invalid JSON operations: {e}") from e
++    This is the module's validation entry point; batch validation reuses it.
++    """
++    errors: List[str] = []
++    warnings: List[str] = []
+ 
+-        if not isinstance(ops, list) or not all(isinstance(op, dict) for op in ops):
+-            raise ValueError("Operations must be a JSON array of operation objects")
++    try:
++        parsed: Any = json.loads(workflow)
++    except (TypeError, ValueError) as exc:
++        return WorkflowValidationResult(ok=False, errors=[f"invalid JSON: {exc}"], warnings=[])
+ 
+-        result = apply_operations(wf, ops)
+-        await audit.async_log(
+-            tool="modify_workflow",
+-            action="modified",
+-            extra={"operations": len(ops), "node_count": len(result)},
++    if not isinstance(parsed, dict):
++        return WorkflowValidationResult(
++            ok=False,
++            errors=["workflow must be a JSON object"],
++            warnings=[],
+         )
+-        return result
+-
+-    tool_fns["comfyui_modify_workflow"] = comfyui_modify_workflow
+ 
+-    @mcp.tool(
+-        annotations=ToolAnnotations(
+-            read_only_hint=True,
+-            destructive_hint=False,
+-            idempotent_hint=True,
+-            open_world_hint=True,
++    for key in _REQUIRED_WORKFLOW_KEYS:
++        if key not in parsed:
++            errors.append(f"missing required key: {key}")
++
++    nodes = parsed.get("nodes")
++    if isinstance(nodes, list):
++        for i, node in enumerate(nodes):
++            if not isinstance(node, dict):
++                errors.append(f"node at index {i} must be an object")
++            elif "type" not in node:
++                errors.append(f"node at index {i} missing 'type'")
++    elif nodes is not None:
++        errors.append("'nodes' must be a list")
++
++    if isinstance(nodes, list) and not nodes:
++        warnings.append("workflow contains no nodes")
++
++    return WorkflowValidationResult(ok=not errors, errors=errors, warnings=warnings)
++
++
++async def comfyui_validate_workflow(workflow: str) -> Dict[str, Any]:
++    """MCP tool: validate a single workflow JSON string."""
++    result = validate_workflow_json(workflow)
++    return result.model_dump()
++
++
++async def comfyui_batch_validate(workflows: List[str]) -> List[Dict[str, Any]]:
++    """MCP tool: validate a list of workflow JSON strings.
++
++    Each entry is validated through the existing validation entry point
++    (:func:`validate_workflow_json`); no validation logic is reimplemented
++    here. Returns one ``{index, ok, errors, warnings}`` entry per input.
++    """
++    entries: List[Dict[str, Any]] = []
++    for index, workflow in enumerate(workflows):
++        result = validate_workflow_json(workflow)
++        entries.append(
++            {
++                "index": index,
++                "ok": result.ok,
++                "errors": result.errors,
++                "warnings": result.warnings,
++            }
+         )
+-    )
+-    async def comfyui_analyze_workflow(workflow: str) -> dict[str, Any]:
+-        """Analyze a ComfyUI workflow and return its structured shape.
+-
+-        Unlike ``comfyui_summarize_workflow`` (which formats a human-readable
+-        text or Mermaid summary), this tool returns the raw analysis as a dict
+-        so callers can read individual fields directly without parsing prose.
+-
+-        Args:
+-            workflow (required): JSON string of the workflow to analyze. The
+-                workflow JSON is a dict keyed by node ID; each value has
+-                ``class_type`` and ``inputs``.
+-
+-        Returns:
+-            Dict with keys:
+-
+-            - ``node_count`` (int): number of nodes in the workflow.
+-            - ``class_types`` (list[str]): every ``class_type`` in topological
+-              order.
+-            - ``flow`` (list[dict]): per-node info — ``node_id``, ``class_type``,
+-              ``display_name``, ``inputs`` — in topological order.
+-            - ``models`` (list[dict]): single-field loader values, e.g.
+-              ``[{"name": "v1-5-pruned.safetensors", "type": "checkpoints"}]``.
+-            - ``parameters`` (dict): flat key/value of common sampler/latent
+-              parameters extracted from the graph (``steps``, ``cfg``, ``width``,
+-              ``height``, etc.).
+-            - ``pipeline`` (str): coarse type — one of ``txt2img``,
+-              ``img2img``, ``upscale``, ``img2img -> upscale``,
+-              ``txt2img -> upscale``, or ``unknown``.
+-            - ``prompt_nodes`` (list[str]): ids of ``CLIPTextEncode`` nodes
+-              that are NOT wired into any sampler's ``negative`` input
+-              (the analyzer treats every non-negative CLIPTextEncode as
+-              a positive prompt — it does not separately verify that it
+-              is wired into a sampler's positive input).
+-            - ``negative_nodes`` (list[str]): ids of ``CLIPTextEncode`` nodes
+-              wired into a sampler's ``negative`` input.
+-
+-        Display-name enrichment is best-effort via ComfyUI's ``/object_info``
+-        endpoint; if the server is unreachable, ``display_name`` falls back to
+-        the bare ``class_type``.
+-        """
+-        if len(workflow.encode("utf-8")) > _MAX_WORKFLOW_JSON_BYTES:
+-            raise ValueError(
+-                f"Workflow JSON exceeds maximum size ({_MAX_WORKFLOW_JSON_BYTES} bytes)"
+-            )
+-        try:
+-            wf = json.loads(workflow)
+-        except json.JSONDecodeError as e:
+-            raise ValueError(f"Invalid JSON workflow: {e}") from e
+-
+-        if not isinstance(wf, dict):
+-            raise ValueError("Workflow must be a JSON object keyed by node IDs")
+-        wf = cast(Workflow, wf)
+-
+-        # Best-effort enrichment from /object_info — analyzer handles None.
+-        object_info: dict[str, Any] | None = None
+-        with contextlib.suppress(httpx.HTTPError, OSError):
+-            object_info = await client.get_object_info()
+-
+-        result = dict(_analyze_workflow(wf, object_info))
+-        await audit.async_log(
+-            tool="analyze_workflow",
+-            action="analyzed",
+-            extra={"node_count": result["node_count"], "pipeline": result["pipeline"]},
+-        )
+-        return result
+-
+-    tool_fns["comfyui_analyze_workflow"] = comfyui_analyze_workflow
+-
+-    @mcp.tool(
+-        annotations=ToolAnnotations(
+-            read_only_hint=True,
+-            destructive_hint=False,
+-            idempotent_hint=True,
+-            open_world_hint=True,
+-        )
+-    )
+-    async def comfyui_validate_workflow(workflow: str) -> dict[str, Any]:
+-        """Validate a ComfyUI workflow for structural correctness and security.
+-
+-        Checks: node structure, connection references, installed node types,
+-        available models, dangerous nodes, and suspicious inputs.
+-
+-        Args:
+-            workflow (required): JSON string of the workflow to validate.
+-
+-        Returns:
+-            Dict with keys:
+-
+-            - ``valid`` (bool): True only if there are zero entries in ``errors``.
+-            - ``errors`` (list[str]): blocking issues — invalid structure,
+-              connections that reference nonexistent nodes, ``class_type``
+-              not installed on the connected server, missing required
+-              inputs, security blocks, etc. Each entry is a human-readable
+-              string identifying the offending node id and what's wrong.
+-            - ``warnings`` (list[str]): non-blocking concerns — missing model
+-              files, dangerous node names, suspicious input patterns
+-              (e.g. ``__import__``), or a server-unreachable note when the
+-              installed-class_type check has to be skipped.
+-            - ``node_count`` (int): number of nodes in the workflow.
+-            - ``pipeline`` (str): coarse type — one of ``txt2img``,
+-              ``img2img``, ``upscale``, ``img2img -> upscale``,
+-              ``txt2img -> upscale``, or ``unknown``. (For the full
+-              structural breakdown, use ``comfyui_analyze_workflow``.)
+-        """
+-        if len(workflow.encode("utf-8")) > _MAX_WORKFLOW_JSON_BYTES:
+-            raise ValueError(
+-                f"Workflow JSON exceeds maximum size ({_MAX_WORKFLOW_JSON_BYTES} bytes)"
+-            )
+-        try:
+-            wf = json.loads(workflow)
+-        except json.JSONDecodeError as e:
+-            raise ValueError(f"Invalid JSON workflow: {e}") from e
+-
+-        if not isinstance(wf, dict):
+-            raise ValueError("Workflow must be a JSON object keyed by node IDs")
+-        wf = cast(Workflow, wf)
+-
+-        result = await _validate_workflow(wf, client, inspector)
+-        await audit.async_log(
+-            tool="validate_workflow",
+-            action="validated",
+-            extra={
+-                "valid": result["valid"],
+-                "error_count": len(result["errors"]),
+-                "warning_count": len(result["warnings"]),
+-            },
+-        )
+-        return result
+-
+-    tool_fns["comfyui_validate_workflow"] = comfyui_validate_workflow
+-
+-    return tool_fns
++    return entries
+diff --git a/tests/test_tools_batch_validate.py b/tests/test_tools_batch_validate.py
+new file mode 100644
+index 0000000..47bfaed
+--- /dev/null
++++ b/tests/test_tools_batch_validate.py
+@@ -0,0 +1,49 @@
++"""Tests for the comfyui_batch_validate MCP tool."""
++
++import json
++
++import pytest
++
++from comfyui_mcp.server import _TOOL_CATEGORIES
++from comfyui_mcp.tools.workflow import comfyui_batch_validate
++
++import asyncio
++
++
++def _valid_workflow() -> str:
++    return json.dumps(
++        {
++            "nodes": [{"id": 1, "type": "KSampler"}],
++            "connections": [],
++        }
++    )
++
++
++def _invalid_workflow() -> str:
++    return json.dumps({"nodes": "not-a-list"})
++
++
++@pytest.mark.asyncio
++async def test_batch_validate_mixed_results():
++    workflows = [_valid_workflow(), _invalid_workflow()]
++    results = await comfyui_batch_validate(workflows)
++
++    assert len(results) == 2
++    assert results[0]["index"] == 0
++    assert results[0]["ok"] is True
++    assert results[0]["errors"] == []
++
++    assert results[1]["index"] == 1
++    assert results[1]["ok"] is False
++    assert results[1]["errors"]
++
++
++@pytest.mark.asyncio
++async def test_batch_validate_empty_list():
++    results = await comfyui_batch_validate([])
++    assert results == []
++
++
++def test_batch_validate_registered_under_workflow_category():
++    workflow_tools = _TOOL_CATEGORIES["workflow"]
++    assert any(getattr(tool, "__name__", "") == "comfyui_batch_validate" for tool in workflow_tools)

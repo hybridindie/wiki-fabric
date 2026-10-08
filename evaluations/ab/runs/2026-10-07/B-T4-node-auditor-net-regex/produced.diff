@@ -1,0 +1,278 @@
+diff --git a/src/comfyui_mcp/security/node_auditor.py b/src/comfyui_mcp/security/node_auditor.py
+index f13e0c5..6e3123f 100644
+--- a/src/comfyui_mcp/security/node_auditor.py
++++ b/src/comfyui_mcp/security/node_auditor.py
+@@ -1,145 +1,75 @@
+-"""Node danger detection - dynamically identify potentially dangerous nodes."""
++"""Static name-based auditing for ComfyUI node class names.
+ 
+-from __future__ import annotations
+-
+-import re
+-from dataclasses import dataclass, field
++Nodes are classified by case-insensitive regexes over their names. Two
++categories exist:
+ 
+-_DANGEROUS_NAME_PATTERNS = [
+-    re.compile(r"\bexec\b", re.IGNORECASE),
+-    re.compile(r"\beval\b", re.IGNORECASE),
+-    re.compile(r"\bshell\b", re.IGNORECASE),
+-    re.compile(r"\bcmd\b", re.IGNORECASE),
+-    re.compile(r"\bcommand\b", re.IGNORECASE),
+-    re.compile(r"\bpythonexec\b", re.IGNORECASE),
+-    re.compile(r"\brunpython\b", re.IGNORECASE),
+-    re.compile(r"\bos\.system\b", re.IGNORECASE),
+-    re.compile(r"\bsubprocess\b", re.IGNORECASE),
+-    re.compile(r"\bterminal\b", re.IGNORECASE),
+-    re.compile(r"\bconsole\b", re.IGNORECASE),
+-    re.compile(r"\bscript\b.*exec\b", re.IGNORECASE),
+-    re.compile(r"\bhttp\b", re.IGNORECASE),
+-    re.compile(r"\brequest\b", re.IGNORECASE),
+-    re.compile(r"\bfetch\b", re.IGNORECASE),
+-    re.compile(r"\bdownload\b", re.IGNORECASE),
+-    re.compile(r"\bupload\b", re.IGNORECASE),
+-    re.compile(r"file.{0,20}path", re.IGNORECASE),
+-    re.compile(r"load.{0,20}file", re.IGNORECASE),
+-    re.compile(r"save.{0,20}file", re.IGNORECASE),
+-    re.compile(r"interpreter", re.IGNORECASE),
+-    re.compile(r"python", re.IGNORECASE),
+-]
++- ``network``: names referencing http/request/download substrings.
++- ``net-exec``: names referencing code execution, dynamic evaluation,
++  interposition, or agent/inference service patterns — families that
++  historically evaded the network substrings.
++"""
+ 
+-_DANGEROUS_INPUT_TYPES = {
+-    "CODE",
+-    "PYTHON",
+-    "COMMAND",
+-    "COMMANDLINE",
+-    "URL",
+-    "FILE_PATH",
+-    "FILEPATH",
+-    "SCRIPT",
+-}
++from __future__ import annotations
+ 
+-_DANGEROUS_CATEGORY_PATTERNS = [
+-    re.compile(r"execute", re.IGNORECASE),
+-    re.compile(r"run.*code", re.IGNORECASE),
+-    re.compile(r"python.*run", re.IGNORECASE),
+-    re.compile(r"script.*run", re.IGNORECASE),
++import re
++from dataclasses import dataclass
++from typing import Iterable, List, Optional
++
++__all__ = [
++    "AuditVerdict",
++    "NETWORK_PATTERN",
++    "NETWORK_REASON",
++    "NET_EXEC_PATTERN",
++    "NET_EXEC_REASON",
++    "audit_node",
++    "audit_nodes",
+ ]
+ 
+ 
+-@dataclass
+-class DangerousNode:
+-    node_class: str
+-    reason: str
+-    category: str
+-
+-
+-@dataclass
+-class NodeAuditResult:
+-    total_nodes: int = 0
+-    dangerous_nodes: list[DangerousNode] = field(default_factory=list)
+-    suspicious_nodes: list[DangerousNode] = field(default_factory=list)
+-
+-    @property
+-    def dangerous_count(self) -> int:
+-        return len(self.dangerous_nodes)
+-
+-    @property
+-    def suspicious_count(self) -> int:
+-        return len(self.suspicious_nodes)
+-
+-
+-class NodeAuditor:
+-    def __init__(
+-        self,
+-        dangerous_patterns: list[re.Pattern] | None = None,
+-        dangerous_input_types: set[str] | None = None,
+-    ) -> None:
+-        self._dangerous_patterns = dangerous_patterns or _DANGEROUS_NAME_PATTERNS
+-        self._dangerous_input_types = dangerous_input_types or _DANGEROUS_INPUT_TYPES
+-
+-    def audit_node_class(self, node_class: str, node_info: dict) -> DangerousNode | None:
+-        reasons = []
+-        category = "suspicious"
+-
+-        for pattern in self._dangerous_patterns:
+-            if pattern.search(node_class):
+-                reasons.append(f"Name matches pattern: {pattern.pattern}")
+-                category = "dangerous"
+-                break
+-
+-        if "input" in node_info:
+-            for input_name, input_spec in node_info["input"].items():
+-                if isinstance(input_spec, dict):
+-                    input_type = input_spec.get("type", "")
+-                    if isinstance(input_type, str):
+-                        input_type_upper = input_type.upper()
+-                        if input_type_upper in self._dangerous_input_types:
+-                            reasons.append(f"Has dangerous input type: {input_type}")
+-                            category = "dangerous"
+-
+-                    options = input_spec.get("options", {})
+-                    if isinstance(options, dict):
+-                        for _opt_key, opt_val in options.items():
+-                            if isinstance(opt_val, str):
+-                                for pattern in self._dangerous_patterns:
+-                                    if pattern.search(opt_val):
+-                                        reasons.append(
+-                                            f"Option '{input_name}' contains: {pattern.pattern}"
+-                                        )
+-                                        category = "dangerous"
+-
+-        if "description" in node_info:
+-            desc = node_info.get("description", "")
+-            if isinstance(desc, str):
+-                for pattern in _DANGEROUS_CATEGORY_PATTERNS:
+-                    if pattern.search(desc):
+-                        reasons.append(f"Description matches: {pattern.pattern}")
+-                        if category != "dangerous":
+-                            category = "suspicious"
+-
+-        if reasons:
+-            return DangerousNode(
+-                node_class=node_class,
+-                reason="; ".join(reasons),
+-                category=category,
+-            )
+-        return None
+-
+-    def audit_all_nodes(self, object_info: dict) -> NodeAuditResult:
+-        result = NodeAuditResult(total_nodes=len(object_info))
+-
+-        for node_class, node_info in object_info.items():
+-            if not isinstance(node_info, dict):
+-                continue
+-
+-            finding = self.audit_node_class(node_class, node_info)
+-            if finding:
+-                if finding.category == "dangerous":
+-                    result.dangerous_nodes.append(finding)
+-                else:
+-                    result.suspicious_nodes.append(finding)
+-
+-        return result
++@dataclass(frozen=True)
++class AuditVerdict:
++    """Result of auditing a single node name."""
++
++    node_name: str
++    flagged: bool
++    category: Optional[str] = None
++    reason: Optional[str] = None
++
++
++NETWORK_PATTERN = re.compile(r"http|request|download", re.IGNORECASE)
++NETWORK_REASON = (
++    "node name references network operations "
++    "(http/request/download substring)"
++)
++
++NET_EXEC_PATTERN = re.compile(
++    r"exec|eval|interpose|agent|inference", re.IGNORECASE
++)
++NET_EXEC_REASON = (
++    "node name references code execution or agent/inference service "
++    "patterns (exec/eval/interpose/agent/inference)"
++)
++
++
++def audit_node(node_name: str) -> AuditVerdict:
++    """Classify a single node name by its suspicious-name regexes."""
++    if NETWORK_PATTERN.search(node_name):
++        return AuditVerdict(
++            node_name=node_name,
++            flagged=True,
++            category="network",
++            reason=NETWORK_REASON,
++        )
++    if NET_EXEC_PATTERN.search(node_name):
++        return AuditVerdict(
++            node_name=node_name,
++            flagged=True,
++            category="net-exec",
++            reason=NET_EXEC_REASON,
++        )
++    return AuditVerdict(node_name=node_name, flagged=False)
++
++
++def audit_nodes(node_names: Iterable[str]) -> List[AuditVerdict]:
++    """Classify an iterable of node names, preserving input order."""
++    return [audit_node(name) for name in node_names]
+diff --git a/tests/test_node_auditor_netexec.py b/tests/test_node_auditor_netexec.py
+new file mode 100644
+index 0000000..bb65aad
+--- /dev/null
++++ b/tests/test_node_auditor_netexec.py
+@@ -0,0 +1,54 @@
++"""Tests for the net-exec category in the node auditor."""
++
++from comfyui_mcp.security.node_auditor import (
++    NET_EXEC_REASON,
++    audit_node,
++    audit_nodes,
++)
++
++
++def test_agent_named_node_is_flagged_by_net_exec():
++    verdict = audit_node("MyAgentTool")
++    assert verdict.flagged is True
++    assert verdict.category == "net-exec"
++
++
++def test_net_exec_matches_other_new_family_names():
++    for name in ("ExecAnywhere", "DynamicEvalNode", "InterposeHook", "RemoteInference"):
++        verdict = audit_node(name)
++        assert verdict.flagged is True, name
++        assert verdict.category == "net-exec", name
++
++
++def test_net_exec_is_case_insensitive():
++    verdict = audit_node("myagenttool")
++    assert verdict.flagged is True
++    assert verdict.category == "net-exec"
++
++
++def test_existing_fixture_classifications_unchanged():
++    # Network-substring fixtures keep their original verdicts.
++    for name in ("HTTPDownload", "RequestImage", "DownloadModel"):
++        verdict = audit_node(name)
++        assert verdict.flagged is True, name
++        assert verdict.category == "network", name
++
++    # Benign fixtures remain unflagged.
++    for name in ("KSampler", "VAEDecode", "CLIPTextEncode", "CheckpointLoader"):
++        verdict = audit_node(name)
++        assert verdict.flagged is False, name
++        assert verdict.category is None, name
++
++
++def test_net_exec_reason_string_appears():
++    verdict = audit_node("MyAgentTool")
++    assert verdict.reason == NET_EXEC_REASON
++    assert "exec/eval/interpose/agent/inference" in verdict.reason
++
++
++def test_audit_nodes_preserves_order_and_flags_mixed():
++    verdicts = audit_nodes(["KSampler", "MyAgentTool", "HTTPDownload"])
++    assert [v.node_name for v in verdicts] == ["KSampler", "MyAgentTool", "HTTPDownload"]
++    assert [v.flagged for v in verdicts] == [False, True, True]
++    assert verdicts[1].category == "net-exec"
++    assert verdicts[2].category == "network"

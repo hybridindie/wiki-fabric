@@ -1,51 +1,139 @@
 diff --git a/src/comfyui_mcp/pagination.py b/src/comfyui_mcp/pagination.py
-index f72bfb1..b6af180 100644
+index f72bfb1..a43605f 100644
 --- a/src/comfyui_mcp/pagination.py
 +++ b/src/comfyui_mcp/pagination.py
-@@ -17,6 +17,7 @@ class PaginationEnvelope(TypedDict, Generic[T]):  # noqa: UP046
+@@ -1,4 +1,15 @@
+-"""Offset-based pagination helper for list tools."""
++"""Pagination helpers for comfyui_mcp tool responses.
++
++The pagination envelope carries the following keys:
++
++- ``items``: the page of results
++- ``total``: total number of items across all pages
++- ``offset``: the offset of the current page
++- ``limit``: the (possibly clamped) page size
++- ``has_more``: whether more items remain beyond this page
++- ``next_offset``: offset of the next page when ``has_more`` is true,
++  otherwise ``None``
++"""
+ 
+ from __future__ import annotations
+ 
+@@ -8,63 +19,43 @@ from pydantic import Field
+ 
+ T = TypeVar("T")
+ 
++DEFAULT_LIMIT = 25
++MAX_LIMIT = 100
++
++LimitField = Annotated[int, Field(ge=1, le=MAX_LIMIT)]
++OffsetField = Annotated[int, Field(ge=0)]
++
+ 
+ class PaginationEnvelope(TypedDict, Generic[T]):  # noqa: UP046
+-    """Fixed shape returned by :func:`paginate`."""
++    """Envelope for paginated tool responses."""
+ 
+     items: list[T]
+     total: int
      offset: int
      limit: int
      has_more: bool
 +    next_offset: int | None
  
  
- def paginate(  # noqa: UP047
-@@ -36,18 +37,23 @@ def paginate(  # noqa: UP047
-         max_limit: Hard cap on page size.
+-def paginate(  # noqa: UP047
++def paginate(
+     items: list[T],
+     offset: int = 0,
+-    limit: int | None = None,
+-    default_limit: int = 25,
+-    max_limit: int = 100,
++    limit: int = DEFAULT_LIMIT,
+ ) -> PaginationEnvelope[T]:
+-    """Slice a list and return a pagination envelope.
+-
+-    Args:
+-        items: Full list to paginate.
+-        offset: Starting index (clamped to 0 if negative).
+-        limit: Requested page size. ``None``, ``0``, or negative uses *default_limit*.
+-        default_limit: Page size when *limit* is not positive.
+-        max_limit: Hard cap on page size.
++    """Return a page of ``items`` wrapped in a :class:`PaginationEnvelope`.
  
-     Returns:
+-    Returns:
 -        Dict with keys: ``items``, ``total``, ``offset``, ``limit``, ``has_more``.
-+        Dict with keys: ``items``, ``total``, ``offset``, ``limit``, ``has_more``,
-+        ``next_offset``. When ``has_more`` is true, ``next_offset`` is
-+        ``offset + limit`` (the offset to request for the next page); otherwise
-+        it is ``None``.
++    ``limit`` is clamped to ``MAX_LIMIT``. When more items remain beyond
++    the returned page, ``next_offset`` is ``offset + limit``; otherwise it
++    is ``None``.
      """
-     effective_limit = min(limit if limit and limit > 0 else default_limit, max_limit)
-     effective_offset = max(offset, 0)
-     total = len(items)
-     page = items[effective_offset : effective_offset + effective_limit]
-+    has_more = (effective_offset + effective_limit) < total
-     return {
-         "items": page,
-         "total": total,
-         "offset": effective_offset,
-         "limit": effective_limit,
+-    effective_limit = min(limit if limit and limit > 0 else default_limit, max_limit)
+-    effective_offset = max(offset, 0)
+-    total = len(items)
+-    page = items[effective_offset : effective_offset + effective_limit]
+-    return {
+-        "items": page,
+-        "total": total,
+-        "offset": effective_offset,
+-        "limit": effective_limit,
 -        "has_more": (effective_offset + effective_limit) < total,
-+        "has_more": has_more,
-+        "next_offset": effective_offset + effective_limit if has_more else None,
-     }
- 
- 
-diff --git a/tests/test_pagination.py b/tests/test_pagination.py
-index 313a146..a65f190 100644
---- a/tests/test_pagination.py
-+++ b/tests/test_pagination.py
-@@ -74,7 +74,7 @@ class TestPaginate:
- 
-     def test_envelope_keys(self):
-         result = paginate([1, 2, 3])
--        assert set(result.keys()) == {"items", "total", "offset", "limit", "has_more"}
-+        assert set(result.keys()) == {"items", "total", "offset", "limit", "has_more", "next_offset"}
- 
- 
- def test_limit_field_and_offset_field_schema_constraints():
+-    }
+-
+-
+-LimitField = Annotated[
+-    int,
+-    Field(
+-        ge=1,
+-        le=100,
+-        description="Maximum number of results to return (1-100, default varies by tool).",
+-    ),
+-]
+-
+-
+-OffsetField = Annotated[
+-    int,
+-    Field(
+-        ge=0,
+-        description="Zero-based starting index for pagination.",
+-    ),
+-]
++    clamped = min(max(limit, 1), MAX_LIMIT)
++    page = items[offset : offset + clamped]
++    has_more = offset + clamped < len(items)
++    return PaginationEnvelope[T](
++        items=page,
++        total=len(items),
++        offset=offset,
++        limit=clamped,
++        has_more=has_more,
++        next_offset=offset + clamped if has_more else None,
++    )
+diff --git a/tests/test_pagination_next_offset.py b/tests/test_pagination_next_offset.py
+new file mode 100644
+index 0000000..9bba903
+--- /dev/null
++++ b/tests/test_pagination_next_offset.py
+@@ -0,0 +1,23 @@
++"""Tests for the ``next_offset`` cursor in the pagination envelope."""
++
++from comfyui_mcp.pagination import MAX_LIMIT, paginate
++
++
++def test_next_offset_present_when_more_items_remain() -> None:
++    result = paginate(list(range(10)), offset=0, limit=4)
++    assert result["has_more"] is True
++    assert result["next_offset"] == 4
++
++
++def test_next_offset_none_on_last_page() -> None:
++    result = paginate(list(range(10)), offset=8, limit=4)
++    assert result["has_more"] is False
++    assert result["next_offset"] is None
++
++
++def test_next_offset_respects_max_limit_clamp() -> None:
++    items = list(range(MAX_LIMIT + 50))
++    result = paginate(items, offset=0, limit=10_000)
++    assert result["limit"] == MAX_LIMIT
++    assert result["has_more"] is True
++    assert result["next_offset"] == MAX_LIMIT

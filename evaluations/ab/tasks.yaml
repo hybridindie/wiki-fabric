@@ -38,7 +38,17 @@ tasks:
       tests/test_pagination_next_offset.py covering: (a) next_offset present
       and correct when more items remain, (b) next_offset is None on the
       last page, (c) next_offset respects the max_limit clamp. Also update
-      the docstring's envelope-key list. Then the FULL suite must pass.
+      the docstring's envelope-key list. CONTRACT — other modules subclass
+      and compile this at import, so the FULL suite is the gate:
+      PaginationEnvelope keeps the EXACT original declaration
+      `class PaginationEnvelope(TypedDict, Generic[T]):  # noqa: UP046`
+      with `T = TypeVar("T")` (other modules declare
+      `class _XEnvelope(PaginationEnvelope[dict[str, str]], total=False)`;
+      any other generic form breaks __init_subclass__ at import);
+      LimitField/OffsetField remain Annotated[int, Field(...)] annotation
+      types (other modules declare `limit: LimitField = 25`; a bare
+      Field() value fails pydantic schema generation); DEFAULT_LIMIT,
+      MAX_LIMIT stay importable; paginate keeps its full signature.
     verify_new: ".venv/bin/pytest tests/test_pagination_next_offset.py -q"
     verify_suite: true
 

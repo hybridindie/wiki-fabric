@@ -61,14 +61,25 @@ EVAL_DIR = _REPO / "evaluations" / "ab"
 RUNS_ROOT = _REPO / "evaluations" / "ab" / "runs"
 
 SYSTEM_PROMPT = (
-    "You are an engineering agent working in a git checkout of comfyui_mcp "
-    "(a Python MCP server project). You complete the assigned task by "
-    "editing files and running commands. Work ONLY inside the current "
-    "working directory. Bash is your single tool: use it to read files "
-    "(cat/sed -n/rg), run the test suite (.venv/bin/pytest), and write "
-    "files (heredoc-style). Prefer small verified steps. When the task's "
-    "tests pass and the full suite is green, FINISH by replying DONE and "
-    "nothing else. Never git commit or push."
+    "You are an engineering agent implementing a task in comfyui_mcp "
+    "(a Python MCP server project). You CANNOT run commands or read files: "
+    "you produce ONE response containing the COMPLETE new contents of every "
+    "file the task requires (create or full-replace), in this exact format "
+    "per file:\n\n"
+    "path/relative/to/repo.py\n"
+    "```python\n"
+    "<complete file contents>\n"
+    "```\n\n"
+    "Order files so dependencies come first. Include every new test file the "
+    "task names. CONTRACT — PRESERVE each file's full existing public surface "
+    "EXACTLY: every current public name (classes, functions, type aliases, "
+    "Annotated types, TypeVars, generics declaration forms) must remain "
+    "defined with its SAME type/form — other modules in this repo import and "
+    "compile those names (pydantic builds schemas from them at import; "
+    "TypedDict+Generic declarations must keep their exact form). DO NOT "
+    "compact, rename, or reshape existing definitions. Finish "
+    "with one line summarizing what you changed. No git commands, no "
+    "commentary outside the file blocks."
 )
 
 MAX_STEPS = 60
@@ -125,88 +136,97 @@ class _call_alarm:
 
 
 def _run_agent(task_prompt, workdir, run_dir, step_budget=MAX_STEPS,
-            fabric_context=None, log=print):
-    """The agent loop: identical shape both arms; arm B's FIRST user prompt
-    pre-pends the pinned fabric manifest text. Returns the metrics dict."""
+               fabric_context=None, log=print):
+    """The SINGLE-CALL protocol (the multi-step loop collapsed here):
+    the model receives the task (+ optionally the pinned fabric manifest),
+    reads nothing, and emits ONE fenced edit block — the full file contents
+    for each file it changes (heredoc-style apply by the RUNNER, not the
+    model). Deterministic framing both arms; one usage record each.
+
+    Why single-call: the 2026-10-07 multi-step dataset collapsed to noise —
+    DNS-fail storms (ollama.com 502s), prose-executed-as-bash, venv syncing.
+    The engineers' question (does the fabric change what the model gets
+    RIGHT, and what does the context cost) is answerable at this altitude:
+    usage + correctness per call, repeated for medians."""
     client, model = _llm()
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     user_prompt = task_prompt
     if fabric_context:
         user_prompt = (f"{task_prompt}\n\n"
                        f"# Project knowledge (fabric context manifest)\n"
                        f"{fabric_context}\n\n"
-                       f"(This manifest is evidence-backed knowledge about "
-                       f"this project; claims carry source locators. Use it "
-                       f"where it helps; verify against the code as always.)")
-    messages.append({"role": "user", "content": user_prompt})
-
+                       f"(Evidence-backed knowledge about this project — "
+                       f"claims carry source locators. Use where it helps; "
+                       f"verify against the code as usual.)")
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt},
+    ]
     m = {"completion_tokens": 0, "reasoning_tokens": 0, "output_tokens": 0,
-         "total_spend": 0, "prompt_tokens": 0, "calls": 0, "tool_calls": 0,
-         "errored_cmds": 0, "steps": 0}
+         "total_spend": 0, "prompt_tokens": 0, "calls": 1, "tool_calls": 0,
+         "errored_cmds": 0, "steps": 1}
     t0 = time.time()
-    for step in range(step_budget):
-        m["steps"] = step + 1
-        # the conversation itself is the transcript — saved verbatim
-        (run_dir / "transcript.jsonl").open("a").write(
-            json.dumps({"step": step, "messages_before_n": len(messages)}) + "\n")
-        try:
-            with _call_alarm(660):
-                resp = client.chat.completions.create(
-                    model=model, temperature=TEMPERATURE,
-                    messages=messages, max_tokens=4096)
-        except Exception as e:
-            log(f"  llm error at step {step}: {e}")
-            (run_dir / "errors.log").open("a").write(f"step {step}: {e}\n")
-            time.sleep(3)
+    try:
+        # reasoning_effort pins the thinking budget: the 2026-10-07
+        # overnight runs burned 33-35k REASONING tokens per call and the
+        # actual edit hit the 32,768 cap before a single file landed
+        # (finished_reason=length, zero content). low = none-to-minimal
+        # thinking, the edit ships. Recorded per run; medium/low flips are
+        # protocol changes (bump --repeats and re-run both arms).
+        _effort = os.environ.get("WF_EVAL_REASONING_EFFORT", "low")
+        with _call_alarm(660):
+            resp = client.chat.completions.create(
+                model=model, temperature=TEMPERATURE,
+                messages=messages, max_tokens=32768,
+                extra_body={"reasoning_effort": _effort})
+    except Exception as e:
+        log(f"  llm error: {e}")
+        (run_dir / "errors.log").open("a").write(f"call: {e}\n")
+        m["wall_seconds"] = round(time.time() - t0, 1)
+        return m
+    msg = resp.choices[0].message
+    usage = resp.usage
+    total, r_tok, o_tok, total_spend = _usage_estimate(usage, msg)
+    content = (msg.content or "").strip()
+    _u_prompt = int((getattr(usage, "prompt_tokens", None)
+                     if not isinstance(usage, dict) else usage.get("prompt_tokens")) or 0)
+    m.update(completion_tokens=total, reasoning_tokens=r_tok,
+             output_tokens=o_tok, total_spend=total_spend + _u_prompt,
+             prompt_tokens=_u_prompt)
+    (run_dir / "transcript.jsonl").open("a").write(json.dumps(
+        {"step": 0, "assistant": content[:8000],
+         "reasoning": (getattr(msg, "reasoning", "") or "")[:8000],
+         "usage": {"completion_api": total, "reasoning_est": r_tok,
+                   "output_api": o_tok, "total_spend_est": total_spend + _u_prompt,
+                   "prompt": _u_prompt}}, ensure_ascii=False) + "\n")
+    # the edit block: ```python fenced FILE blocks with a preceding path line
+    import re as _re
+    blocks = _re.findall(r"(?:^|\n)(?:#+\s*)?(?:file:\s*)?([\w./-]+\.[a-z]+)\s*\n```\w*\n(.*?)```",
+                         content, _re.DOTALL)
+    if not blocks:
+        # unclosed fence(s): the response hit the token cap mid-file — take
+        # each path-line + body-to-next-file (or EOF) rather than nothing
+        # (the 2026-10-07 T2 run: a 16k-cap truncation read 'blocks: 0' and
+        # threw the whole edit away)
+        parts = _re.split(r"(?:^|\n)([\w./-]+\.[a-z]+)\s*\n```\w*\n", content)
+        for i in range(1, len(parts) - 1, 2):
+            blocks.append((parts[i], parts[i + 1]))
+        (run_dir / "apply.log").open("a").write(
+            f"truncation fallback engaged: {len(blocks)} partial block(s)\n")
+    edits_applied = 0
+    for path, body in blocks:
+        # sandbox-relative + safe
+        rel = str(path).lstrip("./")
+        if rel.startswith("/") or ".." in rel:
             continue
-        msg = resp.choices[0].message
-        usage = resp.usage
-        total, r_tok, o_tok, total_spend = _usage_estimate(usage, msg)
-        m["calls"] += 1
-        content = (msg.content or "").strip()
-        _u_prompt = int((getattr(usage, "prompt_tokens", None)
-                         if not isinstance(usage, dict) else usage.get("prompt_tokens")) or 0)
-        m["completion_tokens"] += total
-        m["reasoning_tokens"] += r_tok
-        m["output_tokens"] += o_tok
-        m["total_spend"] += total_spend + _u_prompt
-        m["prompt_tokens"] += _u_prompt
-        m["reasoning_tokens"] += r_tok
-        m["output_tokens"] += o_tok
-        m["prompt_tokens"] += _u_prompt
-        (run_dir / "transcript.jsonl").open("a").write(
-            json.dumps({"step": step, "assistant": content[:4000],
-                        "reasoning": (getattr(msg, "reasoning", "") or "")[:4000],
-                        "usage": {"completion_api": total, "reasoning_est": r_tok,
-                                  "output_api": o_tok, "total_spend_est": total_spend + _u_prompt,
-                                  "prompt": _u_prompt}},
-                       ensure_ascii=False) + "\n")
-        if content.upper().startswith("DONE"):
-            break
-        # the command extraction: the model's LAST fenced block (```bash … ```)
-        # is the action; prose outside fences is ignored. Fallback when no
-        # fence: the whole text (the loop's simplicity stays; the fence-first
-        # parse was found in the 2026-10-07 dataset — prose-heavy responses
-        # were executing narration as bash, burning 20-50 errored cmds/run)
-        m["tool_calls"] += 1
-        fences = re.findall(r"```(?:bash|sh)?\s*\n(.*?)```", content, re.DOTALL)
-        code = (fences[-1] if fences else content).strip("` \n")
-        try:
-            r = subprocess.run(["bash", "-c", code], cwd=workdir,
-                               capture_output=True, text=True, timeout=420)
-            out = (r.stdout or "")[-6000:]
-            err = (r.stderr or "")[-3000:]
-            if r.returncode != 0:
-                m["errored_cmds"] += 1
-            obs = f"exit={r.returncode}\n--- stdout ---\n{out}\n--- stderr ---\n{err}"
-        except subprocess.TimeoutExpired:
-            obs = "exit=124 (timed out 420s)"
-            m["errored_cmds"] += 1
-        (run_dir / "transcript.jsonl").open("a").write(
-            json.dumps({"step": step, "cmd": code[:500],
-                        "observation": obs[:6000]}) + "\n")
-        messages.append({"role": "assistant", "content": content})
-        messages.append({"role": "user", "content": obs[:8000]})
+        dest = Path(workdir) / rel
+        if not str(dest).startswith(str(Path(workdir))):
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(body, encoding="utf-8")
+        edits_applied += 1
+    m["edits_applied"] = edits_applied
+    (run_dir / "apply.log").write_text(
+        f"blocks detected: {len(blocks)}, applied: {edits_applied}\n")
     m["wall_seconds"] = round(time.time() - t0, 1)
     return m
 
@@ -217,9 +237,12 @@ def _verify(sandbox, task, run_dir):
     if task.get("verify_suite"):
         cmds.append(task.get("suite_cmd") or _suite_cmd(sandbox))
     results = {}
+    import os as _os3
+    _env3 = {**_os3.environ, "PYTHONPATH": f"{sandbox}/src"}
     for c in cmds:
         r = subprocess.run(["bash", "-c", c], cwd=sandbox,
-                           capture_output=True, text=True, timeout=900)
+                           capture_output=True, text=True, timeout=900,
+                           env=_env3)
         results[c] = {"rc": r.returncode,
                       "tail": (r.stdout or "").strip().splitlines()[-1:] and
                               (r.stdout or "").strip().splitlines()[-1]}
@@ -245,20 +268,22 @@ def _sandbox(task_cfg, run_name):
     # measured variable becomes the WORK, not environment bootstrapping
     venv = repo / ".venv"
     if venv.exists():
-        # the venv must resolve THIS sandbox's src: the real .venv carries an
-        # EDITABLE install .pth of comfyui_mcp → a symlinked venv imports the
-        # REAL src (silently testing the wrong tree — found running the eval:
-        # the agent's good diffs "failed" because imports never touched the
-        # sandbox). A CLONED venv + a re-editable install into the clone is
-        # sandbox-scoped: APFS reflink clone (cp -c, ~1s) + pip -e (~3s).
+        # The venv must import THIS sandbox's src. Three mechanisms failed in
+        # sequence (the 2026-10-07 run): a symlinked venv imported the REAL
+        # src; a `uv pip -e` reinstall left the editable META-PATH finder
+        # winning over everything under pytest (plain python imported the
+        # sandbox, pytest the real repo — the maddening case); the surviving
+        # deterministic fix: KILL every finder hook in the clone and let
+        # PYTHONPATH=sandbox/src drive imports (sys.path, pytest-honored).
         import subprocess as _sp
         done = _sp.run(["bash", "-c",
                         f"cp -Rc '{venv}' '{work}/.venv' && "
-                        f"uv pip install -q -e '{work}' --python '{work}/.venv/bin/python'"],
+                        f"rm -f '{work}/.venv'/lib/python*/site-packages/*.pth "
+                        f"'{work}/.venv'/lib/python*/site-packages/__editable__* && "
+                        f"rm -rf '{work}/.venv'/lib/python*/site-packages/comfyui_mcp_secure-*.dist-info"],
                        capture_output=True, text=True, timeout=600)
         if done.returncode != 0:
-            print(f"  sandbox venv setup FAILED ({done.stderr[-200:]}) — "
-                  f"verifies will run against the wrong src (loud, not silent)",
+            print(f"  sandbox venv hygiene FAILED ({done.stderr[-160:]})",
                   file=sys.stderr)
     return sb, work
 
@@ -302,15 +327,17 @@ def run_arm(arm, task_ids=None, repeats=1):
                 # record the produced diff for review
                 subprocess.run(
                     ["bash", "-c",
-                     f"git diff > {run_dir}/produced.diff; git status --porcelain > {run_dir}/status.txt"],
+                     f"git add -N . 2>/dev/null; git diff > {run_dir}/produced.diff; "
+                     f"git status --porcelain > {run_dir}/status.txt"],
                     cwd=work)
             finally:
                 shutil.rmtree(sb, ignore_errors=True)
                 subprocess.run(["git", "worktree", "prune"], cwd=Path(t.get("path", cfg["base"]["repo"])),
                                capture_output=True)
-            rec = {"arm": arm, "task": t["id"], "repeat": rep, "model":
-                   os.environ.get("WIKI_EVAL_MODEL", "glm-5.3-flash:cloud"),
-                   "gates_pass": ok, "gates": gates, **m}
+            rec = {"arm": arm, "task": t["id"], "repeat": rep,
+               "model": os.environ.get("WIKI_EVAL_MODEL", "glm-5.3-flash:cloud"),
+               "reasoning_effort": os.environ.get("WF_EVAL_REASONING_EFFORT", "low"),
+               "gates_pass": ok, "gates": gates, **m}
             (run_dir / "metrics.json").write_text(json.dumps(rec, indent=1))
             _log_mlflow(rec, run_name)
             results.append(rec)
@@ -328,7 +355,8 @@ def _log_mlflow(rec, run_name):
         mlflow.set_experiment("wf-ab-engineering-tasks")
         with mlflow.start_run(run_name=run_name):
             mlflow.log_params({"arm": rec["arm"], "task": rec["task"],
-                               "model": rec["model"], "repeat": rec.get("repeat", 0)})
+                               "model": rec["model"], "repeat": rec.get("repeat", 0),
+                               "reasoning_effort": rec.get("reasoning_effort", "low")})
             mlflow.log_metrics({
                 "completion_tokens_api": rec["completion_tokens"],
                 "reasoning_tokens_est": rec["reasoning_tokens"],

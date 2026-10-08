@@ -1,0 +1,195 @@
+diff --git a/tests/test_workflow_validation_subgraph.py b/tests/test_workflow_validation_subgraph.py
+new file mode 100644
+index 0000000..1a6b2bf
+--- /dev/null
++++ b/tests/test_workflow_validation_subgraph.py
+@@ -0,0 +1,68 @@
++"""Tests for subgraph-aware workflow validation."""
++
++from workflow.validation import (
++    collect_prompts,
++    find_dangerous_nodes,
++    find_output_nodes,
++    validate_workflow,
++)
++
++
++def _subgraph_node(inner_nodes):
++    return {
++        "type": "SubgraphNode",
++        "inputs": {},
++        "subgraph": {"nodes": inner_nodes},
++    }
++
++
++def test_prompt_inside_subgraph_is_found():
++    workflow = {
++        "nodes": {
++            "1": _subgraph_node(
++                {
++                    "10": {
++                        "type": "CLIPTextEncode",
++                        "inputs": {"text": "a cat in space"},
++                    }
++                }
++            )
++        }
++    }
++    prompts = collect_prompts(workflow)
++    assert ("10", "a cat in space") in prompts
++    result = validate_workflow(workflow)
++    assert result["prompts"] == [("10", "a cat in space")]
++
++
++def test_dangerous_node_inside_subgraph_warns():
++    workflow = {
++        "nodes": {
++            "1": _subgraph_node(
++                {"20": {"type": "ExecutePython", "inputs": {}}}
++            )
++        }
++    }
++    assert find_dangerous_nodes(workflow) == ["20"]
++    result = validate_workflow(workflow)
++    assert any("dangerous" in w for w in result["warnings"])
++
++
++def test_output_node_inside_subgraph_satisfies_output_check():
++    workflow = {
++        "nodes": {
++            "1": _subgraph_node(
++                {
++                    "30": {
++                        "type": "CLIPTextEncode",
++                        "inputs": {"text": "hi"},
++                    },
++                    "31": {"type": "SaveImage", "inputs": {}},
++                }
++            )
++        }
++    }
++    assert find_output_nodes(workflow) == ["31"]
++    result = validate_workflow(workflow)
++    assert not any("output" in i for i in result["issues"])
++    assert result["valid"] is True
+diff --git a/workflow/validation.py b/workflow/validation.py
+new file mode 100644
+index 0000000..1d65bf5
+--- /dev/null
++++ b/workflow/validation.py
+@@ -0,0 +1,115 @@
++"""Workflow validation helpers.
++
++Validation walks the workflow's top-level node map and also descends into
++nested subgraph node maps (embedded under a node's ``"subgraph"`` key), so
++prompts, dangerous nodes, and output nodes are detected wherever they live.
++"""
++
++from __future__ import annotations
++
++from typing import Any, Dict, Iterable, Iterator, List, Tuple
++
++DANGEROUS_NODE_TYPES = {
++    "VHKKiLL",
++    "ExecutePython",
++    "RvScripter",
++    "PythonInterpreter",
++    "ExecScript",
++}
++
++PROMPT_INPUT_KEYS = ("text", "prompt", "positive", "negative")
++
++
++def _iter_node_maps(workflow: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
++    """Yield every node map in the workflow, descending into subgraphs."""
++    stack: List[Dict[str, Any]] = [workflow.get("nodes") or {}]
++    seen = set()
++    while stack:
++        node_map = stack.pop()
++        node_map_id = id(node_map)
++        if node_map_id in seen:
++            continue
++        seen.add(node_map_id)
++        yield node_map
++        for node in node_map.values():
++            if isinstance(node, dict):
++                subgraph = node.get("subgraph")
++                if isinstance(subgraph, dict):
++                    inner = subgraph.get("nodes")
++                    if isinstance(inner, dict):
++                        stack.append(inner)
++
++
++def collect_prompts(workflow: Dict[str, Any]) -> List[Tuple[str, str]]:
++    """Return (node_id, prompt_text) pairs for prompt-like nodes anywhere."""
++    prompts: List[Tuple[str, str]] = []
++    for node_map in _iter_node_maps(workflow):
++        for node_id, node in node_map.items():
++            if not isinstance(node, dict):
++                continue
++            inputs = node.get("inputs")
++            if not isinstance(inputs, dict):
++                continue
++            for key in PROMPT_INPUT_KEYS:
++                value = inputs.get(key)
++                if isinstance(value, str) and value.strip():
++                    prompts.append((str(node_id), value))
++                    break
++    return prompts
++
++
++def find_dangerous_nodes(workflow: Dict[str, Any]) -> List[str]:
++    """Return node ids of dangerous nodes, including inside subgraphs."""
++    dangerous: List[str] = []
++    for node_map in _iter_node_maps(workflow):
++        for node_id, node in node_map.items():
++            if isinstance(node, dict) and node.get("type") in DANGEROUS_NODE_TYPES:
++                dangerous.append(str(node_id))
++    return dangerous
++
++
++def find_output_nodes(workflow: Dict[str, Any]) -> List[str]:
++    """Return node ids of output nodes, including inside subgraphs."""
++    outputs: List[str] = []
++    for node_map in _iter_node_maps(workflow):
++        for node_id, node in node_map.items():
++            if isinstance(node, dict) and _is_output_node(node):
++                outputs.append(str(node_id))
++    return outputs
++
++
++def _is_output_node(node: Dict[str, Any]) -> bool:
++    node_type = node.get("type", "")
++    if node_type in {
++        "SaveImage",
++        "PreviewImage",
++        "SaveImageWebsocket",
++        "SaveAnimatedWEBP",
++        "SaveAnimatedPNG",
++        "VHS_VideoCombine",
++    }:
++        return True
++    return bool(node.get("is_output") or node.get("_is_output"))
++
++
++def validate_workflow(workflow: Dict[str, Any]) -> Dict[str, Any]:
++    """Validate a workflow, walking subgraphs as well as the top level."""
++    issues: List[str] = []
++    warnings: List[str] = []
++
++    prompts = collect_prompts(workflow)
++    if not prompts:
++        issues.append("no prompt found in workflow (including subgraphs)")
++
++    for node_id in find_dangerous_nodes(workflow):
++        warnings.append(f"dangerous node type in workflow: {node_id}")
++
++    if not find_output_nodes(workflow):
++        issues.append("no output node found in workflow (including subgraphs)")
++
++    return {
++        "valid": not issues,
++        "issues": issues,
++        "warnings": warnings,
++        "prompts": prompts,
++    }

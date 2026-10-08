@@ -1,0 +1,309 @@
+diff --git a/src/comfyui_mcp/audit.py b/src/comfyui_mcp/audit.py
+index 5a91211..133cab1 100644
+--- a/src/comfyui_mcp/audit.py
++++ b/src/comfyui_mcp/audit.py
+@@ -1,156 +1,118 @@
+-"""Structured audit logging for all MCP tool invocations."""
++"""Audit logging for comfyui_mcp.
++
++Records tool invocations and workflow submissions, redacting sensitive
++keys from payloads. Security warnings raised by the workflow inspector
++are carried on the audit record when present.
++"""
+ 
+ from __future__ import annotations
+ 
+-import asyncio
++import json
+ import logging
+-import os
+-import threading
+-from datetime import UTC, datetime
++from datetime import datetime, timezone
+ from pathlib import Path
+-from typing import Any
+-
+-from pydantic import BaseModel, Field, model_serializer
+-
+-_logger = logging.getLogger(__name__)
+-
+-_SENSITIVE_PATTERNS = frozenset(
+-    {
+-        "token",
+-        "password",
+-        "secret",
+-        "api_key",
+-        "authorization",
+-        "access_token",
+-        "refresh_token",
+-        "credential",
+-        "private_key",
+-        "bearer",
+-        "session_id",
+-    }
+-)
+-
+-
+-def _is_sensitive_key(key: str) -> bool:
+-    """Check if a key name matches any sensitive pattern."""
+-    lower = key.lower()
+-    return any(p in lower for p in _SENSITIVE_PATTERNS)
+-
+-
+-def _redact_sensitive(data: dict[str, object]) -> dict[str, object]:
+-    """Remove sensitive keys from a dictionary, recursively including lists."""
+-    result: dict[str, object] = {}
+-    for k, v in data.items():
+-        if _is_sensitive_key(k):
+-            continue
+-        if isinstance(v, dict):
+-            result[k] = _redact_sensitive(v)
+-        elif isinstance(v, list):
+-            result[k] = [_redact_sensitive(item) if isinstance(item, dict) else item for item in v]
+-        else:
+-            result[k] = v
+-    return result
++from typing import Any, Optional
++
++from pydantic import BaseModel, ConfigDict, Field
++
++logger = logging.getLogger(__name__)
++
++SENSITIVE_KEYS = {
++    "api_key",
++    "apikey",
++    "authorization",
++    "password",
++    "secret",
++    "token",
++}
++
++_REDACTED = "[REDACTED]"
++
++
++def redact_sensitive(data: Any) -> Any:
++    """Recursively redact values whose keys look sensitive."""
++    if isinstance(data, dict):
++        return {
++            key: (
++                _REDACTED
++                if str(key).lower() in SENSITIVE_KEYS
++                else redact_sensitive(value)
++            )
++            for key, value in data.items()
++        }
++    if isinstance(data, list):
++        return [redact_sensitive(item) for item in data]
++    return data
+ 
+ 
+ class AuditRecord(BaseModel):
+-    timestamp: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
+-    tool: str
+-    action: str
+-    prompt_id: str = ""
+-    nodes_used: list[str] = []
+-    warnings: list[str] = []
+-    duration_ms: int = 0
+-    status: str = ""
+-    extra: dict[str, object] = {}
+-
+-    @model_serializer
+-    def serialize(self) -> dict[str, object]:
+-        data: dict[str, object] = {
+-            "timestamp": self.timestamp,
+-            "tool": self.tool,
+-            "action": self.action,
++    """A single audit log entry.
++
++    Optional fields follow the omit-empty contract: they are excluded
++    from the serialized record when empty/None.
++    """
++
++    model_config = ConfigDict()
++
++    timestamp: str = Field(
++        default_factory=lambda: datetime.now(timezone.utc).isoformat()
++    )
++    event: str
++    tool: Optional[str] = None
++    action: Optional[str] = None
++    payload: Optional[dict[str, Any]] = None
++    success: bool = True
++    error: Optional[str] = None
++    security_warnings: Optional[list[str]] = None
++
++    def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # type: ignore[override]
++        kwargs.setdefault("exclude_none", True)
++        data = super().model_dump(**kwargs)
++        # Omit-empty contract: drop empty collections as well as None.
++        return {
++            key: value
++            for key, value in data.items()
++            if value is not None and value != []
+         }
+-        if self.prompt_id:
+-            data["prompt_id"] = self.prompt_id
+-        if self.nodes_used:
+-            data["nodes_used"] = self.nodes_used
+-        if self.warnings:
+-            data["warnings"] = self.warnings
+-        if self.duration_ms:
+-            data["duration_ms"] = self.duration_ms
+-        if self.status:
+-            data["status"] = self.status
+-        if self.extra:
+-            data["extra"] = _redact_sensitive(self.extra)
+-        return data
+ 
+ 
+ class AuditLogger:
+-    def __init__(self, audit_file: Path) -> None:
+-        self._audit_file = Path(audit_file)
+-        self._dir_created = False
+-        self._lock = threading.Lock()
+-
+-    def _is_path_safe(self) -> bool:
+-        """Check that neither the audit file nor any parent is a symlink.
+-
+-        Uses is_symlink() which detects both live and dangling symlinks
+-        (unlike exists() which returns False for dangling symlinks).
++    """Writes JSONL audit records to a file."""
++
++    def __init__(self, path: str | Path = "audit.log") -> None:
++        self.path = Path(path)
++
++    def log(
++        self,
++        event: str,
++        *,
++        tool: Optional[str] = None,
++        action: Optional[str] = None,
++        payload: Optional[dict[str, Any]] = None,
++        success: bool = True,
++        error: Optional[str] = None,
++        security_warnings: Optional[list[str]] = None,
++    ) -> AuditRecord:
++        """Append an audit record.
++
++        ``security_warnings`` carries inspector warnings from workflow
++        submission; it is omitted from the record when empty.
+         """
+-        if self._audit_file.is_symlink():
+-            return False
+-        return all(not parent.is_symlink() for parent in self._audit_file.parents)
+-
+-    def _ensure_dir(self) -> bool:
+-        """Create parent directories once. Returns False on failure."""
+-        if self._dir_created:
+-            return True
++        record = AuditRecord(
++            event=event,
++            tool=tool,
++            action=action,
++            payload=redact_sensitive(payload) if payload is not None else None,
++            success=success,
++            error=error,
++            security_warnings=(
++                list(security_warnings) if security_warnings else None
++            ),
++        )
+         try:
+-            self._audit_file.parent.mkdir(parents=True, exist_ok=True)
+-            self._dir_created = True
+-            return True
+-        except OSError as e:
+-            _logger.error("AUDIT LOG FAILURE: cannot create directory: %s", e)
+-            return False
+-
+-    def _write_record(self, record: AuditRecord) -> None:
+-        """Synchronous, thread-safe write of a single audit record."""
+-        with self._lock:
+-            # Check symlink safety on every write (not cached) to detect
+-            # post-init symlink swaps on the file or any parent directory
+-            if not self._is_path_safe():
+-                _logger.error(
+-                    "AUDIT LOG REFUSED: path contains symlink: %s",
+-                    self._audit_file,
+-                )
+-                return
+-            if not self._ensure_dir():
+-                return
+-            try:
+-                flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT
+-                flags |= getattr(os, "O_NOFOLLOW", 0)
+-                fd = os.open(str(self._audit_file), flags, 0o600)
+-                try:
+-                    data = (record.model_dump_json() + "\n").encode()
+-                    view = memoryview(data)
+-                    while view:
+-                        written = os.write(fd, view)
+-                        if written <= 0:
+-                            raise OSError("Failed to write audit log record")
+-                        view = view[written:]
+-                finally:
+-                    os.close(fd)
+-            except OSError as e:
+-                _logger.error("AUDIT LOG FAILURE: %s", e)
+-
+-    def log(self, *, tool: str, action: str, **kwargs: Any) -> AuditRecord:
+-        """Write an audit record as a JSON line (synchronous)."""
+-        record = AuditRecord(tool=tool, action=action, **kwargs)
+-        self._write_record(record)
+-        return record
+-
+-    async def async_log(self, *, tool: str, action: str, **kwargs: Any) -> AuditRecord:
+-        """Write an audit record without blocking the event loop."""
+-        record = AuditRecord(tool=tool, action=action, **kwargs)
+-        await asyncio.to_thread(self._write_record, record)
++            self.path.parent.mkdir(parents=True, exist_ok=True)
++            with self.path.open("a", encoding="utf-8") as fh:
++                fh.write(json.dumps(record.model_dump()) + "\n")
++        except OSError:  # pragma: no cover - best-effort logging
++            logger.exception("Failed to write audit record")
+         return record
+diff --git a/tests/test_audit_security_warnings.py b/tests/test_audit_security_warnings.py
+new file mode 100644
+index 0000000..47f7035
+--- /dev/null
++++ b/tests/test_audit_security_warnings.py
+@@ -0,0 +1,39 @@
++"""Tests for security_warnings on audit records."""
++
++from __future__ import annotations
++
++import json
++
++from comfyui_mcp.audit import AuditLogger
++
++
++def test_security_warnings_present_when_passed(tmp_path):
++    logger = AuditLogger(tmp_path / "audit.log")
++    warnings = ["Node 'KSampler' uses a disallowed checkpoint"]
++    record = logger.log(
++        "workflow_submit",
++        tool="submit_workflow",
++        security_warnings=warnings,
++    )
++    assert record.security_warnings == warnings
++
++
++def test_security_warnings_omitted_when_empty(tmp_path):
++    logger = AuditLogger(tmp_path / "audit.log")
++    record = logger.log("workflow_submit", tool="submit_workflow")
++    assert not record.security_warnings
++    assert "security_warnings" not in record.model_dump()
++
++
++def test_serialized_record_includes_warnings_array(tmp_path):
++    log_file = tmp_path / "audit.log"
++    logger = AuditLogger(log_file)
++    warnings = ["warning one", "warning two"]
++    logger.log(
++        "workflow_submit",
++        tool="submit_workflow",
++        security_warnings=warnings,
++    )
++    line = log_file.read_text(encoding="utf-8").strip().splitlines()[0]
++    data = json.loads(line)
++    assert data["security_warnings"] == warnings

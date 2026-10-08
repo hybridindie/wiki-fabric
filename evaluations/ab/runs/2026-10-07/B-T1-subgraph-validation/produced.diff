@@ -1,0 +1,412 @@
+diff --git a/tests/test_workflow_validation_subgraph.py b/tests/test_workflow_validation_subgraph.py
+new file mode 100644
+index 0000000..668cb1e
+--- /dev/null
++++ b/tests/test_workflow_validation_subgraph.py
+@@ -0,0 +1,86 @@
++"""Tests for validation of nodes nested inside subgraph node maps."""
++
++from workflow.validation import (
++    find_dangerous_nodes,
++    find_output_nodes,
++    find_prompt_nodes,
++    validate_workflow,
++)
++
++
++def _subgraph_node(node_id, inner_nodes, class_type="SubgraphNode"):
++    return {
++        "id": node_id,
++        "class_type": class_type,
++        "subgraph": {"nodes": inner_nodes},
++    }
++
++
++def test_prompt_node_inside_subgraph_is_found():
++    workflow = {
++        "nodes": {
++            "1": _subgraph_node(
++                "1",
++                {
++                    "2": {
++                        "id": "2",
++                        "class_type": "CLIPTextEncode",
++                        "widgets_values": {"text": "a cat"},
++                    }
++                },
++            )
++        }
++    }
++    prompts = find_prompt_nodes(workflow)
++    assert len(prompts) == 1
++    assert prompts[0]["node_id"] == "2"
++    assert prompts[0]["text"] == "a cat"
++    assert "subgraph" in prompts[0]["path"]
++
++    result = validate_workflow(workflow)
++    assert any(
++        issue.code == "prompt_node" and issue.node_id == "2"
++        for issue in result.issues
++    )
++
++
++def test_dangerous_node_inside_subgraph_warns():
++    workflow = {
++        "nodes": {
++            "1": _subgraph_node(
++                "1",
++                {
++                    "2": {"id": "2", "class_type": "ExecutePython"},
++                },
++            )
++        }
++    }
++    dangerous = find_dangerous_nodes(workflow)
++    assert len(dangerous) == 1
++    assert dangerous[0]["node_id"] == "2"
++
++    result = validate_workflow(workflow)
++    warnings = [i for i in result.warnings if i.code == "dangerous_node"]
++    assert len(warnings) == 1
++    assert warnings[0].node_id == "2"
++    assert "subgraph" in (warnings[0].path or "")
++
++
++def test_output_node_inside_subgraph_satisfies_output_check():
++    workflow = {
++        "nodes": {
++            "1": _subgraph_node(
++                "1",
++                {
++                    "2": {"id": "2", "class_type": "SaveImage"},
++                },
++            )
++        }
++    }
++    outputs = find_output_nodes(workflow)
++    assert len(outputs) == 1
++    assert outputs[0]["node_id"] == "2"
++
++    result = validate_workflow(workflow)
++    assert not any(issue.code == "no_output_node" for issue in result.issues)
++    assert result.valid is True
+diff --git a/workflow/validation.py b/workflow/validation.py
+new file mode 100644
+index 0000000..6e11eea
+--- /dev/null
++++ b/workflow/validation.py
+@@ -0,0 +1,314 @@
++"""Validation for ComfyUI workflow JSON.
++
++The validation walk descends into nested subgraph node maps: a node whose
++payload contains a ``"subgraph"`` key with its own ``"nodes"`` mapping is
++treated as a container, and its internal nodes are validated exactly like
++top-level ones (prompt discovery, dangerous-node warnings, output checks).
++"""
++
++from __future__ import annotations
++
++import re
++from dataclasses import dataclass, field
++from typing import Any, Dict, Iterator, List, Optional, Tuple
++
++# Node class types that can execute arbitrary code or touch the filesystem.
++DANGEROUS_NODE_PATTERNS: Tuple[str, ...] = (
++    r"^ExecutePython",
++    r"^PythonInterpreter",
++    r"^Eval",
++    r"^Exec",
++    r"^Shell",
++    r"^Command",
++    r"^LoadImageFromPath$",
++    r"^WriteFile",
++    r"^ReadFile",
++    r"^System",
++)
++
++_DANGEROUS_RE = re.compile("|".join(DANGEROUS_NODE_PATTERNS))
++
++# Node class types considered "prompt-like" (text inputs feeding conditioning).
++PROMPT_NODE_PATTERNS: Tuple[str, ...] = (
++    r"CLIPTextEncode",
++    r"TextEncode",
++    r"Prompt",
++    r"PositivePrompt",
++    r"NegativePrompt",
++)
++
++_PROMPT_RE = re.compile("|".join(PROMPT_NODE_PATTERNS))
++
++# Node class types that mark workflow output.
++OUTPUT_NODE_PATTERNS: Tuple[str, ...] = (
++    r"SaveImage",
++    r"PreviewImage",
++    r"SaveVideo",
++    r"PreviewVideo",
++    r"SaveAudio",
++    r"PreviewAudio",
++    r"VHS_VideoCombine",
++    r"SaveAnimated",
++    r"SaveWebM",
++    r"SaveWEBM",
++    r"SaveLatent",
++    r"ImageSave",
++)
++
++_OUTPUT_RE = re.compile("|".join(OUTPUT_NODE_PATTERNS))
++
++# Widgets commonly holding the prompt text.
++_PROMPT_WIDGET_KEYS: Tuple[str, ...] = (
++    "text",
++    "prompt",
++    "positive",
++    "negative",
++    "value",
++)
++
++
++@dataclass
++class ValidationIssue:
++    """A single validation finding."""
++
++    severity: str  # "error" | "warning" | "info"
++    code: str
++    message: str
++    node_id: Optional[str] = None
++    path: Optional[str] = None
++
++    def as_dict(self) -> Dict[str, Any]:
++        return {
++            "severity": self.severity,
++            "code": self.code,
++            "message": self.message,
++            "node_id": self.node_id,
++            "path": self.path,
++        }
++
++
++@dataclass
++class ValidationResult:
++    """Aggregate result of workflow validation."""
++
++    valid: bool = True
++    errors: List[ValidationIssue] = field(default_factory=list)
++    warnings: List[ValidationIssue] = field(default_factory=list)
++    infos: List[ValidationIssue] = field(default_factory=list)
++
++    @property
++    def issues(self) -> List[ValidationIssue]:
++        return self.errors + self.warnings + self.infos
++
++    def add(self, issue: ValidationIssue) -> None:
++        if issue.severity == "error":
++            self.errors.append(issue)
++            self.valid = False
++        elif issue.severity == "warning":
++            self.warnings.append(issue)
++        else:
++            self.infos.append(issue)
++
++    @property
++    def ok(self) -> bool:
++        return self.valid
++
++    def as_dict(self) -> Dict[str, Any]:
++        return {
++            "valid": self.valid,
++            "errors": [i.as_dict() for i in self.errors],
++            "warnings": [i.as_dict() for i in self.warnings],
++            "infos": [i.as_dict() for i in self.infos],
++        }
++
++
++def _node_class_type(node: Dict[str, Any]) -> str:
++    return str(node.get("class_type") or node.get("type") or "")
++
++
++def _node_id(node: Dict[str, Any], fallback: str) -> str:
++    return str(node.get("id", fallback))
++
++
++def iter_workflow_nodes(
++    workflow: Dict[str, Any],
++) -> Iterator[Tuple[str, Dict[str, Any], str]]:
++    """Yield ``(node_id, node, path)`` for every node in the workflow.
++
++    Walks the top-level ``nodes`` mapping and descends into any node's
++    nested ``subgraph`` node map (recursively), so prompts, dangerous
++    nodes, and output nodes inside subgraphs are all visited. ``path``
++    is a dotted locator such as ``subgraph:12/3`` identifying where the
++    node was found.
++    """
++
++    def _walk(nodes: Any, prefix: str) -> Iterator[Tuple[str, Dict[str, Any], str]]:
++        if not isinstance(nodes, dict):
++            return
++        items: List[Tuple[Any, Any]]
++        if all(isinstance(v, dict) for v in nodes.values()) and nodes and all(
++            isinstance(k, (str, int)) for k in nodes.keys()
++        ):
++            # Mapping form: {id: node}
++            items = list(nodes.items())
++        else:
++            # List-like mapping form: {index: node} from a JSON array
++            items = list(enumerate(nodes))
++        for key, node in items:
++            if not isinstance(node, dict):
++                continue
++            node_id = _node_id(node, str(key))
++            path = f"{prefix}{node_id}" if not prefix else f"{prefix}/{node_id}"
++            yield node_id, node, path
++            subgraph = node.get("subgraph")
++            if isinstance(subgraph, dict):
++                yield from _walk(subgraph.get("nodes"), f"{path}:subgraph")
++
++    yield from _walk(workflow.get("nodes"), "")
++
++
++def find_prompt_nodes(workflow: Dict[str, Any]) -> List[Dict[str, Any]]:
++    """Return prompt-bearing nodes, including those inside subgraphs."""
++    prompts: List[Dict[str, Any]] = []
++    for node_id, node, path in iter_workflow_nodes(workflow):
++        class_type = _node_class_type(node)
++        if not _PROMPT_RE.search(class_type):
++            continue
++        widgets = node.get("widgets_values") or node.get("inputs") or {}
++        text: Optional[str] = None
++        if isinstance(widgets, dict):
++            for key in _PROMPT_WIDGET_KEYS:
++                value = widgets.get(key)
++                if isinstance(value, str):
++                    text = value
++                    break
++        elif isinstance(widgets, list):
++            for value in widgets:
++                if isinstance(value, str):
++                    text = value
++                    break
++        prompts.append(
++            {
++                "node_id": node_id,
++                "class_type": class_type,
++                "text": text,
++                "path": path,
++            }
++        )
++    return prompts
++
++
++def find_dangerous_nodes(workflow: Dict[str, Any]) -> List[Dict[str, Any]]:
++    """Return dangerous nodes, including those inside subgraphs."""
++    dangerous: List[Dict[str, Any]] = []
++    for node_id, node, path in iter_workflow_nodes(workflow):
++        class_type = _node_class_type(node)
++        if _DANGEROUS_RE.search(class_type):
++            dangerous.append(
++                {"node_id": node_id, "class_type": class_type, "path": path}
++            )
++    return dangerous
++
++
++def find_output_nodes(workflow: Dict[str, Any]) -> List[Dict[str, Any]]:
++    """Return output nodes, including those inside subgraphs."""
++    outputs: List[Dict[str, Any]] = []
++    for node_id, node, path in iter_workflow_nodes(workflow):
++        class_type = _node_class_type(node)
++        if _OUTPUT_RE.search(class_type) or node.get("is_output") is True:
++            outputs.append(
++                {"node_id": node_id, "class_type": class_type, "path": path}
++            )
++    return outputs
++
++
++def validate_workflow(workflow: Dict[str, Any]) -> ValidationResult:
++    """Validate a workflow, walking nested subgraph node maps."""
++    result = ValidationResult()
++
++    if not isinstance(workflow, dict):
++        result.add(
++            ValidationIssue(
++                severity="error",
++                code="workflow_not_dict",
++                message="Workflow must be a JSON object.",
++            )
++        )
++        return result
++
++    nodes = workflow.get("nodes")
++    if not isinstance(nodes, dict) or not nodes:
++        result.add(
++            ValidationIssue(
++                severity="error",
++                code="no_nodes",
++                message="Workflow contains no nodes.",
++            )
++        )
++        return result
++
++    # Structural checks on every node (top-level and subgraph-nested).
++    for node_id, node, path in iter_workflow_nodes(workflow):
++        class_type = _node_class_type(node)
++        if not class_type:
++            result.add(
++                ValidationIssue(
++                    severity="error",
++                    code="missing_class_type",
++                    message=f"Node {node_id} is missing 'class_type'.",
++                    node_id=node_id,
++                    path=path,
++                )
++            )
++            continue
++        if _DANGEROUS_RE.search(class_type):
++            result.add(
++                ValidationIssue(
++                    severity="warning",
++                    code="dangerous_node",
++                    message=(
++                        f"Node {node_id} uses potentially dangerous "
++                        f"class type '{class_type}'."
++                    ),
++                    node_id=node_id,
++                    path=path,
++                )
++            )
++
++    # Output check: an output node anywhere (including inside a subgraph)
++    # satisfies the requirement.
++    if not find_output_nodes(workflow):
++        result.add(
++            ValidationIssue(
++                severity="error",
++                code="no_output_node",
++                message="Workflow has no output node.",
++            )
++        )
++
++    # Prompt discovery is informational: prompts inside subgraphs count.
++    prompts = find_prompt_nodes(workflow)
++    if not prompts:
++        result.add(
++            ValidationIssue(
++                severity="info",
++                code="no_prompt_node",
++                message="Workflow has no prompt node.",
++            )
++        )
++    else:
++        for prompt in prompts:
++            result.add(
++                ValidationIssue(
++                    severity="info",
++                    code="prompt_node",
++                    message=(
++                        f"Prompt node {prompt['node_id']} "
++                        f"({prompt['class_type']}) found."
++                    ),
++                    node_id=prompt["node_id"],
++                    path=prompt["path"],
++                )
++            )
++
++    return result

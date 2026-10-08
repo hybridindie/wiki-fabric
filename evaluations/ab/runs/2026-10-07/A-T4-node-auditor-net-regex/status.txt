@@ -1,0 +1,2 @@
+ M src/comfyui_mcp/security/node_auditor.py
+ A tests/test_node_auditor_netexec.py

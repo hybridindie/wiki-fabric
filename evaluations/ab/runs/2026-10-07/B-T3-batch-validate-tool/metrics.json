@@ -3,25 +3,27 @@
  "task": "T3-batch-validate-tool",
  "repeat": 0,
  "model": "glm-5.3-flash:cloud",
+ "reasoning_effort": "low",
  "gates_pass": false,
  "gates": {
   ".venv/bin/pytest tests/test_tools_batch_validate.py -q": {
-   "rc": 4,
-   "tail": "no tests ran in 0.00s"
+   "rc": 0,
+   "tail": "3 passed in 0.04s"
   },
   ".venv/bin/pytest tests/ -q -m 'not integration'": {
-   "rc": 0,
-   "tail": "668 passed in 19.98s"
+   "rc": 2,
+   "tail": "5 errors in 0.73s"
   }
  },
- "completion_tokens": 3241,
- "reasoning_tokens": 466,
- "output_tokens": 6482,
- "total_spend": 270588,
- "prompt_tokens": 534228,
- "calls": 60,
- "tool_calls": 60,
- "errored_cmds": 59,
- "steps": 60,
- "wall_seconds": 72.4
+ "completion_tokens": 1627,
+ "reasoning_tokens": 288,
+ "output_tokens": 1627,
+ "total_spend": 4101,
+ "prompt_tokens": 2186,
+ "calls": 1,
+ "tool_calls": 0,
+ "errored_cmds": 0,
+ "steps": 1,
+ "edits_applied": 3,
+ "wall_seconds": 9.7
 }

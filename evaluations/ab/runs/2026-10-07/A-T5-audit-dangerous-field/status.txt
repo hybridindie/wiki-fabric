@@ -1,0 +1,2 @@
+ M src/comfyui_mcp/audit.py
+ A tests/test_audit_security_warnings.py

@@ -3,25 +3,27 @@
  "task": "T5-audit-dangerous-field",
  "repeat": 0,
  "model": "glm-5.3-flash:cloud",
+ "reasoning_effort": "low",
  "gates_pass": false,
  "gates": {
   ".venv/bin/pytest tests/test_audit_security_warnings.py -q": {
-   "rc": 4,
-   "tail": "no tests ran in 0.00s"
+   "rc": 0,
+   "tail": "3 passed in 0.04s"
   },
   ".venv/bin/pytest tests/ -q -m 'not integration'": {
-   "rc": 0,
-   "tail": "668 passed in 20.19s"
+   "rc": 2,
+   "tail": "7 errors in 0.74s"
   }
  },
- "completion_tokens": 31138,
- "reasoning_tokens": 57384,
- "output_tokens": 62276,
- "total_spend": 720706,
- "prompt_tokens": 1321752,
- "calls": 60,
- "tool_calls": 60,
- "errored_cmds": 29,
- "steps": 60,
- "wall_seconds": 283.2
+ "completion_tokens": 2205,
+ "reasoning_tokens": 775,
+ "output_tokens": 2205,
+ "total_spend": 5233,
+ "prompt_tokens": 2253,
+ "calls": 1,
+ "tool_calls": 0,
+ "errored_cmds": 0,
+ "steps": 1,
+ "edits_applied": 3,
+ "wall_seconds": 14.0
 }

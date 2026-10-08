@@ -3,25 +3,27 @@
  "task": "T4-node-auditor-net-regex",
  "repeat": 0,
  "model": "glm-5.3-flash:cloud",
+ "reasoning_effort": "low",
  "gates_pass": false,
  "gates": {
   ".venv/bin/pytest tests/test_node_auditor_netexec.py -q": {
-   "rc": 4,
-   "tail": "no tests ran in 0.00s"
+   "rc": 0,
+   "tail": "6 passed in 0.01s"
   },
   ".venv/bin/pytest tests/ -q -m 'not integration'": {
-   "rc": 0,
-   "tail": "668 passed in 19.88s"
+   "rc": 2,
+   "tail": "9 errors in 0.74s"
   }
  },
- "completion_tokens": 46954,
- "reasoning_tokens": 84796,
- "output_tokens": 93908,
- "total_spend": 687674,
- "prompt_tokens": 1196644,
- "calls": 60,
- "tool_calls": 60,
- "errored_cmds": 28,
- "steps": 60,
- "wall_seconds": 458.2
+ "completion_tokens": 1438,
+ "reasoning_tokens": 457,
+ "output_tokens": 1438,
+ "total_spend": 4127,
+ "prompt_tokens": 2232,
+ "calls": 1,
+ "tool_calls": 0,
+ "errored_cmds": 0,
+ "steps": 1,
+ "edits_applied": 2,
+ "wall_seconds": 9.1
 }

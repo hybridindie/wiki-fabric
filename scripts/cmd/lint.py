@@ -152,11 +152,11 @@ def md_files(vault):
         rel = p.relative_to(vault).as_posix()
         if "fixtures/okf" in rel:
             continue  # fixture bundles: only lint when explicitly passed as --root
-        if rel.startswith("evaluations/ab/"):
-            continue  # the AB-eval pinned artifacts (context manifests + run
-            # transcripts): committed input data with wikilinks to OTHER
-            # fabrics' claims — linting them broke the okf-attester seed
-            # (123 broken-link errors from 5 context dumps; found running
+        if rel.startswith(("evaluations/ab/", "evaluations/self/")):
+            continue  # eval fixtures + pinned run artifacts (context manifests,
+            # transcripts, the frozen self-eval fixture): committed INPUT data
+            # with wikilinks to fabrics/claims outside this vault — linting them
+            # broke the okf-attester seed (123 broken-link errors; found running
             # the #185-cycle eval)
         if ig.get("globs") or ig.get("compiled"):
             try:

@@ -84,8 +84,8 @@ def seed_fabric(tmp, repo, pr, repo_clone, graphify=False):
     _C = tmp / "corpus"
     shutil.copytree(REPO_ROOT / "scripts", tmp / "scripts", dirs_exist_ok=True)
     shutil.copytree(REPO_ROOT / "schemas", tmp / "schemas", dirs_exist_ok=True)
-    for d in ("patterns", "anti-patterns", "skills", "concepts"):
-        import layout as _lay
+    import layout as _lay
+    for d in ("patterns", "anti_patterns", "skills", "concepts"):
         _lay.make(_C, d).mkdir(parents=True, exist_ok=True)
     if graphify:
         # enable graphify and index the repo's code (AST entity pages)
@@ -142,7 +142,8 @@ def seed_fabric(tmp, repo, pr, repo_clone, graphify=False):
     git_parked = tmp / "_pr_thread_parked"
     if git_dir.exists():
         shutil.move(str(git_dir), str(git_parked))
-    _sp.run([sys.executable, str(tmp / "scripts" / "cmd/ingest.py"),
+    if os.environ.get("WF_REPLAY_INGEST", "") == "1":
+        _sp.run([sys.executable, str(tmp / "scripts" / "cmd/ingest.py"),
              "--changed", repo.split("/")[-1], "--budget", "100",
              "--extract-claims"],
             capture_output=True, text=True, cwd=str(tmp), timeout=1800,
@@ -262,6 +263,10 @@ def main():
     parser.add_argument("--clone", help="Local clone of the repo (docs source); clones shallowly if omitted")
     parser.add_argument("--llm", action="store_true", help="Also ingest the PR thread with LLM claim extraction and measure coverage delta")
     parser.add_argument("--json", action="store_true", help="JSON report")
+    parser.add_argument("--fabric-live", action="store_true",
+                        help="Score against the LIVE fabric's existing knowledge "
+                             "for this repo (0 tokens, seconds) instead of a "
+                             "seeded throwaway fabric")
     args = parser.parse_args()
 
     # Pick PRs

@@ -1,0 +1,3 @@
+ M src/comfyui_mcp/server.py
+ M src/comfyui_mcp/tools/workflow.py
+ A tests/test_tools_batch_validate.py

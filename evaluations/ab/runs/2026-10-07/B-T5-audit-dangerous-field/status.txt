@@ -1,2 +1,3 @@
  M src/comfyui_mcp/audit.py
- M src/comfyui_mcp/tools/generation.py
+ A src/comfyui_mcp/tools.py
+ A tests/test_audit_security_warnings.py
