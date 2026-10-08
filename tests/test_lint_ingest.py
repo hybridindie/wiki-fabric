@@ -351,6 +351,34 @@ class TestProvenanceRelations:
             {"statement": "S", "quote": "Q", "locator": "L1"}, "proj-doc", 0)
         assert "relations: []" in fm_text
 
+    def test_claim_frontmatter_project_stamp_is_canonical(self):
+        """The owning-repo stamp folds to canonical form: a repo captured
+        under `comfyui_mcp/` stamps `comfyui-mcp`, matching the slug form
+        overlays / repos entries / --project use (the field is what context
+        tiering binds on, so the fold is load-bearing)."""
+        fm_text = ingest_mod.claim_frontmatter(
+            {"statement": "S", "quote": "Q", "locator": "L1"}, "proj-doc", 0,
+            project="comfyui_mcp")
+        assert 'project: "comfyui-mcp"' in fm_text
+
+
+class TestFindProjectNamespace:
+    def test_source_raw_path_wins(self, tmp_path):
+        """A source under evidence/raw/<slug>/ resolves to <slug> even with
+        NO vault-root overlay — the fabric-seeded-from-a-repo case that
+        mislabeled every claim `default-project` (2026-10-08 self-eval)."""
+        (tmp_path / "evidence" / "raw" / "wiki-fabric").mkdir(parents=True)
+        src = tmp_path / "evidence" / "raw" / "wiki-fabric" / "README.md"
+        src.write_text("x")
+        assert ingest_mod.find_project_namespace(tmp_path, src) == "wiki-fabric"
+
+    def test_overlay_namespace_when_no_raw_path(self, tmp_path):
+        (tmp_path / ".wiki-overlay.md").write_text("---\nnamespace: myrepo\n---\n")
+        assert ingest_mod.find_project_namespace(tmp_path) == "myrepo"
+
+    def test_default_when_nothing(self, tmp_path):
+        assert ingest_mod.find_project_namespace(tmp_path) == "default-project"
+
 
 class TestLintRelations:
     """Lint validates claim relation targets resolve (BROKEN-LINK) and types."""

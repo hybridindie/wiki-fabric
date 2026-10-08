@@ -235,6 +235,36 @@ def select_context(pages, task, paths, project, today, max_items=20):
     # tier) instead of P3, with the reason saying why (deterministic; 0 tokens).
     preferred = _overlay_domains(project)
     selected, excluded = [], []
+    # the pinned project in canonical form (kebab fold): matches the `project:`
+    # stamp ingest writes on claims and the slug form of everything else
+    _pin = ""
+    if project:
+        try:
+            from wf_common import project_slug as _psl
+            _pin = _psl(str(project)).lower()
+        except Exception:
+            _pin = str(project).lower()
+
+    def binds_project(page):
+        """True when a page names the pinned project — by its `project:`
+        frontmatter stamp (the honest binding ingest writes) OR its file path.
+        The stamp was written for exactly this and, before this fix, tiering
+        only looked at the path: a project's claims (stored under the GLOBAL
+        evidence/claims/ path) could only reach P1 if the slug happened to
+        appear in their filename — 3/8 replayed PRs got ZERO artifacts."""
+        if not _pin:
+            return False
+        fm = page["fm"] or {}
+        stamp = str(fm.get("project") or fm.get("namespace") or "").strip().lower()
+        if stamp:
+            try:
+                from wf_common import project_slug as _psl
+                stamp = _psl(stamp).lower()
+            except Exception:
+                pass
+            if stamp == _pin:
+                return True
+        return _pin in page["posix"].lower()
 
     def body_tokens(page):
         # Body tokens (capped for speed) — used for tag/text matching
@@ -316,7 +346,7 @@ def select_context(pages, task, paths, project, today, max_items=20):
                 priority = "P1-project"
         elif scope == "project":
             # Match: project pinned, or task/body text overlap, or path overlap with namespace
-            if project and project.lower() in pg["posix"]:
+            if binds_project(pg):
                 reason = f"project match: {project}"
                 priority = "P1-project"
             else:
@@ -327,12 +357,25 @@ def select_context(pages, task, paths, project, today, max_items=20):
                     priority = "P1-project"
         elif scope == "global" and pg["type"] == "claim":
             # direct task evidence: a claim whose statement matches the task.
-            # Stopword guard: "the, tool" is not evidence of relevance —
-            # require at least one CONTENT token (>=5 chars) in the overlap
-            # (#e2e finding: every claim listed on generic tasks otherwise).
+            # Stopword guard: "the, tool" is not evidence of relevance — any
+            # match must include a CONTENT token (>=5 chars) (#e2e finding:
+            # every claim listed on generic tasks otherwise).
+            # PROJECT BINDING LOWERS THE BAR, it does not bypass it (the
+            # 2026-10-08 self-eval: bypassing flooded all 20 slots with 67
+            # zero-overlap project claims ahead of the 7 relevant ones). A
+            # claim stamped/filed for the pinned project is trusted evidence
+            # → 1 content-token overlap suffices; a foreign claim needs 2.
+            # Zero-overlap is never delivered (recorded, not silent).
             overlap = task_toks & body_tokens(pg)
             _content = [t for t in overlap if len(t) >= 5]
-            if len(overlap) >= 2 and _content:
+            if binds_project(pg):
+                if _content:
+                    reason = f"project evidence (claim): {', '.join(sorted(_content)[:4])}"
+                    priority = "P1-project"
+                elif len(overlap) >= 1 and any(len(t) >= 4 for t in overlap):
+                    reason = f"project evidence (claim): {', '.join(sorted(overlap)[:3])}"
+                    priority = "P1-project"
+            elif len(overlap) >= 2 and _content:
                 reason = f"task evidence (claim): {', '.join(sorted(_content)[:4])}"
                 priority = "P1-project"
         elif scope == "domain":
@@ -379,17 +422,32 @@ def select_context(pages, task, paths, project, today, max_items=20):
         if priority:
             # Path relevance boosts within-tier ordering
             path_hit = any(pp and pp in pg["posix"] for pp in path_list) if path_list else False
+            # lexical relevance within the tier: how much of the task's CONTENT
+            # vocabulary this page carries — so a project's on-topic claims lead
+            # its off-topic ones (stem-alphabetical order surfaced the wrong
+            # project claims first; 2026-10-08 self-eval)
+            _rel = len(task_toks & body_tokens(pg))
             scored.append({"pg": pg, "reason": reason, "priority": priority,
-                           "stale": overdue, "path_hit": path_hit,
-                           "project_affinity": bool(project and (
-                               project.lower() in pg["posix"]))})
+                           "stale": overdue, "path_hit": path_hit, "relevance": _rel,
+                           "project_affinity": binds_project(pg)})
+        else:
+            # Contract: every EXCLUDED item carries a reason. A candidate that
+            # reached here (passed status/staleness filters) but matched no
+            # tier still gets a reason — silently dropping it was the
+            # quiet-miss class the 2026-10-08 self-eval had to dig for (85
+            # claims vanished with no record on a 0-selected PR).
+            _why = ("no project/text match" if scope == "project"
+                    else "no domain match" if scope == "domain"
+                    else f"no lexical match ({pg['type']}): task did not overlap")
+            excluded.append({"stem": pg["stem"], "path": pg["posix"], "reason": _why})
 
     # Order: priority tier → path hit → project affinity (a --project pin
     # lifts THAT project's pages above same-tier neighbors — alphabetical
     # stem order let an unrelated project flood the P1 slots; found in the
     # AB-eval fixture build, #185-cycle) → staleness → stem
     scored.sort(key=lambda s: (tier_order.get(s["priority"], 9), not s["path_hit"],
-                               not s.get("project_affinity"), -s["stale"], s["pg"]["stem"]))
+                               not s.get("project_affinity"), -s.get("relevance", 0),
+                               -s["stale"], s["pg"]["stem"]))
 
     # Precedence-preserving cap (#159 S1): the plain scored[:max_items] cut let
     # a large P1 claim flood hide the domain tier entirely (P2 is the OVERRIDE
@@ -428,7 +486,8 @@ def select_context(pages, task, paths, project, today, max_items=20):
         out = p1[:p1_share] + p2[:p2_share] + p3[:p3_share]
         demoted = [s for s in scored if s not in out]
         out.sort(key=lambda s: (tier_order.get(s["priority"], 9), not s["path_hit"],
-                                not s.get("project_affinity"), -s["stale"], s["pg"]["stem"]))
+                                not s.get("project_affinity"), -s.get("relevance", 0),
+                                -s["stale"], s["pg"]["stem"]))
         for s in demoted:
             excluded.append({"stem": s["pg"]["stem"], "path": s["pg"]["posix"],
                              "reason": f"beyond --max {max_items} (tier-shared cut)"})

@@ -90,7 +90,25 @@ def _emit_json(mode, extra=None):
 
 
 
-def find_project_namespace(vault_root):
+def find_project_namespace(vault_root, source_path=None):
+    """The project a source belongs to. Order:
+      1. the source's own raw path: evidence/raw/<slug>/... → <slug> (the
+         honest cut — a source captured from a repo lives under its slug)
+      2. <vault_root>/.wiki-overlay.md namespace (the bootstrapped fabric)
+      3. "default-project" (no binding — the last resort)
+    Before (1), a fabric seeded from a repo (raw/wiki-fabric/ but no root
+    overlay) stamped EVERY claim `project: default-project` — the mislabel the
+    2026-10-08 self-eval surfaced. `source_path` is the raw file being ingested."""
+    if source_path is not None:
+        try:
+            from layout import evidence_raw as _evidence_raw
+            rel = Path(source_path).resolve().relative_to(
+                _evidence_raw(vault_root).resolve())
+            parts = rel.parts
+            if len(parts) >= 2:  # <slug>/<file…>
+                return parts[0]
+        except Exception:
+            pass  # not under raw/, or odd path → fall through
     overlay_path = vault_root / ".wiki-overlay.md"
     if not overlay_path.exists():
         return "default-project"
@@ -239,7 +257,16 @@ def sanitize_wikilinks(text):
 def claim_frontmatter(claim, source_slug, idx, provenance=None, project=None):
     """project: the claim's owning repo (canonical) — the per-repo cut every
     consumer guesses from the stem was lossy (lazy-dash class twice over);
-    the field is the honest source (`wf_common.project_slug`)."""
+    the field is the honest source (`wf_common.project_slug`). The stamp is
+    FOLDED to canonical form here: a repo whose raw dir is `comfyui_mcp`
+    stamps `comfyui-mcp`, so the field matches the slug form everything else
+    (overlays, repos entries, `--project`) uses."""
+    if project:
+        try:
+            from wf_common import project_slug as _psl
+            project = _psl(str(project))
+        except Exception:
+            pass
     quote = clean_quote(claim.get('quote', ''))
     statement = claim.get('statement', '')
     rels = list(provenance or [])
@@ -482,7 +509,7 @@ def ingest_source(source_path, extract_claims=False, model=None, dry_run=False, 
                 pass  # best-effort ledger hygiene; the skip stands either way
             return False
 
-    namespace = namespace or find_project_namespace(Path.cwd())
+    namespace = namespace or find_project_namespace(Path.cwd(), source_path)
     print(f"Project namespace: {namespace}")
 
     try:

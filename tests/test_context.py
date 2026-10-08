@@ -107,6 +107,56 @@ class TestSelection:
         selected, _ = ctx.select_context(pages, "some task", [], "auth", datetime.date.today())
         assert any("project match: auth" in s["reason"] for s in selected)
 
+    def test_global_claim_binds_by_project_stamp(self):
+        """A claim stored under the GLOBAL evidence/claims/ path but stamped
+        for the pinned project is that project's evidence — tiering keys on
+        the stamp, not only the filename (2026-10-08 self-eval: 3/8 replayed
+        PRs delivered zero artifacts because only the path was consulted)."""
+        import datetime
+        pages = [_page("evidence/claims/claim-wiki-fabric-readme-md-000.md",
+                       {"type": "claim", "status": "supported", "project": "wiki-fabric"},
+                       "the manifest is explainable by construction")]
+        selected, _ = ctx.select_context(
+            pages, "improve the manifest explainability", [], "wiki-fabric",
+            datetime.date.today())
+        assert any(s["priority"] == "P1-project" and "project evidence" in s["reason"]
+                   for s in selected)
+
+    def test_project_stamp_folds_underscore(self):
+        """`comfyui_mcp` stamp ≡ `comfyui-mcp` pin (canonical fold)."""
+        import datetime
+        pages = [_page("evidence/claims/claim-comfyui-mcp-x-000.md",
+                       {"type": "claim", "status": "supported", "project": "comfyui_mcp"},
+                       "tool contracts")]
+        selected, _ = ctx.select_context(
+            pages, "review the tool contracts", [], "comfyui-mcp", datetime.date.today())
+        assert any(s["priority"] == "P1-project" for s in selected)
+
+    def test_project_binding_still_needs_relevance(self):
+        """Project precedence lowers the lexical bar to ONE content token —
+        but zero-overlap claims are NEVER delivered (the flood guard): a
+        bypass would surface all 20 off-topic project claims."""
+        import datetime
+        pages = [_page("evidence/claims/claim-wiki-fabric-readme-md-000.md",
+                       {"type": "claim", "status": "supported", "project": "wiki-fabric"},
+                       "completely unrelated subject matter")]
+        selected, excluded = ctx.select_context(
+            pages, "kafka partition rebalancing", [], "wiki-fabric", datetime.date.today())
+        assert not selected
+        assert any("no lexical match" in e["reason"] for e in excluded)
+
+    def test_unmatched_candidate_gets_recorded_reason(self):
+        """Contract: every excluded item carries a reason — a candidate that
+        reaches scoring but matches no tier is recorded, not silently dropped
+        (the quiet-miss the self-eval had to dig for)."""
+        import datetime
+        pages = [_page("evidence/claims/claim-other-repo-doc-md-000.md",
+                       {"type": "claim", "status": "supported"}, "unrelated body")]
+        selected, excluded = ctx.select_context(
+            pages, "kafka partition rebalancing", [], None, datetime.date.today())
+        assert not selected
+        assert any("no lexical match" in e["reason"] for e in excluded)
+
     def test_domain_match(self):
         import datetime
         pages = [_page("domains/oauth/concepts/c.md",
