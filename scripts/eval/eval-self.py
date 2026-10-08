@@ -96,6 +96,12 @@ def fetch_pr(repo, number):
         return None
     comments = gh("api", f"repos/{repo}/issues/{number}/comments?per_page=20") or []
     files = gh("api", f"repos/{repo}/pulls/{number}/files?per_page=50") or []
+    # the diff hunks: what the PR ACTUALLY introduced — added identifiers are
+    # the honest key terms (title words miss them; the A/B measured the wrong
+    # thing until this: 2026-10-08)
+    added = "\n".join(
+        ln for f in files for ln in (f.get("patch") or "").splitlines()
+        if ln.startswith("+") and not ln.startswith("+++"))
     return {
         "number": number,
         "title": pr.get("title", ""),
@@ -104,6 +110,7 @@ def fetch_pr(repo, number):
         "merged_at": pr.get("merged_at"),
         "comments": [c.get("body", "") for c in comments],
         "files": [f.get("filename", "") for f in files],
+        "added": added,
     }
 
 
@@ -244,21 +251,34 @@ def llm_probe(task, pr, manifest, fabric, model=None):
             "prompt": int(getattr(u, "prompt_tokens", 0) or 0),
             "completion": int(getattr(u, "completion_tokens", 0) or 0)})
 
-    # the key terms the PR's own diff introduces (symbols + notable nouns)
-    key = {t for t in tokens(pr["title"] + " " + " ".join(pr["files"])) if len(t) >= 5}
+    # the key terms the PR's DIFF introduces: added identifiers/words (the
+    # things a fabric-informed answer should name) — not just title words.
+    # Keep identifier-shaped tokens (snake/Camel) plus content words >=5ch.
+    import re as _re
+    added = pr.get("added") or ""
+    key = set()
+    for w in _re.findall(r"[A-Za-z_][A-Za-z0-9_]{4,}", added):
+        if "_" in w or any(ch.isupper() for ch in w[1:]):
+            key.add(w.lower())            # identifier: keep its shape
+    key |= {t for t in tokens(pr["title"] + " " + added) if len(t) >= 6}
+    # ignore generic scaffolding identifiers a diff always carries
+    key -= {"self", "return", "import", "assert", "def", "class", "true", "false",
+            "none", "str", "int", "dict", "list", "for", "print"}
     croot = (fabric / "corpus") if (fabric / "corpus").exists() else fabric
     ctx = ""
     for s in manifest.get("selected", []):
         p = croot / s["path"]
         if p.exists():
             ctx += p.read_text(encoding="utf-8", errors="replace")[:1500] + "\n"
-    q = f"Task: {task}\n\nSummarize the approach you would take, citing the project's own conventions by name."
+    q = (f"Task: {task}\n\nSummarize the approach you would take, naming the "
+         f"specific functions, helpers, and conventions this project already "
+         f"has for this area.")
     fabric_ans, ftok = _ask(f"# Project knowledge\n{ctx}\n\n{q}" if ctx else q)
     bare_ans, btok = _ask(q)
     fit = len(key & tokens(fabric_ans)) / max(len(key), 1)
     bit = len(key & tokens(bare_ans)) / max(len(key), 1)
     return {"fabric_term_hit": round(fit, 3), "bare_term_hit": round(bit, 3),
-            "fabric_tokens": ftok, "bare_tokens": btok}
+            "n_key_terms": len(key), "fabric_tokens": ftok, "bare_tokens": btok}
 
 
 def main():
