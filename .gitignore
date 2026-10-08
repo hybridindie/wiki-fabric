@@ -1,6 +1,11 @@
 # === User config (personal) ===
 fabric.yaml
 
+# === Harness-side corpus litter ===
+# Content lives in the VAULT (sibling), never the harness. A run from the
+# repo cwd scaffolds corpus/ here (derived indexes) — never track it.
+corpus/
+
 # === Content (user data — harness ships only tooling, not your fabric) ===
 # All content lives in the vault (sibling by default) — never in the harness.
 evidence/
